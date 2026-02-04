@@ -322,8 +322,8 @@ CREATE INDEX idx_meter_values_timestamp ON transaction_meter_values(timestamp);
 ```
 
 #### Task 2.5: Create Certificates Migration
-- [ ] Create `000004_create_certificates.up.sql`
-- [ ] Create `000004_create_certificates.down.sql`
+- [x] Create `000004_create_certificates.up.sql`
+- [x] Create `000004_create_certificates.down.sql`
 
 **File: `migrations/000004_create_certificates.up.sql`**
 ```sql
@@ -1088,9 +1088,9 @@ make postgres-test
 
 ### Current Phase: Phase 2 - Database Schema & Migrations ⏳
 
-**Last Updated:** 2026-02-05 00:35 GMT+1
+**Last Updated:** 2026-02-05 00:51 GMT+1
 
-### Completed Tasks: 18 / ~60 total
+### Completed Tasks: 20 / ~60 total
 
 #### Phase 1: ✅ COMPLETE
 - ✅ Task 1.1: Create Directory Structure  
@@ -1101,7 +1101,8 @@ make postgres-test
 - ✅ Task 2.2: Create Initial Migration (Tokens Table)
 - ✅ Task 2.3: Create Charge Stations Migration
 - ✅ Task 2.4: Create Transactions Migration
-- ⏳ Task 2.5: Create Certificates Migration (NEXT)
+- ✅ Task 2.5: Create Certificates Migration
+- ⏳ Task 2.6: Create OCPI & Locations Migration (NEXT)
 
 #### Phase 3: ✅ COMPLETE (Tokens only)
 - ✅ Task 3.1: Token Queries  
