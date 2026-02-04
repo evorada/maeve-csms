@@ -281,9 +281,9 @@ CREATE INDEX idx_cs_triggers_station_id ON charge_station_triggers(charge_statio
 ```
 
 #### Task 2.4: Create Transactions Migration
-- [ ] Create `000003_create_transactions.up.sql`
-- [ ] Create `000003_create_transactions.down.sql`
-- [ ] Consider partitioning by date for large deployments
+- [x] Create `000003_create_transactions.up.sql`
+- [x] Create `000003_create_transactions.down.sql`
+- [x] Consider partitioning by date for large deployments
 
 **File: `migrations/000003_create_transactions.up.sql`**
 ```sql
@@ -1088,9 +1088,9 @@ make postgres-test
 
 ### Current Phase: Phase 2 - Database Schema & Migrations ⏳
 
-**Last Updated:** 2026-02-05 00:19 GMT+1
+**Last Updated:** 2026-02-05 00:35 GMT+1
 
-### Completed Tasks: 17 / ~60 total
+### Completed Tasks: 18 / ~60 total
 
 #### Phase 1: ✅ COMPLETE
 - ✅ Task 1.1: Create Directory Structure  
@@ -1100,7 +1100,8 @@ make postgres-test
 #### Phase 2: ⏳ IN PROGRESS
 - ✅ Task 2.2: Create Initial Migration (Tokens Table)
 - ✅ Task 2.3: Create Charge Stations Migration
-- ⏳ Task 2.4: Create Transactions Migration (NEXT)
+- ✅ Task 2.4: Create Transactions Migration
+- ⏳ Task 2.5: Create Certificates Migration (NEXT)
 
 #### Phase 3: ✅ COMPLETE (Tokens only)
 - ✅ Task 3.1: Token Queries  
