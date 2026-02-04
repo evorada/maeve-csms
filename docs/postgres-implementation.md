@@ -222,9 +222,9 @@ DROP TABLE IF EXISTS tokens;
 ```
 
 #### Task 2.3: Create Charge Stations Migration
-- [ ] Create `000002_create_charge_stations.up.sql`
-- [ ] Create `000002_create_charge_stations.down.sql`
-- [ ] Support both auth tables (auth, settings, runtime, certificates, triggers)
+- [x] Create `000002_create_charge_stations.up.sql`
+- [x] Create `000002_create_charge_stations.down.sql`
+- [x] Support both auth tables (auth, settings, runtime, certificates, triggers)
 
 **File: `migrations/000002_create_charge_stations.up.sql`**
 ```sql
@@ -1086,19 +1086,21 @@ make postgres-test
 
 ## Progress Tracking
 
-### Current Phase: Phase 4 - Store Implementation 🔧
+### Current Phase: Phase 2 - Database Schema & Migrations ⏳
 
-**Last Updated:** 2026-02-04 23:45 GMT+1
+**Last Updated:** 2026-02-05 00:19 GMT+1
 
-### Completed Tasks: 14 / ~60 total
+### Completed Tasks: 17 / ~60 total
 
 #### Phase 1: ✅ COMPLETE
 - ✅ Task 1.1: Create Directory Structure  
 - ✅ Task 1.2: Configure sqlc  
 - ✅ Task 1.3: Add Make Targets  
 
-#### Phase 2: ✅ COMPLETE (Tokens only)
-- ✅ Task 2.2: Create Initial Migration (Tokens Table)  
+#### Phase 2: ⏳ IN PROGRESS
+- ✅ Task 2.2: Create Initial Migration (Tokens Table)
+- ✅ Task 2.3: Create Charge Stations Migration
+- ⏳ Task 2.4: Create Transactions Migration (NEXT)
 
 #### Phase 3: ✅ COMPLETE (Tokens only)
 - ✅ Task 3.1: Token Queries  
