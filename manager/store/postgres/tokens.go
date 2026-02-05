@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
@@ -100,34 +99,4 @@ func toStoreToken(t *Token) *store.Token {
 		CacheMode:    t.CacheMode,
 		LastUpdated:  timeFromTimestamp(t.LastUpdated).Format(time.RFC3339),
 	}
-}
-
-// Helper functions for pgtype conversions
-
-func textFromString(s *string) pgtype.Text {
-	if s == nil {
-		return pgtype.Text{Valid: false}
-	}
-	return pgtype.Text{String: *s, Valid: true}
-}
-
-func stringFromText(t pgtype.Text) *string {
-	if !t.Valid {
-		return nil
-	}
-	return &t.String
-}
-
-func timestampFromTime(t time.Time) pgtype.Timestamp {
-	return pgtype.Timestamp{
-		Time:  t,
-		Valid: true,
-	}
-}
-
-func timeFromTimestamp(ts pgtype.Timestamp) time.Time {
-	if !ts.Valid {
-		return time.Time{}
-	}
-	return ts.Time
 }

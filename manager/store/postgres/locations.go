@@ -21,6 +21,9 @@ func (s *Store) SetLocation(ctx context.Context, location *store.Location) error
 
 	// Extract country code and party ID from location
 	// These are stored separately for indexing purposes
+	// TODO: Country code should be taken from the party itself, not the location
+	// The party's country might be different from the location's country
+	// We need to implement a proper "parties" concept and use it here
 	countryCode := location.Country
 	if countryCode == "" {
 		countryCode = "XX" // Default if not provided
