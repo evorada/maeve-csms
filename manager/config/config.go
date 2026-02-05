@@ -220,7 +220,7 @@ func getStorage(ctx context.Context, cfg *StorageConfig) (engine store.Engine, e
 			cfg.PostgresStorage.Database,
 			cfg.PostgresStorage.SSLMode,
 		)
-		
+
 		// Run migrations if configured
 		if cfg.PostgresStorage.RunMigrations {
 			slog.Info("running database migrations", "migrations_path", cfg.PostgresStorage.MigrationsPath)
@@ -229,7 +229,7 @@ func getStorage(ctx context.Context, cfg *StorageConfig) (engine store.Engine, e
 			}
 			slog.Info("database migrations completed successfully")
 		}
-		
+
 		engine, err = postgres.NewStore(ctx, connStr)
 		if err != nil {
 			return nil, fmt.Errorf("create postgres storage: %w", err)

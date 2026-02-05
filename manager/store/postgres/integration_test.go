@@ -36,9 +36,9 @@ func TestIntegration_TransactionWithToken(t *testing.T) {
 
 	// Create a charge station auth
 	csAuth := &store.ChargeStationAuth{
-		SecurityProfile:          store.TLSWithBasicAuth,
-		Base64SHA256Password:     "dGVzdHBhc3N3b3Jk",
-		InvalidUsernameAllowed:   false,
+		SecurityProfile:        store.TLSWithBasicAuth,
+		Base64SHA256Password:   "dGVzdHBhc3N3b3Jk",
+		InvalidUsernameAllowed: false,
 	}
 	require.NoError(t, db.store.SetChargeStationAuth(ctx, "CS001", csAuth))
 
@@ -288,7 +288,7 @@ func TestIntegration_MultipleActiveTransactions(t *testing.T) {
 				},
 			},
 		}
-		err := db.store.CreateTransaction(ctx, stationID, fmt.Sprintf("TXN_MULTI_%d", i), 
+		err := db.store.CreateTransaction(ctx, stationID, fmt.Sprintf("TXN_MULTI_%d", i),
 			fmt.Sprintf("TOKEN_MULTI_%d", i), "RFID", meterValues, 0, false)
 		require.NoError(t, err)
 	}
@@ -338,9 +338,9 @@ func TestIntegration_ChargeStationFullLifecycle(t *testing.T) {
 
 	// Step 1: Set up authentication
 	csAuth := &store.ChargeStationAuth{
-		SecurityProfile:          store.TLSWithBasicAuth,
-		Base64SHA256Password:     "dGVzdHBhc3N3b3Jk",
-		InvalidUsernameAllowed:   false,
+		SecurityProfile:        store.TLSWithBasicAuth,
+		Base64SHA256Password:   "dGVzdHBhc3N3b3Jk",
+		InvalidUsernameAllowed: false,
 	}
 	require.NoError(t, db.store.SetChargeStationAuth(ctx, csID, csAuth))
 

@@ -203,9 +203,9 @@ func TestTokenStore_UpdateToken(t *testing.T) {
 		Type:        "RFID",
 		Uid:         "UPDATEME",
 		ContractId:  "GBTWK111111111V", // Changed
-		Issuer:      "Thoughtworks UK",  // Changed
-		Valid:       false,               // Changed
-		CacheMode:   "NEVER",             // Changed
+		Issuer:      "Thoughtworks UK", // Changed
+		Valid:       false,             // Changed
+		CacheMode:   "NEVER",           // Changed
 		LastUpdated: "2026-02-05T12:00:00Z",
 	}
 	require.NoError(t, db.store.SetToken(ctx, updatedToken))

@@ -77,7 +77,7 @@ func (s *Store) Health(ctx context.Context) error {
 		slog.Error("database health check failed", "error", err)
 		return err
 	}
-	
+
 	// Log connection pool stats
 	stats := s.pool.Stat()
 	slog.Debug("database health check",
@@ -85,6 +85,6 @@ func (s *Store) Health(ctx context.Context) error {
 		"idle_conns", stats.IdleConns(),
 		"total_conns", stats.TotalConns(),
 		"max_conns", stats.MaxConns())
-	
+
 	return nil
 }

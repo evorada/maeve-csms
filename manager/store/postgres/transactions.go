@@ -123,11 +123,11 @@ func (s *Store) UpdateTransaction(ctx context.Context, chargeStationId, transact
 
 	// Update sequence number
 	updateParams := UpdateTransactionParams{
-		ID:           transactionId,
-		MeterStop:    txn.MeterStop,
+		ID:            transactionId,
+		MeterStop:     txn.MeterStop,
 		StopTimestamp: txn.StopTimestamp,
 		StoppedReason: txn.StoppedReason,
-		UpdatedSeqNo: txn.UpdatedSeqNo + 1,
+		UpdatedSeqNo:  txn.UpdatedSeqNo + 1,
 	}
 
 	_, err = s.q.UpdateTransaction(ctx, updateParams)
