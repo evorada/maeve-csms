@@ -5,6 +5,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -14,8 +15,11 @@ import (
 
 // SetToken creates or updates a token in the database
 func (s *Store) SetToken(ctx context.Context, token *store.Token) error {
+	slog.Debug("setting token", "uid", token.Uid, "contract_id", token.ContractId)
+
 	lastUpdated, err := time.Parse(time.RFC3339, token.LastUpdated)
 	if err != nil {
+		slog.Error("invalid timestamp in token", "uid", token.Uid, "error", err)
 		return fmt.Errorf("invalid last_updated timestamp: %w", err)
 	}
 
@@ -36,22 +40,29 @@ func (s *Store) SetToken(ctx context.Context, token *store.Token) error {
 
 	_, err = s.q.CreateToken(ctx, params)
 	if err != nil {
+		slog.Error("failed to create token", "uid", token.Uid, "error", err)
 		return fmt.Errorf("failed to create token: %w", err)
 	}
 
+	slog.Debug("token set successfully", "uid", token.Uid)
 	return nil
 }
 
 // LookupToken retrieves a token by its UID
 func (s *Store) LookupToken(ctx context.Context, tokenUid string) (*store.Token, error) {
+	slog.Debug("looking up token", "uid", tokenUid)
+
 	token, err := s.q.GetToken(ctx, tokenUid)
 	if err != nil {
 		if err == pgx.ErrNoRows {
+			slog.Debug("token not found", "uid", tokenUid)
 			return nil, nil
 		}
+		slog.Error("failed to lookup token", "uid", tokenUid, "error", err)
 		return nil, fmt.Errorf("failed to lookup token: %w", err)
 	}
 
+	slog.Debug("token found", "uid", tokenUid, "contract_id", token.ContractID)
 	return toStoreToken(&token), nil
 }
 
