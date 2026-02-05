@@ -25,11 +25,14 @@ type ChargeStation struct {
 }
 
 type ChargeStationCertificate struct {
-	ID              int64            `db:"id" json:"id"`
-	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
-	CertificateType string           `db:"certificate_type" json:"certificate_type"`
-	Certificate     string           `db:"certificate" json:"certificate"`
-	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
+	ID                            int64            `db:"id" json:"id"`
+	ChargeStationID               string           `db:"charge_station_id" json:"charge_station_id"`
+	CertificateType               string           `db:"certificate_type" json:"certificate_type"`
+	Certificate                   string           `db:"certificate" json:"certificate"`
+	CreatedAt                     pgtype.Timestamp `db:"created_at" json:"created_at"`
+	CertificateID                 string           `db:"certificate_id" json:"certificate_id"`
+	CertificateInstallationStatus string           `db:"certificate_installation_status" json:"certificate_installation_status"`
+	SendAfter                     pgtype.Timestamp `db:"send_after" json:"send_after"`
 }
 
 type ChargeStationRuntime struct {
@@ -55,6 +58,8 @@ type ChargeStationTrigger struct {
 	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
 	MessageType     string           `db:"message_type" json:"message_type"`
 	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
+	TriggerStatus   string           `db:"trigger_status" json:"trigger_status"`
+	SendAfter       pgtype.Timestamp `db:"send_after" json:"send_after"`
 }
 
 type Location struct {

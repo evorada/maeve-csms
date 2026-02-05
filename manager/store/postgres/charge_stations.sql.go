@@ -12,19 +12,29 @@ import (
 )
 
 const AddChargeStationCertificate = `-- name: AddChargeStationCertificate :one
-INSERT INTO charge_station_certificates (charge_station_id, certificate_type, certificate)
-VALUES ($1, $2, $3)
-RETURNING id, charge_station_id, certificate_type, certificate, created_at
+INSERT INTO charge_station_certificates (charge_station_id, certificate_id, certificate_type, certificate, certificate_installation_status, send_after)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, charge_station_id, certificate_type, certificate, created_at, certificate_id, certificate_installation_status, send_after
 `
 
 type AddChargeStationCertificateParams struct {
-	ChargeStationID string `db:"charge_station_id" json:"charge_station_id"`
-	CertificateType string `db:"certificate_type" json:"certificate_type"`
-	Certificate     string `db:"certificate" json:"certificate"`
+	ChargeStationID               string           `db:"charge_station_id" json:"charge_station_id"`
+	CertificateID                 string           `db:"certificate_id" json:"certificate_id"`
+	CertificateType               string           `db:"certificate_type" json:"certificate_type"`
+	Certificate                   string           `db:"certificate" json:"certificate"`
+	CertificateInstallationStatus string           `db:"certificate_installation_status" json:"certificate_installation_status"`
+	SendAfter                     pgtype.Timestamp `db:"send_after" json:"send_after"`
 }
 
 func (q *Queries) AddChargeStationCertificate(ctx context.Context, arg AddChargeStationCertificateParams) (ChargeStationCertificate, error) {
-	row := q.db.QueryRow(ctx, AddChargeStationCertificate, arg.ChargeStationID, arg.CertificateType, arg.Certificate)
+	row := q.db.QueryRow(ctx, AddChargeStationCertificate,
+		arg.ChargeStationID,
+		arg.CertificateID,
+		arg.CertificateType,
+		arg.Certificate,
+		arg.CertificateInstallationStatus,
+		arg.SendAfter,
+	)
 	var i ChargeStationCertificate
 	err := row.Scan(
 		&i.ID,
@@ -32,29 +42,9 @@ func (q *Queries) AddChargeStationCertificate(ctx context.Context, arg AddCharge
 		&i.CertificateType,
 		&i.Certificate,
 		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const AddChargeStationTrigger = `-- name: AddChargeStationTrigger :one
-INSERT INTO charge_station_triggers (charge_station_id, message_type)
-VALUES ($1, $2)
-RETURNING id, charge_station_id, message_type, created_at
-`
-
-type AddChargeStationTriggerParams struct {
-	ChargeStationID string `db:"charge_station_id" json:"charge_station_id"`
-	MessageType     string `db:"message_type" json:"message_type"`
-}
-
-func (q *Queries) AddChargeStationTrigger(ctx context.Context, arg AddChargeStationTriggerParams) (ChargeStationTrigger, error) {
-	row := q.db.QueryRow(ctx, AddChargeStationTrigger, arg.ChargeStationID, arg.MessageType)
-	var i ChargeStationTrigger
-	err := row.Scan(
-		&i.ID,
-		&i.ChargeStationID,
-		&i.MessageType,
-		&i.CreatedAt,
+		&i.CertificateID,
+		&i.CertificateInstallationStatus,
+		&i.SendAfter,
 	)
 	return i, err
 }
@@ -68,12 +58,21 @@ func (q *Queries) DeleteChargeStationCertificates(ctx context.Context, chargeSta
 	return err
 }
 
-const DeleteChargeStationTriggers = `-- name: DeleteChargeStationTriggers :exec
+const DeleteChargeStationSettings = `-- name: DeleteChargeStationSettings :exec
+DELETE FROM charge_station_settings WHERE charge_station_id = $1
+`
+
+func (q *Queries) DeleteChargeStationSettings(ctx context.Context, chargeStationID string) error {
+	_, err := q.db.Exec(ctx, DeleteChargeStationSettings, chargeStationID)
+	return err
+}
+
+const DeleteChargeStationTrigger = `-- name: DeleteChargeStationTrigger :exec
 DELETE FROM charge_station_triggers WHERE charge_station_id = $1
 `
 
-func (q *Queries) DeleteChargeStationTriggers(ctx context.Context, chargeStationID string) error {
-	_, err := q.db.Exec(ctx, DeleteChargeStationTriggers, chargeStationID)
+func (q *Queries) DeleteChargeStationTrigger(ctx context.Context, chargeStationID string) error {
+	_, err := q.db.Exec(ctx, DeleteChargeStationTrigger, chargeStationID)
 	return err
 }
 
@@ -97,7 +96,7 @@ func (q *Queries) GetChargeStationAuth(ctx context.Context, chargeStationID stri
 }
 
 const GetChargeStationCertificates = `-- name: GetChargeStationCertificates :many
-SELECT id, charge_station_id, certificate_type, certificate, created_at FROM charge_station_certificates 
+SELECT id, charge_station_id, certificate_type, certificate, created_at, certificate_id, certificate_installation_status, send_after FROM charge_station_certificates 
 WHERE charge_station_id = $1
 ORDER BY created_at DESC
 `
@@ -118,6 +117,9 @@ func (q *Queries) GetChargeStationCertificates(ctx context.Context, chargeStatio
 			&i.CertificateType,
 			&i.Certificate,
 			&i.CreatedAt,
+			&i.CertificateID,
+			&i.CertificateInstallationStatus,
+			&i.SendAfter,
 		); err != nil {
 			return nil, err
 		}
@@ -167,15 +169,128 @@ func (q *Queries) GetChargeStationSettings(ctx context.Context, chargeStationID 
 	return i, err
 }
 
-const GetChargeStationTriggers = `-- name: GetChargeStationTriggers :many
-SELECT id, charge_station_id, message_type, created_at FROM charge_station_triggers
+const GetChargeStationTrigger = `-- name: GetChargeStationTrigger :one
+SELECT id, charge_station_id, message_type, created_at, trigger_status, send_after FROM charge_station_triggers
 WHERE charge_station_id = $1
-ORDER BY created_at ASC
 `
 
 // Triggers
-func (q *Queries) GetChargeStationTriggers(ctx context.Context, chargeStationID string) ([]ChargeStationTrigger, error) {
-	rows, err := q.db.Query(ctx, GetChargeStationTriggers, chargeStationID)
+func (q *Queries) GetChargeStationTrigger(ctx context.Context, chargeStationID string) (ChargeStationTrigger, error) {
+	row := q.db.QueryRow(ctx, GetChargeStationTrigger, chargeStationID)
+	var i ChargeStationTrigger
+	err := row.Scan(
+		&i.ID,
+		&i.ChargeStationID,
+		&i.MessageType,
+		&i.CreatedAt,
+		&i.TriggerStatus,
+		&i.SendAfter,
+	)
+	return i, err
+}
+
+const ListChargeStationCertificates = `-- name: ListChargeStationCertificates :many
+SELECT DISTINCT ON (charge_station_id) charge_station_id, certificate_id, certificate_type, certificate, certificate_installation_status, send_after, created_at
+FROM charge_station_certificates
+WHERE charge_station_id > $1
+ORDER BY charge_station_id ASC, created_at DESC
+LIMIT $2
+`
+
+type ListChargeStationCertificatesParams struct {
+	ChargeStationID string `db:"charge_station_id" json:"charge_station_id"`
+	Limit           int32  `db:"limit" json:"limit"`
+}
+
+type ListChargeStationCertificatesRow struct {
+	ChargeStationID               string           `db:"charge_station_id" json:"charge_station_id"`
+	CertificateID                 string           `db:"certificate_id" json:"certificate_id"`
+	CertificateType               string           `db:"certificate_type" json:"certificate_type"`
+	Certificate                   string           `db:"certificate" json:"certificate"`
+	CertificateInstallationStatus string           `db:"certificate_installation_status" json:"certificate_installation_status"`
+	SendAfter                     pgtype.Timestamp `db:"send_after" json:"send_after"`
+	CreatedAt                     pgtype.Timestamp `db:"created_at" json:"created_at"`
+}
+
+func (q *Queries) ListChargeStationCertificates(ctx context.Context, arg ListChargeStationCertificatesParams) ([]ListChargeStationCertificatesRow, error) {
+	rows, err := q.db.Query(ctx, ListChargeStationCertificates, arg.ChargeStationID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListChargeStationCertificatesRow{}
+	for rows.Next() {
+		var i ListChargeStationCertificatesRow
+		if err := rows.Scan(
+			&i.ChargeStationID,
+			&i.CertificateID,
+			&i.CertificateType,
+			&i.Certificate,
+			&i.CertificateInstallationStatus,
+			&i.SendAfter,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const ListChargeStationSettings = `-- name: ListChargeStationSettings :many
+SELECT charge_station_id, settings, created_at, updated_at FROM charge_station_settings
+WHERE charge_station_id > $1
+ORDER BY charge_station_id ASC
+LIMIT $2
+`
+
+type ListChargeStationSettingsParams struct {
+	ChargeStationID string `db:"charge_station_id" json:"charge_station_id"`
+	Limit           int32  `db:"limit" json:"limit"`
+}
+
+func (q *Queries) ListChargeStationSettings(ctx context.Context, arg ListChargeStationSettingsParams) ([]ChargeStationSetting, error) {
+	rows, err := q.db.Query(ctx, ListChargeStationSettings, arg.ChargeStationID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChargeStationSetting{}
+	for rows.Next() {
+		var i ChargeStationSetting
+		if err := rows.Scan(
+			&i.ChargeStationID,
+			&i.Settings,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const ListChargeStationTriggers = `-- name: ListChargeStationTriggers :many
+SELECT id, charge_station_id, message_type, created_at, trigger_status, send_after FROM charge_station_triggers
+WHERE charge_station_id > $1
+ORDER BY charge_station_id ASC
+LIMIT $2
+`
+
+type ListChargeStationTriggersParams struct {
+	ChargeStationID string `db:"charge_station_id" json:"charge_station_id"`
+	Limit           int32  `db:"limit" json:"limit"`
+}
+
+func (q *Queries) ListChargeStationTriggers(ctx context.Context, arg ListChargeStationTriggersParams) ([]ChargeStationTrigger, error) {
+	rows, err := q.db.Query(ctx, ListChargeStationTriggers, arg.ChargeStationID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -188,6 +303,8 @@ func (q *Queries) GetChargeStationTriggers(ctx context.Context, chargeStationID 
 			&i.ChargeStationID,
 			&i.MessageType,
 			&i.CreatedAt,
+			&i.TriggerStatus,
+			&i.SendAfter,
 		); err != nil {
 			return nil, err
 		}
@@ -303,6 +420,81 @@ func (q *Queries) SetChargeStationSettings(ctx context.Context, arg SetChargeSta
 		&i.Settings,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const SetChargeStationTrigger = `-- name: SetChargeStationTrigger :one
+INSERT INTO charge_station_triggers (charge_station_id, message_type, trigger_status, send_after)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (charge_station_id) DO UPDATE
+SET message_type = EXCLUDED.message_type,
+    trigger_status = EXCLUDED.trigger_status,
+    send_after = EXCLUDED.send_after
+RETURNING id, charge_station_id, message_type, created_at, trigger_status, send_after
+`
+
+type SetChargeStationTriggerParams struct {
+	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
+	MessageType     string           `db:"message_type" json:"message_type"`
+	TriggerStatus   string           `db:"trigger_status" json:"trigger_status"`
+	SendAfter       pgtype.Timestamp `db:"send_after" json:"send_after"`
+}
+
+func (q *Queries) SetChargeStationTrigger(ctx context.Context, arg SetChargeStationTriggerParams) (ChargeStationTrigger, error) {
+	row := q.db.QueryRow(ctx, SetChargeStationTrigger,
+		arg.ChargeStationID,
+		arg.MessageType,
+		arg.TriggerStatus,
+		arg.SendAfter,
+	)
+	var i ChargeStationTrigger
+	err := row.Scan(
+		&i.ID,
+		&i.ChargeStationID,
+		&i.MessageType,
+		&i.CreatedAt,
+		&i.TriggerStatus,
+		&i.SendAfter,
+	)
+	return i, err
+}
+
+const UpdateChargeStationCertificate = `-- name: UpdateChargeStationCertificate :one
+UPDATE charge_station_certificates
+SET certificate = $3,
+    certificate_installation_status = $4,
+    send_after = $5
+WHERE charge_station_id = $1 AND certificate_id = $2
+RETURNING id, charge_station_id, certificate_type, certificate, created_at, certificate_id, certificate_installation_status, send_after
+`
+
+type UpdateChargeStationCertificateParams struct {
+	ChargeStationID               string           `db:"charge_station_id" json:"charge_station_id"`
+	CertificateID                 string           `db:"certificate_id" json:"certificate_id"`
+	Certificate                   string           `db:"certificate" json:"certificate"`
+	CertificateInstallationStatus string           `db:"certificate_installation_status" json:"certificate_installation_status"`
+	SendAfter                     pgtype.Timestamp `db:"send_after" json:"send_after"`
+}
+
+func (q *Queries) UpdateChargeStationCertificate(ctx context.Context, arg UpdateChargeStationCertificateParams) (ChargeStationCertificate, error) {
+	row := q.db.QueryRow(ctx, UpdateChargeStationCertificate,
+		arg.ChargeStationID,
+		arg.CertificateID,
+		arg.Certificate,
+		arg.CertificateInstallationStatus,
+		arg.SendAfter,
+	)
+	var i ChargeStationCertificate
+	err := row.Scan(
+		&i.ID,
+		&i.ChargeStationID,
+		&i.CertificateType,
+		&i.Certificate,
+		&i.CreatedAt,
+		&i.CertificateID,
+		&i.CertificateInstallationStatus,
+		&i.SendAfter,
 	)
 	return i, err
 }

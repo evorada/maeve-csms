@@ -24,6 +24,15 @@ ON CONFLICT (charge_station_id) DO UPDATE
 SET settings = EXCLUDED.settings, updated_at = NOW()
 RETURNING *;
 
+-- name: ListChargeStationSettings :many
+SELECT * FROM charge_station_settings
+WHERE charge_station_id > $1
+ORDER BY charge_station_id ASC
+LIMIT $2;
+
+-- name: DeleteChargeStationSettings :exec
+DELETE FROM charge_station_settings WHERE charge_station_id = $1;
+
 -- Runtime
 -- name: GetChargeStationRuntime :one
 SELECT * FROM charge_station_runtime WHERE charge_station_id = $1;
@@ -47,23 +56,47 @@ WHERE charge_station_id = $1
 ORDER BY created_at DESC;
 
 -- name: AddChargeStationCertificate :one
-INSERT INTO charge_station_certificates (charge_station_id, certificate_type, certificate)
-VALUES ($1, $2, $3)
+INSERT INTO charge_station_certificates (charge_station_id, certificate_id, certificate_type, certificate, certificate_installation_status, send_after)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING *;
+
+-- name: UpdateChargeStationCertificate :one
+UPDATE charge_station_certificates
+SET certificate = $3,
+    certificate_installation_status = $4,
+    send_after = $5
+WHERE charge_station_id = $1 AND certificate_id = $2
 RETURNING *;
 
 -- name: DeleteChargeStationCertificates :exec
 DELETE FROM charge_station_certificates WHERE charge_station_id = $1;
 
--- Triggers
--- name: GetChargeStationTriggers :many
-SELECT * FROM charge_station_triggers
-WHERE charge_station_id = $1
-ORDER BY created_at ASC;
+-- name: ListChargeStationCertificates :many
+SELECT DISTINCT ON (charge_station_id) charge_station_id, certificate_id, certificate_type, certificate, certificate_installation_status, send_after, created_at
+FROM charge_station_certificates
+WHERE charge_station_id > $1
+ORDER BY charge_station_id ASC, created_at DESC
+LIMIT $2;
 
--- name: AddChargeStationTrigger :one
-INSERT INTO charge_station_triggers (charge_station_id, message_type)
-VALUES ($1, $2)
+-- Triggers
+-- name: GetChargeStationTrigger :one
+SELECT * FROM charge_station_triggers
+WHERE charge_station_id = $1;
+
+-- name: SetChargeStationTrigger :one
+INSERT INTO charge_station_triggers (charge_station_id, message_type, trigger_status, send_after)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (charge_station_id) DO UPDATE
+SET message_type = EXCLUDED.message_type,
+    trigger_status = EXCLUDED.trigger_status,
+    send_after = EXCLUDED.send_after
 RETURNING *;
 
--- name: DeleteChargeStationTriggers :exec
+-- name: DeleteChargeStationTrigger :exec
 DELETE FROM charge_station_triggers WHERE charge_station_id = $1;
+
+-- name: ListChargeStationTriggers :many
+SELECT * FROM charge_station_triggers
+WHERE charge_station_id > $1
+ORDER BY charge_station_id ASC
+LIMIT $2;
