@@ -336,8 +336,8 @@ CREATE TABLE certificates (
 ```
 
 #### Task 2.6: Create OCPI & Locations Migration
-- [ ] Create `000005_create_ocpi_locations.up.sql`
-- [ ] Create `000005_create_ocpi_locations.down.sql`
+- [x] Create `000005_create_ocpi_locations.up.sql`
+- [x] Create `000005_create_ocpi_locations.down.sql`
 
 **File: `migrations/000005_create_ocpi_locations.up.sql`**
 ```sql
@@ -1086,27 +1086,30 @@ make postgres-test
 
 ## Progress Tracking
 
-### Current Phase: Phase 2 - Database Schema & Migrations ⏳
+### Current Phase: Phase 2 - Database Schema & Migrations ✅ → Moving to Phase 3
 
-**Last Updated:** 2026-02-05 00:51 GMT+1
+**Last Updated:** 2026-02-05 01:07 GMT+1
 
-### Completed Tasks: 20 / ~60 total
+### Completed Tasks: 22 / ~60 total
 
 #### Phase 1: ✅ COMPLETE
 - ✅ Task 1.1: Create Directory Structure  
 - ✅ Task 1.2: Configure sqlc  
 - ✅ Task 1.3: Add Make Targets  
 
-#### Phase 2: ⏳ IN PROGRESS
+#### Phase 2: ✅ COMPLETE
 - ✅ Task 2.2: Create Initial Migration (Tokens Table)
 - ✅ Task 2.3: Create Charge Stations Migration
 - ✅ Task 2.4: Create Transactions Migration
 - ✅ Task 2.5: Create Certificates Migration
-- ⏳ Task 2.6: Create OCPI & Locations Migration (NEXT)
+- ✅ Task 2.6: Create OCPI & Locations Migration
 
-#### Phase 3: ✅ COMPLETE (Tokens only)
+#### Phase 3: ⏳ IN PROGRESS
 - ✅ Task 3.1: Token Queries  
-- ✅ Task 3.5: Generate sqlc Code  
+- ⏳ Task 3.2: Charge Station Queries (NEXT)
+- ⬜ Task 3.3: Transaction Queries
+- ⬜ Task 3.4: Certificate, OCPI, and Location Queries
+- ⬜ Task 3.5: Generate sqlc Code  
 
 #### Phase 4: ⏳ IN PROGRESS
 - ✅ Task 4.1: Create Base Store Structure
