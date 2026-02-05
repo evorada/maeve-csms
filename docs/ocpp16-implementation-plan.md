@@ -73,15 +73,15 @@ func (r ResetHandler) HandleCallResult(ctx context.Context, chargeStationId stri
 
 ---
 
-#### Task 1.2: UnlockConnector Handler ✅❌
-- [ ] Create `manager/handlers/ocpp16/unlock_connector.go`
-- [ ] Implement `UnlockConnectorHandler` struct
-- [ ] Add `HandleCallResult` method
-- [ ] Add routing in `routing.go`
-- [ ] Add action mapping in `router.go`
-- [ ] Write unit test `unlock_connector_test.go`
-- [ ] Manual integration test
-- [ ] Commit: "Add UnlockConnector handler for OCPP 1.6"
+#### Task 1.2: UnlockConnector Handler ✅
+- [x] Create `manager/handlers/ocpp16/unlock_connector.go`
+- [x] Implement `UnlockConnectorHandler` struct
+- [x] Add `HandleCallResult` method
+- [x] Add routing in `routing.go`
+- [x] Add action mapping in `router.go`
+- [x] Write unit test `unlock_connector_test.go`
+- [x] Manual integration test
+- [x] Commit: "Add UnlockConnector handler for OCPP 1.6"
 
 ---
 
@@ -632,7 +632,7 @@ Tests token validation and connector availability checks.
 
 **Phase 1: Core Profile Completion**
 - [x] Task 1.1: Reset Handler
-- [ ] Task 1.2: UnlockConnector Handler
+- [x] Task 1.2: UnlockConnector Handler
 - [ ] Task 1.3: ClearCache Handler
 - [ ] Task 1.4: ChangeAvailability Handler
 - [ ] Task 1.5: ChangeConfiguration Call Handler
@@ -641,7 +641,7 @@ Tests token validation and connector availability checks.
 - [ ] Task 1.8: RemoteStartTransaction Handler
 - [ ] Task 1.9: RemoteStopTransaction Handler
 
-**Overall Progress:** 1/9 tasks (11%)
+**Overall Progress:** 2/9 tasks (22%)
 
 ---
 
