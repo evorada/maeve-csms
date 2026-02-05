@@ -539,13 +539,13 @@ ORDER BY timestamp ASC;
 ```
 
 #### Task 3.4: Certificate, OCPI, and Location Queries
-- [ ] Create `queries/certificates.sql`
-- [ ] Create `queries/ocpi.sql`
-- [ ] Create `queries/locations.sql`
+- [x] Create `queries/certificates.sql`
+- [x] Create `queries/ocpi.sql`
+- [x] Create `queries/locations.sql`
 
 #### Task 3.5: Generate sqlc Code
-- [ ] Run `sqlc generate` to create Go code
-- [ ] Verify generated files (db.go, models.go, querier.go, etc.)
+- [x] Run `sqlc generate` to create Go code
+- [x] Verify generated files (db.go, models.go, querier.go, etc.)
 
 **Command:**
 ```bash
@@ -1086,11 +1086,11 @@ make postgres-test
 
 ## Progress Tracking
 
-### Current Phase: Phase 3 - SQL Queries (sqlc) 📝
+### Current Phase: Phase 4 - Store Implementation 🔧
 
-**Last Updated:** 2026-02-05 01:39 GMT+1
+**Last Updated:** 2026-02-05 01:56 GMT+1
 
-### Completed Tasks: 24 / ~60 total
+### Completed Tasks: 27 / ~60 total
 
 #### Phase 1: ✅ COMPLETE
 - ✅ Task 1.1: Create Directory Structure  
@@ -1104,17 +1104,20 @@ make postgres-test
 - ✅ Task 2.5: Create Certificates Migration
 - ✅ Task 2.6: Create OCPI & Locations Migration
 
-#### Phase 3: ⏳ IN PROGRESS
+#### Phase 3: ✅ COMPLETE
 - ✅ Task 3.1: Token Queries  
 - ✅ Task 3.2: Charge Station Queries
 - ✅ Task 3.3: Transaction Queries
-- ⏳ Task 3.4: Certificate, OCPI, and Location Queries (NEXT)
-- ⬜ Task 3.5: Generate sqlc Code  
+- ✅ Task 3.4: Certificate, OCPI, and Location Queries
+- ✅ Task 3.5: Generate sqlc Code  
 
 #### Phase 4: ⏳ IN PROGRESS
 - ✅ Task 4.1: Create Base Store Structure
 - ✅ Task 4.2: Implement TokenStore Interface
-- ⏳ Task 4.3-4.6: Remaining store implementations (stubbed, ready for development)
+- ⏳ Task 4.3: Implement ChargeStationAuthStore Interface (NEXT)
+- ⬜ Task 4.4: Implement TransactionStore Interface
+- ⬜ Task 4.5: Implement Remaining Store Interfaces
+- ⬜ Task 4.6: Implement store.Engine Interface
 
 ### Blockers
 - None currently
