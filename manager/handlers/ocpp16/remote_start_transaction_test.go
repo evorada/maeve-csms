@@ -292,9 +292,9 @@ func TestRemoteStartTransactionHandler_TokenValidation(t *testing.T) {
 			expectError: false, // Handler logs warning but doesn't error
 		},
 		{
-			name:       "token not found",
-			idTag:      "UNKNOWN_TOKEN",
-			setupToken: func(engine *inmemory.Store) {},
+			name:        "token not found",
+			idTag:       "UNKNOWN_TOKEN",
+			setupToken:  func(engine *inmemory.Store) {},
 			expectError: false, // Handler logs warning but doesn't error
 		},
 	}

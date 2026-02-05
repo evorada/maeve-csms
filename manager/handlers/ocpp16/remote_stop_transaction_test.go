@@ -137,11 +137,11 @@ func TestRemoteStopTransactionHandler_TransactionValidation(t *testing.T) {
 	idToken := "VALID_TOKEN"
 
 	tests := []struct {
-		name           string
-		transactionId  int
-		setupStore     func(engine *inmemory.Store)
-		expectError    bool
-		expectWarning  bool
+		name          string
+		transactionId int
+		setupStore    func(engine *inmemory.Store)
+		expectError   bool
+		expectWarning bool
 	}{
 		{
 			name:          "transaction exists",
