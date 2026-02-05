@@ -3,7 +3,6 @@
 package postgres
 
 import (
-	"database/sql"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"

@@ -63,9 +63,13 @@ func initProvider(collectorAddr string) (func(context.Context) error, error) {
 			return nil, fmt.Errorf("failed to create resource: %w", err)
 		}
 
-		// Note the use of insecure transport here. TLS is recommended in production.
-		conn, err := grpc.NewClient(collectorAddr,
+		ctx, cancel := context.WithTimeout(ctx, time.Second)
+		defer cancel()
+		//nolint:staticcheck // grpc.DialContext is deprecated in newer versions, but we're on v1.56
+		conn, err := grpc.DialContext(ctx, collectorAddr,
+			// Note the use of insecure transport here. TLS is recommended in production.
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithBlock(), //nolint:staticcheck // grpc.WithBlock is deprecated in newer versions
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create gRPC connection to collector: %w", err)
