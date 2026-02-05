@@ -204,6 +204,13 @@ func NewRouter(emitter transport.Emitter,
 			},
 		},
 		CallResultRoutes: map[string]handlers.CallResultRoute{
+			"Reset": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.ResetJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp16.ResetResponseJson) },
+				RequestSchema:  "ocpp16/Reset.json",
+				ResponseSchema: "ocpp16/ResetResponse.json",
+				Handler:        ResetHandler{},
+			},
 			"DataTransfer": {
 				NewRequest:     func() ocpp.Request { return new(ocpp16.DataTransferJson) },
 				NewResponse:    func() ocpp.Response { return new(ocpp16.DataTransferResponseJson) },
@@ -282,6 +289,7 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 			reflect.TypeOf(&ocpp16.ChangeConfigurationJson{}):    "ChangeConfiguration",
 			reflect.TypeOf(&ocpp16.TriggerMessageJson{}):         "TriggerMessage",
 			reflect.TypeOf(&ocpp16.RemoteStartTransactionJson{}): "RemoteStartTransaction",
+			reflect.TypeOf(&ocpp16.ResetJson{}):                  "Reset",
 		},
 	}
 }
