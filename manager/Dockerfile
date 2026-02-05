@@ -31,5 +31,6 @@ COPY --from=builder /usr/bin/curl /usr/bin/curl
 USER 10000:10000
 
 COPY --from=builder --chown=nonroot:nonroot /app /app
+COPY --from=builder --chown=nonroot:nonroot /src/store/postgres/migrations /migrations
 
 ENTRYPOINT ["/app"]
