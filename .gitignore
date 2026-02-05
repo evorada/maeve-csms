@@ -137,3 +137,8 @@ config/certificates/*.key
 config/certificates/*.csr
 
 # End of https://www.toptal.com/developers/gitignore/api/goland+all,visualstudiocode,go
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
