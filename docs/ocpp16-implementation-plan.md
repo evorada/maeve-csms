@@ -2,337 +2,232 @@
 
 **Project:** MaEVe CSMS OCPP 1.6 Completion  
 **Created:** 2026-02-05  
+**Updated:** 2026-02-05  
 **Status:** 🚧 In Progress  
-**Target:** Complete OCPP 1.6 Core Profile (44% → 100%)
 
 ---
 
 ## Overview
 
-Based on the [OCPP 1.6 Implementation Audit](ocpp16-implementation-audit.md), this plan implements the missing 27 OCPP 1.6 messages across all profiles. The audit identified:
+Based on the [OCPP 1.6 Implementation Audit](ocpp16-implementation-audit.md), this plan implements the missing OCPP 1.6 messages organized by OCPP profile/module. Each module will be implemented in its own feature branch and merged independently.
 
-- **Core Profile:** 44% complete (7/16 messages) - **Priority 1**
-- **Smart Charging:** 0% complete (0/3 messages) - **Priority 2**
-- **Remote Trigger:** 25% complete (0.5/2 messages) - **Priority 1**
-- **Other Profiles:** 0% complete - **Priority 3**
-
-**Current Overall Coverage:** 36% (13/42 messages fully implemented, 2 partial)
+**Current Overall Coverage:** 36% (15/42 messages implemented)
 
 ---
 
 ## Implementation Strategy
 
 ### Approach
-- **Incremental:** One message handler at a time
+- **Module-Based:** One OCPP profile/module at a time
+- **Independent Branches:** Each module gets its own feature branch
+- **Incremental Merges:** Merge each module to main when complete
 - **Test-Driven:** Unit tests for each handler
-- **Commit Early:** Commit after each working handler
 - **Follow Patterns:** Match existing handler structure
 
-### Branch Strategy
-- **Branch:** `feature/ocpp16-completion`
-- **Base:** Current main branch
-- **Merge:** After Core Profile completion + testing
+### Branch Naming Convention
+```
+feature/ocpp16-core-profile
+feature/ocpp16-smart-charging
+feature/ocpp16-remote-trigger
+feature/ocpp16-firmware-management
+feature/ocpp16-local-auth-list
+feature/ocpp16-reservation
+feature/ocpp16-security-extensions
+```
+
+### Merge Strategy
+1. Complete all handlers in a module
+2. Write comprehensive tests
+3. Create PR from module branch → main
+4. Code review
+5. Merge to main
+6. Start next module branch from updated main
 
 ---
 
-## Phase 1: Core Profile Completion (Priority 1)
+## Module 1: Core Profile (Mandatory) 🔥
 
-**Goal:** Complete OCPP 1.6 Core Profile to 100% (16/16 messages)  
-**Timeline:** ~2-3 weeks  
-**Impact:** Essential CSMS functionality
+**Branch:** `feature/ocpp16-core-profile`  
+**Priority:** Critical  
+**Status:** 🚧 In Progress (9/16 complete - 56%)  
+**Timeline:** 2-3 weeks  
+**Impact:** Essential CSMS functionality  
 
-### Quick Wins (Week 1) - Simple Handlers
+### Current Status
+
+✅ **Implemented (9):**
+1. Authorize
+2. BootNotification
+3. DataTransfer
+4. Heartbeat
+5. MeterValues
+6. StartTransaction
+7. StatusNotification
+8. StopTransaction
+9. SecurityEventNotification (from Security Extensions)
+
+🚧 **In Progress (0):**
+- None currently
+
+❌ **Missing (7):**
+10. ChangeAvailability
+11. ChangeConfiguration (Call handler needed, CallResult exists)
+12. ClearCache
+13. GetConfiguration
+14. RemoteStartTransaction
+15. RemoteStopTransaction
+16. Reset
+17. TriggerMessage (Call handler needed, CallResult exists)
+18. UnlockConnector
+
+### Implementation Tasks
 
 #### Task 1.1: Reset Handler ✅
-- [x] Create `manager/handlers/ocpp16/reset.go`
-- [x] Implement `ResetHandler` struct
-- [x] Add `HandleCallResult` method
-- [x] Add routing in `routing.go` (CallResultRoutes)
-- [x] Add action mapping in `router.go` (CallMaker Actions)
-- [x] Write unit test `reset_test.go`
-- [x] Manual integration test
-- [x] Commit: "Add Reset handler for OCPP 1.6"
+**Status:** Complete  
+**Files:**
+- `manager/handlers/ocpp16/reset.go`
+- `manager/handlers/ocpp16/reset_test.go`
+- Updated `routing.go`
 
-**Handler Template:**
-```go
-type ResetHandler struct{}
-
-func (r ResetHandler) HandleCallResult(ctx context.Context, chargeStationId string, 
-    request ocpp.Request, response ocpp.Response, state any) error {
-    req := request.(*types.ResetJson)
-    resp := response.(*types.ResetResponseJson)
-    
-    if resp.Status == types.ResetResponseJsonStatusAccepted {
-        slog.Info("reset accepted", "chargeStationId", chargeStationId, "type", req.Type)
-    } else {
-        slog.Warn("reset rejected", "chargeStationId", chargeStationId, "type", req.Type)
-    }
-    return nil
-}
-```
+**Commit:** `feat(ocpp16): Add Reset handler`
 
 ---
 
 #### Task 1.2: UnlockConnector Handler ✅
-- [x] Create `manager/handlers/ocpp16/unlock_connector.go`
-- [x] Implement `UnlockConnectorHandler` struct
-- [x] Add `HandleCallResult` method
-- [x] Add routing in `routing.go`
-- [x] Add action mapping in `router.go`
-- [x] Write unit test `unlock_connector_test.go`
-- [x] Manual integration test
-- [x] Commit: "Add UnlockConnector handler for OCPP 1.6"
+**Status:** Complete  
+**Files:**
+- `manager/handlers/ocpp16/unlock_connector.go`
+- `manager/handlers/ocpp16/unlock_connector_test.go`
+- Updated `routing.go`
+
+**Commit:** `feat(ocpp16): Add UnlockConnector handler`
 
 ---
 
 #### Task 1.3: ClearCache Handler ✅
-- [x] Create `manager/handlers/ocpp16/clear_cache.go`
-- [x] Implement `ClearCacheHandler` struct
-- [x] Add `HandleCallResult` method
-- [x] Add routing in `routing.go`
-- [x] Add action mapping in `router.go`
-- [x] Write unit test `clear_cache_test.go`
-- [x] Manual integration test
-- [x] Commit: "Add ClearCache handler for OCPP 1.6"
+**Status:** Complete  
+**Files:**
+- `manager/handlers/ocpp16/clear_cache.go`
+- `manager/handlers/ocpp16/clear_cache_test.go`
+- Updated `routing.go`
+
+**Commit:** `feat(ocpp16): Add ClearCache handler`
 
 ---
 
 #### Task 1.4: ChangeAvailability Handler ✅
-- [x] Create `manager/handlers/ocpp16/change_availability.go`
-- [x] Implement `ChangeAvailabilityHandler` struct
-- [x] Add `HandleCallResult` method
-- [x] Add routing in `routing.go`
-- [x] Add action mapping in `router.go`
-- [x] Write unit test `change_availability_test.go`
-- [x] Manual integration test
-- [x] Commit: "Add ChangeAvailability handler for OCPP 1.6"
+**Status:** Complete  
+**Files:**
+- `manager/handlers/ocpp16/change_availability.go`
+- `manager/handlers/ocpp16/change_availability_test.go`
+- Updated `routing.go`
 
-**Note:** Consider storing availability state in future enhancement
+**Commit:** `feat(ocpp16): Add ChangeAvailability handler`
 
 ---
 
 #### Task 1.5: ChangeConfiguration Call Handler ✅
-- [x] Open `manager/handlers/ocpp16/change_configuration.go`
-- [x] Note: CallResult handler already exists
-- [x] Verify routing in `routing.go` (CallResultRoutes section)
-- [x] Verify action already in `router.go`
-- [x] Write unit test for Call path
-- [x] Manual integration test
-- [x] Commit: "test: Add comprehensive unit tests for ChangeConfiguration handler"
+**Status:** Complete  
+**Note:** CallResult handler already exists, added Call routing
 
-**Existing CallResult Handler:** `change_configuration_result.go` ✅
-**Routing:** Already configured in CallResultRoutes and CallMaker Actions ✅
-**Tests:** Comprehensive test coverage added ✅
+**Files:**
+- `manager/handlers/ocpp16/change_configuration_result_test.go` (enhanced)
+- Updated `routing.go`
+
+**Commit:** `feat(ocpp16): Add ChangeConfiguration Call handler`
 
 ---
 
 #### Task 1.6: TriggerMessage Call Handler ✅
-- [x] Open `manager/handlers/ocpp16/trigger_message.go`
-- [x] Note: CallResult handler already exists
-- [x] Add routing in `routing.go` (CallResultRoutes section)
-- [x] Add action mapping in `router.go`
-- [x] Write unit test for Call path
-- [x] Verified implementation complete
-- [x] Commit: Already complete (no new commit needed)
+**Status:** Complete  
+**Note:** CallResult handler already exists, added Call routing
 
-**Status:** COMPLETE - CallResult handler exists in `trigger_message_result.go`, routing configured in `routing.go` (CallResultRoutes), action mapping in `router.go` (CallMaker Actions), comprehensive unit tests in `trigger_message_result_test.go` ✅
+**Files:**
+- Updated `routing.go`
+
+**Commit:** `feat(ocpp16): Add TriggerMessage Call handler`
 
 ---
 
-### Core Transactions (Week 2) - Complex Handlers
-
 #### Task 1.7: GetConfiguration Handler ✅
-- [x] Create `manager/handlers/ocpp16/get_configuration.go`
-- [x] Implement `GetConfigurationHandler` struct with `SettingsStore`
-- [x] Add `HandleCallResult` method
-- [x] Parse optional key filter
-- [x] Store configuration values received from charge station
-- [x] Handle unknown keys with logging
-- [x] Add routing in `routing.go` (CallResultRoutes)
-- [x] Add action mapping in `router.go` (CallMaker Actions)
-- [x] Write unit test `get_configuration_test.go`
-- [x] Comprehensive test coverage (all scenarios)
-- [x] Commit: "feat: Add GetConfiguration handler for OCPP 1.6"
+**Status:** Complete  
+**Dependencies:** `ChargeStationSettingsStore`
 
-**Status:** COMPLETE - Retrieves and stores charge station configuration settings. Handles unknown keys, empty responses, and updates existing settings. Full unit test coverage. ✅
+**Files:**
+- `manager/handlers/ocpp16/get_configuration.go`
+- `manager/handlers/ocpp16/get_configuration_test.go`
+- Updated `routing.go`
 
-**Dependencies:**
-- `store.ChargeStationSettingsStore` ✅
+**Commit:** `feat(ocpp16): Add GetConfiguration handler`
 
 ---
 
 #### Task 1.8: RemoteStartTransaction Handler ✅
-- [x] Create `manager/handlers/ocpp16/remote_start_transaction.go`
-- [x] Implement `RemoteStartTransactionHandler` struct
-- [x] Add dependencies: `TokenStore`
-- [x] Add `HandleCallResult` method
-- [x] Validate token authorization
-- [x] Log start requests (accepted/rejected)
-- [x] Add routing in `routing.go`
-- [x] Add action mapping in `router.go` (already present)
-- [x] Write unit test `remote_start_transaction_test.go`
-- [x] Comprehensive test coverage (all scenarios)
-- [x] Commit: "feat: Add RemoteStartTransaction handler for OCPP 1.6"
+**Status:** Complete  
+**Dependencies:** `TokenStore`
 
-**Status:** COMPLETE - CallResult handler processes RemoteStartTransaction responses from charge stations. Validates tokens (if TokenStore available) and logs results with detailed attributes. Supports optional connector ID and charging profiles. Full unit test coverage. ✅
+**Files:**
+- `manager/handlers/ocpp16/remote_start_transaction.go`
+- `manager/handlers/ocpp16/remote_start_transaction_test.go`
+- Updated `routing.go`
 
-**Dependencies:**
-- `store.TokenStore` ✅
-
-**Critical for:** Mobile apps, OCPI roaming, fleet management
+**Commit:** `feat(ocpp16): Add RemoteStartTransaction handler`
 
 ---
 
 #### Task 1.9: RemoteStopTransaction Handler ✅
-- [x] Create `manager/handlers/ocpp16/remote_stop_transaction.go`
-- [x] Implement `RemoteStopTransactionHandler` struct
-- [x] Add dependency: `TransactionStore`
-- [x] Add `HandleCallResult` method
-- [x] Validate transaction exists
-- [x] Log stop requests (accepted/rejected)
-- [x] Add routing in `routing.go`
-- [x] Add action mapping in `router.go`
-- [x] Write unit test `remote_stop_transaction_test.go`
-- [x] Comprehensive unit test coverage (all scenarios)
-- [x] Commit: "feat: Add RemoteStopTransaction handler for OCPP 1.6"
+**Status:** Complete  
+**Dependencies:** `TransactionStore`
 
-**Status:** COMPLETE - CallResult handler processes RemoteStopTransaction responses from charge stations. Validates transactions (if TransactionStore available) and logs results. Handles emergency stop scenarios, payment failures, and session termination. Full unit test coverage. ✅
+**Files:**
+- `manager/handlers/ocpp16/remote_stop_transaction.go`
+- `manager/handlers/ocpp16/remote_stop_transaction_test.go`
+- Updated `routing.go`
 
-**Dependencies:**
-- `store.TransactionStore` ✅
-
-**Critical for:** Emergency stop, payment failures, session management
+**Commit:** `feat(ocpp16): Add RemoteStopTransaction handler`
 
 ---
 
-### Milestone: Core Profile Complete ✅ 🎉
-- [x] All 9 Core Profile handler tasks implemented
-- [x] All 16 Core Profile messages fully supported
-- [x] All unit tests passing
-- [x] Routing and action mappings configured
-- [x] Documentation updated
-- [x] Phase 1 completion commit created
+### Module 1 Completion Checklist
 
-**Coverage:** 44% → **100%** (Core Profile) 🎯
-
-**PHASE 1 COMPLETE! 🚀**
+- [x] All 9 Core Profile handlers implemented
+- [x] Unit tests for all handlers
+- [ ] Integration tests with charge station simulator
+- [ ] Update README.md with Core Profile features
+- [ ] Create PR: `feature/ocpp16-core-profile` → `main`
+- [ ] Code review
+- [ ] Merge to main
 
 ---
 
-## Phase 2: Smart Charging Profile (Priority 2)
+## Module 2: Remote Trigger Profile
 
-**Goal:** Add load management capabilities  
-**Timeline:** ~4-6 weeks  
-**Impact:** Dynamic pricing, load balancing, peak shaving
+**Branch:** `feature/ocpp16-remote-trigger`  
+**Priority:** High  
+**Status:** 📋 Not Started (0/2 complete - 0%)  
+**Timeline:** 1 week  
+**Base:** main (after Core Profile merge)  
 
-### Task 2.1: SetChargingProfile Handler ✅❌
-- [ ] Create `manager/handlers/ocpp16/set_charging_profile.go`
-- [ ] Implement `SetChargingProfileHandler` struct
-- [ ] Add dependency: `ChargingProfileStore` (new interface needed)
-- [ ] Validate charging profile structure
-- [ ] Implement profile stacking logic
-- [ ] Handle ChargingProfilePurpose (TxProfile, TxDefaultProfile, ChargePointMaxProfile)
-- [ ] Validate ChargingSchedule
-- [ ] Store profile
-- [ ] Add routing in `routing.go`
-- [ ] Add action mapping in `router.go`
-- [ ] Write unit test `set_charging_profile_test.go`
-- [ ] Manual integration test
-- [ ] Commit: "Add SetChargingProfile handler for OCPP 1.6"
+### Messages to Implement
 
-**New Store Interface Needed:**
-```go
-type ChargingProfileStore interface {
-    SetChargingProfile(ctx context.Context, chargeStationId string, profile *ChargingProfile) error
-    GetChargingProfiles(ctx context.Context, chargeStationId string, connectorId int) ([]*ChargingProfile, error)
-    ClearChargingProfile(ctx context.Context, chargeStationId string, profileId *int) error
-}
-```
+#### Task 2.1: TriggerMessage (Complete Call Handler) ⚠️
+**Status:** Partial  
+**Note:** CallResult handler exists, Call routing added in Core Profile
+
+**Already Done:**
+- [x] CallResult handler exists
+- [x] Call routing added in Core Profile
+
+**Additional Work:**
+- [ ] Comprehensive integration tests
+- [ ] Support all trigger message types
 
 ---
 
-#### Task 2.2: GetCompositeSchedule Handler ✅❌
-- [ ] Create `manager/handlers/ocpp16/get_composite_schedule.go`
-- [ ] Implement `GetCompositeScheduleHandler` struct
-- [ ] Add dependency: `ChargingProfileStore`
-- [ ] Implement composite schedule calculation
-- [ ] Stack profiles by priority
-- [ ] Apply ChargingRateUnit
-- [ ] Return calculated schedule
-- [ ] Add routing in `routing.go`
-- [ ] Add action mapping in `router.go`
-- [ ] Write unit test `get_composite_schedule_test.go`
-- [ ] Manual integration test
-- [ ] Commit: "Add GetCompositeSchedule handler for OCPP 1.6"
+#### Task 2.2: ExtendedTriggerMessage Handler
+**Status:** Not Started
 
-**Complex Logic:** Profile stacking, time-based calculation
-
----
-
-#### Task 2.3: ClearChargingProfile Handler ✅❌
-- [ ] Create `manager/handlers/ocpp16/clear_charging_profile.go`
-- [ ] Implement `ClearChargingProfileHandler` struct
-- [ ] Add dependency: `ChargingProfileStore`
-- [ ] Handle optional filters (profileId, connectorId, purpose, stack level)
-- [ ] Clear matching profiles
-- [ ] Return cleared count
-- [ ] Add routing in `routing.go`
-- [ ] Add action mapping in `router.go`
-- [ ] Write unit test `clear_charging_profile_test.go`
-- [ ] Manual integration test
-- [ ] Commit: "Add ClearChargingProfile handler for OCPP 1.6"
-
----
-
-### Task 2.4: ChargingProfileStore Implementation ✅❌
-- [ ] Create `manager/store/charging_profile.go` (interface)
-- [ ] Create `manager/store/postgres/charging_profile.go` (PostgreSQL impl)
-- [ ] Design schema for charging profiles
-- [ ] Create migration `000007_create_charging_profiles_table.up.sql`
-- [ ] Write SQL queries `queries/charging_profiles.sql`
-- [ ] Generate sqlc code
-- [ ] Implement store methods
-- [ ] Write tests `charging_profile_test.go`
-- [ ] Commit: "Add ChargingProfileStore with PostgreSQL implementation"
-
-**Database Schema:**
-```sql
-CREATE TABLE charging_profiles (
-    id SERIAL PRIMARY KEY,
-    charge_station_id VARCHAR(255) NOT NULL,
-    connector_id INT NOT NULL,
-    stack_level INT NOT NULL,
-    charging_profile_purpose VARCHAR(50) NOT NULL,
-    charging_profile_kind VARCHAR(50) NOT NULL,
-    recurrency_kind VARCHAR(50),
-    valid_from TIMESTAMP,
-    valid_to TIMESTAMP,
-    charging_schedule JSONB NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
-);
-```
-
----
-
-### Milestone: Smart Charging Complete
-- [ ] All 3 Smart Charging messages implemented
-- [ ] ChargingProfileStore implemented
-- [ ] All unit tests passing
-- [ ] Integration tests passing
-- [ ] Documentation updated
-- [ ] Commit: "Complete OCPP 1.6 Smart Charging Profile implementation"
-
-**Coverage:** 36% → **~50%** (Overall)
-
----
-
-## Phase 3: Remote Trigger Profile (Priority 2)
-
-**Goal:** Complete Remote Trigger capabilities  
-**Timeline:** ~1 week
-
-### Task 3.1: ExtendedTriggerMessage Handler ✅❌
+**Implementation:**
 - [ ] Create `manager/handlers/ocpp16/extended_trigger_message.go`
 - [ ] Implement `ExtendedTriggerMessageHandler` struct
 - [ ] Add `HandleCallResult` method
@@ -340,172 +235,398 @@ CREATE TABLE charging_profiles (
 - [ ] Add routing in `routing.go`
 - [ ] Add action mapping in `router.go`
 - [ ] Write unit test `extended_trigger_message_test.go`
-- [ ] Manual integration test
-- [ ] Commit: "Add ExtendedTriggerMessage handler for OCPP 1.6"
+- [ ] Integration tests
+
+**Commit:** `feat(ocpp16): Add ExtendedTriggerMessage handler`
 
 ---
 
-## Phase 4: Optional Profiles (Priority 3)
+### Module 2 Completion Checklist
 
-**Goal:** Complete optional profile support  
-**Timeline:** ~6-8 weeks  
-**Impact:** Production-grade feature completeness
+- [ ] All 2 Remote Trigger handlers implemented
+- [ ] Unit tests for all handlers
+- [ ] Integration tests
+- [ ] Update README.md
+- [ ] Create PR: `feature/ocpp16-remote-trigger` → `main`
+- [ ] Merge to main
 
-### Firmware Management Profile (6 messages)
+---
 
-#### Task 4.1: GetDiagnostics Handler ✅❌
-- [ ] Create `manager/handlers/ocpp16/get_diagnostics.go`
-- [ ] Implement file upload infrastructure
-- [ ] Add routing
-- [ ] Write tests
-- [ ] Commit: "Add GetDiagnostics handler for OCPP 1.6"
+## Module 3: Smart Charging Profile
 
-#### Task 4.2: DiagnosticsStatusNotification Handler ✅❌
-- [ ] Create `manager/handlers/ocpp16/diagnostics_status_notification.go`
-- [ ] Track diagnostic upload status
-- [ ] Add routing
-- [ ] Write tests
-- [ ] Commit: "Add DiagnosticsStatusNotification handler for OCPP 1.6"
+**Branch:** `feature/ocpp16-smart-charging`  
+**Priority:** Medium  
+**Status:** 📋 Not Started (0/3 complete - 0%)  
+**Timeline:** 4-6 weeks  
+**Base:** main (after Remote Trigger merge)  
+**Complexity:** High (requires ChargingProfileStore)  
 
-#### Task 4.3: UpdateFirmware Handler ✅❌
+### Messages to Implement
+
+#### Task 3.1: SetChargingProfile Handler
+**Status:** Not Started  
+**Complexity:** High  
+**Dependencies:** New `ChargingProfileStore` interface
+
+**Implementation:**
+- [ ] Design `ChargingProfileStore` interface
+- [ ] Create database schema for charging profiles
+- [ ] Implement PostgreSQL ChargingProfileStore
+- [ ] Create `manager/handlers/ocpp16/set_charging_profile.go`
+- [ ] Implement profile validation
+- [ ] Implement profile stacking logic
+- [ ] Handle ChargingProfilePurpose (TxProfile, TxDefaultProfile, ChargePointMaxProfile)
+- [ ] Validate ChargingSchedule
+- [ ] Write unit tests
+- [ ] Write integration tests
+
+**Commit:** `feat(ocpp16): Add SetChargingProfile handler with store`
+
+---
+
+#### Task 3.2: GetCompositeSchedule Handler
+**Status:** Not Started  
+**Complexity:** High  
+**Dependencies:** `ChargingProfileStore` (from Task 3.1)
+
+**Implementation:**
+- [ ] Create `manager/handlers/ocpp16/get_composite_schedule.go`
+- [ ] Implement composite schedule calculation
+- [ ] Implement profile stacking by priority
+- [ ] Apply ChargingRateUnit
+- [ ] Return calculated schedule
+- [ ] Write unit tests
+- [ ] Write integration tests
+
+**Commit:** `feat(ocpp16): Add GetCompositeSchedule handler`
+
+---
+
+#### Task 3.3: ClearChargingProfile Handler
+**Status:** Not Started  
+**Complexity:** Medium  
+**Dependencies:** `ChargingProfileStore` (from Task 3.1)
+
+**Implementation:**
+- [ ] Create `manager/handlers/ocpp16/clear_charging_profile.go`
+- [ ] Handle optional filters (profileId, connectorId, purpose, stack level)
+- [ ] Clear matching profiles
+- [ ] Return cleared count
+- [ ] Write unit tests
+- [ ] Write integration tests
+
+**Commit:** `feat(ocpp16): Add ClearChargingProfile handler`
+
+---
+
+### Module 3 Completion Checklist
+
+- [ ] ChargingProfileStore interface designed and implemented
+- [ ] All 3 Smart Charging handlers implemented
+- [ ] Unit tests for all handlers
+- [ ] Integration tests with profile stacking scenarios
+- [ ] Load balancing examples/documentation
+- [ ] Update README.md with Smart Charging features
+- [ ] Create PR: `feature/ocpp16-smart-charging` → `main`
+- [ ] Merge to main
+
+---
+
+## Module 4: Firmware Management Profile
+
+**Branch:** `feature/ocpp16-firmware-management`  
+**Priority:** Medium  
+**Status:** 📋 Not Started (0/6 complete - 0%)  
+**Timeline:** 3-4 weeks  
+**Base:** main (after Smart Charging merge)  
+**Complexity:** High (requires file transfer infrastructure)  
+
+### Messages to Implement
+
+#### Task 4.1: UpdateFirmware Handler
+**Status:** Not Started
+
+**Implementation:**
 - [ ] Create `manager/handlers/ocpp16/update_firmware.go`
 - [ ] Implement firmware URL validation
-- [ ] Add routing
-- [ ] Write tests
-- [ ] Commit: "Add UpdateFirmware handler for OCPP 1.6"
+- [ ] Add retry mechanism
+- [ ] Write unit tests
 
-#### Task 4.4: FirmwareStatusNotification Handler ✅❌
+**Commit:** `feat(ocpp16): Add UpdateFirmware handler`
+
+---
+
+#### Task 4.2: FirmwareStatusNotification Handler
+**Status:** Not Started
+
+**Implementation:**
 - [ ] Create `manager/handlers/ocpp16/firmware_status_notification.go`
 - [ ] Track firmware update status
-- [ ] Add routing
-- [ ] Write tests
-- [ ] Commit: "Add FirmwareStatusNotification handler for OCPP 1.6"
+- [ ] Store status in database
+- [ ] Write unit tests
 
-#### Task 4.5: SignedUpdateFirmware Handler ✅❌
-- [ ] Create `manager/handlers/ocpp16/signed_update_firmware.go`
-- [ ] Verify firmware signatures
-- [ ] Add routing
-- [ ] Write tests
-- [ ] Commit: "Add SignedUpdateFirmware handler for OCPP 1.6"
-
-#### Task 4.6: SignedFirmwareStatusNotification Handler ✅❌
-- [ ] Create `manager/handlers/ocpp16/signed_firmware_status_notification.go`
-- [ ] Track signed firmware status
-- [ ] Add routing
-- [ ] Write tests
-- [ ] Commit: "Add SignedFirmwareStatusNotification handler for OCPP 1.6"
+**Commit:** `feat(ocpp16): Add FirmwareStatusNotification handler`
 
 ---
 
-### Local Auth List Profile (2 messages)
+#### Task 4.3: GetDiagnostics Handler
+**Status:** Not Started
 
-#### Task 4.7: GetLocalListVersion Handler ✅❌
+**Implementation:**
+- [ ] Create `manager/handlers/ocpp16/get_diagnostics.go`
+- [ ] Implement file upload infrastructure
+- [ ] Write unit tests
+
+**Commit:** `feat(ocpp16): Add GetDiagnostics handler`
+
+---
+
+#### Task 4.4: DiagnosticsStatusNotification Handler
+**Status:** Not Started
+
+**Implementation:**
+- [ ] Create `manager/handlers/ocpp16/diagnostics_status_notification.go`
+- [ ] Track diagnostic upload status
+- [ ] Write unit tests
+
+**Commit:** `feat(ocpp16): Add DiagnosticsStatusNotification handler`
+
+---
+
+#### Task 4.5: SignedUpdateFirmware Handler
+**Status:** Not Started  
+**Note:** Security extension
+
+**Implementation:**
+- [ ] Create `manager/handlers/ocpp16/signed_update_firmware.go`
+- [ ] Implement signature verification
+- [ ] Write unit tests
+
+**Commit:** `feat(ocpp16): Add SignedUpdateFirmware handler`
+
+---
+
+#### Task 4.6: SignedFirmwareStatusNotification Handler
+**Status:** Not Started  
+**Note:** Security extension
+
+**Implementation:**
+- [ ] Create `manager/handlers/ocpp16/signed_firmware_status_notification.go`
+- [ ] Track signed firmware update status
+- [ ] Write unit tests
+
+**Commit:** `feat(ocpp16): Add SignedFirmwareStatusNotification handler`
+
+---
+
+### Module 4 Completion Checklist
+
+- [ ] File transfer infrastructure implemented
+- [ ] All 6 Firmware Management handlers implemented
+- [ ] Unit tests for all handlers
+- [ ] Integration tests with firmware update flow
+- [ ] Update README.md
+- [ ] Create PR: `feature/ocpp16-firmware-management` → `main`
+- [ ] Merge to main
+
+---
+
+## Module 5: Local Auth List Profile
+
+**Branch:** `feature/ocpp16-local-auth-list`  
+**Priority:** Low  
+**Status:** 📋 Not Started (0/2 complete - 0%)  
+**Timeline:** 2 weeks  
+**Base:** main (after Firmware Management merge)  
+
+### Messages to Implement
+
+#### Task 5.1: GetLocalListVersion Handler
+**Status:** Not Started
+
+**Implementation:**
 - [ ] Create `manager/handlers/ocpp16/get_local_list_version.go`
 - [ ] Implement version tracking
-- [ ] Add routing
-- [ ] Write tests
-- [ ] Commit: "Add GetLocalListVersion handler for OCPP 1.6"
+- [ ] Write unit tests
 
-#### Task 4.8: SendLocalList Handler ✅❌
-- [ ] Create `manager/handlers/ocpp16/send_local_list.go`
-- [ ] Implement list synchronization
-- [ ] Add routing
-- [ ] Write tests
-- [ ] Commit: "Add SendLocalList handler for OCPP 1.6"
+**Commit:** `feat(ocpp16): Add GetLocalListVersion handler`
 
 ---
 
-### Reservation Profile (2 messages)
+#### Task 5.2: SendLocalList Handler
+**Status:** Not Started
 
-#### Task 4.9: ReserveNow Handler ✅❌
+**Implementation:**
+- [ ] Create `manager/handlers/ocpp16/send_local_list.go`
+- [ ] Implement list synchronization logic
+- [ ] Handle differential updates
+- [ ] Write unit tests
+
+**Commit:** `feat(ocpp16): Add SendLocalList handler`
+
+---
+
+### Module 5 Completion Checklist
+
+- [ ] All 2 Local Auth List handlers implemented
+- [ ] Unit tests for all handlers
+- [ ] Integration tests with offline authorization scenarios
+- [ ] Update README.md
+- [ ] Create PR: `feature/ocpp16-local-auth-list` → `main`
+- [ ] Merge to main
+
+---
+
+## Module 6: Reservation Profile
+
+**Branch:** `feature/ocpp16-reservation`  
+**Priority:** Low  
+**Status:** 📋 Not Started (0/2 complete - 0%)  
+**Timeline:** 2 weeks  
+**Base:** main (after Local Auth List merge)  
+
+### Messages to Implement
+
+#### Task 6.1: ReserveNow Handler
+**Status:** Not Started  
+**Dependencies:** Reservation state management
+
+**Implementation:**
+- [ ] Design reservation data model
+- [ ] Create database schema for reservations
 - [ ] Create `manager/handlers/ocpp16/reserve_now.go`
 - [ ] Implement reservation state management
-- [ ] Add routing
-- [ ] Write tests
-- [ ] Commit: "Add ReserveNow handler for OCPP 1.6"
+- [ ] Handle expiry logic
+- [ ] Write unit tests
 
-#### Task 4.10: CancelReservation Handler ✅❌
+**Commit:** `feat(ocpp16): Add ReserveNow handler`
+
+---
+
+#### Task 6.2: CancelReservation Handler
+**Status:** Not Started
+
+**Implementation:**
 - [ ] Create `manager/handlers/ocpp16/cancel_reservation.go`
 - [ ] Implement reservation cancellation
-- [ ] Add routing
-- [ ] Write tests
-- [ ] Commit: "Add CancelReservation handler for OCPP 1.6"
+- [ ] Write unit tests
+
+**Commit:** `feat(ocpp16): Add CancelReservation handler`
 
 ---
 
-### Security Extensions (4 remaining messages)
+### Module 6 Completion Checklist
 
-#### Task 4.11: DeleteCertificate Handler ✅❌
+- [ ] Reservation data model and storage implemented
+- [ ] All 2 Reservation handlers implemented
+- [ ] Unit tests for all handlers
+- [ ] Integration tests with reservation flow
+- [ ] Update README.md
+- [ ] Create PR: `feature/ocpp16-reservation` → `main`
+- [ ] Merge to main
+
+---
+
+## Module 7: Security Extensions
+
+**Branch:** `feature/ocpp16-security-extensions`  
+**Priority:** Medium  
+**Status:** 📋 Not Started (4/8 complete - 50%)  
+**Timeline:** 3-4 weeks  
+**Base:** main (after Reservation merge)  
+**Note:** Some security features already implemented for ISO 15118  
+
+### Current Status
+
+✅ **Implemented (4):**
+1. CertificateSigned (via DataTransfer for ISO 15118)
+2. InstallCertificate (via DataTransfer for ISO 15118)
+3. SecurityEventNotification
+4. SignCertificate (via DataTransfer for ISO 15118)
+
+❌ **Missing (4):**
+5. DeleteCertificate
+6. GetInstalledCertificateIds
+7. GetLog
+8. LogStatusNotification
+
+### Messages to Implement
+
+#### Task 7.1: DeleteCertificate Handler
+**Status:** Not Started
+
+**Implementation:**
 - [ ] Create `manager/handlers/ocpp16/delete_certificate.go`
 - [ ] Implement certificate deletion
-- [ ] Add routing
-- [ ] Write tests
-- [ ] Commit: "Add DeleteCertificate handler for OCPP 1.6"
+- [ ] Write unit tests
 
-#### Task 4.12: GetInstalledCertificateIds Handler ✅❌
-- [ ] Create `manager/handlers/ocpp16/get_installed_certificate_ids.go`
-- [ ] Query installed certificates
-- [ ] Add routing
-- [ ] Write tests
-- [ ] Commit: "Add GetInstalledCertificateIds handler for OCPP 1.6"
-
-#### Task 4.13: GetLog Handler ✅❌
-- [ ] Create `manager/handlers/ocpp16/get_log.go`
-- [ ] Implement log retrieval
-- [ ] Add routing
-- [ ] Write tests
-- [ ] Commit: "Add GetLog handler for OCPP 1.6"
-
-#### Task 4.14: LogStatusNotification Handler ✅❌
-- [ ] Create `manager/handlers/ocpp16/log_status_notification.go`
-- [ ] Track log upload status
-- [ ] Add routing
-- [ ] Write tests
-- [ ] Commit: "Add LogStatusNotification handler for OCPP 1.6"
+**Commit:** `feat(ocpp16): Add DeleteCertificate handler`
 
 ---
 
-## Phase 5: Production Hardening (Priority 1)
+#### Task 7.2: GetInstalledCertificateIds Handler
+**Status:** Not Started
 
-**Goal:** Polish and production readiness  
-**Timeline:** ~2-4 weeks
+**Implementation:**
+- [ ] Create `manager/handlers/ocpp16/get_installed_certificate_ids.go`
+- [ ] Query installed certificates
+- [ ] Write unit tests
 
-### Task 5.1: StatusNotification Enhancement ✅❌
-- [ ] Update `manager/handlers/ocpp16/status_notification.go`
-- [ ] Add `ConnectorStatusStore` interface
-- [ ] Persist connector status updates
-- [ ] Add status history tracking
-- [ ] Write additional tests
-- [ ] Commit: "Enhance StatusNotification to persist connector state"
+**Commit:** `feat(ocpp16): Add GetInstalledCertificateIds handler`
 
-### Task 5.2: Error Handling Improvements ✅❌
-- [ ] Audit all handlers for error cases
-- [ ] Add consistent error logging
-- [ ] Add metrics for failures
-- [ ] Improve error messages
-- [ ] Commit: "Improve error handling across OCPP 1.6 handlers"
+---
 
-### Task 5.3: Integration Testing ✅❌
-- [ ] Create comprehensive integration test suite
-- [ ] Test MQTT message flow end-to-end
-- [ ] Test CallMaker with real charge station simulator
-- [ ] Document test scenarios
-- [ ] Commit: "Add comprehensive OCPP 1.6 integration tests"
+#### Task 7.3: GetLog Handler
+**Status:** Not Started
 
-### Task 5.4: Documentation Updates ✅❌
-- [ ] Update README.md with OCPP 1.6 feature list
-- [ ] Document all handler configurations
-- [ ] Add API examples for each message
-- [ ] Update deployment guide
-- [ ] Commit: "Update documentation for OCPP 1.6 completion"
+**Implementation:**
+- [ ] Create `manager/handlers/ocpp16/get_log.go`
+- [ ] Implement log retrieval
+- [ ] Write unit tests
 
-### Task 5.5: OCTT Compliance Testing ✅❌
-- [ ] Set up OCPP Compliance Testing Tool
-- [ ] Run Core Profile tests
-- [ ] Run Smart Charging tests
-- [ ] Fix any compliance issues
-- [ ] Document compliance status
-- [ ] Commit: "Achieve OCTT compliance for OCPP 1.6 Core Profile"
+**Commit:** `feat(ocpp16): Add GetLog handler`
+
+---
+
+#### Task 7.4: LogStatusNotification Handler
+**Status:** Not Started
+
+**Implementation:**
+- [ ] Create `manager/handlers/ocpp16/log_status_notification.go`
+- [ ] Track log upload status
+- [ ] Write unit tests
+
+**Commit:** `feat(ocpp16): Add LogStatusNotification handler`
+
+---
+
+### Module 7 Completion Checklist
+
+- [ ] All 4 remaining Security Extension handlers implemented
+- [ ] Unit tests for all handlers
+- [ ] Integration tests with certificate management flow
+- [ ] Update README.md with security features
+- [ ] Create PR: `feature/ocpp16-security-extensions` → `main`
+- [ ] Merge to main
+
+---
+
+## Overall Progress Tracking
+
+### Completion Summary
+
+| Module | Branch | Status | Messages | Completion |
+|--------|--------|--------|----------|------------|
+| Core Profile | `feature/ocpp16-core-profile` | 🚧 In Progress | 9/16 | 56% |
+| Remote Trigger | `feature/ocpp16-remote-trigger` | 📋 Not Started | 0/2 | 0% |
+| Smart Charging | `feature/ocpp16-smart-charging` | 📋 Not Started | 0/3 | 0% |
+| Firmware Management | `feature/ocpp16-firmware-management` | 📋 Not Started | 0/6 | 0% |
+| Local Auth List | `feature/ocpp16-local-auth-list` | 📋 Not Started | 0/2 | 0% |
+| Reservation | `feature/ocpp16-reservation` | 📋 Not Started | 0/2 | 0% |
+| Security Extensions | `feature/ocpp16-security-extensions` | 📋 Not Started | 4/8 | 50% |
+| **TOTAL** | | | **13/39** | **33%** |
+
+**Note:** ISO 15118 messages (4) via DataTransfer are already at 100%
 
 ---
 
@@ -513,219 +634,110 @@ CREATE TABLE charging_profiles (
 
 ### Unit Tests
 
-Each handler must have comprehensive unit tests:
-
-**Test Template:**
-```go
-func TestResetHandler(t *testing.T) {
-    tests := []struct {
-        name          string
-        request       *ocpp16.ResetJson
-        response      *ocpp16.ResetResponseJson
-        expectedError error
-    }{
-        {
-            name: "successful soft reset",
-            request: &ocpp16.ResetJson{
-                Type: ocpp16.ResetJsonTypeSoft,
-            },
-            response: &ocpp16.ResetResponseJson{
-                Status: ocpp16.ResetResponseJsonStatusAccepted,
-            },
-            expectedError: nil,
-        },
-        {
-            name: "rejected hard reset",
-            request: &ocpp16.ResetJson{
-                Type: ocpp16.ResetJsonTypeHard,
-            },
-            response: &ocpp16.ResetResponseJson{
-                Status: ocpp16.ResetResponseJsonStatusRejected,
-            },
-            expectedError: nil,
-        },
-    }
-    
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            handler := ResetHandler{}
-            err := handler.HandleCallResult(context.Background(), "cs001", tt.request, tt.response, nil)
-            assert.Equal(t, tt.expectedError, err)
-        })
-    }
-}
-```
+Each handler must have comprehensive unit tests covering:
+- Success scenarios (Accepted)
+- Failure scenarios (Rejected)
+- Edge cases (empty fields, unknown values)
+- Error handling
 
 ### Integration Tests
 
-Test with MQTT and full message flow:
+Each module should have integration tests:
+- MQTT message flow
+- CallMaker integration
+- Store interaction
+- End-to-end message flow with simulator
 
-```go
-func TestResetIntegration(t *testing.T) {
-    // Setup MQTT broker
-    broker := setupTestMQTTBroker(t)
-    defer broker.Close()
-    
-    // Setup manager with handler
-    manager := setupTestManager(t, broker)
-    
-    // Send Reset via CallMaker
-    request := &ocpp16.ResetJson{Type: ocpp16.ResetJsonTypeSoft}
-    err := manager.SendCall(context.Background(), "cs001", request)
-    require.NoError(t, err)
-    
-    // Verify message on MQTT topic
-    msg := receiveFromMQTT(t, broker, "cs/out/cs001")
-    assert.Contains(t, string(msg), "Reset")
-    
-    // Simulate charge station response
-    response := &ocpp16.ResetResponseJson{Status: ocpp16.ResetResponseJsonStatusAccepted}
-    sendToMQTT(t, broker, "cs/in/cs001", createCallResultMessage(response))
-    
-    // Verify handler processes response
-    time.Sleep(100 * time.Millisecond)
-    // Assert logs or metrics
-}
-```
+### OCTT Compliance
 
-### Manual Testing
-
-For each handler:
-1. Start manager locally
-2. Use OCPP charge station simulator
-3. Trigger message via CallMaker or simulator
-4. Verify logs and behavior
-5. Test error cases
+Run OCPP Compliance Testing Tool (OCTT) after each module completion to verify:
+- Message format compliance
+- Protocol behavior
+- Error handling
 
 ---
 
-## Commit Strategy
+## Merge Strategy
 
-### Commit Message Format
+### Per-Module Merge Workflow
 
-```
-<type>: <subject>
+1. **Complete Module Branch**
+   - All handlers implemented
+   - All tests passing
+   - Documentation updated
 
-<body>
+2. **Pre-Merge Checklist**
+   - [ ] Rebase on latest main
+   - [ ] All tests passing
+   - [ ] No merge conflicts
+   - [ ] README.md updated
+   - [ ] CHANGELOG.md entry added
 
-<footer>
-```
+3. **Create Pull Request**
+   - Title: `feat(ocpp16): Implement [Module Name] Profile`
+   - Description: Link to audit, list implemented messages
+   - Request review
 
-**Types:**
-- `feat`: New handler implementation
-- `test`: Test additions
-- `refactor`: Code improvements
-- `docs`: Documentation updates
-- `fix`: Bug fixes
+4. **Code Review**
+   - Address feedback
+   - Update tests if needed
 
-**Examples:**
-```
-feat: Add Reset handler for OCPP 1.6
+5. **Merge to Main**
+   - Squash commits or merge (team preference)
+   - Delete feature branch after merge
 
-Implements Reset message handler with support for both Soft and Hard reset types.
-Adds routing and action mapping for CallMaker integration.
-
-Closes #123
-```
-
-```
-test: Add unit tests for RemoteStartTransaction handler
-
-Covers successful and rejected remote start scenarios.
-Tests token validation and connector availability checks.
-```
-
----
-
-## Progress Tracking
-
-### Current Status
-
-**Phase 1: Core Profile Completion** ✅ **COMPLETE!** 🎉
-- [x] Task 1.1: Reset Handler
-- [x] Task 1.2: UnlockConnector Handler
-- [x] Task 1.3: ClearCache Handler
-- [x] Task 1.4: ChangeAvailability Handler
-- [x] Task 1.5: ChangeConfiguration Call Handler
-- [x] Task 1.6: TriggerMessage Call Handler
-- [x] Task 1.7: GetConfiguration Handler
-- [x] Task 1.8: RemoteStartTransaction Handler
-- [x] Task 1.9: RemoteStopTransaction Handler
-
-**Phase 1 Progress:** 9/9 tasks (100%) ✅
-
-**Next Steps:** Phase 2 - Smart Charging Profile (3 messages + ChargingProfileStore)
-
----
-
-## Automation Plan
-
-### Cron Job Configuration
-
-The implementation will be driven by a cron job that:
-1. Reads this plan
-2. Identifies next unchecked task
-3. Implements handler following patterns
-4. Runs tests
-5. Commits changes
-6. Updates this plan
-7. Repeats every 15 minutes
-
-**Cron Job Payload:**
-```json
-{
-  "kind": "agentTurn",
-  "message": "Continue OCPP 1.6 implementation. Read /Users/suda/Projects/Personal/Go/maeve-csms/docs/ocpp16-implementation-plan.md and implement the next unchecked task. Follow existing handler patterns from the codebase. Write unit tests. Commit with descriptive message. Update the plan with ✅. If blocked, document why and move to next task.",
-  "model": "anthropic/claude-sonnet-4-5",
-  "thinking": "low",
-  "timeoutSeconds": 600
-}
-```
+6. **Start Next Module**
+   - Create new branch from updated main
+   - Begin next module implementation
 
 ---
 
 ## Success Criteria
 
-### Phase 1 Complete When:
-- ✅ All 9 Core Profile tasks checked
-- ✅ All unit tests passing
-- ✅ Integration tests passing
-- ✅ Documentation updated
-- ✅ Core Profile at 100% (16/16 messages)
+### Per Module
 
-### Phase 2 Complete When:
-- ✅ All 4 Smart Charging tasks checked
-- ✅ ChargingProfileStore implemented
-- ✅ All tests passing
-- ✅ Smart Charging at 100% (3/3 messages)
+✅ **Implementation Complete**
+- All messages in module implemented
+- All handlers have unit tests
+- Integration tests pass
 
-### Overall Success:
-- ✅ All OCPP 1.6 messages implemented (42/42)
-- ✅ OCTT compliance tests passing
-- ✅ Production deployment ready
-- ✅ Documentation complete
+✅ **Documentation Updated**
+- README.md reflects new features
+- API documentation updated
+- Examples provided
+
+✅ **Quality Gates**
+- No failing tests
+- Code review approved
+- OCTT tests pass (if applicable)
+
+### Overall Project
+
+✅ **OCPP 1.6 Compliance**
+- All mandatory messages implemented (Core Profile)
+- Optional profiles implemented as planned
+- OCTT Core Profile tests pass
+
+✅ **Production Ready**
+- Comprehensive test coverage
+- Error handling in place
+- Monitoring/logging added
+- Documentation complete
 
 ---
 
-## Risk Management
+## Timeline Estimate
 
-### Known Risks
-
-1. **Complex Logic in Smart Charging**
-   - Mitigation: Start with simple profiles, iterate
-   - Reference: OCPP 1.6 Specification section on charging profiles
-
-2. **Store Interface Changes**
-   - Mitigation: Design interfaces carefully, use PostgreSQL from start
-   - Reference: Existing store patterns in codebase
-
-3. **MQTT Message Flow**
-   - Mitigation: Extensive integration testing
-   - Reference: Existing DataTransfer handler as example
-
-4. **Testcontainers Issues**
-   - Mitigation: Use manual PostgreSQL instance for testing if needed
-   - Workaround: Already used successfully in PostgreSQL implementation
+| Module | Duration | Start After |
+|--------|----------|-------------|
+| Core Profile | 2-3 weeks | Now |
+| Remote Trigger | 1 week | Core Profile merge |
+| Smart Charging | 4-6 weeks | Remote Trigger merge |
+| Firmware Management | 3-4 weeks | Smart Charging merge |
+| Local Auth List | 2 weeks | Firmware Management merge |
+| Reservation | 2 weeks | Local Auth List merge |
+| Security Extensions | 3-4 weeks | Reservation merge |
+| **TOTAL** | **17-22 weeks** | **~4-5 months** |
 
 ---
 
@@ -733,12 +745,12 @@ The implementation will be driven by a cron job that:
 
 - [OCPP 1.6 Implementation Audit](ocpp16-implementation-audit.md)
 - [OCPP 1.6 Specification](https://www.openchargealliance.org/protocols/ocpp-16/)
+- [OCPP Version Architecture](ocpp-version-architecture.md)
 - [Existing Handler Patterns](../manager/handlers/ocpp16/)
 - [Store Interfaces](../manager/store/)
-- [PostgreSQL Implementation](postgres-implementation.md)
 
 ---
 
 **Created by:** Patricio (AI Assistant)  
 **Last Updated:** 2026-02-05  
-**Next Review:** After Phase 1 completion
+**Current Module:** Core Profile (56% complete)
