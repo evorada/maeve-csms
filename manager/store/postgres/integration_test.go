@@ -472,11 +472,16 @@ func TestIntegration_ErrorScenarios(t *testing.T) {
 		}
 		require.NoError(t, db.store.SetToken(ctx, token))
 
-		// Try to create another token with same UID
+		// Try to set another token with same UID (should upsert/update)
 		token2 := *token
 		token2.ContractId = "DIFFERENT_CONTRACT"
 		err := db.store.SetToken(ctx, &token2)
-		assert.Error(t, err) // Should fail due to unique constraint
+		assert.NoError(t, err) // Should succeed (upsert behavior, consistent with Firestore)
+
+		// Verify the token was updated
+		updated, err := db.store.LookupToken(ctx, "DUPLICATE_UID")
+		require.NoError(t, err)
+		assert.Equal(t, "DIFFERENT_CONTRACT", updated.ContractId)
 	})
 
 	t.Run("transaction without token", func(t *testing.T) {
