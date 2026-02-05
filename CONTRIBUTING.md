@@ -114,7 +114,7 @@ scanning the code for vulnerabilities and code smells, all contributors adopt th
 
 ### Install the hooks
 
-You will first need to install [the pre-commit framework](https://pre-commit.com/#install) in order to configure the git
+You will first need to install [the pre-commit framework](https://pre-commit.com/) in order to configure the git
 hooks.
 
 Then, from the root of the repo, you can run the following:

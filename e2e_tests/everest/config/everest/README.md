@@ -77,11 +77,11 @@ Within the `SecurityCtrlr` section:
 
 Additional examples of configuration files can be found in:
 * [OCPP 1.6 configs](https://github.com/EVerest/libocpp/tree/main/config/v16)
-* [OCPP 2.0.1 configs](https://github.com/EVerest/libocpp/tree/main/config/v201)
 
 Schemas showing all the configuration options can be found in:
 * [OCPP 1.6 schemas](https://github.com/EVerest/libocpp/tree/main/config/v16/profile_schemas)
-* [OCPP 2.0.1 schemas](https://github.com/EVerest/libocpp/tree/main/config/v201/component_schemas)
+
+<!-- OCPP 2.0.1 config/schema links are currently unavailable in the EVerest libocpp repository -->
 
 ## Certificates
 

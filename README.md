@@ -44,7 +44,7 @@ charge station can connect to the CSMS using:
 Charge stations can use either OCPP 1.6j or OCPP 2.0.1.
 
 For TLS, the charge station should use a certificate provisioned using the
-[Hubject CPO EST service](https://hubject.stoplight.io/docs/open-plugncharge/486f0b8b3ded4-simple-enroll-iso-15118-2-and-iso-15118-20).
+[Hubject CPO EST service](https://hubject.stoplight.io/).
 
 A charge station must first be registered with the CSMS before it can be used. This can be done using the
 [manager API](./manager/api/API.md). e.g. for TLS with client certificate, use:

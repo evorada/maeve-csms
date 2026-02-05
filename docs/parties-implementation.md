@@ -451,8 +451,8 @@ func TestOCPIRegistrationCreatesParty(t *testing.T) {
 
 ## References
 
-- [OCPI 2.2.1 Specification](https://github.com/ocpi/ocpi/blob/2.2.1/mod_parties.asciidoc)
-- [OCPI Credentials Module](https://github.com/ocpi/ocpi/blob/2.2.1/credentials.asciidoc)
+- [OCPI 2.2.1 Specification](https://github.com/ocpi/ocpi)
+- [OCPI Specification](https://github.com/ocpi/ocpi)
 - [Current LocationStore Interface](../manager/store/location.go)
 - [Current OcpiStore Interface](../manager/store/ocpi.go)
 - [PostgreSQL Locations Implementation](../manager/store/postgres/locations.go)
