@@ -1088,9 +1088,9 @@ make postgres-test
 
 ### Current Phase: Phase 3 - SQL Queries (sqlc) 📝
 
-**Last Updated:** 2026-02-05 01:23 GMT+1
+**Last Updated:** 2026-02-05 01:39 GMT+1
 
-### Completed Tasks: 23 / ~60 total
+### Completed Tasks: 24 / ~60 total
 
 #### Phase 1: ✅ COMPLETE
 - ✅ Task 1.1: Create Directory Structure  
@@ -1107,8 +1107,8 @@ make postgres-test
 #### Phase 3: ⏳ IN PROGRESS
 - ✅ Task 3.1: Token Queries  
 - ✅ Task 3.2: Charge Station Queries
-- ⏳ Task 3.3: Transaction Queries (NEXT)
-- ⬜ Task 3.4: Certificate, OCPI, and Location Queries
+- ✅ Task 3.3: Transaction Queries
+- ⏳ Task 3.4: Certificate, OCPI, and Location Queries (NEXT)
 - ⬜ Task 3.5: Generate sqlc Code  
 
 #### Phase 4: ⏳ IN PROGRESS
