@@ -1,6 +1,6 @@
 package store
 
-import "golang.org/x/net/context"
+import "context"
 
 type GeoLocation struct {
 	Latitude  string

@@ -36,14 +36,6 @@ func toNullableText(s string) pgtype.Text {
 	return pgtype.Text{String: s, Valid: true}
 }
 
-// toNullString converts *string to sql.NullString
-func toNullString(s *string) sql.NullString {
-	if s == nil {
-		return sql.NullString{Valid: false}
-	}
-	return sql.NullString{String: *s, Valid: true}
-}
-
 // timestampFromTime converts time.Time to pgtype.Timestamp
 func timestampFromTime(t time.Time) pgtype.Timestamp {
 	return pgtype.Timestamp{
@@ -68,44 +60,12 @@ func toPgTimestamp(t time.Time) pgtype.Timestamp {
 	return pgtype.Timestamp{Time: t, Valid: true}
 }
 
-// timestamptzFromTime converts *time.Time to pgtype.Timestamptz
-func timestamptzFromTime(t *time.Time) pgtype.Timestamptz {
-	if t == nil {
-		return pgtype.Timestamptz{Valid: false}
-	}
-	return pgtype.Timestamptz{Time: *t, Valid: true}
-}
-
-// timestamptzToTime converts pgtype.Timestamptz to *time.Time
-func timestamptzToTime(t pgtype.Timestamptz) *time.Time {
-	if !t.Valid {
-		return nil
-	}
-	return &t.Time
-}
-
-// toNullableTimestamptz converts time.Time to pgtype.Timestamptz (treats zero time as NULL)
-func toNullableTimestamptz(t time.Time) pgtype.Timestamptz {
-	if t.IsZero() {
-		return pgtype.Timestamptz{Valid: false}
-	}
-	return pgtype.Timestamptz{Time: t, Valid: true}
-}
-
 // fromNullableText converts pgtype.Text to string (returns empty string for NULL)
 func fromNullableText(t pgtype.Text) string {
 	if !t.Valid {
 		return ""
 	}
 	return t.String
-}
-
-// fromNullString converts sql.NullString to *string
-func fromNullString(ns sql.NullString) *string {
-	if !ns.Valid {
-		return nil
-	}
-	return &ns.String
 }
 
 // fromPgTimestamp is an alias for timeFromTimestamp for consistency

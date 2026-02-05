@@ -5,15 +5,16 @@
 package firestore_test
 
 import (
+	"context"
 	"fmt"
+	"math/rand"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/firestore"
-	"golang.org/x/net/context"
 	"k8s.io/utils/clock"
-	"math/rand"
-	"testing"
 )
 
 func TestSetAndLookupLocation(t *testing.T) {
