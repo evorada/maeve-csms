@@ -12,8 +12,8 @@ country_code = "GB"
 party_id = "TWK"
 
 [storage]
-type = "firestore"
-firestore.project_id = "*detect-project-id*"
+type = "postgres"
+postgres.connection_string = "postgres://maeve:maeve@postgres:5432/maeve?sslmode=disable"
 
 [contract_cert_validator]
 type = "ocsp"

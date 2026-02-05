@@ -73,9 +73,10 @@ services:
     depends_on:
       mqtt:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
     environment:
       ENVIRONMENT: dev
-      FIRESTORE_EMULATOR_HOST: firestore:8080
     command:
       - "serve"
       - "-c"
@@ -99,13 +100,16 @@ services:
       retries: 3
     user: "${UID}:${GID}"
 
-  firestore:
-    image: google/cloud-sdk
-    command:
-      - gcloud
-      - emulators
-      - firestore
-      - start
-      - --host-port=0.0.0.0:8080
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: maeve
+      POSTGRES_USER: maeve
+      POSTGRES_PASSWORD: maeve
     ports:
-      - "8080:8080"
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maeve -d maeve"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
