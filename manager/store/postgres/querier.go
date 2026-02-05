@@ -11,10 +11,17 @@ import (
 type Querier interface {
 	AddChargeStationCertificate(ctx context.Context, arg AddChargeStationCertificateParams) (ChargeStationCertificate, error)
 	AddChargeStationTrigger(ctx context.Context, arg AddChargeStationTriggerParams) (ChargeStationTrigger, error)
+	AddMeterValues(ctx context.Context, arg AddMeterValuesParams) error
 	CreateToken(ctx context.Context, arg CreateTokenParams) (Token, error)
+	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
+	DeleteCertificate(ctx context.Context, certificateHash string) error
 	DeleteChargeStationCertificates(ctx context.Context, chargeStationID string) error
 	DeleteChargeStationTriggers(ctx context.Context, chargeStationID string) error
+	DeleteLocation(ctx context.Context, id string) error
+	DeleteOcpiRegistration(ctx context.Context, arg DeleteOcpiRegistrationParams) error
 	DeleteToken(ctx context.Context, uid string) error
+	FindActiveTransaction(ctx context.Context, chargeStationID string) (Transaction, error)
+	GetCertificate(ctx context.Context, certificateHash string) (Certificate, error)
 	// Auth
 	GetChargeStationAuth(ctx context.Context, chargeStationID string) (ChargeStation, error)
 	// Certificates
@@ -25,12 +32,24 @@ type Querier interface {
 	GetChargeStationSettings(ctx context.Context, chargeStationID string) (ChargeStationSetting, error)
 	// Triggers
 	GetChargeStationTriggers(ctx context.Context, chargeStationID string) ([]ChargeStationTrigger, error)
+	GetLocation(ctx context.Context, id string) (Location, error)
+	GetMeterValues(ctx context.Context, transactionID string) ([]TransactionMeterValue, error)
+	GetOcpiRegistration(ctx context.Context, arg GetOcpiRegistrationParams) (OcpiRegistration, error)
 	GetToken(ctx context.Context, uid string) (Token, error)
+	GetTransaction(ctx context.Context, id string) (Transaction, error)
+	ListAllLocations(ctx context.Context, arg ListAllLocationsParams) ([]Location, error)
+	ListCertificates(ctx context.Context) ([]Certificate, error)
+	ListLocations(ctx context.Context, arg ListLocationsParams) ([]Location, error)
+	ListOcpiRegistrations(ctx context.Context) ([]OcpiRegistration, error)
 	ListTokens(ctx context.Context, arg ListTokensParams) ([]Token, error)
+	SetCertificate(ctx context.Context, arg SetCertificateParams) (Certificate, error)
 	SetChargeStationAuth(ctx context.Context, arg SetChargeStationAuthParams) (ChargeStation, error)
 	SetChargeStationRuntime(ctx context.Context, arg SetChargeStationRuntimeParams) (ChargeStationRuntime, error)
 	SetChargeStationSettings(ctx context.Context, arg SetChargeStationSettingsParams) (ChargeStationSetting, error)
+	SetLocation(ctx context.Context, arg SetLocationParams) (Location, error)
+	SetOcpiRegistration(ctx context.Context, arg SetOcpiRegistrationParams) (OcpiRegistration, error)
 	UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token, error)
+	UpdateTransaction(ctx context.Context, arg UpdateTransactionParams) (Transaction, error)
 }
 
 var _ Querier = (*Queries)(nil)
