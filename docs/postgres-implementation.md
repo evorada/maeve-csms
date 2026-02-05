@@ -1086,11 +1086,11 @@ make postgres-test
 
 ## Progress Tracking
 
-### Current Phase: Phase 2 - Database Schema & Migrations ✅ → Moving to Phase 3
+### Current Phase: Phase 3 - SQL Queries (sqlc) 📝
 
-**Last Updated:** 2026-02-05 01:07 GMT+1
+**Last Updated:** 2026-02-05 01:23 GMT+1
 
-### Completed Tasks: 22 / ~60 total
+### Completed Tasks: 23 / ~60 total
 
 #### Phase 1: ✅ COMPLETE
 - ✅ Task 1.1: Create Directory Structure  
@@ -1106,8 +1106,8 @@ make postgres-test
 
 #### Phase 3: ⏳ IN PROGRESS
 - ✅ Task 3.1: Token Queries  
-- ⏳ Task 3.2: Charge Station Queries (NEXT)
-- ⬜ Task 3.3: Transaction Queries
+- ✅ Task 3.2: Charge Station Queries
+- ⏳ Task 3.3: Transaction Queries (NEXT)
 - ⬜ Task 3.4: Certificate, OCPI, and Location Queries
 - ⬜ Task 3.5: Generate sqlc Code  
 
