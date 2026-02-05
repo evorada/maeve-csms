@@ -500,8 +500,9 @@ func TestIntegration_ErrorScenarios(t *testing.T) {
 
 	t.Run("update non-existent transaction", func(t *testing.T) {
 		err := db.store.UpdateTransaction(ctx, "NONEXISTENT_CS", "NONEXISTENT_TXN", []store.MeterValue{})
-		// Should not error, just no-op
-		assert.NoError(t, err)
+		// PostgreSQL implementation returns error for non-existent transactions
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "transaction not found")
 	})
 
 	t.Run("end non-existent transaction", func(t *testing.T) {
@@ -518,7 +519,8 @@ func TestIntegration_ErrorScenarios(t *testing.T) {
 			},
 		}
 		err := db.store.EndTransaction(ctx, "NONEXISTENT_CS", "NONEXISTENT_TXN", "TOKEN", "RFID", endMeterValues, 1)
-		// Should not error, just no-op
-		assert.NoError(t, err)
+		// PostgreSQL implementation returns error for non-existent transactions
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "transaction not found")
 	})
 }

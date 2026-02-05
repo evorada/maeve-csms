@@ -22,11 +22,12 @@ func (s *Store) SetToken(ctx context.Context, token *store.Token) error {
 		return fmt.Errorf("invalid last_updated timestamp: %w", err)
 	}
 
-	params := CreateTokenParams{
+	// Try to update first
+	updateParams := UpdateTokenParams{
+		Uid:          token.Uid,
 		CountryCode:  token.CountryCode,
 		PartyID:      token.PartyId,
 		Type:         token.Type,
-		Uid:          token.Uid,
 		ContractID:   token.ContractId,
 		VisualNumber: textFromString(token.VisualNumber),
 		Issuer:       token.Issuer,
@@ -37,10 +38,34 @@ func (s *Store) SetToken(ctx context.Context, token *store.Token) error {
 		LastUpdated:  timestampFromTime(lastUpdated),
 	}
 
-	_, err = s.q.CreateToken(ctx, params)
+	_, err = s.q.UpdateToken(ctx, updateParams)
 	if err != nil {
-		slog.Error("failed to create token", "uid", token.Uid, "error", err)
-		return fmt.Errorf("failed to create token: %w", err)
+		if err == pgx.ErrNoRows {
+			// Token doesn't exist, create it
+			createParams := CreateTokenParams{
+				CountryCode:  token.CountryCode,
+				PartyID:      token.PartyId,
+				Type:         token.Type,
+				Uid:          token.Uid,
+				ContractID:   token.ContractId,
+				VisualNumber: textFromString(token.VisualNumber),
+				Issuer:       token.Issuer,
+				GroupID:      textFromString(token.GroupId),
+				Valid:        token.Valid,
+				LanguageCode: textFromString(token.LanguageCode),
+				CacheMode:    token.CacheMode,
+				LastUpdated:  timestampFromTime(lastUpdated),
+			}
+
+			_, err = s.q.CreateToken(ctx, createParams)
+			if err != nil {
+				slog.Error("failed to create token", "uid", token.Uid, "error", err)
+				return fmt.Errorf("failed to create token: %w", err)
+			}
+		} else {
+			slog.Error("failed to update token", "uid", token.Uid, "error", err)
+			return fmt.Errorf("failed to update token: %w", err)
+		}
 	}
 
 	slog.Debug("token set successfully", "uid", token.Uid)

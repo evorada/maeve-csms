@@ -375,6 +375,15 @@ func TestChargeStationInstallCertificatesStore_UpdateAndLookup(t *testing.T) {
 
 	ctx := context.Background()
 
+	// Create the charge station first (foreign key requirement)
+	auth := &store.ChargeStationAuth{
+		SecurityProfile:        store.TLSWithBasicAuth,
+		Base64SHA256Password:   "test",
+		InvalidUsernameAllowed: false,
+	}
+	err := db.store.SetChargeStationAuth(ctx, "CS001", auth)
+	require.NoError(t, err)
+
 	certificates := &store.ChargeStationInstallCertificates{
 		ChargeStationId: "CS001",
 		Certificates: []*store.ChargeStationInstallCertificate{
@@ -396,7 +405,7 @@ func TestChargeStationInstallCertificatesStore_UpdateAndLookup(t *testing.T) {
 	}
 
 	// Test UpdateChargeStationInstallCertificates
-	err := db.store.UpdateChargeStationInstallCertificates(ctx, "CS001", certificates)
+	err = db.store.UpdateChargeStationInstallCertificates(ctx, "CS001", certificates)
 	require.NoError(t, err)
 
 	// Test LookupChargeStationInstallCertificates - found
@@ -418,6 +427,15 @@ func TestChargeStationInstallCertificatesStore_ReplaceExisting(t *testing.T) {
 
 	ctx := context.Background()
 
+	// Create the charge station first (foreign key requirement)
+	auth := &store.ChargeStationAuth{
+		SecurityProfile:        store.TLSWithBasicAuth,
+		Base64SHA256Password:   "test",
+		InvalidUsernameAllowed: false,
+	}
+	err := db.store.SetChargeStationAuth(ctx, "CS001", auth)
+	require.NoError(t, err)
+
 	// Add initial certificates
 	certificates := &store.ChargeStationInstallCertificates{
 		ChargeStationId: "CS001",
@@ -432,7 +450,7 @@ func TestChargeStationInstallCertificatesStore_ReplaceExisting(t *testing.T) {
 		},
 	}
 
-	err := db.store.UpdateChargeStationInstallCertificates(ctx, "CS001", certificates)
+	err = db.store.UpdateChargeStationInstallCertificates(ctx, "CS001", certificates)
 	require.NoError(t, err)
 
 	// Replace with new certificate
@@ -468,6 +486,15 @@ func TestChargeStationInstallCertificatesStore_List(t *testing.T) {
 	// Create certificates for multiple stations
 	for i := 1; i <= 3; i++ {
 		csId := fmt.Sprintf("CS%03d", i)
+
+		// Create the charge station first (foreign key requirement)
+		auth := &store.ChargeStationAuth{
+			SecurityProfile:        store.TLSWithBasicAuth,
+			Base64SHA256Password:   "test",
+			InvalidUsernameAllowed: false,
+		}
+		require.NoError(t, db.store.SetChargeStationAuth(ctx, csId, auth))
+
 		certificates := &store.ChargeStationInstallCertificates{
 			ChargeStationId: csId,
 			Certificates: []*store.ChargeStationInstallCertificate{
@@ -497,6 +524,15 @@ func TestChargeStationTriggerMessageStore_SetAndLookup(t *testing.T) {
 
 	ctx := context.Background()
 
+	// Create the charge station first (foreign key requirement)
+	auth := &store.ChargeStationAuth{
+		SecurityProfile:        store.TLSWithBasicAuth,
+		Base64SHA256Password:   "test",
+		InvalidUsernameAllowed: false,
+	}
+	err := db.store.SetChargeStationAuth(ctx, "CS001", auth)
+	require.NoError(t, err)
+
 	trigger := &store.ChargeStationTriggerMessage{
 		ChargeStationId: "CS001",
 		TriggerMessage:  store.TriggerMessageBootNotification,
@@ -505,7 +541,7 @@ func TestChargeStationTriggerMessageStore_SetAndLookup(t *testing.T) {
 	}
 
 	// Test SetChargeStationTriggerMessage
-	err := db.store.SetChargeStationTriggerMessage(ctx, "CS001", trigger)
+	err = db.store.SetChargeStationTriggerMessage(ctx, "CS001", trigger)
 	require.NoError(t, err)
 
 	// Test LookupChargeStationTriggerMessage - found
@@ -528,6 +564,15 @@ func TestChargeStationTriggerMessageStore_Update(t *testing.T) {
 
 	ctx := context.Background()
 
+	// Create the charge station first (foreign key requirement)
+	auth := &store.ChargeStationAuth{
+		SecurityProfile:        store.TLSWithBasicAuth,
+		Base64SHA256Password:   "test",
+		InvalidUsernameAllowed: false,
+	}
+	err := db.store.SetChargeStationAuth(ctx, "CS001", auth)
+	require.NoError(t, err)
+
 	// Initial trigger
 	trigger := &store.ChargeStationTriggerMessage{
 		ChargeStationId: "CS001",
@@ -536,7 +581,7 @@ func TestChargeStationTriggerMessageStore_Update(t *testing.T) {
 		SendAfter:       time.Now(),
 	}
 
-	err := db.store.SetChargeStationTriggerMessage(ctx, "CS001", trigger)
+	err = db.store.SetChargeStationTriggerMessage(ctx, "CS001", trigger)
 	require.NoError(t, err)
 
 	// Update trigger
@@ -563,6 +608,15 @@ func TestChargeStationTriggerMessageStore_Delete(t *testing.T) {
 
 	ctx := context.Background()
 
+	// Create the charge station first (foreign key requirement)
+	auth := &store.ChargeStationAuth{
+		SecurityProfile:        store.TLSWithBasicAuth,
+		Base64SHA256Password:   "test",
+		InvalidUsernameAllowed: false,
+	}
+	err := db.store.SetChargeStationAuth(ctx, "CS001", auth)
+	require.NoError(t, err)
+
 	// Create trigger
 	trigger := &store.ChargeStationTriggerMessage{
 		ChargeStationId: "CS001",
@@ -571,7 +625,7 @@ func TestChargeStationTriggerMessageStore_Delete(t *testing.T) {
 		SendAfter:       time.Now(),
 	}
 
-	err := db.store.SetChargeStationTriggerMessage(ctx, "CS001", trigger)
+	err = db.store.SetChargeStationTriggerMessage(ctx, "CS001", trigger)
 	require.NoError(t, err)
 
 	// Delete trigger
@@ -593,6 +647,15 @@ func TestChargeStationTriggerMessageStore_List(t *testing.T) {
 	// Create triggers for multiple stations
 	for i := 1; i <= 5; i++ {
 		csId := fmt.Sprintf("CS%03d", i)
+
+		// Create the charge station first (foreign key requirement)
+		auth := &store.ChargeStationAuth{
+			SecurityProfile:        store.TLSWithBasicAuth,
+			Base64SHA256Password:   "test",
+			InvalidUsernameAllowed: false,
+		}
+		require.NoError(t, db.store.SetChargeStationAuth(ctx, csId, auth))
+
 		trigger := &store.ChargeStationTriggerMessage{
 			ChargeStationId: csId,
 			TriggerMessage:  store.TriggerMessageBootNotification,
