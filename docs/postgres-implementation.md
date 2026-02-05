@@ -1088,9 +1088,9 @@ make postgres-test
 
 ### Current Phase: Phase 5 - Testing 🧪
 
-**Last Updated:** 2026-02-05 04:59 GMT+1
+**Last Updated:** 2026-02-05 05:00 GMT+1
 
-### Completed Tasks: 36 / ~60 total
+### Completed Tasks: 38 / ~60 total
 
 #### Phase 1: ✅ COMPLETE
 - ✅ Task 1.1: Create Directory Structure  
@@ -1119,13 +1119,20 @@ make postgres-test
 - ✅ Task 4.5: Implement Remaining Store Interfaces
 - ✅ Task 4.6: Implement store.Engine Interface
 
-#### Phase 5: ⏳ BLOCKED
+#### Phase 5: ⚠️ BLOCKED
 - ✅ Task 5.1: Create Test Infrastructure
 - ✅ Task 5.2: Write Token Store Tests
 - ✅ Task 5.3: Write Charge Station Store Tests
 - ✅ Task 5.4: Write Transaction Store Tests
 - ✅ Task 5.5: Write Integration Tests
 - ⚠️ Task 5.6: Run Test Suite (BLOCKED - testcontainers hanging on container startup, needs investigation; code compiles successfully)
+
+#### Phase 6: ⏳ IN PROGRESS
+- ✅ Task 6.1: Add PostgreSQL Configuration
+- [ ] Task 6.2: Update Store Factory
+- ✅ Task 6.3: Write README
+- [ ] Task 6.4: Update Docker Compose
+- [ ] Task 6.5: Update Main Documentation
 
 ### Blockers
 - **Task 5.6 (Test Suite):** Testcontainers hanging during PostgreSQL container startup. Investigation needed. Possible causes:
@@ -1147,6 +1154,8 @@ make postgres-test
 - Task 5.4 completed 2026-02-05: Comprehensive TransactionStore tests covering CreateTransaction, FindTransaction, UpdateTransaction, EndTransaction, meter values with multiple sampled values, offline transactions, sequence number increments, and charge station isolation
 - Task 5.5 completed 2026-02-05: Integration tests covering cross-store operations, concurrent token/transaction creation, connection pooling with mixed operations, multiple active transactions, full charge station lifecycle, token cache modes, and error scenarios (duplicate UIDs, non-existent records). All tests compile successfully.
 - Task 5.6 blocked 2026-02-05 04:59: Testcontainers hanging on PostgreSQL container startup; code compiles successfully; moving to Phase 6 (Documentation) while test issue is investigated
+- Task 6.1 completed 2026-02-05 05:00: Added PostgresStorageConfig to manager config with full validation (host, port, database, user, password, ssl_mode); updated getStorage() to build connection string and instantiate postgres.NewStore(); code compiles successfully
+- Task 6.3 completed 2026-02-05 05:00: Comprehensive README.md created covering setup, configuration, development, performance tuning, troubleshooting, production deployment (Docker Compose, K8s), backup/restore, and Firestore comparison
 
 ---
 
