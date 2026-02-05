@@ -19,8 +19,7 @@ There are three parts to the main configuration file:
 * active_modules
 * x-module-layout
 
-There is a [schema file](https://github.com/EVerest/everest-framework/blob/main/schemas/config.yaml)
-that describes the syntax for the configuration file.
+There is a schema file in the EVerest framework repository that describes the syntax for the configuration file.
 
 ### Settings
 
