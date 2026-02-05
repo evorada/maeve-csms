@@ -111,16 +111,18 @@ func (r ResetHandler) HandleCallResult(ctx context.Context, chargeStationId stri
 
 ---
 
-#### Task 1.5: ChangeConfiguration Call Handler ✅❌
-- [ ] Open `manager/handlers/ocpp16/change_configuration.go`
-- [ ] Note: CallResult handler already exists
-- [ ] Add routing in `routing.go` (CallRoutes section)
-- [ ] Verify action already in `router.go`
-- [ ] Write unit test for Call path
-- [ ] Manual integration test
-- [ ] Commit: "Add ChangeConfiguration Call handler for OCPP 1.6"
+#### Task 1.5: ChangeConfiguration Call Handler ✅
+- [x] Open `manager/handlers/ocpp16/change_configuration.go`
+- [x] Note: CallResult handler already exists
+- [x] Verify routing in `routing.go` (CallResultRoutes section)
+- [x] Verify action already in `router.go`
+- [x] Write unit test for Call path
+- [x] Manual integration test
+- [x] Commit: "test: Add comprehensive unit tests for ChangeConfiguration handler"
 
 **Existing CallResult Handler:** `change_configuration_result.go` ✅
+**Routing:** Already configured in CallResultRoutes and CallMaker Actions ✅
+**Tests:** Comprehensive test coverage added ✅
 
 ---
 
@@ -635,13 +637,13 @@ Tests token validation and connector availability checks.
 - [x] Task 1.2: UnlockConnector Handler
 - [x] Task 1.3: ClearCache Handler
 - [x] Task 1.4: ChangeAvailability Handler
-- [ ] Task 1.5: ChangeConfiguration Call Handler
+- [x] Task 1.5: ChangeConfiguration Call Handler
 - [ ] Task 1.6: TriggerMessage Call Handler
 - [ ] Task 1.7: GetConfiguration Handler
 - [ ] Task 1.8: RemoteStartTransaction Handler
 - [ ] Task 1.9: RemoteStopTransaction Handler
 
-**Overall Progress:** 4/9 tasks (44%)
+**Overall Progress:** 5/9 tasks (56%)
 
 ---
 
