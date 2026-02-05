@@ -218,6 +218,13 @@ func NewRouter(emitter transport.Emitter,
 				ResponseSchema: "ocpp16/UnlockConnectorResponse.json",
 				Handler:        UnlockConnectorHandler{},
 			},
+			"ClearCache": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.ClearCacheJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp16.ClearCacheResponseJson) },
+				RequestSchema:  "ocpp16/ClearCache.json",
+				ResponseSchema: "ocpp16/ClearCacheResponse.json",
+				Handler:        ClearCacheHandler{},
+			},
 			"DataTransfer": {
 				NewRequest:     func() ocpp.Request { return new(ocpp16.DataTransferJson) },
 				NewResponse:    func() ocpp.Response { return new(ocpp16.DataTransferResponseJson) },
@@ -298,6 +305,7 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 			reflect.TypeOf(&ocpp16.RemoteStartTransactionJson{}): "RemoteStartTransaction",
 			reflect.TypeOf(&ocpp16.ResetJson{}):                  "Reset",
 			reflect.TypeOf(&ocpp16.UnlockConnectorJson{}):        "UnlockConnector",
+			reflect.TypeOf(&ocpp16.ClearCacheJson{}):             "ClearCache",
 		},
 	}
 }
