@@ -8,6 +8,75 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Certificate struct {
+	CertificateHash string           `db:"certificate_hash" json:"certificate_hash"`
+	CertificateType string           `db:"certificate_type" json:"certificate_type"`
+	CertificateData string           `db:"certificate_data" json:"certificate_data"`
+	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
+}
+
+type ChargeStation struct {
+	ChargeStationID        string           `db:"charge_station_id" json:"charge_station_id"`
+	SecurityProfile        int32            `db:"security_profile" json:"security_profile"`
+	Base64Sha256Password   pgtype.Text      `db:"base64_sha256_password" json:"base64_sha256_password"`
+	InvalidUsernameAllowed bool             `db:"invalid_username_allowed" json:"invalid_username_allowed"`
+	CreatedAt              pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt              pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
+type ChargeStationCertificate struct {
+	ID              int64            `db:"id" json:"id"`
+	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
+	CertificateType string           `db:"certificate_type" json:"certificate_type"`
+	Certificate     string           `db:"certificate" json:"certificate"`
+	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
+}
+
+type ChargeStationRuntime struct {
+	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
+	OcppVersion     string           `db:"ocpp_version" json:"ocpp_version"`
+	Vendor          pgtype.Text      `db:"vendor" json:"vendor"`
+	Model           pgtype.Text      `db:"model" json:"model"`
+	SerialNumber    pgtype.Text      `db:"serial_number" json:"serial_number"`
+	FirmwareVersion pgtype.Text      `db:"firmware_version" json:"firmware_version"`
+	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
+type ChargeStationSetting struct {
+	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
+	Settings        []byte           `db:"settings" json:"settings"`
+	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
+type ChargeStationTrigger struct {
+	ID              int64            `db:"id" json:"id"`
+	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
+	MessageType     string           `db:"message_type" json:"message_type"`
+	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
+}
+
+type Location struct {
+	ID           string           `db:"id" json:"id"`
+	CountryCode  string           `db:"country_code" json:"country_code"`
+	PartyID      string           `db:"party_id" json:"party_id"`
+	LocationData []byte           `db:"location_data" json:"location_data"`
+	CreatedAt    pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt    pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
+type OcpiRegistration struct {
+	ID          int64            `db:"id" json:"id"`
+	CountryCode string           `db:"country_code" json:"country_code"`
+	PartyID     string           `db:"party_id" json:"party_id"`
+	Status      string           `db:"status" json:"status"`
+	Token       string           `db:"token" json:"token"`
+	Url         string           `db:"url" json:"url"`
+	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
 type Token struct {
 	ID           int64            `db:"id" json:"id"`
 	CountryCode  string           `db:"country_code" json:"country_code"`
@@ -24,4 +93,28 @@ type Token struct {
 	LastUpdated  pgtype.Timestamp `db:"last_updated" json:"last_updated"`
 	CreatedAt    pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt    pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
+type Transaction struct {
+	ID              string           `db:"id" json:"id"`
+	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
+	TokenUid        string           `db:"token_uid" json:"token_uid"`
+	TokenType       string           `db:"token_type" json:"token_type"`
+	MeterStart      int32            `db:"meter_start" json:"meter_start"`
+	MeterStop       pgtype.Int4      `db:"meter_stop" json:"meter_stop"`
+	StartTimestamp  pgtype.Timestamp `db:"start_timestamp" json:"start_timestamp"`
+	StopTimestamp   pgtype.Timestamp `db:"stop_timestamp" json:"stop_timestamp"`
+	StoppedReason   pgtype.Text      `db:"stopped_reason" json:"stopped_reason"`
+	UpdatedSeqNo    int32            `db:"updated_seq_no" json:"updated_seq_no"`
+	Offline         bool             `db:"offline" json:"offline"`
+	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
+type TransactionMeterValue struct {
+	ID            int64            `db:"id" json:"id"`
+	TransactionID string           `db:"transaction_id" json:"transaction_id"`
+	Timestamp     pgtype.Timestamp `db:"timestamp" json:"timestamp"`
+	SampledValues []byte           `db:"sampled_values" json:"sampled_values"`
+	CreatedAt     pgtype.Timestamp `db:"created_at" json:"created_at"`
 }

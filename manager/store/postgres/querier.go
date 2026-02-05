@@ -9,10 +9,27 @@ import (
 )
 
 type Querier interface {
+	AddChargeStationCertificate(ctx context.Context, arg AddChargeStationCertificateParams) (ChargeStationCertificate, error)
+	AddChargeStationTrigger(ctx context.Context, arg AddChargeStationTriggerParams) (ChargeStationTrigger, error)
 	CreateToken(ctx context.Context, arg CreateTokenParams) (Token, error)
+	DeleteChargeStationCertificates(ctx context.Context, chargeStationID string) error
+	DeleteChargeStationTriggers(ctx context.Context, chargeStationID string) error
 	DeleteToken(ctx context.Context, uid string) error
+	// Auth
+	GetChargeStationAuth(ctx context.Context, chargeStationID string) (ChargeStation, error)
+	// Certificates
+	GetChargeStationCertificates(ctx context.Context, chargeStationID string) ([]ChargeStationCertificate, error)
+	// Runtime
+	GetChargeStationRuntime(ctx context.Context, chargeStationID string) (ChargeStationRuntime, error)
+	// Settings
+	GetChargeStationSettings(ctx context.Context, chargeStationID string) (ChargeStationSetting, error)
+	// Triggers
+	GetChargeStationTriggers(ctx context.Context, chargeStationID string) ([]ChargeStationTrigger, error)
 	GetToken(ctx context.Context, uid string) (Token, error)
 	ListTokens(ctx context.Context, arg ListTokensParams) ([]Token, error)
+	SetChargeStationAuth(ctx context.Context, arg SetChargeStationAuthParams) (ChargeStation, error)
+	SetChargeStationRuntime(ctx context.Context, arg SetChargeStationRuntimeParams) (ChargeStationRuntime, error)
+	SetChargeStationSettings(ctx context.Context, arg SetChargeStationSettingsParams) (ChargeStationSetting, error)
 	UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token, error)
 }
 
