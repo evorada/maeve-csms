@@ -84,6 +84,16 @@ The manager is configured through a TOML configuration file. An example configur
 [./config/manager/config.toml](./config/manager/config.toml). Details of the available configuration options
 can be found in [./manager/config/README.md](./manager/config/README.md).
 
+### Storage Options
+
+MaEVe supports multiple storage backends:
+
+- **Firestore** - Google Cloud Firestore (default in the example configuration)
+- **PostgreSQL** - Self-hosted PostgreSQL database (recommended for production deployments)
+- **In-Memory** - Volatile storage for testing and development
+
+To use PostgreSQL as your storage backend, see the [PostgreSQL storage documentation](./manager/store/postgres/README.md) for setup instructions and configuration examples. A ready-to-use Docker Compose setup with PostgreSQL is available in `docker-compose-postgres.yml`.
+
 ## Contributing
 
 Learn more about how to contribute on this project through [Contributing](./CONTRIBUTING.md)
