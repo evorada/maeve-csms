@@ -744,7 +744,7 @@ Run OCPP Compliance Testing Tool (OCTT) after each module completion to verify:
 ## References
 
 - [OCPP 1.6 Implementation Audit](ocpp16-implementation-audit.md)
-- [OCPP 1.6 Specification](https://www.openchargealliance.org/protocols/ocpp-16/)
+- [OCPP Specifications](https://openchargealliance.org/protocols/open-charge-point-protocol/)
 - [OCPP Version Architecture](ocpp-version-architecture.md)
 - [Existing Handler Patterns](../manager/handlers/ocpp16/)
 - [Store Interfaces](../manager/store/)

@@ -913,7 +913,6 @@ The architecture supports both **incremental adoption** (new versions alongside 
 
 ## References
 
-- [OCPP 1.6 Specification](https://www.openchargealliance.org/protocols/ocpp-16/)
-- [OCPP 2.0.1 Specification](https://www.openchargealliance.org/protocols/ocpp-201/)
+- [OCPP Specifications](https://openchargealliance.org/protocols/open-charge-point-protocol/)
 - [MaEVe Design Document](./design.md)
 - [MaEVe Handler Documentation](../manager/handlers/)
