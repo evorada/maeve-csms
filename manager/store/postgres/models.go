@@ -71,15 +71,22 @@ type Location struct {
 	UpdatedAt    pgtype.Timestamp `db:"updated_at" json:"updated_at"`
 }
 
-type OcpiRegistration struct {
+type OcpiParty struct {
 	ID          int64            `db:"id" json:"id"`
+	Role        string           `db:"role" json:"role"`
 	CountryCode string           `db:"country_code" json:"country_code"`
 	PartyID     string           `db:"party_id" json:"party_id"`
-	Status      string           `db:"status" json:"status"`
-	Token       string           `db:"token" json:"token"`
 	Url         string           `db:"url" json:"url"`
+	Token       string           `db:"token" json:"token"`
 	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
+type OcpiRegistration struct {
+	Token     string           `db:"token" json:"token"`
+	Status    string           `db:"status" json:"status"`
+	CreatedAt pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt pgtype.Timestamp `db:"updated_at" json:"updated_at"`
 }
 
 type Token struct {

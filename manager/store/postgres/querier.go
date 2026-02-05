@@ -18,7 +18,7 @@ type Querier interface {
 	DeleteChargeStationSettings(ctx context.Context, chargeStationID string) error
 	DeleteChargeStationTrigger(ctx context.Context, chargeStationID string) error
 	DeleteLocation(ctx context.Context, id string) error
-	DeleteOcpiRegistration(ctx context.Context, arg DeleteOcpiRegistrationParams) error
+	DeleteOcpiRegistration(ctx context.Context, token string) error
 	DeleteToken(ctx context.Context, uid string) error
 	FindActiveTransaction(ctx context.Context, chargeStationID string) (Transaction, error)
 	GetCertificate(ctx context.Context, certificateHash string) (Certificate, error)
@@ -34,7 +34,10 @@ type Querier interface {
 	GetChargeStationTrigger(ctx context.Context, chargeStationID string) (ChargeStationTrigger, error)
 	GetLocation(ctx context.Context, id string) (Location, error)
 	GetMeterValues(ctx context.Context, transactionID string) ([]TransactionMeterValue, error)
-	GetOcpiRegistration(ctx context.Context, arg GetOcpiRegistrationParams) (OcpiRegistration, error)
+	// Party Details (by role + country_code + party_id)
+	GetOcpiParty(ctx context.Context, arg GetOcpiPartyParams) (OcpiParty, error)
+	// Registrations (by token)
+	GetOcpiRegistration(ctx context.Context, token string) (OcpiRegistration, error)
 	GetToken(ctx context.Context, uid string) (Token, error)
 	GetTransaction(ctx context.Context, id string) (Transaction, error)
 	ListAllLocations(ctx context.Context, arg ListAllLocationsParams) ([]Location, error)
@@ -43,7 +46,7 @@ type Querier interface {
 	ListChargeStationSettings(ctx context.Context, arg ListChargeStationSettingsParams) ([]ChargeStationSetting, error)
 	ListChargeStationTriggers(ctx context.Context, arg ListChargeStationTriggersParams) ([]ChargeStationTrigger, error)
 	ListLocations(ctx context.Context, arg ListLocationsParams) ([]Location, error)
-	ListOcpiRegistrations(ctx context.Context) ([]OcpiRegistration, error)
+	ListOcpiPartiesForRole(ctx context.Context, role string) ([]OcpiParty, error)
 	ListTokens(ctx context.Context, arg ListTokensParams) ([]Token, error)
 	ListTransactions(ctx context.Context) ([]Transaction, error)
 	SetCertificate(ctx context.Context, arg SetCertificateParams) (Certificate, error)
@@ -52,6 +55,7 @@ type Querier interface {
 	SetChargeStationSettings(ctx context.Context, arg SetChargeStationSettingsParams) (ChargeStationSetting, error)
 	SetChargeStationTrigger(ctx context.Context, arg SetChargeStationTriggerParams) (ChargeStationTrigger, error)
 	SetLocation(ctx context.Context, arg SetLocationParams) (Location, error)
+	SetOcpiParty(ctx context.Context, arg SetOcpiPartyParams) (OcpiParty, error)
 	SetOcpiRegistration(ctx context.Context, arg SetOcpiRegistrationParams) (OcpiRegistration, error)
 	UpdateChargeStationCertificate(ctx context.Context, arg UpdateChargeStationCertificateParams) (ChargeStationCertificate, error)
 	UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token, error)

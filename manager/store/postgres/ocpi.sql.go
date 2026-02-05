@@ -11,67 +11,84 @@ import (
 
 const DeleteOcpiRegistration = `-- name: DeleteOcpiRegistration :exec
 DELETE FROM ocpi_registrations
-WHERE country_code = $1 AND party_id = $2
+WHERE token = $1
 `
 
-type DeleteOcpiRegistrationParams struct {
-	CountryCode string `db:"country_code" json:"country_code"`
-	PartyID     string `db:"party_id" json:"party_id"`
-}
-
-func (q *Queries) DeleteOcpiRegistration(ctx context.Context, arg DeleteOcpiRegistrationParams) error {
-	_, err := q.db.Exec(ctx, DeleteOcpiRegistration, arg.CountryCode, arg.PartyID)
+func (q *Queries) DeleteOcpiRegistration(ctx context.Context, token string) error {
+	_, err := q.db.Exec(ctx, DeleteOcpiRegistration, token)
 	return err
 }
 
-const GetOcpiRegistration = `-- name: GetOcpiRegistration :one
-SELECT id, country_code, party_id, status, token, url, created_at, updated_at FROM ocpi_registrations
-WHERE country_code = $1 AND party_id = $2
+const GetOcpiParty = `-- name: GetOcpiParty :one
+SELECT id, role, country_code, party_id, url, token, created_at, updated_at FROM ocpi_parties
+WHERE role = $1 AND country_code = $2 AND party_id = $3
 LIMIT 1
 `
 
-type GetOcpiRegistrationParams struct {
+type GetOcpiPartyParams struct {
+	Role        string `db:"role" json:"role"`
 	CountryCode string `db:"country_code" json:"country_code"`
 	PartyID     string `db:"party_id" json:"party_id"`
 }
 
-func (q *Queries) GetOcpiRegistration(ctx context.Context, arg GetOcpiRegistrationParams) (OcpiRegistration, error) {
-	row := q.db.QueryRow(ctx, GetOcpiRegistration, arg.CountryCode, arg.PartyID)
-	var i OcpiRegistration
+// Party Details (by role + country_code + party_id)
+func (q *Queries) GetOcpiParty(ctx context.Context, arg GetOcpiPartyParams) (OcpiParty, error) {
+	row := q.db.QueryRow(ctx, GetOcpiParty, arg.Role, arg.CountryCode, arg.PartyID)
+	var i OcpiParty
 	err := row.Scan(
 		&i.ID,
+		&i.Role,
 		&i.CountryCode,
 		&i.PartyID,
-		&i.Status,
-		&i.Token,
 		&i.Url,
+		&i.Token,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const ListOcpiRegistrations = `-- name: ListOcpiRegistrations :many
-SELECT id, country_code, party_id, status, token, url, created_at, updated_at FROM ocpi_registrations
+const GetOcpiRegistration = `-- name: GetOcpiRegistration :one
+SELECT token, status, created_at, updated_at FROM ocpi_registrations
+WHERE token = $1
+LIMIT 1
+`
+
+// Registrations (by token)
+func (q *Queries) GetOcpiRegistration(ctx context.Context, token string) (OcpiRegistration, error) {
+	row := q.db.QueryRow(ctx, GetOcpiRegistration, token)
+	var i OcpiRegistration
+	err := row.Scan(
+		&i.Token,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const ListOcpiPartiesForRole = `-- name: ListOcpiPartiesForRole :many
+SELECT id, role, country_code, party_id, url, token, created_at, updated_at FROM ocpi_parties
+WHERE role = $1
 ORDER BY created_at DESC
 `
 
-func (q *Queries) ListOcpiRegistrations(ctx context.Context) ([]OcpiRegistration, error) {
-	rows, err := q.db.Query(ctx, ListOcpiRegistrations)
+func (q *Queries) ListOcpiPartiesForRole(ctx context.Context, role string) ([]OcpiParty, error) {
+	rows, err := q.db.Query(ctx, ListOcpiPartiesForRole, role)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []OcpiRegistration{}
+	items := []OcpiParty{}
 	for rows.Next() {
-		var i OcpiRegistration
+		var i OcpiParty
 		if err := rows.Scan(
 			&i.ID,
+			&i.Role,
 			&i.CountryCode,
 			&i.PartyID,
-			&i.Status,
-			&i.Token,
 			&i.Url,
+			&i.Token,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -85,46 +102,66 @@ func (q *Queries) ListOcpiRegistrations(ctx context.Context) ([]OcpiRegistration
 	return items, nil
 }
 
-const SetOcpiRegistration = `-- name: SetOcpiRegistration :one
-INSERT INTO ocpi_registrations (
-    country_code,
-    party_id,
-    status,
-    token,
-    url
-) VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (country_code, party_id) DO UPDATE
-SET status = EXCLUDED.status,
+const SetOcpiParty = `-- name: SetOcpiParty :one
+INSERT INTO ocpi_parties (role, country_code, party_id, url, token)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (role, country_code, party_id) DO UPDATE
+SET url = EXCLUDED.url,
     token = EXCLUDED.token,
-    url = EXCLUDED.url,
     updated_at = NOW()
-RETURNING id, country_code, party_id, status, token, url, created_at, updated_at
+RETURNING id, role, country_code, party_id, url, token, created_at, updated_at
+`
+
+type SetOcpiPartyParams struct {
+	Role        string `db:"role" json:"role"`
+	CountryCode string `db:"country_code" json:"country_code"`
+	PartyID     string `db:"party_id" json:"party_id"`
+	Url         string `db:"url" json:"url"`
+	Token       string `db:"token" json:"token"`
+}
+
+func (q *Queries) SetOcpiParty(ctx context.Context, arg SetOcpiPartyParams) (OcpiParty, error) {
+	row := q.db.QueryRow(ctx, SetOcpiParty,
+		arg.Role,
+		arg.CountryCode,
+		arg.PartyID,
+		arg.Url,
+		arg.Token,
+	)
+	var i OcpiParty
+	err := row.Scan(
+		&i.ID,
+		&i.Role,
+		&i.CountryCode,
+		&i.PartyID,
+		&i.Url,
+		&i.Token,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const SetOcpiRegistration = `-- name: SetOcpiRegistration :one
+INSERT INTO ocpi_registrations (token, status)
+VALUES ($1, $2)
+ON CONFLICT (token) DO UPDATE
+SET status = EXCLUDED.status,
+    updated_at = NOW()
+RETURNING token, status, created_at, updated_at
 `
 
 type SetOcpiRegistrationParams struct {
-	CountryCode string `db:"country_code" json:"country_code"`
-	PartyID     string `db:"party_id" json:"party_id"`
-	Status      string `db:"status" json:"status"`
-	Token       string `db:"token" json:"token"`
-	Url         string `db:"url" json:"url"`
+	Token  string `db:"token" json:"token"`
+	Status string `db:"status" json:"status"`
 }
 
 func (q *Queries) SetOcpiRegistration(ctx context.Context, arg SetOcpiRegistrationParams) (OcpiRegistration, error) {
-	row := q.db.QueryRow(ctx, SetOcpiRegistration,
-		arg.CountryCode,
-		arg.PartyID,
-		arg.Status,
-		arg.Token,
-		arg.Url,
-	)
+	row := q.db.QueryRow(ctx, SetOcpiRegistration, arg.Token, arg.Status)
 	var i OcpiRegistration
 	err := row.Scan(
-		&i.ID,
-		&i.CountryCode,
-		&i.PartyID,
-		&i.Status,
 		&i.Token,
-		&i.Url,
+		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
