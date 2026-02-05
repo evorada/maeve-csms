@@ -159,6 +159,45 @@ func (q *Queries) GetTransaction(ctx context.Context, id string) (Transaction, e
 	return i, err
 }
 
+const ListTransactions = `-- name: ListTransactions :many
+SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at FROM transactions
+ORDER BY start_timestamp DESC
+`
+
+func (q *Queries) ListTransactions(ctx context.Context) ([]Transaction, error) {
+	rows, err := q.db.Query(ctx, ListTransactions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Transaction{}
+	for rows.Next() {
+		var i Transaction
+		if err := rows.Scan(
+			&i.ID,
+			&i.ChargeStationID,
+			&i.TokenUid,
+			&i.TokenType,
+			&i.MeterStart,
+			&i.MeterStop,
+			&i.StartTimestamp,
+			&i.StopTimestamp,
+			&i.StoppedReason,
+			&i.UpdatedSeqNo,
+			&i.Offline,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const UpdateTransaction = `-- name: UpdateTransaction :one
 UPDATE transactions
 SET meter_stop = $2,

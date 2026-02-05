@@ -45,6 +45,7 @@ type Querier interface {
 	ListLocations(ctx context.Context, arg ListLocationsParams) ([]Location, error)
 	ListOcpiRegistrations(ctx context.Context) ([]OcpiRegistration, error)
 	ListTokens(ctx context.Context, arg ListTokensParams) ([]Token, error)
+	ListTransactions(ctx context.Context) ([]Transaction, error)
 	SetCertificate(ctx context.Context, arg SetCertificateParams) (Certificate, error)
 	SetChargeStationAuth(ctx context.Context, arg SetChargeStationAuthParams) (ChargeStation, error)
 	SetChargeStationRuntime(ctx context.Context, arg SetChargeStationRuntimeParams) (ChargeStationRuntime, error)

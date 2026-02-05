@@ -1,6 +1,10 @@
 -- name: GetTransaction :one
 SELECT * FROM transactions WHERE id = $1;
 
+-- name: ListTransactions :many
+SELECT * FROM transactions
+ORDER BY start_timestamp DESC;
+
 -- name: FindActiveTransaction :one
 SELECT * FROM transactions 
 WHERE charge_station_id = $1 AND stop_timestamp IS NULL

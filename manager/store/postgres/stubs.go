@@ -10,27 +10,7 @@ import (
 )
 
 // ChargeStation store interfaces implemented in charge_stations.go
-
-// TODO: Implement TransactionStore interface
-func (s *Store) Transactions(ctx context.Context) ([]*store.Transaction, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (s *Store) FindTransaction(ctx context.Context, chargeStationId, transactionId string) (*store.Transaction, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (s *Store) CreateTransaction(ctx context.Context, chargeStationId, transactionId, idToken, tokenType string, meterValue []store.MeterValue, seqNo int, offline bool) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (s *Store) UpdateTransaction(ctx context.Context, chargeStationId, transactionId string, meterValue []store.MeterValue) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (s *Store) EndTransaction(ctx context.Context, chargeStationId, transactionId, idToken, tokenType string, meterValue []store.MeterValue, seqNo int) error {
-	return fmt.Errorf("not implemented")
-}
+// TransactionStore interface implemented in transactions.go
 
 // TODO: Implement CertificateStore interface
 func (s *Store) SetCertificate(ctx context.Context, pemCertificate string) error {
