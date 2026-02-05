@@ -298,6 +298,15 @@ func NewRouter(emitter transport.Emitter,
 				ResponseSchema: "ocpp16/TriggerMessageResponse.json",
 				Handler:        TriggerMessageResultHandler{},
 			},
+			"GetConfiguration": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.GetConfigurationJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp16.GetConfigurationResponseJson) },
+				RequestSchema:  "ocpp16/GetConfiguration.json",
+				ResponseSchema: "ocpp16/GetConfigurationResponse.json",
+				Handler: GetConfigurationHandler{
+					SettingsStore: engine,
+				},
+			},
 		},
 	}
 }
@@ -314,6 +323,7 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 			reflect.TypeOf(&ocpp16.UnlockConnectorJson{}):        "UnlockConnector",
 			reflect.TypeOf(&ocpp16.ClearCacheJson{}):             "ClearCache",
 			reflect.TypeOf(&ocpp16.ChangeAvailabilityJson{}):     "ChangeAvailability",
+			reflect.TypeOf(&ocpp16.GetConfigurationJson{}):       "GetConfiguration",
 		},
 	}
 }
