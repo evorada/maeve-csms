@@ -51,6 +51,13 @@ func (s *Server) RegisterChargeStation(w http.ResponseWriter, r *http.Request, c
 	if req.InvalidUsernameAllowed != nil {
 		invalidUsernameAllowed = *req.InvalidUsernameAllowed
 	}
+
+	// Validate SecurityProfile is within valid range for int8
+	if req.SecurityProfile < 0 || req.SecurityProfile > 127 {
+		_ = render.Render(w, r, ErrInvalidRequest(fmt.Errorf("security profile value %d is out of valid range", req.SecurityProfile)))
+		return
+	}
+
 	err := s.store.SetChargeStationAuth(r.Context(), csId, &store.ChargeStationAuth{
 		SecurityProfile:        store.SecurityProfile(req.SecurityProfile),
 		Base64SHA256Password:   pwd,

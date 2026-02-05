@@ -39,8 +39,13 @@ func (s *Store) LookupChargeStationAuth(ctx context.Context, csId string) (*stor
 		return nil, fmt.Errorf("failed to lookup charge station auth: %w", err)
 	}
 
+	securityProfile, err := securityProfileFromInt32(cs.SecurityProfile)
+	if err != nil {
+		return nil, fmt.Errorf("invalid security profile: %w", err)
+	}
+
 	return &store.ChargeStationAuth{
-		SecurityProfile:        store.SecurityProfile(cs.SecurityProfile),
+		SecurityProfile:        securityProfile,
 		Base64SHA256Password:   fromNullableText(cs.Base64Sha256Password),
 		InvalidUsernameAllowed: cs.InvalidUsernameAllowed,
 	}, nil
@@ -94,9 +99,14 @@ func (s *Store) ListChargeStationSettings(ctx context.Context, pageSize int, pre
 		previousChargeStationId = ""
 	}
 
+	pageSizeInt32, err := safeIntToInt32(pageSize)
+	if err != nil {
+		return nil, fmt.Errorf("invalid page size value: %w", err)
+	}
+
 	dbSettingsList, err := s.q.ListChargeStationSettings(ctx, ListChargeStationSettingsParams{
 		ChargeStationID: previousChargeStationId,
-		Limit:           int32(pageSize),
+		Limit:           pageSizeInt32,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list charge station settings: %w", err)
@@ -223,9 +233,14 @@ func (s *Store) ListChargeStationInstallCertificates(ctx context.Context, pageSi
 		previousChargeStationId = ""
 	}
 
+	pageSizeInt32, err := safeIntToInt32(pageSize)
+	if err != nil {
+		return nil, fmt.Errorf("invalid page size value: %w", err)
+	}
+
 	dbCertsList, err := s.q.ListChargeStationCertificates(ctx, ListChargeStationCertificatesParams{
 		ChargeStationID: previousChargeStationId,
-		Limit:           int32(pageSize),
+		Limit:           pageSizeInt32,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list charge station certificates: %w", err)
@@ -303,9 +318,14 @@ func (s *Store) ListChargeStationTriggerMessages(ctx context.Context, pageSize i
 		previousChargeStationId = ""
 	}
 
+	pageSizeInt32, err := safeIntToInt32(pageSize)
+	if err != nil {
+		return nil, fmt.Errorf("invalid page size value: %w", err)
+	}
+
 	triggers, err := s.q.ListChargeStationTriggers(ctx, ListChargeStationTriggersParams{
 		ChargeStationID: previousChargeStationId,
-		Limit:           int32(pageSize),
+		Limit:           pageSizeInt32,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list charge station trigger messages: %w", err)

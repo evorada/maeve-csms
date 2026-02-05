@@ -69,9 +69,18 @@ func (s *Store) LookupLocation(ctx context.Context, locationId string) (*store.L
 
 // ListLocations retrieves a paginated list of locations
 func (s *Store) ListLocations(ctx context.Context, offset int, limit int) ([]*store.Location, error) {
+	limitInt32, err := safeIntToInt32(limit)
+	if err != nil {
+		return nil, fmt.Errorf("invalid limit value: %w", err)
+	}
+	offsetInt32, err := safeIntToInt32(offset)
+	if err != nil {
+		return nil, fmt.Errorf("invalid offset value: %w", err)
+	}
+
 	params := ListAllLocationsParams{
-		Limit:  int32(limit),
-		Offset: int32(offset),
+		Limit:  limitInt32,
+		Offset: offsetInt32,
 	}
 
 	locations, err := s.q.ListAllLocations(ctx, params)

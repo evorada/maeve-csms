@@ -67,9 +67,18 @@ func (s *Store) LookupToken(ctx context.Context, tokenUid string) (*store.Token,
 
 // ListTokens retrieves a paginated list of tokens
 func (s *Store) ListTokens(ctx context.Context, offset int, limit int) ([]*store.Token, error) {
+	limitInt32, err := safeIntToInt32(limit)
+	if err != nil {
+		return nil, fmt.Errorf("invalid limit value: %w", err)
+	}
+	offsetInt32, err := safeIntToInt32(offset)
+	if err != nil {
+		return nil, fmt.Errorf("invalid offset value: %w", err)
+	}
+
 	tokens, err := s.q.ListTokens(ctx, ListTokensParams{
-		Limit:  int32(limit),
-		Offset: int32(offset),
+		Limit:  limitInt32,
+		Offset: offsetInt32,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tokens: %w", err)

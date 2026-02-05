@@ -44,6 +44,12 @@ func (s *Store) LookupChargeStationAuth(ctx context.Context, chargeStationId str
 	if err = snap.DataTo(&csData); err != nil {
 		return nil, fmt.Errorf("map charge station %s: %w", chargeStationId, err)
 	}
+
+	// Validate SecurityProfile is within valid range for int8
+	if csData.SecurityProfile < 0 || csData.SecurityProfile > 127 {
+		return nil, fmt.Errorf("security profile value %d is out of valid range", csData.SecurityProfile)
+	}
+
 	return &store.ChargeStationAuth{
 		SecurityProfile:        store.SecurityProfile(csData.SecurityProfile),
 		Base64SHA256Password:   csData.Base64SHA256Password,

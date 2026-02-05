@@ -3,9 +3,11 @@
 package postgres
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
 // Helper functions for pgtype conversions
@@ -70,4 +72,32 @@ func fromNullableText(t pgtype.Text) string {
 // fromPgTimestamp is an alias for timeFromTimestamp for consistency
 func fromPgTimestamp(ts pgtype.Timestamp) time.Time {
 	return timeFromTimestamp(ts)
+}
+
+// securityProfileFromInt32 safely converts int32 to SecurityProfile with validation
+func securityProfileFromInt32(val int32) (store.SecurityProfile, error) {
+	// SecurityProfile is int8, so valid range is -128 to 127
+	// In practice, valid values are 0-2
+	if val < 0 || val > 127 {
+		return 0, fmt.Errorf("security profile value %d is out of valid range", val)
+	}
+	return store.SecurityProfile(val), nil
+}
+
+// securityProfileFromInt safely converts int to SecurityProfile with validation
+func securityProfileFromInt(val int) (store.SecurityProfile, error) {
+	// SecurityProfile is int8, so valid range is -128 to 127
+	// In practice, valid values are 0-2
+	if val < 0 || val > 127 {
+		return 0, fmt.Errorf("security profile value %d is out of valid range", val)
+	}
+	return store.SecurityProfile(val), nil
+}
+
+// safeIntToInt32 safely converts int to int32 with overflow check
+func safeIntToInt32(val int) (int32, error) {
+	if val < -2147483648 || val > 2147483647 {
+		return 0, fmt.Errorf("value %d overflows int32", val)
+	}
+	return int32(val), nil
 }
