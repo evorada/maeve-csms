@@ -1088,9 +1088,9 @@ make postgres-test
 
 ### Current Phase: Phase 6 - Documentation & Integration 📚
 
-**Last Updated:** 2026-02-05 05:18 GMT+1
+**Last Updated:** 2026-02-05 05:35 GMT+1
 
-### Completed Tasks: 39 / ~60 total
+### Completed Tasks: 40 / ~60 total
 
 #### Phase 1: ✅ COMPLETE
 - ✅ Task 1.1: Create Directory Structure  
@@ -1131,7 +1131,7 @@ make postgres-test
 - ✅ Task 6.1: Add PostgreSQL Configuration
 - ✅ Task 6.2: Update Store Factory
 - ✅ Task 6.3: Write README
-- [ ] Task 6.4: Update Docker Compose
+- ✅ Task 6.4: Update Docker Compose
 - [ ] Task 6.5: Update Main Documentation
 
 ### Blockers
@@ -1157,6 +1157,7 @@ make postgres-test
 - Task 6.1 completed 2026-02-05 05:00: Added PostgresStorageConfig to manager config with full validation (host, port, database, user, password, ssl_mode); updated getStorage() to build connection string and instantiate postgres.NewStore(); code compiles successfully
 - Task 6.3 completed 2026-02-05 05:00: Comprehensive README.md created covering setup, configuration, development, performance tuning, troubleshooting, production deployment (Docker Compose, K8s), backup/restore, and Firestore comparison
 - Task 6.2 completed 2026-02-05 05:18: Auto-migration support added with RunMigrations and MigrationsPath config options; migrations run automatically on startup when configured; code compiles successfully
+- Task 6.4 completed 2026-02-05 05:35: Docker Compose PostgreSQL setup created with docker-compose-postgres.yml; includes PostgreSQL 15 Alpine service with health checks, postgres-migrate init container for automatic schema setup, config-postgres.toml with PostgreSQL configuration, persistent volume for data, and proper service dependency chain (postgres → migrate → manager); code compiles successfully
 
 ---
 
