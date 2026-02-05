@@ -307,6 +307,15 @@ func NewRouter(emitter transport.Emitter,
 					SettingsStore: engine,
 				},
 			},
+			"RemoteStartTransaction": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.RemoteStartTransactionJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp16.RemoteStartTransactionResponseJson) },
+				RequestSchema:  "ocpp16/RemoteStartTransaction.json",
+				ResponseSchema: "ocpp16/RemoteStartTransactionResponse.json",
+				Handler: RemoteStartTransactionHandler{
+					TokenStore: engine,
+				},
+			},
 		},
 	}
 }
