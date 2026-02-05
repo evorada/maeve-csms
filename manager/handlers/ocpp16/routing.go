@@ -316,6 +316,15 @@ func NewRouter(emitter transport.Emitter,
 					TokenStore: engine,
 				},
 			},
+			"RemoteStopTransaction": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.RemoteStopTransactionJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp16.RemoteStopTransactionResponseJson) },
+				RequestSchema:  "ocpp16/RemoteStopTransaction.json",
+				ResponseSchema: "ocpp16/RemoteStopTransactionResponse.json",
+				Handler: RemoteStopTransactionHandler{
+					TransactionStore: engine,
+				},
+			},
 		},
 	}
 }
@@ -328,6 +337,7 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 			reflect.TypeOf(&ocpp16.ChangeConfigurationJson{}):    "ChangeConfiguration",
 			reflect.TypeOf(&ocpp16.TriggerMessageJson{}):         "TriggerMessage",
 			reflect.TypeOf(&ocpp16.RemoteStartTransactionJson{}): "RemoteStartTransaction",
+			reflect.TypeOf(&ocpp16.RemoteStopTransactionJson{}):  "RemoteStopTransaction",
 			reflect.TypeOf(&ocpp16.ResetJson{}):                  "Reset",
 			reflect.TypeOf(&ocpp16.UnlockConnectorJson{}):        "UnlockConnector",
 			reflect.TypeOf(&ocpp16.ClearCacheJson{}):             "ClearCache",
