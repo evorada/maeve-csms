@@ -9,12 +9,14 @@ type FirestoreStorageConfig struct {
 }
 
 type PostgresStorageConfig struct {
-	Host     string `mapstructure:"host" toml:"host" validate:"required"`
-	Port     int    `mapstructure:"port" toml:"port" validate:"required,min=1,max=65535"`
-	Database string `mapstructure:"database" toml:"database" validate:"required"`
-	User     string `mapstructure:"user" toml:"user" validate:"required"`
-	Password string `mapstructure:"password" toml:"password" validate:"required"`
-	SSLMode  string `mapstructure:"ssl_mode" toml:"ssl_mode" validate:"required,oneof=disable require verify-ca verify-full"`
+	Host           string `mapstructure:"host" toml:"host" validate:"required"`
+	Port           int    `mapstructure:"port" toml:"port" validate:"required,min=1,max=65535"`
+	Database       string `mapstructure:"database" toml:"database" validate:"required"`
+	User           string `mapstructure:"user" toml:"user" validate:"required"`
+	Password       string `mapstructure:"password" toml:"password" validate:"required"`
+	SSLMode        string `mapstructure:"ssl_mode" toml:"ssl_mode" validate:"required,oneof=disable require verify-ca verify-full"`
+	RunMigrations  bool   `mapstructure:"run_migrations" toml:"run_migrations"`
+	MigrationsPath string `mapstructure:"migrations_path" toml:"migrations_path"`
 }
 
 type StorageConfig struct {
