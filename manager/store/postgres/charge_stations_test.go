@@ -107,6 +107,15 @@ func TestChargeStationSettingsStore_UpdateAndLookup(t *testing.T) {
 
 	ctx := context.Background()
 
+	// Create the charge station first (foreign key requirement)
+	auth := &store.ChargeStationAuth{
+		SecurityProfile:        store.TLSWithBasicAuth,
+		Base64SHA256Password:   "test",
+		InvalidUsernameAllowed: false,
+	}
+	err := db.store.SetChargeStationAuth(ctx, "CS001", auth)
+	require.NoError(t, err)
+
 	settings := &store.ChargeStationSettings{
 		ChargeStationId: "CS001",
 		Settings: map[string]*store.ChargeStationSetting{
@@ -124,7 +133,7 @@ func TestChargeStationSettingsStore_UpdateAndLookup(t *testing.T) {
 	}
 
 	// Test UpdateChargeStationSettings
-	err := db.store.UpdateChargeStationSettings(ctx, "CS001", settings)
+	err = db.store.UpdateChargeStationSettings(ctx, "CS001", settings)
 	require.NoError(t, err)
 
 	// Test LookupChargeStationSettings - found
@@ -148,6 +157,15 @@ func TestChargeStationSettingsStore_UpdateExisting(t *testing.T) {
 
 	ctx := context.Background()
 
+	// Create the charge station first (foreign key requirement)
+	auth := &store.ChargeStationAuth{
+		SecurityProfile:        store.TLSWithBasicAuth,
+		Base64SHA256Password:   "test",
+		InvalidUsernameAllowed: false,
+	}
+	err := db.store.SetChargeStationAuth(ctx, "CS001", auth)
+	require.NoError(t, err)
+
 	// Initial settings
 	settings := &store.ChargeStationSettings{
 		ChargeStationId: "CS001",
@@ -160,7 +178,7 @@ func TestChargeStationSettingsStore_UpdateExisting(t *testing.T) {
 		},
 	}
 
-	err := db.store.UpdateChargeStationSettings(ctx, "CS001", settings)
+	err = db.store.UpdateChargeStationSettings(ctx, "CS001", settings)
 	require.NoError(t, err)
 
 	// Update settings
@@ -199,6 +217,15 @@ func TestChargeStationSettingsStore_ListSettings(t *testing.T) {
 	// Create settings for multiple stations
 	for i := 1; i <= 5; i++ {
 		csId := fmt.Sprintf("CS%03d", i)
+
+		// Create the charge station first (foreign key requirement)
+		auth := &store.ChargeStationAuth{
+			SecurityProfile:        store.TLSWithBasicAuth,
+			Base64SHA256Password:   "test",
+			InvalidUsernameAllowed: false,
+		}
+		require.NoError(t, db.store.SetChargeStationAuth(ctx, csId, auth))
+
 		settings := &store.ChargeStationSettings{
 			ChargeStationId: csId,
 			Settings: map[string]*store.ChargeStationSetting{
@@ -232,6 +259,15 @@ func TestChargeStationSettingsStore_Delete(t *testing.T) {
 
 	ctx := context.Background()
 
+	// Create the charge station first (foreign key requirement)
+	auth := &store.ChargeStationAuth{
+		SecurityProfile:        store.TLSWithBasicAuth,
+		Base64SHA256Password:   "test",
+		InvalidUsernameAllowed: false,
+	}
+	err := db.store.SetChargeStationAuth(ctx, "CS001", auth)
+	require.NoError(t, err)
+
 	// Create settings
 	settings := &store.ChargeStationSettings{
 		ChargeStationId: "CS001",
@@ -244,7 +280,7 @@ func TestChargeStationSettingsStore_Delete(t *testing.T) {
 		},
 	}
 
-	err := db.store.UpdateChargeStationSettings(ctx, "CS001", settings)
+	err = db.store.UpdateChargeStationSettings(ctx, "CS001", settings)
 	require.NoError(t, err)
 
 	// Delete settings
@@ -265,12 +301,21 @@ func TestChargeStationRuntimeStore_SetAndLookup(t *testing.T) {
 
 	ctx := context.Background()
 
+	// Create the charge station first (foreign key requirement)
+	auth := &store.ChargeStationAuth{
+		SecurityProfile:        store.TLSWithBasicAuth,
+		Base64SHA256Password:   "test",
+		InvalidUsernameAllowed: false,
+	}
+	err := db.store.SetChargeStationAuth(ctx, "CS001", auth)
+	require.NoError(t, err)
+
 	runtime := &store.ChargeStationRuntimeDetails{
 		OcppVersion: "1.6",
 	}
 
 	// Test SetChargeStationRuntimeDetails
-	err := db.store.SetChargeStationRuntimeDetails(ctx, "CS001", runtime)
+	err = db.store.SetChargeStationRuntimeDetails(ctx, "CS001", runtime)
 	require.NoError(t, err)
 
 	// Test LookupChargeStationRuntimeDetails - found
@@ -291,12 +336,21 @@ func TestChargeStationRuntimeStore_Update(t *testing.T) {
 
 	ctx := context.Background()
 
+	// Create the charge station first (foreign key requirement)
+	auth := &store.ChargeStationAuth{
+		SecurityProfile:        store.TLSWithBasicAuth,
+		Base64SHA256Password:   "test",
+		InvalidUsernameAllowed: false,
+	}
+	err := db.store.SetChargeStationAuth(ctx, "CS001", auth)
+	require.NoError(t, err)
+
 	// Initial runtime
 	runtime := &store.ChargeStationRuntimeDetails{
 		OcppVersion: "1.6",
 	}
 
-	err := db.store.SetChargeStationRuntimeDetails(ctx, "CS001", runtime)
+	err = db.store.SetChargeStationRuntimeDetails(ctx, "CS001", runtime)
 	require.NoError(t, err)
 
 	// Update runtime

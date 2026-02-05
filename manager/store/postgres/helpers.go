@@ -84,16 +84,6 @@ func securityProfileFromInt32(val int32) (store.SecurityProfile, error) {
 	return store.SecurityProfile(val), nil
 }
 
-// securityProfileFromInt safely converts int to SecurityProfile with validation
-func securityProfileFromInt(val int) (store.SecurityProfile, error) {
-	// SecurityProfile is int8, so valid range is -128 to 127
-	// In practice, valid values are 0-2
-	if val < 0 || val > 127 {
-		return 0, fmt.Errorf("security profile value %d is out of valid range", val)
-	}
-	return store.SecurityProfile(val), nil
-}
-
 // safeIntToInt32 safely converts int to int32 with overflow check
 func safeIntToInt32(val int) (int32, error) {
 	if val < -2147483648 || val > 2147483647 {
