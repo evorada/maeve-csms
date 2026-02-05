@@ -15,6 +15,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/firestore"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"github.com/thoughtworks/maeve-csms/manager/store/postgres"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	mqtt2 "github.com/thoughtworks/maeve-csms/manager/transport/mqtt"
 	"go.opentelemetry.io/contrib/detectors/gcp"
@@ -207,6 +208,21 @@ func getStorage(ctx context.Context, cfg *StorageConfig) (engine store.Engine, e
 		engine, err = firestore.NewStore(ctx, cfg.FirestoreStorage.ProjectId, clock.RealClock{})
 		if err != nil {
 			return nil, fmt.Errorf("create firestore storage: %w", err)
+		}
+	case "postgres":
+		// Import added at the top of the file
+		connStr := fmt.Sprintf(
+			"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+			cfg.PostgresStorage.Host,
+			cfg.PostgresStorage.Port,
+			cfg.PostgresStorage.User,
+			cfg.PostgresStorage.Password,
+			cfg.PostgresStorage.Database,
+			cfg.PostgresStorage.SSLMode,
+		)
+		engine, err = postgres.NewStore(ctx, connStr)
+		if err != nil {
+			return nil, fmt.Errorf("create postgres storage: %w", err)
 		}
 	case "in_memory":
 		engine = inmemory.NewStore(clock.RealClock{})
