@@ -16,8 +16,8 @@ services:
         target: /mosquitto/config
         read_only: true
     ports:
-      - "1883:1883"
-      - "9000:9000"
+      - "1884:1883"
+      - "9001:9000"
     user: "10000:10000"
     healthcheck:
       test: ["CMD-SHELL", "timeout 5 mosquitto_sub -t '$$SYS/#' -C 1 | grep -v Error || exit 1"]
@@ -107,7 +107,7 @@ services:
       POSTGRES_USER: maeve
       POSTGRES_PASSWORD: maeve
     ports:
-      - "5432:5432"
+      - "5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U maeve -d maeve"]
       interval: 10s

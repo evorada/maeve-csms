@@ -54,15 +54,6 @@ func NewStore(ctx context.Context, connString string) (*Store, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	// Run migrations
-	slog.Info("running database migrations")
-	if err := RunMigrations(connString, "file:///migrations"); err != nil {
-		pool.Close()
-		slog.Error("failed to run migrations", "error", err)
-		return nil, fmt.Errorf("failed to run migrations: %w", err)
-	}
-	slog.Info("database migrations completed successfully")
-
 	slog.Info("PostgreSQL store initialized successfully")
 
 	return &Store{

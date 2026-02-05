@@ -223,8 +223,18 @@ func getStorage(ctx context.Context, cfg *StorageConfig) (engine store.Engine, e
 
 		// Run migrations if configured
 		if cfg.PostgresStorage.RunMigrations {
+			// Build postgres:// URL for migrations (golang-migrate format)
+			migrateConnStr := fmt.Sprintf(
+				"postgres://%s:%s@%s:%d/%s?sslmode=%s",
+				cfg.PostgresStorage.User,
+				cfg.PostgresStorage.Password,
+				cfg.PostgresStorage.Host,
+				cfg.PostgresStorage.Port,
+				cfg.PostgresStorage.Database,
+				cfg.PostgresStorage.SSLMode,
+			)
 			slog.Info("running database migrations", "migrations_path", cfg.PostgresStorage.MigrationsPath)
-			if err := postgres.RunMigrations(connStr, cfg.PostgresStorage.MigrationsPath); err != nil {
+			if err := postgres.RunMigrations(migrateConnStr, cfg.PostgresStorage.MigrationsPath); err != nil {
 				return nil, fmt.Errorf("failed to run migrations: %w", err)
 			}
 			slog.Info("database migrations completed successfully")

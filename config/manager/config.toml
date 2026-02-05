@@ -13,7 +13,15 @@ party_id = "TWK"
 
 [storage]
 type = "postgres"
-postgres.connection_string = "postgres://maeve:maeve@postgres:5432/maeve?sslmode=disable"
+[storage.postgres]
+host = "postgres"
+port = 5432
+database = "maeve"
+user = "maeve"
+password = "maeve"
+ssl_mode = "disable"
+run_migrations = true
+migrations_path = "file:///migrations"
 
 [contract_cert_validator]
 type = "ocsp"
