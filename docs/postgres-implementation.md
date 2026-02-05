@@ -1088,9 +1088,9 @@ make postgres-test
 
 ### Current Phase: Phase 5 - Testing 🧪
 
-**Last Updated:** 2026-02-05 02:48 GMT+1
+**Last Updated:** 2026-02-05 03:10 GMT+1
 
-### Completed Tasks: 31 / ~60 total
+### Completed Tasks: 32 / ~60 total
 
 #### Phase 1: ✅ COMPLETE
 - ✅ Task 1.1: Create Directory Structure  
@@ -1120,8 +1120,8 @@ make postgres-test
 - ✅ Task 4.6: Implement store.Engine Interface
 
 #### Phase 5: ⏳ IN PROGRESS
-- ⏳ Task 5.1: Create Test Infrastructure (NEXT)
-- ⬜ Task 5.2: Write Token Store Tests
+- ✅ Task 5.1: Create Test Infrastructure
+- ⏳ Task 5.2: Write Token Store Tests (NEXT)
 - ⬜ Task 5.3: Write Charge Station Store Tests
 - ⬜ Task 5.4: Write Transaction Store Tests
 - ⬜ Task 5.5: Write Integration Tests
@@ -1137,6 +1137,7 @@ make postgres-test
 - Task 4.4 completed 2026-02-05: TransactionStore with meter value JSONB storage
 - Task 4.5 completed 2026-02-05: CertificateStore, OcpiStore, LocationStore implemented; fixed OCPI schema separation
 - Phase 4 complete 2026-02-05: All store.Engine interfaces implemented and compiling successfully
+- Task 5.1 completed 2026-02-05: Test infrastructure with testcontainers, migration runner, and health check test
 
 ---
 
