@@ -97,15 +97,15 @@ func (r ResetHandler) HandleCallResult(ctx context.Context, chargeStationId stri
 
 ---
 
-#### Task 1.4: ChangeAvailability Handler ✅❌
-- [ ] Create `manager/handlers/ocpp16/change_availability.go`
-- [ ] Implement `ChangeAvailabilityHandler` struct
-- [ ] Add `HandleCallResult` method
-- [ ] Add routing in `routing.go`
-- [ ] Add action mapping in `router.go`
-- [ ] Write unit test `change_availability_test.go`
-- [ ] Manual integration test
-- [ ] Commit: "Add ChangeAvailability handler for OCPP 1.6"
+#### Task 1.4: ChangeAvailability Handler ✅
+- [x] Create `manager/handlers/ocpp16/change_availability.go`
+- [x] Implement `ChangeAvailabilityHandler` struct
+- [x] Add `HandleCallResult` method
+- [x] Add routing in `routing.go`
+- [x] Add action mapping in `router.go`
+- [x] Write unit test `change_availability_test.go`
+- [x] Manual integration test
+- [x] Commit: "Add ChangeAvailability handler for OCPP 1.6"
 
 **Note:** Consider storing availability state in future enhancement
 
@@ -634,14 +634,14 @@ Tests token validation and connector availability checks.
 - [x] Task 1.1: Reset Handler
 - [x] Task 1.2: UnlockConnector Handler
 - [x] Task 1.3: ClearCache Handler
-- [ ] Task 1.4: ChangeAvailability Handler
+- [x] Task 1.4: ChangeAvailability Handler
 - [ ] Task 1.5: ChangeConfiguration Call Handler
 - [ ] Task 1.6: TriggerMessage Call Handler
 - [ ] Task 1.7: GetConfiguration Handler
 - [ ] Task 1.8: RemoteStartTransaction Handler
 - [ ] Task 1.9: RemoteStopTransaction Handler
 
-**Overall Progress:** 3/9 tasks (33%)
+**Overall Progress:** 4/9 tasks (44%)
 
 ---
 
