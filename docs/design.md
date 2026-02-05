@@ -20,6 +20,19 @@ expected to be a limiting factor.
 
 The use of a database to store state allows the handlers themselves to be stateless.
 
+### Storage Layer
+
+MaEVe implements a pluggable storage architecture through the `store.Engine` interface, allowing different 
+database backends to be used based on deployment requirements:
+
+- **Firestore** - Managed NoSQL database ideal for cloud deployments on Google Cloud Platform
+- **PostgreSQL** - Open-source relational database recommended for self-hosted and production deployments
+- **In-Memory** - Volatile storage for testing and development environments
+
+The PostgreSQL implementation uses modern Go database tooling including `pgx` for high-performance 
+connections, `sqlc` for type-safe query generation, and `golang-migrate` for schema migrations. 
+This provides a production-ready, cost-effective alternative to managed cloud databases.
+
 ![Diagram showing how multiple charge stations can connect to multiple instances of the CSMS gateway via a load balancer and on to multiple instances of the CSMS manager via an MQTT broker](assets/scaling.png)
 
 ## Evolution
