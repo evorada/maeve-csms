@@ -62,6 +62,27 @@ type ChargeStationTrigger struct {
 	SendAfter       pgtype.Timestamp `db:"send_after" json:"send_after"`
 }
 
+type ChargingProfile struct {
+	ID                      int32            `db:"id" json:"id"`
+	ChargeStationID         string           `db:"charge_station_id" json:"charge_station_id"`
+	ConnectorID             int32            `db:"connector_id" json:"connector_id"`
+	ChargingProfileID       int32            `db:"charging_profile_id" json:"charging_profile_id"`
+	TransactionID           pgtype.Int4      `db:"transaction_id" json:"transaction_id"`
+	StackLevel              int32            `db:"stack_level" json:"stack_level"`
+	ChargingProfilePurpose  string           `db:"charging_profile_purpose" json:"charging_profile_purpose"`
+	ChargingProfileKind     string           `db:"charging_profile_kind" json:"charging_profile_kind"`
+	RecurrencyKind          pgtype.Text      `db:"recurrency_kind" json:"recurrency_kind"`
+	ValidFrom               pgtype.Timestamp `db:"valid_from" json:"valid_from"`
+	ValidTo                 pgtype.Timestamp `db:"valid_to" json:"valid_to"`
+	ChargingRateUnit        string           `db:"charging_rate_unit" json:"charging_rate_unit"`
+	Duration                pgtype.Int4      `db:"duration" json:"duration"`
+	StartSchedule           pgtype.Timestamp `db:"start_schedule" json:"start_schedule"`
+	MinChargingRate         pgtype.Float8    `db:"min_charging_rate" json:"min_charging_rate"`
+	ChargingSchedulePeriods []byte           `db:"charging_schedule_periods" json:"charging_schedule_periods"`
+	CreatedAt               pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt               pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
 type Location struct {
 	ID           string           `db:"id" json:"id"`
 	CountryCode  string           `db:"country_code" json:"country_code"`
