@@ -580,5 +580,5 @@ When reviewing code, check for:
 
 - [Effective Go](https://go.dev/doc/effective_go)
 - [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments)
-- [Uber Go Style Guide](https://github.com/uber-go/guide/blob/master/style.md)
+- [Uber Go Style Guide](https://github.com/uber-go/guide)
 - [MaEVe Design Document](./docs/design.md)
