@@ -338,17 +338,17 @@ feature/ocpp16-security-extensions
 
 ---
 
-#### Task 3.3: ClearChargingProfile Handler
-**Status:** Not Started  
+#### Task 3.3: ClearChargingProfile Handler ✅
+**Status:** Complete  
 **Complexity:** Medium  
 **Dependencies:** `ChargingProfileStore` (from Task 3.1)
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/clear_charging_profile.go`
-- [ ] Handle optional filters (profileId, connectorId, purpose, stack level)
-- [ ] Clear matching profiles
-- [ ] Return cleared count
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/clear_charging_profile.go`
+- [x] Handle optional filters (profileId, connectorId, purpose, stack level)
+- [x] Clear matching profiles
+- [x] Return cleared count
+- [x] Write unit tests
 - [ ] Write integration tests
 
 **Commit:** `feat(ocpp16): Add ClearChargingProfile handler`
