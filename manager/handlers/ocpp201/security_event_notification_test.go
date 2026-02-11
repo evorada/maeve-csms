@@ -4,12 +4,13 @@ package ocpp201
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/testutil"
-	"testing"
-	"time"
 )
 
 func TestSecurityEventNotificationHandler(t *testing.T) {

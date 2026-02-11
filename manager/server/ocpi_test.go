@@ -6,18 +6,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/ocpi"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
-	"io"
 	"k8s.io/utils/clock"
 	clockTest "k8s.io/utils/clock/testing"
-	"net/http"
-	"net/http/httptest"
-	"testing"
-	"time"
 )
 
 func TestSwaggerHandler(t *testing.T) {

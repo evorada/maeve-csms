@@ -4,6 +4,9 @@ package services_test
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
@@ -12,8 +15,6 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
 	"github.com/thoughtworks/maeve-csms/manager/testutil"
 	fakeclock "k8s.io/utils/clock/testing"
-	"testing"
-	"time"
 )
 
 func TestOcppTokenAuthServiceAcceptsNoAuthorization(t *testing.T) {

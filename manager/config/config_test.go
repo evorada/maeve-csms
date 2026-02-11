@@ -4,12 +4,13 @@ package config_test
 
 import (
 	"context"
-	"github.com/huandu/go-clone/generic"
+	"os"
+	"testing"
+
+	clone "github.com/huandu/go-clone/generic"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/config"
-	"os"
-	"testing"
 )
 
 func TestConfigure(t *testing.T) {

@@ -4,6 +4,7 @@ package ocpp201
 
 import (
 	"context"
+
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"

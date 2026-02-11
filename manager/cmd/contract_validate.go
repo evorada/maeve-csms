@@ -5,11 +5,12 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"github.com/spf13/cobra"
-	"github.com/thoughtworks/maeve-csms/manager/services"
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/spf13/cobra"
+	"github.com/thoughtworks/maeve-csms/manager/services"
 )
 
 var validationTrustRoots []string

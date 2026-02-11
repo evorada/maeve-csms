@@ -4,10 +4,11 @@ package ocpp16
 
 import (
 	"context"
+	"time"
+
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"time"
 
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"

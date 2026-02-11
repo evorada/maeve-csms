@@ -6,15 +6,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/thoughtworks/maeve-csms/manager/services"
-	"k8s.io/utils/clock"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/thoughtworks/maeve-csms/manager/services"
+	"k8s.io/utils/clock"
 )
 
 func TestEnvTokenService(t *testing.T) {

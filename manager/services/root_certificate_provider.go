@@ -9,15 +9,16 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"go.opentelemetry.io/otel/codes"
-	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
-	"go.opentelemetry.io/otel/trace"
 	"io"
-	"k8s.io/utils/clock"
 	"net/http"
 	"os"
 	"sync"
 	"time"
+
+	"go.opentelemetry.io/otel/codes"
+	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+	"go.opentelemetry.io/otel/trace"
+	"k8s.io/utils/clock"
 )
 
 type RootCertificateProviderService interface {

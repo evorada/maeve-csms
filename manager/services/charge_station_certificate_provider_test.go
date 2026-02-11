@@ -14,18 +14,19 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/thoughtworks/maeve-csms/manager/services"
-	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
-	"go.mozilla.org/pkcs7"
 	"io"
-	"k8s.io/utils/clock"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/thoughtworks/maeve-csms/manager/services"
+	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"go.mozilla.org/pkcs7"
+	"k8s.io/utils/clock"
 )
 
 type opcpHttpHandler struct {

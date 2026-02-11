@@ -8,12 +8,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
 	"go.opentelemetry.io/otel/codes"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	"go.opentelemetry.io/otel/trace"
-	"io"
-	"net/http"
 )
 
 const XsdMsgDefinition = "urn:iso:15118:2:2013:MsgDef"

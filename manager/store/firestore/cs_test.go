@@ -7,10 +7,11 @@ package firestore_test
 import (
 	"context"
 	"fmt"
-	"k8s.io/utils/clock"
-	clockTest "k8s.io/utils/clock/testing"
 	"testing"
 	"time"
+
+	"k8s.io/utils/clock"
+	clockTest "k8s.io/utils/clock/testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

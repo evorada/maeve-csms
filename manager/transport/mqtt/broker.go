@@ -4,12 +4,13 @@ package mqtt
 
 import (
 	"fmt"
-	"github.com/mochi-co/mqtt/v2"
-	"github.com/mochi-co/mqtt/v2/hooks/auth"
-	"github.com/mochi-co/mqtt/v2/listeners"
 	"net"
 	"net/url"
 	"testing"
+
+	"github.com/mochi-co/mqtt/v2"
+	"github.com/mochi-co/mqtt/v2/hooks/auth"
+	"github.com/mochi-co/mqtt/v2/listeners"
 )
 
 func getFreePort() (port int, err error) {

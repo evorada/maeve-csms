@@ -4,6 +4,7 @@ package has2be
 
 import (
 	"context"
+
 	"github.com/thoughtworks/maeve-csms/manager/handlers"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	typesHasToBe "github.com/thoughtworks/maeve-csms/manager/ocpp/has2be"

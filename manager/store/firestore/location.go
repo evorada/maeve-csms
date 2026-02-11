@@ -3,9 +3,10 @@
 package firestore
 
 import (
-	"cloud.google.com/go/firestore"
 	"context"
 	"fmt"
+
+	"cloud.google.com/go/firestore"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"google.golang.org/api/iterator"
 	"google.golang.org/grpc/codes"

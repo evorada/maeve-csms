@@ -3,6 +3,9 @@
 package server
 
 import (
+	"net/http"
+	"os"
+
 	oapimiddleware "github.com/deepmap/oapi-codegen/pkg/chi-middleware"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/go-chi/chi/v5"
@@ -14,8 +17,6 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	"github.com/unrolled/secure"
 	"k8s.io/utils/clock"
-	"net/http"
-	"os"
 )
 
 func NewOcpiHandler(engine store.Engine, clock clock.PassiveClock, ocpiApi ocpi.Api, emitter transport.Emitter) http.Handler {

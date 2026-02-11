@@ -12,13 +12,14 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/pem"
+	"math/big"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
 	"k8s.io/utils/clock"
-	"math/big"
-	"testing"
-	"time"
 )
 
 func TestSetAndLookupAndDeleteCertificate(t *testing.T) {

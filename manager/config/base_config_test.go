@@ -3,11 +3,12 @@
 package config_test
 
 import (
+	"testing"
+
 	clone "github.com/huandu/go-clone/generic"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/config"
-	"testing"
 )
 
 func TestParseConfig(t *testing.T) {

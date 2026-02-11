@@ -299,21 +299,23 @@ feature/ocpp16-security-extensions
 
 ---
 
-#### Task 3.1: SetChargingProfile Handler
-**Status:** Not Started  
+#### Task 3.1: SetChargingProfile Handler ✅
+**Status:** Complete  
 **Complexity:** High  
 **Dependencies:** Task 3.0 (ChargingProfileStore)
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/set_charging_profile.go`
-- [ ] Implement profile validation
-- [ ] Implement profile stacking logic
-- [ ] Handle ChargingProfilePurpose (TxProfile, TxDefaultProfile, ChargePointMaxProfile)
-- [ ] Validate ChargingSchedule
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/set_charging_profile.go`
+- [x] Create OCPP 1.6 types: `manager/ocpp/ocpp16/set_charging_profile.go`, `set_charging_profile_response.go`
+- [x] Implement profile conversion from OCPP types to store types
+- [x] Handle ChargingProfilePurpose (TxProfile, TxDefaultProfile, ChargePointMaxProfile)
+- [x] Store profile on Accepted response, skip on Rejected/NotSupported
+- [x] Handle optional fields (ValidFrom, ValidTo, RecurrencyKind, TransactionId, StartSchedule, Duration, MinChargingRate, NumberPhases)
+- [x] Add routing in `routing.go` (CallResult route + CallMaker action)
+- [x] Write unit tests (`set_charging_profile_test.go`): accepted/rejected/not-supported, full profile conversion, invalid date handling, profile replacement
 - [ ] Write integration tests
 
-**Commit:** `feat(ocpp16): Add SetChargingProfile handler with store`
+**Commit:** `feat(ocpp16): Add SetChargingProfile handler`
 
 ---
 

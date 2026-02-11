@@ -6,9 +6,10 @@ package inmemory_test
 
 import (
 	"context"
-	"k8s.io/utils/clock"
 	"testing"
 	"time"
+
+	"k8s.io/utils/clock"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/thoughtworks/maeve-csms/manager/store"

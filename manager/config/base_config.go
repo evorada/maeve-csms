@@ -4,10 +4,11 @@ package config
 
 import (
 	"bufio"
-	"github.com/go-playground/validator/v10"
-	"github.com/pelletier/go-toml/v2"
 	"io"
 	"os"
+
+	"github.com/go-playground/validator/v10"
+	"github.com/pelletier/go-toml/v2"
 )
 
 // BaseConfig provides the data structures that represent the configuration

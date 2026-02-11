@@ -5,14 +5,15 @@ package inmemory_test
 import (
 	"context"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
 	"k8s.io/utils/clock"
 	clockTest "k8s.io/utils/clock/testing"
-	"testing"
-	"time"
 )
 
 func TestUpdateChargeStationSettingsWithNewSettings(t *testing.T) {

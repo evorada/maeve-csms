@@ -6,11 +6,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/santhosh-tekuri/jsonschema"
-	"github.com/santhosh-tekuri/jsonschema/loader"
 	"io"
 	"io/fs"
 	"net/url"
+
+	"github.com/santhosh-tekuri/jsonschema"
+	"github.com/santhosh-tekuri/jsonschema/loader"
 )
 
 type FSLoader struct {

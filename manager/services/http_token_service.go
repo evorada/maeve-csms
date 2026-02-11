@@ -8,12 +8,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"k8s.io/utils/clock"
 	"net/http"
 	"os"
 	"regexp"
 	"sync"
 	"time"
+
+	"k8s.io/utils/clock"
 )
 
 type HttpTokenService interface {

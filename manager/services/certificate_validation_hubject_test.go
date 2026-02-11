@@ -8,12 +8,13 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/pem"
+	"net/http"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/services"
-	"net/http"
-	"testing"
 )
 
 func TestCertificateValidationServiceWithHubjectCertificate(t *testing.T) {

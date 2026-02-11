@@ -4,10 +4,11 @@ package ocpp16_test
 
 import (
 	"context"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	handlers "github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
-	"testing"
 )
 
 func TestStatusNotificationHandler(t *testing.T) {

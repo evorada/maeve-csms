@@ -5,10 +5,11 @@ package server_test
 import (
 	"context"
 	"fmt"
-	"github.com/thoughtworks/maeve-csms/manager/server"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/thoughtworks/maeve-csms/manager/server"
 )
 
 func TestServer(t *testing.T) {

@@ -7,9 +7,10 @@ package firestore_test
 import (
 	"context"
 	"fmt"
+	"testing"
+
 	"google.golang.org/api/iterator"
 	"k8s.io/utils/clock"
-	"testing"
 
 	firestoreapi "cloud.google.com/go/firestore"
 	"github.com/stretchr/testify/assert"

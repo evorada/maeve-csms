@@ -6,11 +6,12 @@ package firestore_test
 
 import (
 	"context"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/store/firestore"
 	"k8s.io/utils/clock"
-	"testing"
 )
 
 func TestNewStore(t *testing.T) {

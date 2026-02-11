@@ -7,15 +7,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"regexp"
+	"strconv"
+	"time"
+
 	"github.com/go-chi/render"
 	"github.com/thoughtworks/maeve-csms/manager/handlers"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"golang.org/x/exp/slog"
 	"k8s.io/utils/clock"
-	"net/http"
-	"regexp"
-	"strconv"
-	"time"
 )
 
 type Server struct {

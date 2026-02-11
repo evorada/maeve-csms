@@ -3,13 +3,14 @@
 package firestore
 
 import (
-	"cloud.google.com/go/firestore"
 	"context"
 	"fmt"
+	"time"
+
+	"cloud.google.com/go/firestore"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"time"
 )
 
 type chargeStation struct {

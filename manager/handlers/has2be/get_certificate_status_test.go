@@ -4,6 +4,8 @@ package has2be_test
 
 import (
 	"context"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	handlersHasToBe "github.com/thoughtworks/maeve-csms/manager/handlers/has2be"
@@ -11,7 +13,6 @@ import (
 	typesHasToBe "github.com/thoughtworks/maeve-csms/manager/ocpp/has2be"
 	types201 "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/services"
-	"testing"
 )
 
 type dummyCertificateValidationService struct {

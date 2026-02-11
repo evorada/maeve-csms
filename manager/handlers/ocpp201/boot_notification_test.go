@@ -4,6 +4,9 @@ package ocpp201_test
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	handlers "github.com/thoughtworks/maeve-csms/manager/handlers/ocpp201"
@@ -12,8 +15,6 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
 	"k8s.io/utils/clock"
 	clockTest "k8s.io/utils/clock/testing"
-	"testing"
-	"time"
 )
 
 func makePtr[T any](t T) *T {

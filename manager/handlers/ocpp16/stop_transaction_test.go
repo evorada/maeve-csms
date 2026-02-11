@@ -5,10 +5,11 @@ package ocpp16_test
 import (
 	"context"
 	"fmt"
-	"k8s.io/utils/clock"
 	"math/rand"
 	"testing"
 	"time"
+
+	"k8s.io/utils/clock"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

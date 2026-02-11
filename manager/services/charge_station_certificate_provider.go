@@ -13,16 +13,17 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
-	"github.com/thoughtworks/maeve-csms/manager/store"
-	"go.mozilla.org/pkcs7"
-	"go.opentelemetry.io/otel/codes"
-	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
-	"go.opentelemetry.io/otel/trace"
 	"io"
 	"math/big"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/thoughtworks/maeve-csms/manager/store"
+	"go.mozilla.org/pkcs7"
+	"go.opentelemetry.io/otel/codes"
+	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type CertificateType int

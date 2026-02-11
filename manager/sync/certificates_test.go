@@ -5,6 +5,9 @@ package sync_test
 import (
 	"context"
 	"encoding/pem"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	handlers201 "github.com/thoughtworks/maeve-csms/manager/handlers/ocpp201"
@@ -14,8 +17,6 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
 	"github.com/thoughtworks/maeve-csms/manager/sync"
 	"k8s.io/utils/clock"
-	"testing"
-	"time"
 )
 
 type updateChargeStation struct {

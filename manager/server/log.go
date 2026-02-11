@@ -2,10 +2,11 @@ package server
 
 import (
 	"fmt"
-	"github.com/go-chi/chi/v5/middleware"
-	"golang.org/x/exp/slog"
 	"net/http"
 	"time"
+
+	"github.com/go-chi/chi/v5/middleware"
+	"golang.org/x/exp/slog"
 )
 
 type logEntry struct {

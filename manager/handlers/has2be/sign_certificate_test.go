@@ -6,12 +6,13 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/pem"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	handlersHasToBe "github.com/thoughtworks/maeve-csms/manager/handlers/has2be"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	typesHasToBe "github.com/thoughtworks/maeve-csms/manager/ocpp/has2be"
 	types201 "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
-	"testing"
 )
 
 type spy201SignCertificateHandler struct {
