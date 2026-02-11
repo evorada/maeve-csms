@@ -319,18 +319,19 @@ feature/ocpp16-security-extensions
 
 ---
 
-#### Task 3.2: GetCompositeSchedule Handler
-**Status:** Not Started  
+#### Task 3.2: GetCompositeSchedule Handler ✅
+**Status:** Complete  
 **Complexity:** High  
 **Dependencies:** `ChargingProfileStore` (from Task 3.1)
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/get_composite_schedule.go`
-- [ ] Implement composite schedule calculation
-- [ ] Implement profile stacking by priority
-- [ ] Apply ChargingRateUnit
-- [ ] Return calculated schedule
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/get_composite_schedule.go`
+- [x] Create OCPP 1.6 types: `manager/ocpp/ocpp16/get_composite_schedule.go`, `get_composite_schedule_response.go`
+- [x] Handle accepted/rejected responses with tracing and logging
+- [x] Support optional ChargingRateUnit in request
+- [x] Log composite schedule details (rate unit, period count)
+- [x] Add routing in `routing.go` (CallResult route + CallMaker action)
+- [x] Write unit tests (`get_composite_schedule_test.go`): accepted with W/A, rejected, connector 0, with/without schedule body, schedule start/duration/min charging rate
 - [ ] Write integration tests
 
 **Commit:** `feat(ocpp16): Add GetCompositeSchedule handler`

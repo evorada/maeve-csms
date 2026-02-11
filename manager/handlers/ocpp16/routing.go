@@ -342,6 +342,13 @@ func NewRouter(emitter transport.Emitter,
 					ChargingProfileStore: engine,
 				},
 			},
+			"GetCompositeSchedule": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.GetCompositeScheduleJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp16.GetCompositeScheduleResponseJson) },
+				RequestSchema:  "ocpp16/GetCompositeSchedule.json",
+				ResponseSchema: "ocpp16/GetCompositeScheduleResponse.json",
+				Handler:        GetCompositeScheduleHandler{},
+			},
 		},
 	}
 }
@@ -362,6 +369,7 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 			reflect.TypeOf(&ocpp16.GetConfigurationJson{}):       "GetConfiguration",
 			reflect.TypeOf(&ocpp16.ExtendedTriggerMessageJson{}): "ExtendedTriggerMessage",
 			reflect.TypeOf(&ocpp16.SetChargingProfileJson{}):     "SetChargingProfile",
+			reflect.TypeOf(&ocpp16.GetCompositeScheduleJson{}):   "GetCompositeSchedule",
 		},
 	}
 }
