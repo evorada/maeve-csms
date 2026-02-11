@@ -263,15 +263,45 @@ feature/ocpp16-security-extensions
 
 ### Messages to Implement
 
+#### Task 3.0: ChargingProfileStore — Data Store Implementation
+**Status:** Not Started  
+**Complexity:** High  
+**Priority:** Must be done before any Module 3 handlers
+
+**Store Interface** (`manager/store/charging_profile.go`):
+- [ ] Define `ChargingProfile` struct: `ProfileId` (int), `StackLevel` (int), `ChargingProfilePurpose` (enum: TxProfile/TxDefaultProfile/ChargePointMaxProfile), `ChargingProfileKind` (enum: Absolute/Relative/Recurring), `RecurrencyKind` (enum: Daily/Weekly, optional), `ValidFrom`/`ValidTo` (time), `ChargingSchedule` (struct with `ChargingRateUnit`, `Duration`, `StartSchedule`, `MinChargingRate`, `ChargingSchedulePeriod[]` with `StartPeriod`, `Limit`, `NumberPhases`)
+- [ ] Define `ChargingProfileStore` interface:
+  - `SetChargingProfile(ctx, chargeStationId string, connectorId int, profile *ChargingProfile) error`
+  - `GetChargingProfiles(ctx, chargeStationId string, connectorId *int, purpose *string, stackLevel *int) ([]*ChargingProfile, error)`
+  - `ClearChargingProfile(ctx, chargeStationId string, profileId *int, connectorId *int, purpose *string, stackLevel *int) (int, error)`
+  - `GetCompositeSchedule(ctx, chargeStationId string, connectorId int, duration int, rateUnit *string) (*ChargingSchedule, error)`
+- [ ] Add `ChargingProfileStore` to `Engine` interface in `manager/store/engine.go`
+
+**PostgreSQL** (`manager/store/postgres/`):
+- [ ] Create migration `000002_create_charging_profiles.up.sql` / `.down.sql`
+- [ ] Create SQL queries in `queries/charging_profiles.sql`
+- [ ] Generate sqlc code
+- [ ] Implement `ChargingProfileStore` methods in `charging_profiles.go`
+- [ ] Write tests in `charging_profiles_test.go`
+
+**Firestore** (`manager/store/firestore/`):
+- [ ] Implement `ChargingProfileStore` methods in `charging_profile.go`
+- [ ] Write tests in `charging_profile_test.go`
+
+**In-Memory** (`manager/store/inmemory/`):
+- [ ] Implement `ChargingProfileStore` methods in `store.go`
+- [ ] Write tests
+
+**Commit:** `feat(store): Add ChargingProfileStore for smart charging`
+
+---
+
 #### Task 3.1: SetChargingProfile Handler
 **Status:** Not Started  
 **Complexity:** High  
-**Dependencies:** New `ChargingProfileStore` interface
+**Dependencies:** Task 3.0 (ChargingProfileStore)
 
 **Implementation:**
-- [ ] Design `ChargingProfileStore` interface
-- [ ] Create database schema for charging profiles
-- [ ] Implement PostgreSQL ChargingProfileStore
 - [ ] Create `manager/handlers/ocpp16/set_charging_profile.go`
 - [ ] Implement profile validation
 - [ ] Implement profile stacking logic
@@ -342,6 +372,39 @@ feature/ocpp16-security-extensions
 **Complexity:** High (requires file transfer infrastructure)  
 
 ### Messages to Implement
+
+#### Task 4.0: FirmwareStore — Data Store Implementation
+**Status:** Not Started  
+**Priority:** Must be done before Module 4 handlers
+
+**Store Interface** (`manager/store/firmware.go`):
+- [ ] Define `FirmwareUpdateStatus` struct: `ChargeStationId`, `Status` (enum: Downloading/Downloaded/InstallationFailed/Installing/Installed/Idle), `Location` (URL string), `RetrieveDate` (time), `RetryCount` (int), `UpdatedAt` (time)
+- [ ] Define `DiagnosticsStatus` struct: `ChargeStationId`, `Status` (enum: Idle/Uploaded/UploadFailed/Uploading), `Location` (URL string), `UpdatedAt` (time)
+- [ ] Define `FirmwareStore` interface:
+  - `SetFirmwareUpdateStatus(ctx, chargeStationId string, status *FirmwareUpdateStatus) error`
+  - `GetFirmwareUpdateStatus(ctx, chargeStationId string) (*FirmwareUpdateStatus, error)`
+  - `SetDiagnosticsStatus(ctx, chargeStationId string, status *DiagnosticsStatus) error`
+  - `GetDiagnosticsStatus(ctx, chargeStationId string) (*DiagnosticsStatus, error)`
+- [ ] Add `FirmwareStore` to `Engine` interface in `manager/store/engine.go`
+
+**PostgreSQL** (`manager/store/postgres/`):
+- [ ] Create migration `000003_create_firmware_status.up.sql` / `.down.sql`
+- [ ] Create SQL queries in `queries/firmware.sql`
+- [ ] Generate sqlc code
+- [ ] Implement `FirmwareStore` methods in `firmware.go`
+- [ ] Write tests
+
+**Firestore** (`manager/store/firestore/`):
+- [ ] Implement `FirmwareStore` methods in `firmware.go`
+- [ ] Write tests
+
+**In-Memory** (`manager/store/inmemory/`):
+- [ ] Implement `FirmwareStore` methods in `store.go`
+- [ ] Write tests
+
+**Commit:** `feat(store): Add FirmwareStore for firmware and diagnostics tracking`
+
+---
 
 #### Task 4.1: UpdateFirmware Handler
 **Status:** Not Started
@@ -441,6 +504,38 @@ feature/ocpp16-security-extensions
 
 ### Messages to Implement
 
+#### Task 5.0: LocalAuthListStore — Data Store Implementation
+**Status:** Not Started  
+**Priority:** Must be done before Module 5 handlers
+
+**Store Interface** (`manager/store/local_auth_list.go`):
+- [ ] Define `LocalAuthListEntry` struct: `IdTag` (string), `IdTagInfo` (struct with `Status` enum: Accepted/Blocked/Expired/Invalid, `ExpiryDate` *time, `ParentIdTag` *string)
+- [ ] Define `LocalAuthListStore` interface:
+  - `GetLocalListVersion(ctx, chargeStationId string) (int, error)`
+  - `SetLocalListVersion(ctx, chargeStationId string, version int) error`
+  - `UpdateLocalAuthList(ctx, chargeStationId string, version int, updateType string, entries []*LocalAuthListEntry) error` — `updateType`: "Full" (replace) or "Differential" (add/update/remove)
+  - `GetLocalAuthList(ctx, chargeStationId string) ([]*LocalAuthListEntry, error)`
+- [ ] Add `LocalAuthListStore` to `Engine` interface in `manager/store/engine.go`
+
+**PostgreSQL** (`manager/store/postgres/`):
+- [ ] Create migration `000004_create_local_auth_list.up.sql` / `.down.sql`
+- [ ] Create SQL queries in `queries/local_auth_list.sql`
+- [ ] Generate sqlc code
+- [ ] Implement `LocalAuthListStore` methods in `local_auth_list.go`
+- [ ] Write tests
+
+**Firestore** (`manager/store/firestore/`):
+- [ ] Implement `LocalAuthListStore` methods in `local_auth_list.go`
+- [ ] Write tests
+
+**In-Memory** (`manager/store/inmemory/`):
+- [ ] Implement `LocalAuthListStore` methods in `store.go`
+- [ ] Write tests
+
+**Commit:** `feat(store): Add LocalAuthListStore for local auth list management`
+
+---
+
 #### Task 5.1: GetLocalListVersion Handler
 **Status:** Not Started
 
@@ -487,13 +582,45 @@ feature/ocpp16-security-extensions
 
 ### Messages to Implement
 
+#### Task 6.0: ReservationStore — Data Store Implementation
+**Status:** Not Started  
+**Priority:** Must be done before Module 6 handlers
+
+**Store Interface** (`manager/store/reservation.go`):
+- [ ] Define `Reservation` struct: `ReservationId` (int), `ChargeStationId` (string), `ConnectorId` (int), `IdTag` (string), `ParentIdTag` (*string), `ExpiryDate` (time), `Status` (enum: Accepted/Faulted/Occupied/Rejected/Unavailable/Cancelled/Expired), `CreatedAt` (time)
+- [ ] Define `ReservationStore` interface:
+  - `CreateReservation(ctx, reservation *Reservation) error`
+  - `GetReservation(ctx, reservationId int) (*Reservation, error)`
+  - `CancelReservation(ctx, reservationId int) error`
+  - `GetActiveReservations(ctx, chargeStationId string) ([]*Reservation, error)`
+  - `GetReservationByConnector(ctx, chargeStationId string, connectorId int) (*Reservation, error)`
+  - `ExpireReservations(ctx) (int, error)` — expire all past-due reservations
+- [ ] Add `ReservationStore` to `Engine` interface in `manager/store/engine.go`
+
+**PostgreSQL** (`manager/store/postgres/`):
+- [ ] Create migration `000005_create_reservations.up.sql` / `.down.sql`
+- [ ] Create SQL queries in `queries/reservations.sql`
+- [ ] Generate sqlc code
+- [ ] Implement `ReservationStore` methods in `reservations.go`
+- [ ] Write tests
+
+**Firestore** (`manager/store/firestore/`):
+- [ ] Implement `ReservationStore` methods in `reservation.go`
+- [ ] Write tests
+
+**In-Memory** (`manager/store/inmemory/`):
+- [ ] Implement `ReservationStore` methods in `store.go`
+- [ ] Write tests
+
+**Commit:** `feat(store): Add ReservationStore for connector reservation management`
+
+---
+
 #### Task 6.1: ReserveNow Handler
 **Status:** Not Started  
-**Dependencies:** Reservation state management
+**Dependencies:** Task 6.0 (ReservationStore)
 
 **Implementation:**
-- [ ] Design reservation data model
-- [ ] Create database schema for reservations
 - [ ] Create `manager/handlers/ocpp16/reserve_now.go`
 - [ ] Implement reservation state management
 - [ ] Handle expiry logic
