@@ -456,6 +456,13 @@ func NewRouter(emitter transport.Emitter,
 				ResponseSchema: "ocpp16/GetInstalledCertificateIdsResponse.json",
 				Handler:        GetInstalledCertificateIdsResultHandler{},
 			},
+			"GetLog": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.GetLogJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp16.GetLogResponseJson) },
+				RequestSchema:  "ocpp16/GetLog.json",
+				ResponseSchema: "ocpp16/GetLogResponse.json",
+				Handler:        GetLogResultHandler{},
+			},
 		},
 	}
 }
@@ -497,6 +504,7 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 			reflect.TypeOf(&ocpp16.GetConfigurationJson{}):           "GetConfiguration",
 			reflect.TypeOf(&ocpp16.DeleteCertificateJson{}):          "DeleteCertificate",
 			reflect.TypeOf(&ocpp16.GetInstalledCertificateIdsJson{}): "GetInstalledCertificateIds",
+			reflect.TypeOf(&ocpp16.GetLogJson{}):                     "GetLog",
 		},
 	}
 }
