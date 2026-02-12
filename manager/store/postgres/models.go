@@ -81,6 +81,8 @@ type ChargingProfile struct {
 	ChargingSchedulePeriods []byte           `db:"charging_schedule_periods" json:"charging_schedule_periods"`
 	CreatedAt               pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt               pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
 type DiagnosticsStatus struct {
 	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
 	Status          string             `db:"status" json:"status"`
