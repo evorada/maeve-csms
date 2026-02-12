@@ -443,13 +443,15 @@ feature/ocpp16-security-extensions
 
 ---
 
-#### Task 4.3: GetDiagnostics Handler
-**Status:** Not Started
+#### Task 4.3: GetDiagnostics Handler ✅
+**Status:** Complete
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/get_diagnostics.go`
-- [ ] Implement file upload infrastructure
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/get_diagnostics.go`
+- [x] Create OCPP types `manager/ocpp/ocpp16/get_diagnostics.go` and `get_diagnostics_response.go`
+- [x] Implement diagnostics status tracking via FirmwareStore
+- [x] Add routing in `routing.go` and action mapping in CallMaker
+- [x] Write unit tests (`get_diagnostics_test.go`) — 4 test cases covering success, time range params, no filename, store errors
 
 **Commit:** `feat(ocpp16): Add GetDiagnostics handler`
 
