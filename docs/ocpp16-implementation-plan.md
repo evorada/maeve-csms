@@ -706,13 +706,19 @@ feature/ocpp16-security-extensions
 
 ### Messages to Implement
 
-#### Task 7.1: DeleteCertificate Handler
-**Status:** Not Started
+#### Task 7.1: DeleteCertificate Handler ✅
+**Status:** Complete
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/delete_certificate.go`
-- [ ] Implement certificate deletion
-- [ ] Write unit tests
+- [x] Create OCPP 1.6 types: `manager/ocpp/ocpp16/delete_certificate.go`, `delete_certificate_response.go`
+- [x] Define `CertificateHashDataType` struct with `HashAlgorithm`, `IssuerNameHash`, `IssuerKeyHash`, `SerialNumber`
+- [x] Define `HashAlgorithmEnumType` (SHA256/SHA384/SHA512)
+- [x] Define `DeleteCertificateResponseJsonStatus` (Accepted/Failed/NotFound)
+- [x] Create `manager/handlers/ocpp16/delete_certificate_result.go`
+- [x] Implement `DeleteCertificateResultHandler` with tracing and logging
+- [x] Add routing in `routing.go` (CallResult route)
+- [x] Add action mapping in `NewCallMaker`
+- [x] Write unit tests (`delete_certificate_result_test.go` — 11 test cases: all hash algorithms, all statuses, accepted/failed/not found scenarios)
 
 **Commit:** `feat(ocpp16): Add DeleteCertificate handler`
 
