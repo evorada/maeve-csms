@@ -43,6 +43,7 @@ type Store struct {
 	diagnosticsStatus                map[string]*store.DiagnosticsStatus
 	localAuthListVersions            map[string]int
 	localAuthListEntries             map[string]map[string]*store.LocalAuthListEntry
+	reservations                     map[int]*store.Reservation
 }
 
 func NewStore(clock clock.PassiveClock) *Store {
@@ -64,6 +65,7 @@ func NewStore(clock clock.PassiveClock) *Store {
 		diagnosticsStatus:                make(map[string]*store.DiagnosticsStatus),
 		localAuthListVersions:            make(map[string]int),
 		localAuthListEntries:             make(map[string]map[string]*store.LocalAuthListEntry),
+		reservations:                     make(map[int]*store.Reservation),
 	}
 }
 
@@ -599,4 +601,76 @@ func (s *Store) GetLocalAuthList(_ context.Context, chargeStationId string) ([]*
 		return entries[i].IdTag < entries[j].IdTag
 	})
 	return entries, nil
+}
+
+func (s *Store) CreateReservation(_ context.Context, reservation *store.Reservation) error {
+	s.Lock()
+	defer s.Unlock()
+	r := *reservation
+	s.reservations[reservation.ReservationId] = &r
+	return nil
+}
+
+func (s *Store) GetReservation(_ context.Context, reservationId int) (*store.Reservation, error) {
+	s.Lock()
+	defer s.Unlock()
+	r, ok := s.reservations[reservationId]
+	if !ok {
+		return nil, nil
+	}
+	copy := *r
+	return &copy, nil
+}
+
+func (s *Store) CancelReservation(_ context.Context, reservationId int) error {
+	s.Lock()
+	defer s.Unlock()
+	r, ok := s.reservations[reservationId]
+	if !ok {
+		return fmt.Errorf("reservation %d not found", reservationId)
+	}
+	r.Status = store.ReservationStatusCancelled
+	return nil
+}
+
+func (s *Store) GetActiveReservations(_ context.Context, chargeStationId string) ([]*store.Reservation, error) {
+	s.Lock()
+	defer s.Unlock()
+	var result []*store.Reservation
+	for _, r := range s.reservations {
+		if r.ChargeStationId == chargeStationId && r.Status == store.ReservationStatusAccepted {
+			copy := *r
+			result = append(result, &copy)
+		}
+	}
+	if result == nil {
+		result = make([]*store.Reservation, 0)
+	}
+	return result, nil
+}
+
+func (s *Store) GetReservationByConnector(_ context.Context, chargeStationId string, connectorId int) (*store.Reservation, error) {
+	s.Lock()
+	defer s.Unlock()
+	for _, r := range s.reservations {
+		if r.ChargeStationId == chargeStationId && r.ConnectorId == connectorId && r.Status == store.ReservationStatusAccepted {
+			copy := *r
+			return &copy, nil
+		}
+	}
+	return nil, nil
+}
+
+func (s *Store) ExpireReservations(_ context.Context) (int, error) {
+	s.Lock()
+	defer s.Unlock()
+	now := s.clock.Now()
+	count := 0
+	for _, r := range s.reservations {
+		if r.Status == store.ReservationStatusAccepted && r.ExpiryDate.Before(now) {
+			r.Status = store.ReservationStatusExpired
+			count++
+		}
+	}
+	return count, nil
 }

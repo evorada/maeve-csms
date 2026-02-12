@@ -16,4 +16,5 @@ type Engine interface {
 	ChargingProfileStore
 	FirmwareStore
 	LocalAuthListStore
+	ReservationStore
 }
