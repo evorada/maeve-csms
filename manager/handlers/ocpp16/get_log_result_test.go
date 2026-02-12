@@ -185,10 +185,6 @@ func TestGetLogResultHandler_AllStatuses(t *testing.T) {
 	}
 }
 
-func strPtr(s string) *string {
-	return &s
-}
-
 func intP(i int) *int {
 	return &i
 }
