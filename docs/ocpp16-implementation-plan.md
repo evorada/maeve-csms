@@ -724,13 +724,18 @@ feature/ocpp16-security-extensions
 
 ---
 
-#### Task 7.2: GetInstalledCertificateIds Handler
-**Status:** Not Started
+#### Task 7.2: GetInstalledCertificateIds Handler ✅
+**Status:** Complete
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/get_installed_certificate_ids.go`
-- [ ] Query installed certificates
-- [ ] Write unit tests
+- [x] Create OCPP 1.6 types: `manager/ocpp/ocpp16/get_installed_certificate_ids.go`, `get_installed_certificate_ids_response.go`
+- [x] Define `CertificateUseEnumType` (CentralSystemRootCertificate/ManufacturerRootCertificate)
+- [x] Define `GetInstalledCertificateIdsResponseJsonStatus` (Accepted/NotFound)
+- [x] Create `manager/handlers/ocpp16/get_installed_certificate_ids_result.go`
+- [x] Implement `GetInstalledCertificateIdsResultHandler` with tracing and logging
+- [x] Add routing in `routing.go` (CallResult route)
+- [x] Add action mapping in `NewCallMaker`
+- [x] Write unit tests (`get_installed_certificate_ids_result_test.go` — 10 test cases: all certificate types, all statuses, multiple certificates, not found scenarios)
 
 **Commit:** `feat(ocpp16): Add GetInstalledCertificateIds handler`
 

@@ -449,6 +449,13 @@ func NewRouter(emitter transport.Emitter,
 				ResponseSchema: "ocpp16/DeleteCertificateResponse.json",
 				Handler:        DeleteCertificateResultHandler{},
 			},
+			"GetInstalledCertificateIds": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.GetInstalledCertificateIdsJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp16.GetInstalledCertificateIdsResponseJson) },
+				RequestSchema:  "ocpp16/GetInstalledCertificateIds.json",
+				ResponseSchema: "ocpp16/GetInstalledCertificateIdsResponse.json",
+				Handler:        GetInstalledCertificateIdsResultHandler{},
+			},
 		},
 	}
 }
@@ -479,6 +486,17 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 			reflect.TypeOf(&ocpp16.ReserveNowJson{}):             "ReserveNow",
 			reflect.TypeOf(&ocpp16.CancelReservationJson{}):      "CancelReservation",
 			reflect.TypeOf(&ocpp16.DeleteCertificateJson{}):      "DeleteCertificate",
+			reflect.TypeOf(&ocpp16.ChangeConfigurationJson{}):        "ChangeConfiguration",
+			reflect.TypeOf(&ocpp16.TriggerMessageJson{}):             "TriggerMessage",
+			reflect.TypeOf(&ocpp16.RemoteStartTransactionJson{}):     "RemoteStartTransaction",
+			reflect.TypeOf(&ocpp16.RemoteStopTransactionJson{}):      "RemoteStopTransaction",
+			reflect.TypeOf(&ocpp16.ResetJson{}):                      "Reset",
+			reflect.TypeOf(&ocpp16.UnlockConnectorJson{}):            "UnlockConnector",
+			reflect.TypeOf(&ocpp16.ClearCacheJson{}):                 "ClearCache",
+			reflect.TypeOf(&ocpp16.ChangeAvailabilityJson{}):         "ChangeAvailability",
+			reflect.TypeOf(&ocpp16.GetConfigurationJson{}):           "GetConfiguration",
+			reflect.TypeOf(&ocpp16.DeleteCertificateJson{}):          "DeleteCertificate",
+			reflect.TypeOf(&ocpp16.GetInstalledCertificateIdsJson{}): "GetInstalledCertificateIds",
 		},
 	}
 }
