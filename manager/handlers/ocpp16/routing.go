@@ -107,6 +107,14 @@ func NewRouter(emitter transport.Emitter,
 				ResponseSchema: "ocpp16/SecurityEventNotificationResponse.json",
 				Handler:        SecurityEventNotificationHandler{},
 			},
+			"DiagnosticsStatusNotification": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.DiagnosticsStatusNotificationJson) },
+				RequestSchema:  "ocpp16/DiagnosticsStatusNotification.json",
+				ResponseSchema: "ocpp16/DiagnosticsStatusNotificationResponse.json",
+				Handler: DiagnosticsStatusNotificationHandler{
+					FirmwareStore: engine,
+				},
+			},
 			"FirmwareStatusNotification": {
 				NewRequest:     func() ocpp.Request { return new(ocpp16.FirmwareStatusNotificationJson) },
 				RequestSchema:  "ocpp16/FirmwareStatusNotification.json",
@@ -406,6 +414,8 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 			reflect.TypeOf(&ocpp16.ClearChargingProfileJson{}):   "ClearChargingProfile",
 			reflect.TypeOf(&ocpp16.UpdateFirmwareJson{}):          "UpdateFirmware",
 			reflect.TypeOf(&ocpp16.GetDiagnosticsJson{}):          "GetDiagnostics",
+			reflect.TypeOf(&ocpp16.UpdateFirmwareJson{}):         "UpdateFirmware",
+			reflect.TypeOf(&ocpp16.GetDiagnosticsJson{}):         "GetDiagnostics",
 		},
 	}
 }
