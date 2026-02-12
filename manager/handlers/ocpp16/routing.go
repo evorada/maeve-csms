@@ -423,6 +423,8 @@ func NewRouter(emitter transport.Emitter,
 				ResponseSchema: "ocpp16/SendLocalListResponse.json",
 				Handler: SendLocalListResultHandler{
 					LocalAuthListStore: engine,
+				},
+			},
 			"ReserveNow": {
 				NewRequest:     func() ocpp.Request { return new(ocpp16.ReserveNowJson) },
 				NewResponse:    func() ocpp.Response { return new(ocpp16.ReserveNowResponseJson) },
@@ -469,7 +471,7 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 			reflect.TypeOf(&ocpp16.GetLocalListVersionJson{}):    "GetLocalListVersion",
 			reflect.TypeOf(&ocpp16.SendLocalListJson{}):          "SendLocalList",
 			reflect.TypeOf(&ocpp16.ReserveNowJson{}):             "ReserveNow",
-			reflect.TypeOf(&ocpp16.CancelReservationJson{}):     "CancelReservation",
+			reflect.TypeOf(&ocpp16.CancelReservationJson{}):      "CancelReservation",
 		},
 	}
 }
