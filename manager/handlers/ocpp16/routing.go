@@ -356,6 +356,13 @@ func NewRouter(emitter transport.Emitter,
 				ResponseSchema: "ocpp16/ClearChargingProfileResponse.json",
 				Handler: ClearChargingProfileHandler{
 					ChargingProfileStore: engine,
+			"UpdateFirmware": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.UpdateFirmwareJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp16.UpdateFirmwareResponseJson) },
+				RequestSchema:  "ocpp16/UpdateFirmware.json",
+				ResponseSchema: "ocpp16/UpdateFirmwareResponse.json",
+				Handler: UpdateFirmwareHandler{
+					FirmwareStore: engine,
 				},
 			},
 		},
@@ -380,6 +387,7 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 			reflect.TypeOf(&ocpp16.SetChargingProfileJson{}):     "SetChargingProfile",
 			reflect.TypeOf(&ocpp16.GetCompositeScheduleJson{}):   "GetCompositeSchedule",
 			reflect.TypeOf(&ocpp16.ClearChargingProfileJson{}):   "ClearChargingProfile",
+			reflect.TypeOf(&ocpp16.UpdateFirmwareJson{}):          "UpdateFirmware",
 		},
 	}
 }
