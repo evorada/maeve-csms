@@ -415,6 +415,15 @@ func NewRouter(emitter transport.Emitter,
 				ResponseSchema: "ocpp16/GetLocalListVersionResponse.json",
 				Handler:        GetLocalListVersionHandler{},
 			},
+			"SendLocalList": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.SendLocalListJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp16.SendLocalListResponseJson) },
+				RequestSchema:  "ocpp16/SendLocalList.json",
+				ResponseSchema: "ocpp16/SendLocalListResponse.json",
+				Handler: SendLocalListResultHandler{
+					LocalAuthListStore: engine,
+				},
+			},
 		},
 	}
 }
@@ -441,6 +450,7 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 			reflect.TypeOf(&ocpp16.SignedUpdateFirmwareJson{}):   "SignedUpdateFirmware",
 			reflect.TypeOf(&ocpp16.GetDiagnosticsJson{}):         "GetDiagnostics",
 			reflect.TypeOf(&ocpp16.GetLocalListVersionJson{}):    "GetLocalListVersion",
+			reflect.TypeOf(&ocpp16.SendLocalListJson{}):          "SendLocalList",
 		},
 	}
 }
