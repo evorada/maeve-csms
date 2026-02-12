@@ -39,6 +39,8 @@ type Querier interface {
 	GetChargeStationTrigger(ctx context.Context, chargeStationID string) (ChargeStationTrigger, error)
 	GetChargingProfilesByStation(ctx context.Context, chargeStationID string) ([]ChargingProfile, error)
 	GetChargingProfilesByStationAndConnector(ctx context.Context, arg GetChargingProfilesByStationAndConnectorParams) ([]ChargingProfile, error)
+	GetDiagnosticsStatus(ctx context.Context, chargeStationID string) (DiagnosticsStatus, error)
+	GetFirmwareUpdateStatus(ctx context.Context, chargeStationID string) (FirmwareUpdateStatus, error)
 	GetLocation(ctx context.Context, id string) (Location, error)
 	GetMeterValues(ctx context.Context, transactionID string) ([]TransactionMeterValue, error)
 	// Party Details (by role + country_code + party_id)
@@ -68,6 +70,8 @@ type Querier interface {
 	UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token, error)
 	UpdateTransaction(ctx context.Context, arg UpdateTransactionParams) (Transaction, error)
 	UpsertChargingProfile(ctx context.Context, arg UpsertChargingProfileParams) error
+	UpsertDiagnosticsStatus(ctx context.Context, arg UpsertDiagnosticsStatusParams) error
+	UpsertFirmwareUpdateStatus(ctx context.Context, arg UpsertFirmwareUpdateStatusParams) error
 }
 
 var _ Querier = (*Queries)(nil)

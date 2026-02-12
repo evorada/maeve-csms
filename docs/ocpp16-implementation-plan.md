@@ -372,117 +372,133 @@ feature/ocpp16-security-extensions
 
 **Branch:** `feature/ocpp16-firmware-management`  
 **Priority:** Medium  
-**Status:** 📋 Not Started (0/6 complete - 0%)  
+**Status:** ✅ Complete (6/6 complete - 100%)  
 **Timeline:** 3-4 weeks  
 **Base:** main (after Smart Charging merge)  
 **Complexity:** High (requires file transfer infrastructure)  
 
 ### Messages to Implement
 
-#### Task 4.0: FirmwareStore — Data Store Implementation
-**Status:** Not Started  
+#### Task 4.0: FirmwareStore — Data Store Implementation ✅
+**Status:** Complete  
 **Priority:** Must be done before Module 4 handlers
 
 **Store Interface** (`manager/store/firmware.go`):
-- [ ] Define `FirmwareUpdateStatus` struct: `ChargeStationId`, `Status` (enum: Downloading/Downloaded/InstallationFailed/Installing/Installed/Idle), `Location` (URL string), `RetrieveDate` (time), `RetryCount` (int), `UpdatedAt` (time)
-- [ ] Define `DiagnosticsStatus` struct: `ChargeStationId`, `Status` (enum: Idle/Uploaded/UploadFailed/Uploading), `Location` (URL string), `UpdatedAt` (time)
-- [ ] Define `FirmwareStore` interface:
+- [x] Define `FirmwareUpdateStatus` struct: `ChargeStationId`, `Status` (enum: Downloading/Downloaded/InstallationFailed/Installing/Installed/Idle), `Location` (URL string), `RetrieveDate` (time), `RetryCount` (int), `UpdatedAt` (time)
+- [x] Define `DiagnosticsStatus` struct: `ChargeStationId`, `Status` (enum: Idle/Uploaded/UploadFailed/Uploading), `Location` (URL string), `UpdatedAt` (time)
+- [x] Define `FirmwareStore` interface:
   - `SetFirmwareUpdateStatus(ctx, chargeStationId string, status *FirmwareUpdateStatus) error`
   - `GetFirmwareUpdateStatus(ctx, chargeStationId string) (*FirmwareUpdateStatus, error)`
   - `SetDiagnosticsStatus(ctx, chargeStationId string, status *DiagnosticsStatus) error`
   - `GetDiagnosticsStatus(ctx, chargeStationId string) (*DiagnosticsStatus, error)`
-- [ ] Add `FirmwareStore` to `Engine` interface in `manager/store/engine.go`
+- [x] Add `FirmwareStore` to `Engine` interface in `manager/store/engine.go`
 
 **PostgreSQL** (`manager/store/postgres/`):
-- [ ] Create migration `000003_create_firmware_status.up.sql` / `.down.sql`
-- [ ] Create SQL queries in `queries/firmware.sql`
-- [ ] Generate sqlc code
-- [ ] Implement `FirmwareStore` methods in `firmware.go`
-- [ ] Write tests
+- [x] Create migration `000007_create_firmware_status.up.sql` / `.down.sql`
+- [x] Create SQL queries in `queries/firmware.sql`
+- [x] Generate sqlc code
+- [x] Implement `FirmwareStore` methods in `firmware.go`
+- [x] Write tests
 
 **Firestore** (`manager/store/firestore/`):
-- [ ] Implement `FirmwareStore` methods in `firmware.go`
-- [ ] Write tests
+- [x] Implement `FirmwareStore` methods in `firmware.go`
+- [x] Write tests
 
 **In-Memory** (`manager/store/inmemory/`):
-- [ ] Implement `FirmwareStore` methods in `store.go`
-- [ ] Write tests
+- [x] Implement `FirmwareStore` methods in `store.go`
+- [x] Write tests
 
 **Commit:** `feat(store): Add FirmwareStore for firmware and diagnostics tracking`
 
 ---
 
-#### Task 4.1: UpdateFirmware Handler
-**Status:** Not Started
+#### Task 4.1: UpdateFirmware Handler ✅
+**Status:** Complete
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/update_firmware.go`
-- [ ] Implement firmware URL validation
-- [ ] Add retry mechanism
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/update_firmware.go`
+- [x] Create OCPP types `manager/ocpp/ocpp16/update_firmware.go` and `update_firmware_response.go`
+- [x] Implement firmware status tracking via FirmwareStore
+- [x] Add retry count handling
+- [x] Add routing in `routing.go` and action mapping in CallMaker
+- [x] Write unit tests (`update_firmware_test.go`) — 5 test cases
 
 **Commit:** `feat(ocpp16): Add UpdateFirmware handler`
 
 ---
 
-#### Task 4.2: FirmwareStatusNotification Handler
-**Status:** Not Started
+#### Task 4.2: FirmwareStatusNotification Handler ✅
+**Status:** Complete
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/firmware_status_notification.go`
-- [ ] Track firmware update status
-- [ ] Store status in database
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/firmware_status_notification.go`
+- [x] Track firmware update status
+- [x] Store status in database
+- [x] Write unit tests (`firmware_status_notification_test.go`) — 4 test cases covering all statuses, no existing status, store errors, unknown status
+- [x] Create OCPP types `manager/ocpp/ocpp16/firmware_status_notification.go` and `firmware_status_notification_response.go`
+- [x] Add `DownloadFailed` status to `FirmwareUpdateStatusType` in store
+- [x] Add routing in `routing.go`
 
 **Commit:** `feat(ocpp16): Add FirmwareStatusNotification handler`
 
 ---
 
-#### Task 4.3: GetDiagnostics Handler
-**Status:** Not Started
+#### Task 4.3: GetDiagnostics Handler ✅
+**Status:** Complete
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/get_diagnostics.go`
-- [ ] Implement file upload infrastructure
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/get_diagnostics.go`
+- [x] Create OCPP types `manager/ocpp/ocpp16/get_diagnostics.go` and `get_diagnostics_response.go`
+- [x] Implement diagnostics status tracking via FirmwareStore
+- [x] Add routing in `routing.go` and action mapping in CallMaker
+- [x] Write unit tests (`get_diagnostics_test.go`) — 4 test cases covering success, time range params, no filename, store errors
 
 **Commit:** `feat(ocpp16): Add GetDiagnostics handler`
 
 ---
 
-#### Task 4.4: DiagnosticsStatusNotification Handler
-**Status:** Not Started
+#### Task 4.4: DiagnosticsStatusNotification Handler ✅
+**Status:** Complete
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/diagnostics_status_notification.go`
-- [ ] Track diagnostic upload status
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/diagnostics_status_notification.go`
+- [x] Create OCPP types `manager/ocpp/ocpp16/diagnostics_status_notification.go` and `diagnostics_status_notification_response.go`
+- [x] Track diagnostic upload status (Idle/Uploaded/UploadFailed/Uploading) via FirmwareStore
+- [x] Preserve existing location info from previous status entries
+- [x] Add routing in `routing.go`
+- [x] Write unit tests (`diagnostics_status_notification_test.go`) — 4 test cases covering all statuses, no existing status, store errors, unknown status
 
 **Commit:** `feat(ocpp16): Add DiagnosticsStatusNotification handler`
 
 ---
 
-#### Task 4.5: SignedUpdateFirmware Handler
-**Status:** Not Started  
+#### Task 4.5: SignedUpdateFirmware Handler ✅
+**Status:** Complete  
 **Note:** Security extension
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/signed_update_firmware.go`
-- [ ] Implement signature verification
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/signed_update_firmware.go`
+- [x] Create OCPP types `manager/ocpp/ocpp16/signed_update_firmware.go` and `signed_update_firmware_response.go`
+- [x] Handle all response statuses (Accepted, Rejected, AcceptedCanceled, InvalidCertificate, RevokedCertificate)
+- [x] Track firmware update status via FirmwareStore on acceptance
+- [x] Add routing in `routing.go` and action mapping in CallMaker
+- [x] Write unit tests (`signed_update_firmware_test.go`) — 5 test cases covering accepted, rejected, invalid certificate, store error, no retries
 
 **Commit:** `feat(ocpp16): Add SignedUpdateFirmware handler`
 
 ---
 
-#### Task 4.6: SignedFirmwareStatusNotification Handler
-**Status:** Not Started  
+#### Task 4.6: SignedFirmwareStatusNotification Handler ✅
+**Status:** Complete  
 **Note:** Security extension
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/signed_firmware_status_notification.go`
-- [ ] Track signed firmware update status
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/signed_firmware_status_notification.go`
+- [x] Create OCPP types `manager/ocpp/ocpp16/signed_firmware_status_notification.go` and `signed_firmware_status_notification_response.go`
+- [x] Track signed firmware update status via FirmwareStore (all 14 status types)
+- [x] Add new store status types for security extension firmware statuses
+- [x] Add routing in `routing.go`
+- [x] Write unit tests (`signed_firmware_status_notification_test.go`) — 5 test cases covering all statuses, no existing status, store errors, unknown status, no requestId
 
 **Commit:** `feat(ocpp16): Add SignedFirmwareStatusNotification handler`
 

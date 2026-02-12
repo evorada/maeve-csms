@@ -86,6 +86,8 @@ func cleanupAllCollections(t *testing.T, gcloudProject string) {
 	cleanupCollection(t, gcloudProject, "Token")
 	cleanupCollection(t, gcloudProject, "Transaction")
 	cleanupCollection(t, gcloudProject, "ChargingProfile")
+	cleanupCollection(t, gcloudProject, "FirmwareUpdateStatus")
+	cleanupCollection(t, gcloudProject, "DiagnosticsStatus")
 }
 
 func cleanupCollection(t *testing.T, gcloudProject, collection string) {

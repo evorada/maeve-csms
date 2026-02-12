@@ -107,6 +107,30 @@ func NewRouter(emitter transport.Emitter,
 				ResponseSchema: "ocpp16/SecurityEventNotificationResponse.json",
 				Handler:        SecurityEventNotificationHandler{},
 			},
+			"DiagnosticsStatusNotification": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.DiagnosticsStatusNotificationJson) },
+				RequestSchema:  "ocpp16/DiagnosticsStatusNotification.json",
+				ResponseSchema: "ocpp16/DiagnosticsStatusNotificationResponse.json",
+				Handler: DiagnosticsStatusNotificationHandler{
+					FirmwareStore: engine,
+				},
+			},
+			"FirmwareStatusNotification": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.FirmwareStatusNotificationJson) },
+				RequestSchema:  "ocpp16/FirmwareStatusNotification.json",
+				ResponseSchema: "ocpp16/FirmwareStatusNotificationResponse.json",
+				Handler: FirmwareStatusNotificationHandler{
+					FirmwareStore: engine,
+				},
+			},
+			"SignedFirmwareStatusNotification": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.SignedFirmwareStatusNotificationJson) },
+				RequestSchema:  "ocpp16/SignedFirmwareStatusNotification.json",
+				ResponseSchema: "ocpp16/SignedFirmwareStatusNotificationResponse.json",
+				Handler: SignedFirmwareStatusNotificationHandler{
+					FirmwareStore: engine,
+				},
+			},
 			"DataTransfer": {
 				NewRequest:     func() ocpp.Request { return new(ocpp16.DataTransferJson) },
 				RequestSchema:  "ocpp16/DataTransfer.json",
@@ -358,6 +382,33 @@ func NewRouter(emitter transport.Emitter,
 					ChargingProfileStore: engine,
 				},
 			},
+			"UpdateFirmware": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.UpdateFirmwareJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp16.UpdateFirmwareResponseJson) },
+				RequestSchema:  "ocpp16/UpdateFirmware.json",
+				ResponseSchema: "ocpp16/UpdateFirmwareResponse.json",
+				Handler: UpdateFirmwareHandler{
+					FirmwareStore: engine,
+				},
+			},
+			"SignedUpdateFirmware": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.SignedUpdateFirmwareJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp16.SignedUpdateFirmwareResponseJson) },
+				RequestSchema:  "ocpp16/SignedUpdateFirmware.json",
+				ResponseSchema: "ocpp16/SignedUpdateFirmwareResponse.json",
+				Handler: SignedUpdateFirmwareHandler{
+					FirmwareStore: engine,
+				},
+			},
+			"GetDiagnostics": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.GetDiagnosticsJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp16.GetDiagnosticsResponseJson) },
+				RequestSchema:  "ocpp16/GetDiagnostics.json",
+				ResponseSchema: "ocpp16/GetDiagnosticsResponse.json",
+				Handler: GetDiagnosticsHandler{
+					FirmwareStore: engine,
+				},
+			},
 		},
 	}
 }
@@ -380,6 +431,9 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 			reflect.TypeOf(&ocpp16.SetChargingProfileJson{}):     "SetChargingProfile",
 			reflect.TypeOf(&ocpp16.GetCompositeScheduleJson{}):   "GetCompositeSchedule",
 			reflect.TypeOf(&ocpp16.ClearChargingProfileJson{}):   "ClearChargingProfile",
+			reflect.TypeOf(&ocpp16.UpdateFirmwareJson{}):         "UpdateFirmware",
+			reflect.TypeOf(&ocpp16.SignedUpdateFirmwareJson{}):   "SignedUpdateFirmware",
+			reflect.TypeOf(&ocpp16.GetDiagnosticsJson{}):         "GetDiagnostics",
 		},
 	}
 }
