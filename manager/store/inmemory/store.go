@@ -282,7 +282,7 @@ func (s *Store) ListChargeStationTriggerMessages(ctx context.Context, pageSize i
 func (s *Store) SetToken(_ context.Context, token *store.Token) error {
 	s.Lock()
 	defer s.Unlock()
-	token.LastUpdated = time.Now().UTC().Format(time.RFC3339)
+	token.LastUpdated = s.clock.Now().UTC().Format(time.RFC3339)
 	s.tokens[token.Uid] = token
 	return nil
 }
