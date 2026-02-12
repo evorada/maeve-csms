@@ -13,6 +13,7 @@ type Querier interface {
 	AddMeterValues(ctx context.Context, arg AddMeterValuesParams) error
 	CreateToken(ctx context.Context, arg CreateTokenParams) (Token, error)
 	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
+	DeleteAllLocalAuthListEntries(ctx context.Context, chargeStationID string) error
 	DeleteCertificate(ctx context.Context, certificateHash string) error
 	DeleteChargeStationCertificates(ctx context.Context, chargeStationID string) error
 	DeleteChargeStationSettings(ctx context.Context, chargeStationID string) error
@@ -22,6 +23,7 @@ type Querier interface {
 	DeleteChargingProfilesByStationAndConnector(ctx context.Context, arg DeleteChargingProfilesByStationAndConnectorParams) (int64, error)
 	DeleteChargingProfilesByStationAndPurpose(ctx context.Context, arg DeleteChargingProfilesByStationAndPurposeParams) (int64, error)
 	DeleteChargingProfilesByStationConnectorPurposeStack(ctx context.Context, arg DeleteChargingProfilesByStationConnectorPurposeStackParams) (int64, error)
+	DeleteLocalAuthListEntry(ctx context.Context, arg DeleteLocalAuthListEntryParams) error
 	DeleteLocation(ctx context.Context, id string) error
 	DeleteOcpiRegistration(ctx context.Context, token string) error
 	DeleteToken(ctx context.Context, uid string) error
@@ -41,6 +43,8 @@ type Querier interface {
 	GetChargingProfilesByStationAndConnector(ctx context.Context, arg GetChargingProfilesByStationAndConnectorParams) ([]ChargingProfile, error)
 	GetDiagnosticsStatus(ctx context.Context, chargeStationID string) (DiagnosticsStatus, error)
 	GetFirmwareUpdateStatus(ctx context.Context, chargeStationID string) (FirmwareUpdateStatus, error)
+	GetLocalAuthListEntries(ctx context.Context, chargeStationID string) ([]LocalAuthListEntry, error)
+	GetLocalListVersion(ctx context.Context, chargeStationID string) (int32, error)
 	GetLocation(ctx context.Context, id string) (Location, error)
 	GetMeterValues(ctx context.Context, transactionID string) ([]TransactionMeterValue, error)
 	// Party Details (by role + country_code + party_id)
@@ -72,6 +76,8 @@ type Querier interface {
 	UpsertChargingProfile(ctx context.Context, arg UpsertChargingProfileParams) error
 	UpsertDiagnosticsStatus(ctx context.Context, arg UpsertDiagnosticsStatusParams) error
 	UpsertFirmwareUpdateStatus(ctx context.Context, arg UpsertFirmwareUpdateStatusParams) error
+	UpsertLocalAuthListEntry(ctx context.Context, arg UpsertLocalAuthListEntryParams) error
+	UpsertLocalListVersion(ctx context.Context, arg UpsertLocalListVersionParams) error
 }
 
 var _ Querier = (*Queries)(nil)

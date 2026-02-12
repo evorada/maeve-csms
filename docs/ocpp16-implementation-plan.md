@@ -526,58 +526,58 @@ feature/ocpp16-security-extensions
 
 ### Messages to Implement
 
-#### Task 5.0: LocalAuthListStore — Data Store Implementation
-**Status:** Not Started  
+#### Task 5.0: LocalAuthListStore — Data Store Implementation ✅
+**Status:** Complete  
 **Priority:** Must be done before Module 5 handlers
 
 **Store Interface** (`manager/store/local_auth_list.go`):
-- [ ] Define `LocalAuthListEntry` struct: `IdTag` (string), `IdTagInfo` (struct with `Status` enum: Accepted/Blocked/Expired/Invalid, `ExpiryDate` *time, `ParentIdTag` *string)
-- [ ] Define `LocalAuthListStore` interface:
-  - `GetLocalListVersion(ctx, chargeStationId string) (int, error)`
-  - `SetLocalListVersion(ctx, chargeStationId string, version int) error`
-  - `UpdateLocalAuthList(ctx, chargeStationId string, version int, updateType string, entries []*LocalAuthListEntry) error` — `updateType`: "Full" (replace) or "Differential" (add/update/remove)
-  - `GetLocalAuthList(ctx, chargeStationId string) ([]*LocalAuthListEntry, error)`
-- [ ] Add `LocalAuthListStore` to `Engine` interface in `manager/store/engine.go`
+- [x] Define `LocalAuthListEntry` struct with `IdTag`, `IdTagInfo` (Status, ExpiryDate, ParentIdTag)
+- [x] Define `LocalAuthListStore` interface: `GetLocalListVersion`, `UpdateLocalAuthList` (Full/Differential), `GetLocalAuthList`
+- [x] Add `LocalAuthListStore` to `Engine` interface in `manager/store/engine.go`
 
 **PostgreSQL** (`manager/store/postgres/`):
-- [ ] Create migration `000004_create_local_auth_list.up.sql` / `.down.sql`
-- [ ] Create SQL queries in `queries/local_auth_list.sql`
-- [ ] Generate sqlc code
-- [ ] Implement `LocalAuthListStore` methods in `local_auth_list.go`
-- [ ] Write tests
+- [x] Create migration `000007_create_local_auth_list.up.sql` / `.down.sql`
+- [x] Create SQL queries in `queries/local_auth_list.sql`
+- [x] Generate sqlc code
+- [x] Implement `LocalAuthListStore` methods in `local_auth_list.go`
 
 **Firestore** (`manager/store/firestore/`):
-- [ ] Implement `LocalAuthListStore` methods in `local_auth_list.go`
-- [ ] Write tests
+- [x] Implement `LocalAuthListStore` methods in `local_auth_list.go`
 
 **In-Memory** (`manager/store/inmemory/`):
-- [ ] Implement `LocalAuthListStore` methods in `store.go`
-- [ ] Write tests
+- [x] Implement `LocalAuthListStore` methods in `store.go`
+- [x] Write tests (10 test cases in `local_auth_list_test.go`)
 
 **Commit:** `feat(store): Add LocalAuthListStore for local auth list management`
 
 ---
 
-#### Task 5.1: GetLocalListVersion Handler
-**Status:** Not Started
+#### Task 5.1: GetLocalListVersion Handler ✅
+**Status:** Complete
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/get_local_list_version.go`
-- [ ] Implement version tracking
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/get_local_list_version.go`
+- [x] Create OCPP types: `manager/ocpp/ocpp16/get_local_list_version.go`, `get_local_list_version_response.go`
+- [x] Implement version tracking via tracing and logging
+- [x] Add routing in `routing.go` (CallResult route)
+- [x] Add action mapping in CallMaker
+- [x] Write unit tests (`get_local_list_version_test.go` — 4 test cases)
 
 **Commit:** `feat(ocpp16): Add GetLocalListVersion handler`
 
 ---
 
-#### Task 5.2: SendLocalList Handler
-**Status:** Not Started
+#### Task 5.2: SendLocalList Handler ✅
+**Status:** Complete
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/send_local_list.go`
-- [ ] Implement list synchronization logic
-- [ ] Handle differential updates
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/send_local_list.go`
+- [x] Create OCPP types: `manager/ocpp/ocpp16/send_local_list.go`, `send_local_list_response.go`
+- [x] Implement list synchronization logic (Full and Differential updates)
+- [x] Handle differential updates (entries without IdTagInfo are removals)
+- [x] Persist accepted updates to LocalAuthListStore
+- [x] Add routing in `routing.go` (CallResult route + CallMaker action)
+- [x] Write unit tests (`send_local_list_test.go` — 8 test cases)
 
 **Commit:** `feat(ocpp16): Add SendLocalList handler`
 

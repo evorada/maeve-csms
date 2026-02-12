@@ -99,6 +99,22 @@ type FirmwareUpdateStatus struct {
 	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
 
+type LocalAuthListEntry struct {
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	IDTag           string             `db:"id_tag" json:"id_tag"`
+	Status          string             `db:"status" json:"status"`
+	ExpiryDate      pgtype.Text        `db:"expiry_date" json:"expiry_date"`
+	ParentIDTag     pgtype.Text        `db:"parent_id_tag" json:"parent_id_tag"`
+	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
+type LocalAuthListVersion struct {
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	Version         int32              `db:"version" json:"version"`
+	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
 type Location struct {
 	ID           string           `db:"id" json:"id"`
 	CountryCode  string           `db:"country_code" json:"country_code"`
