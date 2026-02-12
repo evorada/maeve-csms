@@ -210,7 +210,7 @@ feature/ocpp16-security-extensions
 
 ### Messages to Implement
 
-#### Task 2.1: TriggerMessage (Complete Call Handler) ⚠️
+#### Task 2.1: TriggerMessage (Complete Call Handler) ✅
 **Status:** Partial  
 **Note:** CallResult handler exists, Call routing added in Core Profile
 
