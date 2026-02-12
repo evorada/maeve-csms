@@ -412,14 +412,16 @@ feature/ocpp16-security-extensions
 
 ---
 
-#### Task 4.1: UpdateFirmware Handler
-**Status:** Not Started
+#### Task 4.1: UpdateFirmware Handler ✅
+**Status:** Complete
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/update_firmware.go`
-- [ ] Implement firmware URL validation
-- [ ] Add retry mechanism
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/update_firmware.go`
+- [x] Create OCPP types `manager/ocpp/ocpp16/update_firmware.go` and `update_firmware_response.go`
+- [x] Implement firmware status tracking via FirmwareStore
+- [x] Add retry count handling
+- [x] Add routing in `routing.go` and action mapping in CallMaker
+- [x] Write unit tests (`update_firmware_test.go`) — 5 test cases
 
 **Commit:** `feat(ocpp16): Add UpdateFirmware handler`
 
