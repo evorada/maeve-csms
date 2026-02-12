@@ -636,15 +636,18 @@ feature/ocpp16-security-extensions
 
 ---
 
-#### Task 6.1: ReserveNow Handler
-**Status:** Not Started  
+#### Task 6.1: ReserveNow Handler ✅
+**Status:** Complete  
 **Dependencies:** Task 6.0 (ReservationStore)
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/reserve_now.go`
-- [ ] Implement reservation state management
-- [ ] Handle expiry logic
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/reserve_now.go`
+- [x] Create OCPP types: `manager/ocpp/ocpp16/reserve_now.go`, `reserve_now_response.go`
+- [x] Implement reservation state management (create reservation on Accepted, skip on rejection)
+- [x] Handle expiry date parsing (RFC3339)
+- [x] Handle optional parentIdTag
+- [x] Add routing in `routing.go` (CallResult route + CallMaker action)
+- [x] Write unit tests (`reserve_now_test.go` — 10 test cases: accepted, accepted with parentIdTag, faulted, occupied, rejected, unavailable, invalid expiry date, all rejection statuses, connector 0)
 
 **Commit:** `feat(ocpp16): Add ReserveNow handler`
 
