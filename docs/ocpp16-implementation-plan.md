@@ -472,14 +472,17 @@ feature/ocpp16-security-extensions
 
 ---
 
-#### Task 4.5: SignedUpdateFirmware Handler
-**Status:** Not Started  
+#### Task 4.5: SignedUpdateFirmware Handler ✅
+**Status:** Complete  
 **Note:** Security extension
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/signed_update_firmware.go`
-- [ ] Implement signature verification
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/signed_update_firmware.go`
+- [x] Create OCPP types `manager/ocpp/ocpp16/signed_update_firmware.go` and `signed_update_firmware_response.go`
+- [x] Handle all response statuses (Accepted, Rejected, AcceptedCanceled, InvalidCertificate, RevokedCertificate)
+- [x] Track firmware update status via FirmwareStore on acceptance
+- [x] Add routing in `routing.go` and action mapping in CallMaker
+- [x] Write unit tests (`signed_update_firmware_test.go`) — 5 test cases covering accepted, rejected, invalid certificate, store error, no retries
 
 **Commit:** `feat(ocpp16): Add SignedUpdateFirmware handler`
 
