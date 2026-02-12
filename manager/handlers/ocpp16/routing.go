@@ -381,6 +381,15 @@ func NewRouter(emitter transport.Emitter,
 					FirmwareStore: engine,
 				},
 			},
+			"SignedUpdateFirmware": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.SignedUpdateFirmwareJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp16.SignedUpdateFirmwareResponseJson) },
+				RequestSchema:  "ocpp16/SignedUpdateFirmware.json",
+				ResponseSchema: "ocpp16/SignedUpdateFirmwareResponse.json",
+				Handler: SignedUpdateFirmwareHandler{
+					FirmwareStore: engine,
+				},
+			},
 			"GetDiagnostics": {
 				NewRequest:     func() ocpp.Request { return new(ocpp16.GetDiagnosticsJson) },
 				NewResponse:    func() ocpp.Response { return new(ocpp16.GetDiagnosticsResponseJson) },
@@ -415,6 +424,7 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 			reflect.TypeOf(&ocpp16.UpdateFirmwareJson{}):          "UpdateFirmware",
 			reflect.TypeOf(&ocpp16.GetDiagnosticsJson{}):          "GetDiagnostics",
 			reflect.TypeOf(&ocpp16.UpdateFirmwareJson{}):         "UpdateFirmware",
+			reflect.TypeOf(&ocpp16.SignedUpdateFirmwareJson{}):   "SignedUpdateFirmware",
 			reflect.TypeOf(&ocpp16.GetDiagnosticsJson{}):         "GetDiagnostics",
 		},
 	}
