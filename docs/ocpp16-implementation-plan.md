@@ -372,7 +372,7 @@ feature/ocpp16-security-extensions
 
 **Branch:** `feature/ocpp16-firmware-management`  
 **Priority:** Medium  
-**Status:** 🚧 In Progress (5/6 complete - 83%)  
+**Status:** ✅ Complete (6/6 complete - 100%)  
 **Timeline:** 3-4 weeks  
 **Base:** main (after Smart Charging merge)  
 **Complexity:** High (requires file transfer infrastructure)  
@@ -488,14 +488,17 @@ feature/ocpp16-security-extensions
 
 ---
 
-#### Task 4.6: SignedFirmwareStatusNotification Handler
-**Status:** Not Started  
+#### Task 4.6: SignedFirmwareStatusNotification Handler ✅
+**Status:** Complete  
 **Note:** Security extension
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/signed_firmware_status_notification.go`
-- [ ] Track signed firmware update status
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/signed_firmware_status_notification.go`
+- [x] Create OCPP types `manager/ocpp/ocpp16/signed_firmware_status_notification.go` and `signed_firmware_status_notification_response.go`
+- [x] Track signed firmware update status via FirmwareStore (all 14 status types)
+- [x] Add new store status types for security extension firmware statuses
+- [x] Add routing in `routing.go`
+- [x] Write unit tests (`signed_firmware_status_notification_test.go`) — 5 test cases covering all statuses, no existing status, store errors, unknown status, no requestId
 
 **Commit:** `feat(ocpp16): Add SignedFirmwareStatusNotification handler`
 
