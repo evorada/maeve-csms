@@ -11,13 +11,20 @@ import (
 type FirmwareUpdateStatusType string
 
 var (
-	FirmwareUpdateStatusDownloading        FirmwareUpdateStatusType = "Downloading"
-	FirmwareUpdateStatusDownloaded         FirmwareUpdateStatusType = "Downloaded"
-	FirmwareUpdateStatusDownloadFailed     FirmwareUpdateStatusType = "DownloadFailed"
-	FirmwareUpdateStatusInstallationFailed FirmwareUpdateStatusType = "InstallationFailed"
-	FirmwareUpdateStatusInstalling         FirmwareUpdateStatusType = "Installing"
-	FirmwareUpdateStatusInstalled          FirmwareUpdateStatusType = "Installed"
-	FirmwareUpdateStatusIdle               FirmwareUpdateStatusType = "Idle"
+	FirmwareUpdateStatusDownloading               FirmwareUpdateStatusType = "Downloading"
+	FirmwareUpdateStatusDownloaded                FirmwareUpdateStatusType = "Downloaded"
+	FirmwareUpdateStatusDownloadFailed            FirmwareUpdateStatusType = "DownloadFailed"
+	FirmwareUpdateStatusInstallationFailed        FirmwareUpdateStatusType = "InstallationFailed"
+	FirmwareUpdateStatusInstalling                FirmwareUpdateStatusType = "Installing"
+	FirmwareUpdateStatusInstalled                 FirmwareUpdateStatusType = "Installed"
+	FirmwareUpdateStatusIdle                      FirmwareUpdateStatusType = "Idle"
+	FirmwareUpdateStatusDownloadScheduled         FirmwareUpdateStatusType = "DownloadScheduled"
+	FirmwareUpdateStatusDownloadPaused            FirmwareUpdateStatusType = "DownloadPaused"
+	FirmwareUpdateStatusInstallRebooting          FirmwareUpdateStatusType = "InstallRebooting"
+	FirmwareUpdateStatusInstallScheduled          FirmwareUpdateStatusType = "InstallScheduled"
+	FirmwareUpdateStatusInstallVerificationFailed FirmwareUpdateStatusType = "InstallVerificationFailed"
+	FirmwareUpdateStatusInvalidSignature          FirmwareUpdateStatusType = "InvalidSignature"
+	FirmwareUpdateStatusSignatureVerified         FirmwareUpdateStatusType = "SignatureVerified"
 )
 
 // FirmwareUpdateStatus tracks the firmware update status for a charge station

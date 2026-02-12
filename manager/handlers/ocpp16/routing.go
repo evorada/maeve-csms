@@ -123,6 +123,14 @@ func NewRouter(emitter transport.Emitter,
 					FirmwareStore: engine,
 				},
 			},
+			"SignedFirmwareStatusNotification": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.SignedFirmwareStatusNotificationJson) },
+				RequestSchema:  "ocpp16/SignedFirmwareStatusNotification.json",
+				ResponseSchema: "ocpp16/SignedFirmwareStatusNotificationResponse.json",
+				Handler: SignedFirmwareStatusNotificationHandler{
+					FirmwareStore: engine,
+				},
+			},
 			"DataTransfer": {
 				NewRequest:     func() ocpp.Request { return new(ocpp16.DataTransferJson) },
 				RequestSchema:  "ocpp16/DataTransfer.json",
