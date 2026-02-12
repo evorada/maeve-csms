@@ -11,6 +11,8 @@ import (
 type Querier interface {
 	AddChargeStationCertificate(ctx context.Context, arg AddChargeStationCertificateParams) (ChargeStationCertificate, error)
 	AddMeterValues(ctx context.Context, arg AddMeterValuesParams) error
+	CancelReservation(ctx context.Context, reservationID int32) error
+	CreateReservation(ctx context.Context, arg CreateReservationParams) error
 	CreateToken(ctx context.Context, arg CreateTokenParams) (Token, error)
 	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
 	DeleteAllLocalAuthListEntries(ctx context.Context, chargeStationID string) error
@@ -27,7 +29,9 @@ type Querier interface {
 	DeleteLocation(ctx context.Context, id string) error
 	DeleteOcpiRegistration(ctx context.Context, token string) error
 	DeleteToken(ctx context.Context, uid string) error
+	ExpireReservations(ctx context.Context) (int64, error)
 	FindActiveTransaction(ctx context.Context, chargeStationID string) (Transaction, error)
+	GetActiveReservations(ctx context.Context, chargeStationID string) ([]Reservation, error)
 	GetCertificate(ctx context.Context, certificateHash string) (Certificate, error)
 	// Auth
 	GetChargeStationAuth(ctx context.Context, chargeStationID string) (ChargeStation, error)
@@ -51,6 +55,8 @@ type Querier interface {
 	GetOcpiParty(ctx context.Context, arg GetOcpiPartyParams) (OcpiParty, error)
 	// Registrations (by token)
 	GetOcpiRegistration(ctx context.Context, token string) (OcpiRegistration, error)
+	GetReservation(ctx context.Context, reservationID int32) (Reservation, error)
+	GetReservationByConnector(ctx context.Context, arg GetReservationByConnectorParams) (Reservation, error)
 	GetToken(ctx context.Context, uid string) (Token, error)
 	GetTransaction(ctx context.Context, id string) (Transaction, error)
 	ListAllLocations(ctx context.Context, arg ListAllLocationsParams) ([]Location, error)

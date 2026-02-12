@@ -142,6 +142,17 @@ type OcpiRegistration struct {
 	UpdatedAt pgtype.Timestamp `db:"updated_at" json:"updated_at"`
 }
 
+type Reservation struct {
+	ReservationID   int32              `db:"reservation_id" json:"reservation_id"`
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	ConnectorID     int32              `db:"connector_id" json:"connector_id"`
+	IDTag           string             `db:"id_tag" json:"id_tag"`
+	ParentIDTag     pgtype.Text        `db:"parent_id_tag" json:"parent_id_tag"`
+	ExpiryDate      pgtype.Timestamptz `db:"expiry_date" json:"expiry_date"`
+	Status          string             `db:"status" json:"status"`
+	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
+}
+
 type Token struct {
 	ID           int64            `db:"id" json:"id"`
 	CountryCode  string           `db:"country_code" json:"country_code"`
