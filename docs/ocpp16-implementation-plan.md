@@ -372,7 +372,7 @@ feature/ocpp16-security-extensions
 
 **Branch:** `feature/ocpp16-firmware-management`  
 **Priority:** Medium  
-**Status:** 🚧 In Progress (1/6 complete - 17%)  
+**Status:** 🚧 In Progress (5/6 complete - 83%)  
 **Timeline:** 3-4 weeks  
 **Base:** main (after Smart Charging merge)  
 **Complexity:** High (requires file transfer infrastructure)  
@@ -457,13 +457,16 @@ feature/ocpp16-security-extensions
 
 ---
 
-#### Task 4.4: DiagnosticsStatusNotification Handler
-**Status:** Not Started
+#### Task 4.4: DiagnosticsStatusNotification Handler ✅
+**Status:** Complete
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/diagnostics_status_notification.go`
-- [ ] Track diagnostic upload status
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/diagnostics_status_notification.go`
+- [x] Create OCPP types `manager/ocpp/ocpp16/diagnostics_status_notification.go` and `diagnostics_status_notification_response.go`
+- [x] Track diagnostic upload status (Idle/Uploaded/UploadFailed/Uploading) via FirmwareStore
+- [x] Preserve existing location info from previous status entries
+- [x] Add routing in `routing.go`
+- [x] Write unit tests (`diagnostics_status_notification_test.go`) — 4 test cases covering all statuses, no existing status, store errors, unknown status
 
 **Commit:** `feat(ocpp16): Add DiagnosticsStatusNotification handler`
 
