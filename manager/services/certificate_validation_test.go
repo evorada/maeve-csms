@@ -15,19 +15,20 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/pem"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
-	"github.com/thoughtworks/maeve-csms/manager/services"
-	"golang.org/x/crypto/ocsp"
 	"io"
-	"k8s.io/utils/strings/slices"
 	"math"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
+	"github.com/thoughtworks/maeve-csms/manager/services"
+	"golang.org/x/crypto/ocsp"
+	"k8s.io/utils/strings/slices"
 )
 
 type OCSPResponder struct {

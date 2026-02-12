@@ -4,15 +4,16 @@ package server_test
 
 import (
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/config"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
-	"io"
 	"k8s.io/utils/clock"
-	"net/http"
-	"net/http/httptest"
-	"testing"
 
 	"github.com/thoughtworks/maeve-csms/manager/server"
 )

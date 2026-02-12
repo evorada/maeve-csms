@@ -5,6 +5,9 @@ package ocpp201_test
 import (
 	"context"
 	"errors"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	handlers "github.com/thoughtworks/maeve-csms/manager/handlers/ocpp201"
@@ -13,8 +16,6 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
 	clockutil "k8s.io/utils/clock"
-	"testing"
-	"time"
 )
 
 type mockCertValidationService struct {

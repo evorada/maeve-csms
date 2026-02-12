@@ -9,13 +9,14 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
-	"k8s.io/utils/clock"
 	"math"
 	"sort"
 	"sync"
 	"time"
+
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
+	"k8s.io/utils/clock"
 
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
@@ -37,6 +38,7 @@ type Store struct {
 	registrations                    map[string]*store.OcpiRegistration
 	partyDetails                     map[string]*store.OcpiParty
 	locations                        map[string]*store.Location
+	chargingProfiles                 map[int]*store.ChargingProfile
 }
 
 func NewStore(clock clock.PassiveClock) *Store {
@@ -53,6 +55,7 @@ func NewStore(clock clock.PassiveClock) *Store {
 		registrations:                    make(map[string]*store.OcpiRegistration),
 		partyDetails:                     make(map[string]*store.OcpiParty),
 		locations:                        make(map[string]*store.Location),
+		chargingProfiles:                 make(map[int]*store.ChargingProfile),
 	}
 }
 

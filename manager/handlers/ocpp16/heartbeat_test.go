@@ -4,13 +4,14 @@ package ocpp16_test
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	handlers "github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	clockTest "k8s.io/utils/clock/testing"
-	"testing"
-	"time"
 )
 
 func TestHeartbeatHandler(t *testing.T) {

@@ -14,14 +14,15 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
+	"html/template"
+	"math"
+	"net/http"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	"github.com/thoughtworks/maeve-csms/manager/services"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"golang.org/x/exp/slog"
-	"html/template"
-	"math"
-	"net/http"
 )
 
 var (

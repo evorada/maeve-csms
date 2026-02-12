@@ -5,16 +5,17 @@
 package firestore_test
 
 import (
-	firestoreapi "cloud.google.com/go/firestore"
 	"context"
 	"errors"
+	"log"
+	"os"
+	"testing"
+
+	firestoreapi "cloud.google.com/go/firestore"
 	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"google.golang.org/api/iterator"
-	"log"
-	"os"
-	"testing"
 )
 
 var endpoint string
@@ -84,6 +85,7 @@ func cleanupAllCollections(t *testing.T, gcloudProject string) {
 	cleanupCollection(t, gcloudProject, "OcpiRegistration")
 	cleanupCollection(t, gcloudProject, "Token")
 	cleanupCollection(t, gcloudProject, "Transaction")
+	cleanupCollection(t, gcloudProject, "ChargingProfile")
 }
 
 func cleanupCollection(t *testing.T, gcloudProject, collection string) {

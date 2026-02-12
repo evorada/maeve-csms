@@ -2,9 +2,11 @@
 
 package ocpp16
 
-import "encoding/json"
-import "fmt"
-import "unicode/utf8"
+import (
+	"encoding/json"
+	"fmt"
+	"unicode/utf8"
+)
 
 type GetConfigurationResponseJson struct {
 	// ConfigurationKey corresponds to the JSON schema field "configurationKey".

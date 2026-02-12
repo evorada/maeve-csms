@@ -3,12 +3,13 @@
 package services
 
 import (
-	secretmanager "cloud.google.com/go/secretmanager/apiv1"
-	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	"context"
 	"fmt"
 	"io"
 	"os"
+
+	secretmanager "cloud.google.com/go/secretmanager/apiv1"
+	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 )
 
 type LocalSource interface {

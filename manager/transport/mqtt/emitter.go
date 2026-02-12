@@ -6,6 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"sync"
+	"time"
+
 	"github.com/eclipse/paho.golang/autopaho"
 	"github.com/eclipse/paho.golang/paho"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
@@ -15,9 +19,6 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
-	"net/url"
-	"sync"
-	"time"
 )
 
 // Emitter is an implementation of transport.Emitter that uses MQTT

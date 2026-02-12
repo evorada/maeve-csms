@@ -4,13 +4,14 @@ package sync
 
 import (
 	"context"
+	"time"
+
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	"go.opentelemetry.io/otel/trace"
 	"k8s.io/utils/clock"
-	"time"
 )
 
 func Sync(storageEngine store.Engine, clock clock.PassiveClock, tracer trace.Tracer, emitter transport.Emitter) {

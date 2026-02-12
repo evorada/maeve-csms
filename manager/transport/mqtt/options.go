@@ -3,9 +3,10 @@
 package mqtt
 
 import (
-	"go.opentelemetry.io/otel/trace"
 	"net/url"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 type connectionDetails struct {

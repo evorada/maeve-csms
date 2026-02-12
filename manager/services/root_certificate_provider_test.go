@@ -7,15 +7,16 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/thoughtworks/maeve-csms/manager/services"
-	"k8s.io/utils/clock"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/thoughtworks/maeve-csms/manager/services"
+	"k8s.io/utils/clock"
 )
 
 const rcpUrl = "/v1/root/rootCerts"

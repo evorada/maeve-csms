@@ -2,12 +2,13 @@ package ocpp_test
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	"math/rand"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 )
 
 func TestNormalizeEmaidWithEmaidWithHyphens(t *testing.T) {

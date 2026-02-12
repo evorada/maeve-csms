@@ -5,6 +5,8 @@ package ocpp16_test
 import (
 	"context"
 	"errors"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/handlers"
@@ -13,7 +15,6 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/schemas"
-	"testing"
 )
 
 func TestDataTransferHandlerRoutesCall(t *testing.T) {

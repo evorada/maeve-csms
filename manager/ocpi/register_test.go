@@ -4,6 +4,10 @@ package ocpi_test
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/ocpi"
@@ -11,9 +15,6 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
 	"k8s.io/utils/clock"
-	"net/http"
-	"net/http/httptest"
-	"testing"
 )
 
 func TestRegistration(t *testing.T) {

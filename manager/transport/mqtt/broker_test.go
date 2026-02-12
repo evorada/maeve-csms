@@ -4,12 +4,13 @@ package mqtt_test
 
 import (
 	"context"
-	"github.com/eclipse/paho.golang/autopaho"
-	"github.com/eclipse/paho.golang/paho"
-	"github.com/thoughtworks/maeve-csms/manager/transport/mqtt"
 	"net/url"
 	"testing"
 	"time"
+
+	"github.com/eclipse/paho.golang/autopaho"
+	"github.com/eclipse/paho.golang/paho"
+	"github.com/thoughtworks/maeve-csms/manager/transport/mqtt"
 )
 
 func TestNewBroker(t *testing.T) {

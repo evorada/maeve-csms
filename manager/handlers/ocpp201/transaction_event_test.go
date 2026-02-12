@@ -4,9 +4,10 @@ package ocpp201_test
 
 import (
 	"context"
+	"testing"
+
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"k8s.io/utils/clock"
-	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

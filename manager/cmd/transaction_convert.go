@@ -4,10 +4,11 @@ package cmd
 
 import (
 	"fmt"
+	"strconv"
+
 	"github.com/rodaine/table"
 	"github.com/spf13/cobra"
 	handlers16 "github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
-	"strconv"
 )
 
 // convertIdCmd represents the convertId command

@@ -6,6 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
+	"reflect"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/thoughtworks/maeve-csms/manager/handlers"
 	handlersHasToBe "github.com/thoughtworks/maeve-csms/manager/handlers/has2be"
@@ -17,10 +21,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/services"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
-	"io/fs"
 	"k8s.io/utils/clock"
-	"reflect"
-	"time"
 )
 
 func NewRouter(emitter transport.Emitter,
@@ -332,6 +333,31 @@ func NewRouter(emitter transport.Emitter,
 					TransactionStore: engine,
 				},
 			},
+			"SetChargingProfile": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.SetChargingProfileJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp16.SetChargingProfileResponseJson) },
+				RequestSchema:  "ocpp16/SetChargingProfile.json",
+				ResponseSchema: "ocpp16/SetChargingProfileResponse.json",
+				Handler: SetChargingProfileHandler{
+					ChargingProfileStore: engine,
+				},
+			},
+			"GetCompositeSchedule": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.GetCompositeScheduleJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp16.GetCompositeScheduleResponseJson) },
+				RequestSchema:  "ocpp16/GetCompositeSchedule.json",
+				ResponseSchema: "ocpp16/GetCompositeScheduleResponse.json",
+				Handler:        GetCompositeScheduleHandler{},
+			},
+			"ClearChargingProfile": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.ClearChargingProfileJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp16.ClearChargingProfileResponseJson) },
+				RequestSchema:  "ocpp16/ClearChargingProfile.json",
+				ResponseSchema: "ocpp16/ClearChargingProfileResponse.json",
+				Handler: ClearChargingProfileHandler{
+					ChargingProfileStore: engine,
+				},
+			},
 		},
 	}
 }
@@ -351,6 +377,9 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 			reflect.TypeOf(&ocpp16.ChangeAvailabilityJson{}):     "ChangeAvailability",
 			reflect.TypeOf(&ocpp16.GetConfigurationJson{}):       "GetConfiguration",
 			reflect.TypeOf(&ocpp16.ExtendedTriggerMessageJson{}): "ExtendedTriggerMessage",
+			reflect.TypeOf(&ocpp16.SetChargingProfileJson{}):     "SetChargingProfile",
+			reflect.TypeOf(&ocpp16.GetCompositeScheduleJson{}):   "GetCompositeSchedule",
+			reflect.TypeOf(&ocpp16.ClearChargingProfileJson{}):   "ClearChargingProfile",
 		},
 	}
 }

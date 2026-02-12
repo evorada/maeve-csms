@@ -3,8 +3,9 @@
 package api
 
 import (
-	"github.com/go-chi/render"
 	"net/http"
+
+	"github.com/go-chi/render"
 )
 
 type ErrResponse struct {

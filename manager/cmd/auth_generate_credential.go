@@ -3,8 +3,9 @@ package cmd
 import (
 	"crypto/rand"
 	"fmt"
-	"github.com/spf13/cobra"
 	"math/big"
+
+	"github.com/spf13/cobra"
 )
 
 // generateCredentialCmd represents the generateCredentialCmd command

@@ -266,86 +266,89 @@ feature/ocpp16-security-extensions
 
 ### Messages to Implement
 
-#### Task 3.0: ChargingProfileStore — Data Store Implementation
-**Status:** Not Started  
+#### Task 3.0: ChargingProfileStore — Data Store Implementation ✅
+**Status:** Complete  
 **Complexity:** High  
 **Priority:** Must be done before any Module 3 handlers
 
 **Store Interface** (`manager/store/charging_profile.go`):
-- [ ] Define `ChargingProfile` struct: `ProfileId` (int), `StackLevel` (int), `ChargingProfilePurpose` (enum: TxProfile/TxDefaultProfile/ChargePointMaxProfile), `ChargingProfileKind` (enum: Absolute/Relative/Recurring), `RecurrencyKind` (enum: Daily/Weekly, optional), `ValidFrom`/`ValidTo` (time), `ChargingSchedule` (struct with `ChargingRateUnit`, `Duration`, `StartSchedule`, `MinChargingRate`, `ChargingSchedulePeriod[]` with `StartPeriod`, `Limit`, `NumberPhases`)
-- [ ] Define `ChargingProfileStore` interface:
-  - `SetChargingProfile(ctx, chargeStationId string, connectorId int, profile *ChargingProfile) error`
-  - `GetChargingProfiles(ctx, chargeStationId string, connectorId *int, purpose *string, stackLevel *int) ([]*ChargingProfile, error)`
-  - `ClearChargingProfile(ctx, chargeStationId string, profileId *int, connectorId *int, purpose *string, stackLevel *int) (int, error)`
-  - `GetCompositeSchedule(ctx, chargeStationId string, connectorId int, duration int, rateUnit *string) (*ChargingSchedule, error)`
-- [ ] Add `ChargingProfileStore` to `Engine` interface in `manager/store/engine.go`
+- [x] Define `ChargingProfile` struct: `ProfileId` (int), `StackLevel` (int), `ChargingProfilePurpose` (enum: TxProfile/TxDefaultProfile/ChargePointMaxProfile), `ChargingProfileKind` (enum: Absolute/Relative/Recurring), `RecurrencyKind` (enum: Daily/Weekly, optional), `ValidFrom`/`ValidTo` (time), `ChargingSchedule` (struct with `ChargingRateUnit`, `Duration`, `StartSchedule`, `MinChargingRate`, `ChargingSchedulePeriod[]` with `StartPeriod`, `Limit`, `NumberPhases`)
+- [x] Define `ChargingProfileStore` interface:
+  - `SetChargingProfile(ctx, profile *ChargingProfile) error`
+  - `GetChargingProfiles(ctx, chargeStationId string, connectorId *int, purpose *ChargingProfilePurpose, stackLevel *int) ([]*ChargingProfile, error)`
+  - `ClearChargingProfile(ctx, chargeStationId string, profileId *int, connectorId *int, purpose *ChargingProfilePurpose, stackLevel *int) (int, error)`
+  - `GetCompositeSchedule(ctx, chargeStationId string, connectorId int, duration int, chargingRateUnit *ChargingRateUnit) (*ChargingSchedule, error)`
+- [x] Add `ChargingProfileStore` to `Engine` interface in `manager/store/engine.go`
 
 **PostgreSQL** (`manager/store/postgres/`):
-- [ ] Create migration `000002_create_charging_profiles.up.sql` / `.down.sql`
-- [ ] Create SQL queries in `queries/charging_profiles.sql`
-- [ ] Generate sqlc code
-- [ ] Implement `ChargingProfileStore` methods in `charging_profiles.go`
-- [ ] Write tests in `charging_profiles_test.go`
+- [x] Create migration `000007_create_charging_profiles.up.sql` / `.down.sql`
+- [x] Create SQL queries in `queries/charging_profiles.sql`
+- [x] Generate sqlc code
+- [x] Implement `ChargingProfileStore` methods in `charging_profiles.go`
+- [ ] Write tests in `charging_profiles_test.go` (requires PostgreSQL instance)
 
 **Firestore** (`manager/store/firestore/`):
-- [ ] Implement `ChargingProfileStore` methods in `charging_profile.go`
-- [ ] Write tests in `charging_profile_test.go`
+- [x] Implement `ChargingProfileStore` methods in `charging_profile.go`
+- [x] Write tests in `charging_profile_test.go`
 
 **In-Memory** (`manager/store/inmemory/`):
-- [ ] Implement `ChargingProfileStore` methods in `store.go`
-- [ ] Write tests
+- [x] Implement `ChargingProfileStore` methods in `charging_profile.go`
+- [x] Write tests in `charging_profile_test.go`
 
 **Commit:** `feat(store): Add ChargingProfileStore for smart charging`
 
 ---
 
-#### Task 3.1: SetChargingProfile Handler
-**Status:** Not Started  
+#### Task 3.1: SetChargingProfile Handler ✅
+**Status:** Complete  
 **Complexity:** High  
 **Dependencies:** Task 3.0 (ChargingProfileStore)
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/set_charging_profile.go`
-- [ ] Implement profile validation
-- [ ] Implement profile stacking logic
-- [ ] Handle ChargingProfilePurpose (TxProfile, TxDefaultProfile, ChargePointMaxProfile)
-- [ ] Validate ChargingSchedule
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/set_charging_profile.go`
+- [x] Create OCPP 1.6 types: `manager/ocpp/ocpp16/set_charging_profile.go`, `set_charging_profile_response.go`
+- [x] Implement profile conversion from OCPP types to store types
+- [x] Handle ChargingProfilePurpose (TxProfile, TxDefaultProfile, ChargePointMaxProfile)
+- [x] Store profile on Accepted response, skip on Rejected/NotSupported
+- [x] Handle optional fields (ValidFrom, ValidTo, RecurrencyKind, TransactionId, StartSchedule, Duration, MinChargingRate, NumberPhases)
+- [x] Add routing in `routing.go` (CallResult route + CallMaker action)
+- [x] Write unit tests (`set_charging_profile_test.go`): accepted/rejected/not-supported, full profile conversion, invalid date handling, profile replacement
 - [ ] Write integration tests
 
-**Commit:** `feat(ocpp16): Add SetChargingProfile handler with store`
+**Commit:** `feat(ocpp16): Add SetChargingProfile handler`
 
 ---
 
-#### Task 3.2: GetCompositeSchedule Handler
-**Status:** Not Started  
+#### Task 3.2: GetCompositeSchedule Handler ✅
+**Status:** Complete  
 **Complexity:** High  
 **Dependencies:** `ChargingProfileStore` (from Task 3.1)
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/get_composite_schedule.go`
-- [ ] Implement composite schedule calculation
-- [ ] Implement profile stacking by priority
-- [ ] Apply ChargingRateUnit
-- [ ] Return calculated schedule
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/get_composite_schedule.go`
+- [x] Create OCPP 1.6 types: `manager/ocpp/ocpp16/get_composite_schedule.go`, `get_composite_schedule_response.go`
+- [x] Handle accepted/rejected responses with tracing and logging
+- [x] Support optional ChargingRateUnit in request
+- [x] Log composite schedule details (rate unit, period count)
+- [x] Add routing in `routing.go` (CallResult route + CallMaker action)
+- [x] Write unit tests (`get_composite_schedule_test.go`): accepted with W/A, rejected, connector 0, with/without schedule body, schedule start/duration/min charging rate
 - [ ] Write integration tests
 
 **Commit:** `feat(ocpp16): Add GetCompositeSchedule handler`
 
 ---
 
-#### Task 3.3: ClearChargingProfile Handler
-**Status:** Not Started  
+#### Task 3.3: ClearChargingProfile Handler ✅
+**Status:** Complete  
 **Complexity:** Medium  
 **Dependencies:** `ChargingProfileStore` (from Task 3.1)
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/clear_charging_profile.go`
-- [ ] Handle optional filters (profileId, connectorId, purpose, stack level)
-- [ ] Clear matching profiles
-- [ ] Return cleared count
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/clear_charging_profile.go`
+- [x] Handle optional filters (profileId, connectorId, purpose, stack level)
+- [x] Clear matching profiles
+- [x] Return cleared count
+- [x] Write unit tests
 - [ ] Write integration tests
 
 **Commit:** `feat(ocpp16): Add ClearChargingProfile handler`

@@ -5,6 +5,10 @@ package mqtt_test
 import (
 	"context"
 	"encoding/json"
+	"net/url"
+	"testing"
+	"time"
+
 	"github.com/eclipse/paho.golang/autopaho"
 	"github.com/eclipse/paho.golang/paho"
 	"github.com/stretchr/testify/assert"
@@ -15,9 +19,6 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
-	"net/url"
-	"testing"
-	"time"
 )
 
 func TestEmitterSendsOcpp201Message(t *testing.T) {

@@ -3,6 +3,9 @@
 package testutil
 
 import (
+	"sort"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -11,8 +14,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/maps"
-	"sort"
-	"testing"
 )
 
 // GetTracer is used in tests to get a trace.Tracer implementation that captures

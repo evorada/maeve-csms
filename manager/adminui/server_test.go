@@ -9,11 +9,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"github.com/go-chi/chi/v5"
-	"github.com/thoughtworks/maeve-csms/manager/services"
-	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
 	"io"
-	"k8s.io/utils/clock"
 	"math"
 	"math/big"
 	"net/http"
@@ -22,6 +18,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/thoughtworks/maeve-csms/manager/services"
+	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"k8s.io/utils/clock"
 )
 
 func TestConnectWithUnsecuredAuth(t *testing.T) {

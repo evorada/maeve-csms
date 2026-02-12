@@ -4,10 +4,11 @@ package api
 
 import (
 	"fmt"
-	handlers "github.com/thoughtworks/maeve-csms/manager/handlers/ocpp201"
-	"github.com/thoughtworks/maeve-csms/manager/ocpi"
 	"net/http"
 	"time"
+
+	handlers "github.com/thoughtworks/maeve-csms/manager/handlers/ocpp201"
+	"github.com/thoughtworks/maeve-csms/manager/ocpi"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/render"

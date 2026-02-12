@@ -5,12 +5,13 @@ package has2be
 import (
 	"context"
 	"errors"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	handlers201 "github.com/thoughtworks/maeve-csms/manager/handlers/ocpp201"
 	typesHasToBe "github.com/thoughtworks/maeve-csms/manager/ocpp/has2be"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/services"
-	"testing"
 )
 
 var calledTimes int

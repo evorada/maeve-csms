@@ -3,9 +3,10 @@
 package firestore
 
 import (
-	"cloud.google.com/go/firestore"
 	"context"
 	"fmt"
+
+	"cloud.google.com/go/firestore"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"k8s.io/utils/clock"
 )

@@ -17,6 +17,11 @@ type Querier interface {
 	DeleteChargeStationCertificates(ctx context.Context, chargeStationID string) error
 	DeleteChargeStationSettings(ctx context.Context, chargeStationID string) error
 	DeleteChargeStationTrigger(ctx context.Context, chargeStationID string) error
+	DeleteChargingProfileById(ctx context.Context, arg DeleteChargingProfileByIdParams) (int64, error)
+	DeleteChargingProfilesByStation(ctx context.Context, chargeStationID string) (int64, error)
+	DeleteChargingProfilesByStationAndConnector(ctx context.Context, arg DeleteChargingProfilesByStationAndConnectorParams) (int64, error)
+	DeleteChargingProfilesByStationAndPurpose(ctx context.Context, arg DeleteChargingProfilesByStationAndPurposeParams) (int64, error)
+	DeleteChargingProfilesByStationConnectorPurposeStack(ctx context.Context, arg DeleteChargingProfilesByStationConnectorPurposeStackParams) (int64, error)
 	DeleteLocation(ctx context.Context, id string) error
 	DeleteOcpiRegistration(ctx context.Context, token string) error
 	DeleteToken(ctx context.Context, uid string) error
@@ -32,6 +37,8 @@ type Querier interface {
 	GetChargeStationSettings(ctx context.Context, chargeStationID string) (ChargeStationSetting, error)
 	// Triggers
 	GetChargeStationTrigger(ctx context.Context, chargeStationID string) (ChargeStationTrigger, error)
+	GetChargingProfilesByStation(ctx context.Context, chargeStationID string) ([]ChargingProfile, error)
+	GetChargingProfilesByStationAndConnector(ctx context.Context, arg GetChargingProfilesByStationAndConnectorParams) ([]ChargingProfile, error)
 	GetLocation(ctx context.Context, id string) (Location, error)
 	GetMeterValues(ctx context.Context, transactionID string) ([]TransactionMeterValue, error)
 	// Party Details (by role + country_code + party_id)
@@ -60,6 +67,7 @@ type Querier interface {
 	UpdateChargeStationCertificate(ctx context.Context, arg UpdateChargeStationCertificateParams) (ChargeStationCertificate, error)
 	UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token, error)
 	UpdateTransaction(ctx context.Context, arg UpdateTransactionParams) (Transaction, error)
+	UpsertChargingProfile(ctx context.Context, arg UpsertChargingProfileParams) error
 }
 
 var _ Querier = (*Queries)(nil)

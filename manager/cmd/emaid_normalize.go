@@ -4,6 +4,7 @@ package cmd
 
 import (
 	"fmt"
+
 	"github.com/spf13/cobra"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 )

@@ -3,12 +3,13 @@
 package api
 
 import (
+	"net/http"
+	"strings"
+
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers"
 	"github.com/go-chi/render"
-	"net/http"
-	"strings"
 )
 
 func ValidationMiddleware(next http.Handler) http.Handler {

@@ -4,13 +4,14 @@ package handlers_test
 
 import (
 	"context"
+	"reflect"
+	"regexp"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/thoughtworks/maeve-csms/manager/handlers"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
-	"reflect"
-	"regexp"
-	"testing"
 )
 
 type FakeEmitter struct {

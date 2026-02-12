@@ -6,12 +6,13 @@ package services_test
 
 import (
 	"context"
+	"net/http"
+	"testing"
+
 	"github.com/lestrrat-go/jwx/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/services"
-	"net/http"
-	"testing"
 )
 
 func TestHubjectTestHttpTokenService(t *testing.T) {

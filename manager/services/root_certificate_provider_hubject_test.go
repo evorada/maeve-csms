@@ -6,11 +6,12 @@ package services_test
 
 import (
 	"context"
+	"net/http"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/services"
-	"net/http"
-	"testing"
 )
 
 func TestProvideCertificatesWithHubjectRootCertificatePool(t *testing.T) {

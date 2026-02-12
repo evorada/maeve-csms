@@ -6,6 +6,11 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"net/http"
+	"net/url"
+	"os"
+	"time"
+
 	"github.com/subnova/slog-exporter/slogtrace"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp201"
@@ -31,10 +36,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"k8s.io/utils/clock"
-	"net/http"
-	"net/url"
-	"os"
-	"time"
 )
 
 type ApiSettings struct {

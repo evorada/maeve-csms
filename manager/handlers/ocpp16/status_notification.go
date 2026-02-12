@@ -4,6 +4,7 @@ package ocpp16
 
 import (
 	"context"
+
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 

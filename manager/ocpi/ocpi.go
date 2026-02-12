@@ -8,9 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+
 	"github.com/google/uuid"
 	"github.com/thoughtworks/maeve-csms/manager/store"
-	"net/http"
 )
 
 //go:generate oapi-codegen -config cfg.yaml ocpi22-spec.yaml

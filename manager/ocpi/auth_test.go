@@ -5,6 +5,10 @@ package ocpi_test
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/stretchr/testify/assert"
@@ -13,9 +17,6 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
 	"k8s.io/utils/clock"
-	"net/http"
-	"net/http/httptest"
-	"testing"
 )
 
 func TestAuthenticationWithPendingToken(t *testing.T) {

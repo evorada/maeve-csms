@@ -5,6 +5,10 @@ package handlers_test
 import (
 	"context"
 	"errors"
+	"os"
+	"strings"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/handlers"
 	handlers201 "github.com/thoughtworks/maeve-csms/manager/handlers/ocpp201"
@@ -14,9 +18,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"k8s.io/utils/clock"
-	"os"
-	"strings"
-	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"

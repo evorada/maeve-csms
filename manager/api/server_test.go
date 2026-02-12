@@ -15,6 +15,14 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
+	"math/big"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,15 +30,8 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/ocpi"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
-	"io"
 	"k8s.io/utils/clock"
 	clockTest "k8s.io/utils/clock/testing"
-	"math/big"
-	"net/http"
-	"net/http/httptest"
-	"strings"
-	"testing"
-	"time"
 )
 
 func TestRegisterChargeStation(t *testing.T) {

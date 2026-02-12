@@ -3,6 +3,10 @@
 package server
 
 import (
+	"net/http"
+	"os"
+	"text/template"
+
 	"github.com/rs/cors"
 	"github.com/thoughtworks/maeve-csms/manager/adminui"
 	"github.com/thoughtworks/maeve-csms/manager/api"
@@ -12,9 +16,6 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/unrolled/secure"
 	"k8s.io/utils/clock"
-	"net/http"
-	"os"
-	"text/template"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"

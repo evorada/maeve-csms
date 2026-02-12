@@ -7,8 +7,9 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
-	"github.com/spf13/cobra"
 	"os"
+
+	"github.com/spf13/cobra"
 )
 
 // hashCertificateCmd represents the hashCertificate command

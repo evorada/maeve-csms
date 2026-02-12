@@ -9,10 +9,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/thoughtworks/maeve-csms/manager/store"
 	"io"
 	"math/big"
 	"net/http"
+
+	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
 func (o *OCPI) RegisterNewParty(ctx context.Context, url, token string) error {

@@ -3,6 +3,10 @@ package mqtt_test
 import (
 	"context"
 	"encoding/json"
+	"strings"
+	"testing"
+	"time"
+
 	server "github.com/mochi-co/mqtt/v2"
 	"github.com/mochi-co/mqtt/v2/packets"
 	"github.com/stretchr/testify/assert"
@@ -13,9 +17,6 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
-	"strings"
-	"testing"
-	"time"
 )
 
 func TestListenerProcessesMessagesReceivedFromTheBroker(t *testing.T) {

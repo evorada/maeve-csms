@@ -5,6 +5,7 @@ package ocpp201
 import (
 	"context"
 	"fmt"
+
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/store"

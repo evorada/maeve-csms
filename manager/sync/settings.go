@@ -5,15 +5,16 @@ package sync
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
+	"time"
+
 	"github.com/thoughtworks/maeve-csms/manager/handlers"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"golang.org/x/exp/slog"
 	"k8s.io/utils/clock"
-	"regexp"
-	"strconv"
-	"time"
 )
 
 func SyncSettings(ctx context.Context, engine store.Engine, clock clock.PassiveClock, v16CallMaker, v201CallMaker handlers.CallMaker, runEvery time.Duration, retryAfter time.Duration) {

@@ -4,12 +4,13 @@ package ocpp201_test
 
 import (
 	"context"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp201"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/testutil"
-	"testing"
 )
 
 func TestFirmwareStatusNotification(t *testing.T) {

@@ -5,6 +5,8 @@ package ocpp201_test
 import (
 	"context"
 	"encoding/pem"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	handlers201 "github.com/thoughtworks/maeve-csms/manager/handlers/ocpp201"
@@ -13,7 +15,6 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
 	"github.com/thoughtworks/maeve-csms/manager/testutil"
 	"k8s.io/utils/clock"
-	"testing"
 )
 
 func TestCertificateSignedResultHandler(t *testing.T) {
