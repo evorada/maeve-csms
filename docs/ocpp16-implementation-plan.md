@@ -653,13 +653,17 @@ feature/ocpp16-security-extensions
 
 ---
 
-#### Task 6.2: CancelReservation Handler
-**Status:** Not Started
+#### Task 6.2: CancelReservation Handler ✅
+**Status:** Complete
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/cancel_reservation.go`
-- [ ] Implement reservation cancellation
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/cancel_reservation.go`
+- [x] Implement reservation cancellation
+- [x] Write unit tests (`cancel_reservation_test.go` — 4 test cases: accepted, rejected, non-existent reservation, multiple reservations)
+
+**Types Created:**
+- `manager/ocpp/ocpp16/cancel_reservation.go`
+- `manager/ocpp/ocpp16/cancel_reservation_response.go`
 
 **Commit:** `feat(ocpp16): Add CancelReservation handler`
 
