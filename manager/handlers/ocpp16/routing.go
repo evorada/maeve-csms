@@ -408,6 +408,12 @@ func NewRouter(emitter transport.Emitter,
 				Handler: GetDiagnosticsHandler{
 					FirmwareStore: engine,
 				},
+			"GetLocalListVersion": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.GetLocalListVersionJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp16.GetLocalListVersionResponseJson) },
+				RequestSchema:  "ocpp16/GetLocalListVersion.json",
+				ResponseSchema: "ocpp16/GetLocalListVersionResponse.json",
+				Handler:        GetLocalListVersionHandler{},
 			},
 		},
 	}
@@ -434,6 +440,7 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 			reflect.TypeOf(&ocpp16.UpdateFirmwareJson{}):         "UpdateFirmware",
 			reflect.TypeOf(&ocpp16.SignedUpdateFirmwareJson{}):   "SignedUpdateFirmware",
 			reflect.TypeOf(&ocpp16.GetDiagnosticsJson{}):         "GetDiagnostics",
+			reflect.TypeOf(&ocpp16.GetLocalListVersionJson{}):    "GetLocalListVersion",
 		},
 	}
 }

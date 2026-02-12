@@ -552,13 +552,16 @@ feature/ocpp16-security-extensions
 
 ---
 
-#### Task 5.1: GetLocalListVersion Handler
-**Status:** Not Started
+#### Task 5.1: GetLocalListVersion Handler ✅
+**Status:** Complete
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/get_local_list_version.go`
-- [ ] Implement version tracking
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/get_local_list_version.go`
+- [x] Create OCPP types: `manager/ocpp/ocpp16/get_local_list_version.go`, `get_local_list_version_response.go`
+- [x] Implement version tracking via tracing and logging
+- [x] Add routing in `routing.go` (CallResult route)
+- [x] Add action mapping in CallMaker
+- [x] Write unit tests (`get_local_list_version_test.go` — 4 test cases)
 
 **Commit:** `feat(ocpp16): Add GetLocalListVersion handler`
 
