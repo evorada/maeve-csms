@@ -27,7 +27,6 @@ func purposePtr(p store.ChargingProfilePurpose) *store.ChargingProfilePurpose {
 	return &p
 }
 
-
 func newTestProfile(csId string, connectorId, profileId, stackLevel int, purpose store.ChargingProfilePurpose) *store.ChargingProfile {
 	return &store.ChargingProfile{
 		ChargeStationId:        csId,
