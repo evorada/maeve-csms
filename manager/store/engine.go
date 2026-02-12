@@ -14,4 +14,5 @@ type Engine interface {
 	OcpiStore
 	LocationStore
 	ChargingProfileStore
+	FirmwareStore
 }
