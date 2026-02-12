@@ -349,8 +349,8 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 			reflect.TypeOf(&ocpp16.UnlockConnectorJson{}):        "UnlockConnector",
 			reflect.TypeOf(&ocpp16.ClearCacheJson{}):             "ClearCache",
 			reflect.TypeOf(&ocpp16.ChangeAvailabilityJson{}):     "ChangeAvailability",
-			reflect.TypeOf(&ocpp16.GetConfigurationJson{}):            "GetConfiguration",
-			reflect.TypeOf(&ocpp16.ExtendedTriggerMessageJson{}):      "ExtendedTriggerMessage",
+			reflect.TypeOf(&ocpp16.GetConfigurationJson{}):       "GetConfiguration",
+			reflect.TypeOf(&ocpp16.ExtendedTriggerMessageJson{}): "ExtendedTriggerMessage",
 		},
 	}
 }
