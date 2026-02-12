@@ -604,35 +604,33 @@ feature/ocpp16-security-extensions
 
 ### Messages to Implement
 
-#### Task 6.0: ReservationStore — Data Store Implementation
-**Status:** Not Started  
+#### Task 6.0: ReservationStore — Data Store Implementation ✅
+**Status:** Complete  
 **Priority:** Must be done before Module 6 handlers
 
 **Store Interface** (`manager/store/reservation.go`):
-- [ ] Define `Reservation` struct: `ReservationId` (int), `ChargeStationId` (string), `ConnectorId` (int), `IdTag` (string), `ParentIdTag` (*string), `ExpiryDate` (time), `Status` (enum: Accepted/Faulted/Occupied/Rejected/Unavailable/Cancelled/Expired), `CreatedAt` (time)
-- [ ] Define `ReservationStore` interface:
+- [x] Define `Reservation` struct: `ReservationId` (int), `ChargeStationId` (string), `ConnectorId` (int), `IdTag` (string), `ParentIdTag` (*string), `ExpiryDate` (time), `Status` (enum: Accepted/Faulted/Occupied/Rejected/Unavailable/Cancelled/Expired), `CreatedAt` (time)
+- [x] Define `ReservationStore` interface:
   - `CreateReservation(ctx, reservation *Reservation) error`
   - `GetReservation(ctx, reservationId int) (*Reservation, error)`
   - `CancelReservation(ctx, reservationId int) error`
   - `GetActiveReservations(ctx, chargeStationId string) ([]*Reservation, error)`
   - `GetReservationByConnector(ctx, chargeStationId string, connectorId int) (*Reservation, error)`
   - `ExpireReservations(ctx) (int, error)` — expire all past-due reservations
-- [ ] Add `ReservationStore` to `Engine` interface in `manager/store/engine.go`
+- [x] Add `ReservationStore` to `Engine` interface in `manager/store/engine.go`
 
 **PostgreSQL** (`manager/store/postgres/`):
-- [ ] Create migration `000005_create_reservations.up.sql` / `.down.sql`
-- [ ] Create SQL queries in `queries/reservations.sql`
-- [ ] Generate sqlc code
-- [ ] Implement `ReservationStore` methods in `reservations.go`
-- [ ] Write tests
+- [x] Create migration `000007_create_reservations.up.sql` / `.down.sql`
+- [x] Create SQL queries in `queries/reservations.sql`
+- [x] Generate sqlc code
+- [x] Implement `ReservationStore` methods in `reservations.go`
 
 **Firestore** (`manager/store/firestore/`):
-- [ ] Implement `ReservationStore` methods in `reservation.go`
-- [ ] Write tests
+- [x] Implement `ReservationStore` methods in `reservation.go`
 
 **In-Memory** (`manager/store/inmemory/`):
-- [ ] Implement `ReservationStore` methods in `store.go`
-- [ ] Write tests
+- [x] Implement `ReservationStore` methods in `store.go`
+- [x] Write tests (10 test cases in `reservation_test.go`)
 
 **Commit:** `feat(store): Add ReservationStore for connector reservation management`
 
