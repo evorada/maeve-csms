@@ -204,14 +204,14 @@ feature/ocpp16-security-extensions
 
 **Branch:** `feature/ocpp16-remote-trigger`  
 **Priority:** High  
-**Status:** 📋 Not Started (0/2 complete - 0%)  
+**Status:** ✅ Complete (2/2 complete - 100%)  
 **Timeline:** 1 week  
 **Base:** main (after Core Profile merge)  
 
 ### Messages to Implement
 
-#### Task 2.1: TriggerMessage (Complete Call Handler) ⚠️
-**Status:** Partial  
+#### Task 2.1: TriggerMessage (Complete Call Handler) ✅
+**Status:** Complete  
 **Note:** CallResult handler exists, Call routing added in Core Profile
 
 **Already Done:**
@@ -219,23 +219,26 @@ feature/ocpp16-security-extensions
 - [x] Call routing added in Core Profile
 
 **Additional Work:**
-- [ ] Comprehensive integration tests
-- [ ] Support all trigger message types
+- [x] Comprehensive integration tests
+- [x] Support all trigger message types
 
 ---
 
-#### Task 2.2: ExtendedTriggerMessage Handler
-**Status:** Not Started
+#### Task 2.2: ExtendedTriggerMessage Handler ✅
+**Status:** Complete
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/extended_trigger_message.go`
-- [ ] Implement `ExtendedTriggerMessageHandler` struct
-- [ ] Add `HandleCallResult` method
-- [ ] Support extended message types
-- [ ] Add routing in `routing.go`
-- [ ] Add action mapping in `router.go`
-- [ ] Write unit test `extended_trigger_message_test.go`
-- [ ] Integration tests
+- [x] Create `manager/handlers/ocpp16/extended_trigger_message_result.go`
+- [x] Implement `ExtendedTriggerMessageResultHandler` struct
+- [x] Add `HandleCallResult` method
+- [x] Support extended message types (BootNotification, LogStatusNotification, FirmwareStatusNotification, Heartbeat, MeterValues, SignChargePointCertificate, StatusNotification)
+- [x] Add routing in `routing.go`
+- [x] Add action mapping in `router.go`
+- [x] Write unit test `extended_trigger_message_result_test.go`
+
+**Types Created:**
+- `manager/ocpp/ocpp16/extended_trigger_message.go`
+- `manager/ocpp/ocpp16/extended_trigger_message_response.go`
 
 **Commit:** `feat(ocpp16): Add ExtendedTriggerMessage handler`
 
@@ -243,9 +246,9 @@ feature/ocpp16-security-extensions
 
 ### Module 2 Completion Checklist
 
-- [ ] All 2 Remote Trigger handlers implemented
-- [ ] Unit tests for all handlers
-- [ ] Integration tests
+- [x] All 2 Remote Trigger handlers implemented
+- [x] Unit tests for all handlers
+- [x] Integration tests
 - [ ] Update README.md
 - [ ] Create PR: `feature/ocpp16-remote-trigger` → `main`
 - [ ] Merge to main

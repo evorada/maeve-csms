@@ -298,6 +298,13 @@ func NewRouter(emitter transport.Emitter,
 				ResponseSchema: "ocpp16/TriggerMessageResponse.json",
 				Handler:        TriggerMessageResultHandler{},
 			},
+			"ExtendedTriggerMessage": {
+				NewRequest:     func() ocpp.Request { return new(ocpp16.ExtendedTriggerMessageJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp16.ExtendedTriggerMessageResponseJson) },
+				RequestSchema:  "ocpp16/ExtendedTriggerMessage.json",
+				ResponseSchema: "ocpp16/ExtendedTriggerMessageResponse.json",
+				Handler:        ExtendedTriggerMessageResultHandler{},
+			},
 			"GetConfiguration": {
 				NewRequest:     func() ocpp.Request { return new(ocpp16.GetConfigurationJson) },
 				NewResponse:    func() ocpp.Response { return new(ocpp16.GetConfigurationResponseJson) },
@@ -343,6 +350,7 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 			reflect.TypeOf(&ocpp16.ClearCacheJson{}):             "ClearCache",
 			reflect.TypeOf(&ocpp16.ChangeAvailabilityJson{}):     "ChangeAvailability",
 			reflect.TypeOf(&ocpp16.GetConfigurationJson{}):       "GetConfiguration",
+			reflect.TypeOf(&ocpp16.ExtendedTriggerMessageJson{}): "ExtendedTriggerMessage",
 		},
 	}
 }
