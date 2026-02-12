@@ -372,41 +372,41 @@ feature/ocpp16-security-extensions
 
 **Branch:** `feature/ocpp16-firmware-management`  
 **Priority:** Medium  
-**Status:** 📋 Not Started (0/6 complete - 0%)  
+**Status:** 🚧 In Progress (1/6 complete - 17%)  
 **Timeline:** 3-4 weeks  
 **Base:** main (after Smart Charging merge)  
 **Complexity:** High (requires file transfer infrastructure)  
 
 ### Messages to Implement
 
-#### Task 4.0: FirmwareStore — Data Store Implementation
-**Status:** Not Started  
+#### Task 4.0: FirmwareStore — Data Store Implementation ✅
+**Status:** Complete  
 **Priority:** Must be done before Module 4 handlers
 
 **Store Interface** (`manager/store/firmware.go`):
-- [ ] Define `FirmwareUpdateStatus` struct: `ChargeStationId`, `Status` (enum: Downloading/Downloaded/InstallationFailed/Installing/Installed/Idle), `Location` (URL string), `RetrieveDate` (time), `RetryCount` (int), `UpdatedAt` (time)
-- [ ] Define `DiagnosticsStatus` struct: `ChargeStationId`, `Status` (enum: Idle/Uploaded/UploadFailed/Uploading), `Location` (URL string), `UpdatedAt` (time)
-- [ ] Define `FirmwareStore` interface:
+- [x] Define `FirmwareUpdateStatus` struct: `ChargeStationId`, `Status` (enum: Downloading/Downloaded/InstallationFailed/Installing/Installed/Idle), `Location` (URL string), `RetrieveDate` (time), `RetryCount` (int), `UpdatedAt` (time)
+- [x] Define `DiagnosticsStatus` struct: `ChargeStationId`, `Status` (enum: Idle/Uploaded/UploadFailed/Uploading), `Location` (URL string), `UpdatedAt` (time)
+- [x] Define `FirmwareStore` interface:
   - `SetFirmwareUpdateStatus(ctx, chargeStationId string, status *FirmwareUpdateStatus) error`
   - `GetFirmwareUpdateStatus(ctx, chargeStationId string) (*FirmwareUpdateStatus, error)`
   - `SetDiagnosticsStatus(ctx, chargeStationId string, status *DiagnosticsStatus) error`
   - `GetDiagnosticsStatus(ctx, chargeStationId string) (*DiagnosticsStatus, error)`
-- [ ] Add `FirmwareStore` to `Engine` interface in `manager/store/engine.go`
+- [x] Add `FirmwareStore` to `Engine` interface in `manager/store/engine.go`
 
 **PostgreSQL** (`manager/store/postgres/`):
-- [ ] Create migration `000003_create_firmware_status.up.sql` / `.down.sql`
-- [ ] Create SQL queries in `queries/firmware.sql`
-- [ ] Generate sqlc code
-- [ ] Implement `FirmwareStore` methods in `firmware.go`
-- [ ] Write tests
+- [x] Create migration `000007_create_firmware_status.up.sql` / `.down.sql`
+- [x] Create SQL queries in `queries/firmware.sql`
+- [x] Generate sqlc code
+- [x] Implement `FirmwareStore` methods in `firmware.go`
+- [x] Write tests
 
 **Firestore** (`manager/store/firestore/`):
-- [ ] Implement `FirmwareStore` methods in `firmware.go`
-- [ ] Write tests
+- [x] Implement `FirmwareStore` methods in `firmware.go`
+- [x] Write tests
 
 **In-Memory** (`manager/store/inmemory/`):
-- [ ] Implement `FirmwareStore` methods in `store.go`
-- [ ] Write tests
+- [x] Implement `FirmwareStore` methods in `store.go`
+- [x] Write tests
 
 **Commit:** `feat(store): Add FirmwareStore for firmware and diagnostics tracking`
 
