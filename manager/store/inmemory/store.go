@@ -41,6 +41,8 @@ type Store struct {
 	chargingProfiles                 map[int]*store.ChargingProfile
 	firmwareUpdateStatus             map[string]*store.FirmwareUpdateStatus
 	diagnosticsStatus                map[string]*store.DiagnosticsStatus
+	localAuthListVersions            map[string]int
+	localAuthListEntries             map[string]map[string]*store.LocalAuthListEntry
 }
 
 func NewStore(clock clock.PassiveClock) *Store {
@@ -60,6 +62,8 @@ func NewStore(clock clock.PassiveClock) *Store {
 		chargingProfiles:                 make(map[int]*store.ChargingProfile),
 		firmwareUpdateStatus:             make(map[string]*store.FirmwareUpdateStatus),
 		diagnosticsStatus:                make(map[string]*store.DiagnosticsStatus),
+		localAuthListVersions:            make(map[string]int),
+		localAuthListEntries:             make(map[string]map[string]*store.LocalAuthListEntry),
 	}
 }
 
@@ -547,4 +551,52 @@ func (s *Store) ListLocations(_ context.Context, offset int, limit int) ([]*stor
 		locations = make([]*store.Location, 0)
 	}
 	return locations, nil
+}
+
+func (s *Store) GetLocalListVersion(_ context.Context, chargeStationId string) (int, error) {
+	s.Lock()
+	defer s.Unlock()
+	return s.localAuthListVersions[chargeStationId], nil
+}
+
+func (s *Store) UpdateLocalAuthList(_ context.Context, chargeStationId string, version int, updateType string, entries []*store.LocalAuthListEntry) error {
+	s.Lock()
+	defer s.Unlock()
+
+	if updateType == store.LocalAuthListUpdateTypeFull {
+		s.localAuthListEntries[chargeStationId] = make(map[string]*store.LocalAuthListEntry)
+		for _, entry := range entries {
+			s.localAuthListEntries[chargeStationId][entry.IdTag] = entry
+		}
+	} else {
+		if s.localAuthListEntries[chargeStationId] == nil {
+			s.localAuthListEntries[chargeStationId] = make(map[string]*store.LocalAuthListEntry)
+		}
+		for _, entry := range entries {
+			if entry.IdTagInfo == nil {
+				delete(s.localAuthListEntries[chargeStationId], entry.IdTag)
+			} else {
+				s.localAuthListEntries[chargeStationId][entry.IdTag] = entry
+			}
+		}
+	}
+
+	s.localAuthListVersions[chargeStationId] = version
+	return nil
+}
+
+func (s *Store) GetLocalAuthList(_ context.Context, chargeStationId string) ([]*store.LocalAuthListEntry, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	entries := make([]*store.LocalAuthListEntry, 0)
+	if m, ok := s.localAuthListEntries[chargeStationId]; ok {
+		for _, entry := range m {
+			entries = append(entries, entry)
+		}
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].IdTag < entries[j].IdTag
+	})
+	return entries, nil
 }
