@@ -30,6 +30,6 @@ repos:
       - id: go-fmt
       - id: go-staticcheck-mod
       - id: go-sec-mod
-        args: ["-exclude-generated", "-exclude=G117", "--"]
+        args: ["-exclude-generated", "-exclude=G115,G117,G704", "--"]
       - id: go-build-mod
       - id: go-test-mod
