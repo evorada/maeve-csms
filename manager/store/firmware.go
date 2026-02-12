@@ -13,6 +13,7 @@ type FirmwareUpdateStatusType string
 var (
 	FirmwareUpdateStatusDownloading        FirmwareUpdateStatusType = "Downloading"
 	FirmwareUpdateStatusDownloaded         FirmwareUpdateStatusType = "Downloaded"
+	FirmwareUpdateStatusDownloadFailed     FirmwareUpdateStatusType = "DownloadFailed"
 	FirmwareUpdateStatusInstallationFailed FirmwareUpdateStatusType = "InstallationFailed"
 	FirmwareUpdateStatusInstalling         FirmwareUpdateStatusType = "Installing"
 	FirmwareUpdateStatusInstalled          FirmwareUpdateStatusType = "Installed"

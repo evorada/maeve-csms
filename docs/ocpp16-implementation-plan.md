@@ -427,14 +427,17 @@ feature/ocpp16-security-extensions
 
 ---
 
-#### Task 4.2: FirmwareStatusNotification Handler
-**Status:** Not Started
+#### Task 4.2: FirmwareStatusNotification Handler ✅
+**Status:** Complete
 
 **Implementation:**
-- [ ] Create `manager/handlers/ocpp16/firmware_status_notification.go`
-- [ ] Track firmware update status
-- [ ] Store status in database
-- [ ] Write unit tests
+- [x] Create `manager/handlers/ocpp16/firmware_status_notification.go`
+- [x] Track firmware update status
+- [x] Store status in database
+- [x] Write unit tests (`firmware_status_notification_test.go`) — 4 test cases covering all statuses, no existing status, store errors, unknown status
+- [x] Create OCPP types `manager/ocpp/ocpp16/firmware_status_notification.go` and `firmware_status_notification_response.go`
+- [x] Add `DownloadFailed` status to `FirmwareUpdateStatusType` in store
+- [x] Add routing in `routing.go`
 
 **Commit:** `feat(ocpp16): Add FirmwareStatusNotification handler`
 
