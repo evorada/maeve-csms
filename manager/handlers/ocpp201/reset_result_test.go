@@ -15,27 +15,81 @@ import (
 func TestResetResultHandler(t *testing.T) {
 	handler := ocpp201.ResetResultHandler{}
 
-	tracer, exporter := testutil.GetTracer()
+	tests := []struct {
+		name           string
+		resetType      types.ResetEnumType
+		status         types.ResetStatusEnumType
+		statusInfo     *types.StatusInfoType
+		expectedAttrs  map[string]any
+	}{
+		{
+			name:      "accepted reset",
+			resetType: types.ResetEnumTypeOnIdle,
+			status:    types.ResetStatusEnumTypeAccepted,
+			expectedAttrs: map[string]any{
+				"reset.type":   "OnIdle",
+				"reset.status": "Accepted",
+			},
+		},
+		{
+			name:      "scheduled reset",
+			resetType: types.ResetEnumTypeImmediate,
+			status:    types.ResetStatusEnumTypeScheduled,
+			expectedAttrs: map[string]any{
+				"reset.type":   "Immediate",
+				"reset.status": "Scheduled",
+			},
+		},
+		{
+			name:      "rejected reset",
+			resetType: types.ResetEnumTypeImmediate,
+			status:    types.ResetStatusEnumTypeRejected,
+			expectedAttrs: map[string]any{
+				"reset.type":   "Immediate",
+				"reset.status": "Rejected",
+			},
+		},
+		{
+			name:      "rejected with status info",
+			resetType: types.ResetEnumTypeOnIdle,
+			status:    types.ResetStatusEnumTypeRejected,
+			statusInfo: &types.StatusInfoType{
+				ReasonCode: "Busy",
+				AdditionalInfo: func() *string {
+					s := "Active transaction in progress"
+					return &s
+				}(),
+			},
+			expectedAttrs: map[string]any{
+				"reset.type":   "OnIdle",
+				"reset.status": "Rejected",
+			},
+		},
+	}
 
-	ctx := context.Background()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tracer, exporter := testutil.GetTracer()
 
-	func() {
-		ctx, span := tracer.Start(ctx, `test`)
-		defer span.End()
+			ctx := context.Background()
 
-		req := &types.ResetRequestJson{
-			Type: types.ResetEnumTypeOnIdle,
-		}
-		resp := &types.ResetResponseJson{
-			Status: types.ResetStatusEnumTypeAccepted,
-		}
+			func() {
+				ctx, span := tracer.Start(ctx, `test`)
+				defer span.End()
 
-		err := handler.HandleCallResult(ctx, "cs001", req, resp, nil)
-		require.NoError(t, err)
-	}()
+				req := &types.ResetRequestJson{
+					Type: tt.resetType,
+				}
+				resp := &types.ResetResponseJson{
+					Status:     tt.status,
+					StatusInfo: tt.statusInfo,
+				}
 
-	testutil.AssertSpan(t, &exporter.GetSpans()[0], "test", map[string]any{
-		"reset.type":   "OnIdle",
-		"reset.status": "Accepted",
-	})
+				err := handler.HandleCallResult(ctx, "cs001", req, resp, nil)
+				require.NoError(t, err)
+			}()
+
+			testutil.AssertSpan(t, &exporter.GetSpans()[0], "test", tt.expectedAttrs)
+		})
+	}
 }
