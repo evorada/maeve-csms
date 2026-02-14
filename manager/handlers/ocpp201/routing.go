@@ -138,6 +138,15 @@ func NewRouter(emitter transport.Emitter,
 			},
 		},
 		CallResultRoutes: map[string]handlers.CallResultRoute{
+			"ClearChargingProfile": {
+				NewRequest:     func() ocpp.Request { return new(ocpp201.ClearChargingProfileRequestJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp201.ClearChargingProfileResponseJson) },
+				RequestSchema:  "ocpp201/ClearChargingProfileRequest.json",
+				ResponseSchema: "ocpp201/ClearChargingProfileResponse.json",
+				Handler: ClearChargingProfileResultHandler{
+					Store: engine,
+				},
+			},
 			"CostUpdated": {
 				NewRequest:     func() ocpp.Request { return new(ocpp201.CostUpdatedRequestJson) },
 				NewResponse:    func() ocpp.Response { return new(ocpp201.CostUpdatedResponseJson) },
@@ -320,6 +329,7 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 		Emitter:     e,
 		OcppVersion: transport.OcppVersion201,
 		Actions: map[reflect.Type]string{
+			reflect.TypeOf(&ocpp201.ClearChargingProfileRequestJson{}):       "ClearChargingProfile",
 			reflect.TypeOf(&ocpp201.CertificateSignedRequestJson{}):          "CertificateSigned",
 			reflect.TypeOf(&ocpp201.CostUpdatedRequestJson{}):                "CostUpdated",
 			reflect.TypeOf(&ocpp201.ChangeAvailabilityRequestJson{}):         "ChangeAvailability",
