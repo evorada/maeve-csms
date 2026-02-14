@@ -14,6 +14,8 @@ type Transaction struct {
 	EndedSeqNo        int          `firestore:"endedSeqNo"`
 	UpdatedSeqNoCount int          `firestore:"updatedSeqNoCount"`
 	Offline           bool         `firestore:"offline"`
+	// LastCost is the most recently communicated running cost for this transaction (from CostUpdated).
+	LastCost *float64 `firestore:"lastCost,omitempty"`
 }
 
 type MeterValue struct {
@@ -41,4 +43,7 @@ type TransactionStore interface {
 	CreateTransaction(ctx context.Context, chargeStationId, transactionId, idToken, tokenType string, meterValue []MeterValue, seqNo int, offline bool) error
 	UpdateTransaction(ctx context.Context, chargeStationId, transactionId string, meterValue []MeterValue) error
 	EndTransaction(ctx context.Context, chargeStationId, transactionId, idToken, tokenType string, meterValue []MeterValue, seqNo int) error
+	// UpdateTransactionCost stores the most recent running cost for a transaction as
+	// communicated by the CSMS via the CostUpdated message.
+	UpdateTransactionCost(ctx context.Context, chargeStationId, transactionId string, totalCost float64) error
 }

@@ -235,6 +235,18 @@ func (s *Store) addMeterValue(ctx context.Context, transactionId string, mv *sto
 	return s.q.AddMeterValues(ctx, params)
 }
 
+// UpdateTransactionCost stores the most recent running cost communicated via CostUpdated.
+// Uses a direct query rather than sqlc-generated code since last_cost was added via migration.
+func (s *Store) UpdateTransactionCost(ctx context.Context, chargeStationId, transactionId string, totalCost float64) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE transactions SET last_cost = $1, updated_at = NOW() WHERE id = $2 AND charge_station_id = $3`,
+		totalCost, transactionId, chargeStationId)
+	if err != nil {
+		return fmt.Errorf("failed to update transaction cost for %s/%s: %w", chargeStationId, transactionId, err)
+	}
+	return nil
+}
+
 // Helper function to convert PostgreSQL Transaction to store.Transaction
 func (s *Store) toStoreTransaction(ctx context.Context, txn *Transaction) (*store.Transaction, error) {
 	// Retrieve meter values for this transaction
