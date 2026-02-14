@@ -45,6 +45,7 @@ type Store struct {
 	localAuthListVersions            map[string]int
 	localAuthListEntries             map[string]map[string]*store.LocalAuthListEntry
 	reservations                     map[int]*store.Reservation
+	meterValues                      map[meterValueKey][]store.StoredMeterValue
 }
 
 func NewStore(clock clock.PassiveClock) *Store {
@@ -68,6 +69,7 @@ func NewStore(clock clock.PassiveClock) *Store {
 		localAuthListVersions:            make(map[string]int),
 		localAuthListEntries:             make(map[string]map[string]*store.LocalAuthListEntry),
 		reservations:                     make(map[int]*store.Reservation),
+		meterValues:                      make(map[meterValueKey][]store.StoredMeterValue),
 	}
 }
 

@@ -124,6 +124,16 @@ type Location struct {
 	UpdatedAt    pgtype.Timestamp `db:"updated_at" json:"updated_at"`
 }
 
+type MeterValue struct {
+	ID              int64            `db:"id" json:"id"`
+	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
+	EvseID          int32            `db:"evse_id" json:"evse_id"`
+	TransactionID   pgtype.Text      `db:"transaction_id" json:"transaction_id"`
+	Timestamp       pgtype.Timestamp `db:"timestamp" json:"timestamp"`
+	SampledValues   []byte           `db:"sampled_values" json:"sampled_values"`
+	ReceivedAt      pgtype.Timestamp `db:"received_at" json:"received_at"`
+}
+
 type OcpiParty struct {
 	ID          int64            `db:"id" json:"id"`
 	Role        string           `db:"role" json:"role"`

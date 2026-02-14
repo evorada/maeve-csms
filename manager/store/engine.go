@@ -17,4 +17,5 @@ type Engine interface {
 	FirmwareStore
 	LocalAuthListStore
 	ReservationStore
+	MeterValuesStore
 }

@@ -32,6 +32,7 @@ type Querier interface {
 	ExpireReservations(ctx context.Context) (int64, error)
 	FindActiveTransaction(ctx context.Context, chargeStationID string) (Transaction, error)
 	GetActiveReservations(ctx context.Context, chargeStationID string) ([]Reservation, error)
+	GetAllMeterValuesByStation(ctx context.Context, arg GetAllMeterValuesByStationParams) ([]MeterValue, error)
 	GetCertificate(ctx context.Context, certificateHash string) (Certificate, error)
 	// Auth
 	GetChargeStationAuth(ctx context.Context, chargeStationID string) (ChargeStation, error)
@@ -51,6 +52,7 @@ type Querier interface {
 	GetLocalListVersion(ctx context.Context, chargeStationID string) (int32, error)
 	GetLocation(ctx context.Context, id string) (Location, error)
 	GetMeterValues(ctx context.Context, transactionID string) ([]TransactionMeterValue, error)
+	GetMeterValuesByStationAndEvse(ctx context.Context, arg GetMeterValuesByStationAndEvseParams) ([]MeterValue, error)
 	// Party Details (by role + country_code + party_id)
 	GetOcpiParty(ctx context.Context, arg GetOcpiPartyParams) (OcpiParty, error)
 	// Registrations (by token)
@@ -77,6 +79,7 @@ type Querier interface {
 	SetLocation(ctx context.Context, arg SetLocationParams) (Location, error)
 	SetOcpiParty(ctx context.Context, arg SetOcpiPartyParams) (OcpiParty, error)
 	SetOcpiRegistration(ctx context.Context, arg SetOcpiRegistrationParams) (OcpiRegistration, error)
+	StoreMeterValue(ctx context.Context, arg StoreMeterValueParams) error
 	UpdateChargeStationCertificate(ctx context.Context, arg UpdateChargeStationCertificateParams) (ChargeStationCertificate, error)
 	UpdateReservationStatus(ctx context.Context, arg UpdateReservationStatusParams) error
 	UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token, error)

@@ -100,7 +100,7 @@ func NewRouter(emitter transport.Emitter,
 				NewRequest:     func() ocpp.Request { return new(ocpp201.MeterValuesRequestJson) },
 				RequestSchema:  "ocpp201/MeterValuesRequest.json",
 				ResponseSchema: "ocpp201/MeterValuesResponse.json",
-				Handler:        MeterValuesHandler{},
+				Handler:        MeterValuesHandler{Store: engine},
 			},
 			"NotifyReport": {
 				NewRequest:     func() ocpp.Request { return new(ocpp201.NotifyReportRequestJson) },
