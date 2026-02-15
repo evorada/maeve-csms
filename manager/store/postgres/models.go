@@ -142,6 +142,15 @@ type OcpiRegistration struct {
 	UpdatedAt pgtype.Timestamp `db:"updated_at" json:"updated_at"`
 }
 
+type PublishFirmwareStatus struct {
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	Status          string             `db:"status" json:"status"`
+	Location        string             `db:"location" json:"location"`
+	Checksum        string             `db:"checksum" json:"checksum"`
+	RequestID       int32              `db:"request_id" json:"request_id"`
+	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
 type Reservation struct {
 	ReservationID   int32              `db:"reservation_id" json:"reservation_id"`
 	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`

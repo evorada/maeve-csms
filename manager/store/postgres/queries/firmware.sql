@@ -25,3 +25,18 @@ ON CONFLICT (charge_station_id) DO UPDATE SET
 SELECT charge_station_id, status, location, updated_at
 FROM diagnostics_status
 WHERE charge_station_id = $1;
+
+-- name: UpsertPublishFirmwareStatus :exec
+INSERT INTO publish_firmware_status (charge_station_id, status, location, checksum, request_id, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (charge_station_id) DO UPDATE SET
+    status = EXCLUDED.status,
+    location = EXCLUDED.location,
+    checksum = EXCLUDED.checksum,
+    request_id = EXCLUDED.request_id,
+    updated_at = EXCLUDED.updated_at;
+
+-- name: GetPublishFirmwareStatus :one
+SELECT charge_station_id, status, location, checksum, request_id, updated_at
+FROM publish_firmware_status
+WHERE charge_station_id = $1;

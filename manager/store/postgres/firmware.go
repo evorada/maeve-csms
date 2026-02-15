@@ -74,3 +74,37 @@ func (s *Store) GetDiagnosticsStatus(ctx context.Context, chargeStationId string
 		UpdatedAt:       row.UpdatedAt.Time,
 	}, nil
 }
+
+func (s *Store) SetPublishFirmwareStatus(ctx context.Context, chargeStationId string, status *store.PublishFirmwareStatus) error {
+	err := s.q.UpsertPublishFirmwareStatus(ctx, UpsertPublishFirmwareStatusParams{
+		ChargeStationID: chargeStationId,
+		Status:          string(status.Status),
+		Location:        status.Location,
+		Checksum:        status.Checksum,
+		RequestID:       int32(status.RequestId),
+		UpdatedAt:       pgtype.Timestamptz{Time: status.UpdatedAt, Valid: true},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to set publish firmware status: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) GetPublishFirmwareStatus(ctx context.Context, chargeStationId string) (*store.PublishFirmwareStatus, error) {
+	row, err := s.q.GetPublishFirmwareStatus(ctx, chargeStationId)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get publish firmware status: %w", err)
+	}
+
+	return &store.PublishFirmwareStatus{
+		ChargeStationId: row.ChargeStationID,
+		Status:          store.PublishFirmwareStatusType(row.Status),
+		Location:        row.Location,
+		Checksum:        row.Checksum,
+		RequestId:       int(row.RequestID),
+		UpdatedAt:       row.UpdatedAt.Time,
+	}, nil
+}

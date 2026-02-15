@@ -111,5 +111,57 @@ func (s *Store) GetDiagnosticsStatus(ctx context.Context, chargeStationId string
 	}, nil
 }
 
+type firestorePublishFirmwareStatus struct {
+	ChargeStationId string `firestore:"chargeStationId"`
+	Status          string `firestore:"status"`
+	Location        string `firestore:"location"`
+	Checksum        string `firestore:"checksum"`
+	RequestId       int    `firestore:"requestId"`
+	UpdatedAt       string `firestore:"updatedAt"`
+}
+
+func (s *Store) SetPublishFirmwareStatus(ctx context.Context, chargeStationId string, pubStatus *store.PublishFirmwareStatus) error {
+	doc := &firestorePublishFirmwareStatus{
+		ChargeStationId: chargeStationId,
+		Status:          string(pubStatus.Status),
+		Location:        pubStatus.Location,
+		Checksum:        pubStatus.Checksum,
+		RequestId:       pubStatus.RequestId,
+		UpdatedAt:       pubStatus.UpdatedAt.Format(time.RFC3339),
+	}
+
+	_, err := s.client.Collection("PublishFirmwareStatus").Doc(chargeStationId).Set(ctx, doc)
+	if err != nil {
+		return fmt.Errorf("setting publish firmware status for %s: %w", chargeStationId, err)
+	}
+	return nil
+}
+
+func (s *Store) GetPublishFirmwareStatus(ctx context.Context, chargeStationId string) (*store.PublishFirmwareStatus, error) {
+	snap, err := s.client.Collection("PublishFirmwareStatus").Doc(chargeStationId).Get(ctx)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("getting publish firmware status for %s: %w", chargeStationId, err)
+	}
+
+	var doc firestorePublishFirmwareStatus
+	if err := snap.DataTo(&doc); err != nil {
+		return nil, fmt.Errorf("decoding publish firmware status for %s: %w", chargeStationId, err)
+	}
+
+	updatedAt, _ := time.Parse(time.RFC3339, doc.UpdatedAt)
+
+	return &store.PublishFirmwareStatus{
+		ChargeStationId: doc.ChargeStationId,
+		Status:          store.PublishFirmwareStatusType(doc.Status),
+		Location:        doc.Location,
+		Checksum:        doc.Checksum,
+		RequestId:       doc.RequestId,
+		UpdatedAt:       updatedAt,
+	}, nil
+}
+
 // Ensure firestore.Store still satisfies the interface at compile time
 var _ store.FirmwareStore = (*Store)(nil)

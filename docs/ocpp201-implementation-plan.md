@@ -370,9 +370,13 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Task 7.2: UpdateFirmware (CSMS→CS, New)
+**Status:** ✅ Complete  
 **Complexity:** Medium  
-- [ ] Create handler + types + routing + CallMaker
-- [ ] Write tests
+**Completed:** 2026-02-15  
+- [x] Create UpdateFirmwareRequestJson/ResponseJson types + FirmwareType in ocpp/ocpp201/
+- [x] Create UpdateFirmwareResultHandler with store persistence on Accepted
+- [x] Register in routing.go CallResultRoutes + CallMaker Actions
+- [x] 5 unit tests: Accepted, Rejected, AcceptedWithRetries, InvalidCertificate, AcceptedInvalidDate
 
 ---
 

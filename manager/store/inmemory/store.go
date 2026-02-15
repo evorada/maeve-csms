@@ -41,6 +41,7 @@ type Store struct {
 	chargingProfiles                 map[int]*store.ChargingProfile
 	firmwareUpdateStatus             map[string]*store.FirmwareUpdateStatus
 	diagnosticsStatus                map[string]*store.DiagnosticsStatus
+	publishFirmwareStatus            map[string]*store.PublishFirmwareStatus
 	localAuthListVersions            map[string]int
 	localAuthListEntries             map[string]map[string]*store.LocalAuthListEntry
 	reservations                     map[int]*store.Reservation
@@ -63,6 +64,7 @@ func NewStore(clock clock.PassiveClock) *Store {
 		chargingProfiles:                 make(map[int]*store.ChargingProfile),
 		firmwareUpdateStatus:             make(map[string]*store.FirmwareUpdateStatus),
 		diagnosticsStatus:                make(map[string]*store.DiagnosticsStatus),
+		publishFirmwareStatus:            make(map[string]*store.PublishFirmwareStatus),
 		localAuthListVersions:            make(map[string]int),
 		localAuthListEntries:             make(map[string]map[string]*store.LocalAuthListEntry),
 		reservations:                     make(map[int]*store.Reservation),
@@ -95,6 +97,20 @@ func (s *Store) GetDiagnosticsStatus(_ context.Context, chargeStationId string) 
 	s.Lock()
 	defer s.Unlock()
 	return s.diagnosticsStatus[chargeStationId], nil
+}
+
+func (s *Store) SetPublishFirmwareStatus(_ context.Context, chargeStationId string, status *store.PublishFirmwareStatus) error {
+	s.Lock()
+	defer s.Unlock()
+	status.ChargeStationId = chargeStationId
+	s.publishFirmwareStatus[chargeStationId] = status
+	return nil
+}
+
+func (s *Store) GetPublishFirmwareStatus(_ context.Context, chargeStationId string) (*store.PublishFirmwareStatus, error) {
+	s.Lock()
+	defer s.Unlock()
+	return s.publishFirmwareStatus[chargeStationId], nil
 }
 
 func (s *Store) SetChargeStationAuth(_ context.Context, chargeStationId string, auth *store.ChargeStationAuth) error {

@@ -309,6 +309,15 @@ func NewRouter(emitter transport.Emitter,
 				ResponseSchema: "ocpp201/UnclockConnectorResponse.json",
 				Handler:        UnlockConnectorResultHandler{},
 			},
+			"PublishFirmware": {
+				NewRequest:     func() ocpp.Request { return new(ocpp201.PublishFirmwareRequestJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp201.PublishFirmwareResponseJson) },
+				RequestSchema:  "ocpp201/PublishFirmwareRequest.json",
+				ResponseSchema: "ocpp201/PublishFirmwareResponse.json",
+				Handler: PublishFirmwareResultHandler{
+					Store: engine,
+				},
+			},
 			"UpdateFirmware": {
 				NewRequest:     func() ocpp.Request { return new(ocpp201.UpdateFirmwareRequestJson) },
 				NewResponse:    func() ocpp.Response { return new(ocpp201.UpdateFirmwareResponseJson) },
@@ -348,7 +357,8 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 			reflect.TypeOf(&ocpp201.SetVariablesRequestJson{}):               "SetVariables",
 			reflect.TypeOf(&ocpp201.TriggerMessageRequestJson{}):             "TriggerMessage",
 			reflect.TypeOf(&ocpp201.UnlockConnectorRequestJson{}):            "UnlockConnector",
-			reflect.TypeOf(&ocpp201.UpdateFirmwareRequestJson{}):             "UpdateFirmware",
+			reflect.TypeOf(&ocpp201.PublishFirmwareRequestJson{}):            "PublishFirmware",
+		reflect.TypeOf(&ocpp201.UpdateFirmwareRequestJson{}):             "UpdateFirmware",
 		},
 	}
 }
