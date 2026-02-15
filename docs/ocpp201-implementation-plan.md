@@ -410,9 +410,15 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Task 7.5: UnpublishFirmware (CSMS→CS, New)
+**Status:** ✅ Complete  
 **Complexity:** Low  
-- [ ] Create handler + routing
-- [ ] Write tests
+**Completed:** 2026-02-15  
+- [x] Create UnpublishFirmwareRequestJson type (checksum field per OCPP 2.0.1 schema)
+- [x] Create UnpublishFirmwareResponseJson with UnpublishFirmwareStatusEnumType enum
+- [x] Implement UnpublishFirmwareResultHandler with FirmwareStore:
+      Unpublished → sets store to Idle; DownloadOngoing/NoFirmware → log only
+- [x] Register in routing.go CallResultRoutes + CallMaker Actions
+- [x] 5 unit tests: Unpublished, DownloadOngoing, NoFirmware, MultipleStations, SpanAttributes
 
 ---
 
@@ -423,7 +429,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Module 7 Completion Checklist
-- [ ] All Firmware handlers
+- [x] All Firmware handlers (Tasks 7.1–7.5) ✅
 - [ ] Create PR → Merge
 
 ---
