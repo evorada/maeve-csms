@@ -438,12 +438,18 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 **Branch:** `feature/ocpp201-diagnostics`  
 **Priority:** Medium  
-**Status:** 📋 Not Started (0/8)  
+**Status:** 🔄 In Progress (1/10)  
 **Complexity:** High  
 
 ### Task 8.1: LogStatusNotification — Add Persistence
+**Status:** ✅ Complete  
 **Complexity:** Low  
-- [ ] Store log upload status
+**Completed:** 2026-02-15  
+- [x] Convert handler to struct with FirmwareStore dependency
+- [x] Add mapLogUploadStatus() mapping all 8 UploadLogStatusEnumType values to DiagnosticsStatusType
+- [x] Persist status via existing SetDiagnosticsStatus store method
+- [x] Update routing.go to inject engine
+- [x] 5 unit tests: basic, request_id, upload failure, status progression, multiple stations
 
 ---
 
