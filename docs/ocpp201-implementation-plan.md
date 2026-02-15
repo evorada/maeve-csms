@@ -381,9 +381,17 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Task 7.3: PublishFirmware (CSMS→CS, New)
+**Status:** ✅ Complete  
 **Complexity:** Medium  
-- [ ] Create handler + types + routing
-- [ ] Write tests
+**Completed:** 2026-02-15  
+- [x] Create PublishFirmwareRequestJson/ResponseJson types in ocpp/ocpp201/
+- [x] Add PublishFirmwareStatus store types + interface methods (FirmwareStore)
+- [x] Implement SetPublishFirmwareStatus/GetPublishFirmwareStatus in inmemory, firestore, postgres stores
+- [x] Add postgres migration 000011: publish_firmware_status table + sqlc-generated queries
+- [x] Create PublishFirmwareResultHandler with store persistence on Accepted
+- [x] Register in routing.go CallResultRoutes + CallMaker Actions
+- [x] 5 unit tests: Accepted, Rejected, AcceptedWithRetries, MultipleStations, SpanAttributes
+- [x] Fix MockFirmwareStore in ocpp16 tests to implement new interface
 
 ---
 
