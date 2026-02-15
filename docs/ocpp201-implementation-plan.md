@@ -1,8 +1,8 @@
 # OCPP 2.0.1 Implementation Plan
 
-**Project:** MaEVe CSMS OCPP 2.0.1 Completion
-**Created:** 2026-02-12
-**Status:** 🚧 Implementation complete on feature branches; awaiting maintainer merges to `main`
+**Project:** MaEVe CSMS OCPP 2.0.1 Completion  
+**Created:** 2026-02-12  
+**Status:** 📋 Planning  
 
 ---
 
@@ -10,8 +10,8 @@
 
 Based on the [OCPP 2.0.1 Implementation Audit](ocpp201-implementation-audit.md), this plan implements the missing and incomplete OCPP 2.0.1 messages organized by functional block. Each block will be implemented in its own feature branch.
 
-**Current Overall Coverage:** 100% of planned OCPP 2.0.1 blocks implemented on feature branches (55/55)
-**Target Coverage:** Merge feature branches to `main` and run integrated validation
+**Current Overall Coverage:** ~22% (12/55 fully implemented)  
+**Target Coverage:** 100% of mandatory blocks, 80%+ optional blocks
 
 ---
 
@@ -20,7 +20,7 @@ Based on the [OCPP 2.0.1 Implementation Audit](ocpp201-implementation-audit.md),
 ### Approach
 - **Block-Based:** One OCPP 2.0.1 functional block at a time
 - **Independent Branches:** Each block gets its own feature branch
-- **Upgrade Existing:** Many handlers exist as stubs - upgrade them with real logic
+- **Upgrade Existing:** Many handlers exist as stubs — upgrade them with real logic
 - **Test-Driven:** Unit tests for each handler
 - **Follow Patterns:** Match existing handler structure (OpenTelemetry tracing, etc.)
 
@@ -44,17 +44,16 @@ feature/ocpp201-security
 
 ## Module 1: Provisioning (Upgrade Existing) 🔥
 
-**Branch:** `feature/ocpp201-provisioning`
-**Priority:** Critical
-**Status:** ✅ Complete (5/5)
-**Completed:** 2026-02-17
-**Complexity:** Medium
+**Branch:** `feature/ocpp201-provisioning`  
+**Priority:** Critical  
+**Status:** 📋 Not Started (3/8 fully implemented)  
+**Complexity:** Medium  
 
 ### Messages to Upgrade/Implement
 
-#### Task 1.1: StatusNotification - Add Persistence
-**Status:** ⚠️ Partial → ✅
-**Complexity:** Low
+#### Task 1.1: StatusNotification — Add Persistence
+**Status:** ⚠️ Partial → ✅  
+**Complexity:** Low  
 
 **Current:** Traces connector status but doesn't store it.
 
@@ -66,15 +65,15 @@ feature/ocpp201-security
 
 **Store Requirements:**
 - **Interface:** `UpdateConnectorStatus(ctx, chargeStationId string, evseId int, connectorId int, status string) error`
-- **PostgreSQL:** `manager/store/postgres/` - new query/method
-- **Firestore:** `manager/store/firestore/` - new method
-- **In-Memory:** `manager/store/inmemory/` - new method
+- **PostgreSQL:** `manager/store/postgres/` — new query/method
+- **Firestore:** `manager/store/firestore/` — new method
+- **In-Memory:** `manager/store/inmemory/` — new method
 
 ---
 
-#### Task 1.2: NotifyReport - Add Persistence
-**Status:** ⚠️ Partial → ✅
-**Complexity:** Medium
+#### Task 1.2: NotifyReport — Add Persistence
+**Status:** ⚠️ Partial → ✅  
+**Complexity:** Medium  
 
 - [ ] Add store dependency
 - [ ] Store reported variable/component data
@@ -87,9 +86,9 @@ feature/ocpp201-security
 
 ---
 
-#### Task 1.3: GetBaseReport - Meaningful CallResult Processing
-**Status:** ⚠️ Partial → ✅
-**Complexity:** Low
+#### Task 1.3: GetBaseReport — Meaningful CallResult Processing
+**Status:** ⚠️ Partial → ✅  
+**Complexity:** Low  
 
 - [ ] Track pending report requests
 - [ ] Update `manager/handlers/ocpp201/get_base_report_result.go`
@@ -97,9 +96,9 @@ feature/ocpp201-security
 
 ---
 
-#### Task 1.4: GetVariables - Store Retrieved Values
-**Status:** ⚠️ Partial → ✅
-**Complexity:** Low
+#### Task 1.4: GetVariables — Store Retrieved Values
+**Status:** ⚠️ Partial → ✅  
+**Complexity:** Low  
 
 - [ ] Store retrieved variable values
 - [ ] Update `manager/handlers/ocpp201/get_variables_result.go`
@@ -107,47 +106,42 @@ feature/ocpp201-security
 
 ---
 
-#### Task 1.5: Reset - Track Reset Status
-**Status:** ✅ Complete
-**Complexity:** Low
-**Completed:** 2026-02-17
-**Commit:** 789b256
+#### Task 1.5: Reset — Track Reset Status
+**Status:** ⚠️ Partial → ✅  
+**Complexity:** Low  
 
-- [x] Log reset acceptance/rejection meaningfully
-- [x] Update `manager/handlers/ocpp201/reset_result.go`
+- [ ] Log reset acceptance/rejection meaningfully
+- [ ] Update `manager/handlers/ocpp201/reset_result.go`
 
 ---
 
 ### Module 1 Completion Checklist
-- [x] All Provisioning handlers store meaningful data
-- [x] Unit tests updated
-- [x] Create MR: `feature/ocpp201-provisioning` → `main`
-- [ ] Merge to main *(pending maintainer merge; automation remote currently exposes feature branches only)*
+- [ ] All Provisioning handlers store meaningful data
+- [ ] Unit tests updated
+- [ ] Create PR: `feature/ocpp201-provisioning` → `main`
+- [ ] Merge to main
 
 ---
 
 ## Module 2: MeterValues (Critical Gap) 🔥
 
-**Branch:** `feature/ocpp201-meter-values`
-**Priority:** Critical
-**Status:** ✅ Complete (1/1)
-**Completed:** 2026-02-17
-**Complexity:** Medium
+**Branch:** `feature/ocpp201-meter-values`  
+**Priority:** Critical  
+**Status:** 📋 Not Started  
+**Complexity:** Medium  
 
-### Task 2.1: MeterValues - Add Storage
-**Status:** ✅ Complete
-**Completed:** 2026-02-17
-**Commit:** 1bda038
-**Complexity:** Medium
+### Task 2.1: MeterValues — Add Storage
+**Status:** ⚠️ Partial → ✅  
+**Complexity:** Medium  
 
-**Current:** MeterValues payloads are persisted and linked to active transactions.
+**Current:** Only traces EVSE ID. Meter data is discarded.
 
-- [x] Add `store.Engine` dependency
-- [x] Parse and store `MeterValue` data (sampled values, measurands, phases, units)
-- [x] Associate meter values with active transactions
-- [x] Update `manager/handlers/ocpp201/meter_values.go`
-- [x] Update `manager/handlers/ocpp201/meter_values_test.go`
-- [x] Update routing in `routing.go`
+- [ ] Add `store.Engine` dependency
+- [ ] Parse and store `MeterValue` data (sampled values, measurands, phases, units)
+- [ ] Associate meter values with active transactions
+- [ ] Update `manager/handlers/ocpp201/meter_values.go`
+- [ ] Update `manager/handlers/ocpp201/meter_values_test.go`
+- [ ] Update routing in `routing.go`
 
 **Store Requirements:**
 - **Interface:** `StoreMeterValues(ctx, chargeStationId string, evseId int, meterValues []MeterValueType) error`
@@ -158,69 +152,66 @@ feature/ocpp201-security
 ---
 
 ### Module 2 Completion Checklist
-- [x] MeterValues stored with full fidelity
-- [x] Unit tests
-- [x] Create MR: `feature/ocpp201-meter-values` → `main`
-- [ ] Merge to `main` *(pending maintainer merge; automation remote currently exposes feature branches only)*
+- [ ] MeterValues stored with full fidelity
+- [ ] Unit tests
+- [ ] Create PR → Merge
 
 ---
 
 ## Module 3: Remote Control 🔥
 
-**Branch:** `feature/ocpp201-remote-control`
-**Priority:** Critical
-**Status:** ✅ Complete (3/3 fully implemented)
-**Completed:** 2026-02-17
-**Complexity:** Low
+**Branch:** `feature/ocpp201-remote-control`  
+**Priority:** Critical  
+**Status:** 📋 Not Started (0/3 fully implemented)  
+**Complexity:** Low  
 
 All three handlers exist as CallResult-only. The CallMaker can already initiate these. Just need meaningful result processing.
 
-### Task 3.1: RequestStartTransaction - Track Result
-**Status:** ✅ Complete
-**Complexity:** Low
+### Task 3.1: RequestStartTransaction — Track Result
+**Status:** ⚠️ Partial → ✅  
+**Complexity:** Low  
 
-- [x] Store remote start result (transaction ID mapping)
-- [x] Update `manager/handlers/ocpp201/request_start_transaction_result.go`
-- [x] Update tests (`request_start_transaction_result_test.go`)
-
----
-
-### Task 3.2: RequestStopTransaction - Track Result
-**Status:** ✅ Complete
-**Complexity:** Low
-
-- [x] Store remote stop result
-- [x] Update `manager/handlers/ocpp201/request_stop_transaction_result.go`
-- [x] Update tests (`request_stop_transaction_result_test.go`)
+- [ ] Store remote start result (transaction ID mapping)
+- [ ] Update `manager/handlers/ocpp201/request_start_transaction_result.go`
+- [ ] Update test
 
 ---
 
-### Task 3.3: UnlockConnector - Track Result
-**Status:** ✅ Complete
-**Complexity:** Low
+### Task 3.2: RequestStopTransaction — Track Result
+**Status:** ⚠️ Partial → ✅  
+**Complexity:** Low  
 
-- [x] Persist unlock connector results from CallResult handling
-- [x] Update `manager/handlers/ocpp201/unlock_connector_result.go`
-- [x] Update tests (`unlock_connector_result_test.go`)
+- [ ] Store remote stop result
+- [ ] Update `manager/handlers/ocpp201/request_stop_transaction_result.go`
+- [ ] Update test
+
+---
+
+### Task 3.3: UnlockConnector — Track Result
+**Status:** ⚠️ Partial → ✅  
+**Complexity:** Low  
+
+- [ ] Already functional as trace-only; optionally persist
+- [ ] Update `manager/handlers/ocpp201/unlock_connector_result.go`
 
 ---
 
 ### Module 3 Completion Checklist
-- [x] All 3 Remote Control handlers upgraded
+- [ ] All 3 Remote Control handlers upgraded
 - [ ] Create PR → Merge
 
 ---
 
 ## Module 4: Transaction Completion
 
-**Branch:** `feature/ocpp201-transaction`
-**Priority:** High
-**Status:** 📋 Not Started
-**Complexity:** Medium
+**Branch:** `feature/ocpp201-transaction`  
+**Priority:** High  
+**Status:** 📋 Not Started  
+**Complexity:** Medium  
 
 ### Task 4.1: CostUpdated Handler (New)
-**Status:** ❌ Missing
-**Complexity:** Medium
+**Status:** ❌ Missing  
+**Complexity:** Medium  
 
 - [ ] Create `manager/handlers/ocpp201/cost_updated_result.go`
 - [ ] Create OCPP types: `manager/ocpp/ocpp201/cost_updated_request.go`, `cost_updated_response.go`
@@ -240,14 +231,14 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 ## Module 5: Smart Charging
 
-**Branch:** `feature/ocpp201-smart-charging`
-**Priority:** High
-**Status:** 📋 Not Started (0/9)
-**Complexity:** High
+**Branch:** `feature/ocpp201-smart-charging`  
+**Priority:** High  
+**Status:** 📋 Not Started (0/9)  
+**Complexity:** High  
 
 ### Task 5.0: ChargingProfileStore
-**Status:** Not Started
-**Complexity:** High
+**Status:** Not Started  
+**Complexity:** High  
 
 - [ ] Define `ChargingProfileStore` interface in `manager/store/`
 - [ ] Implement for PostgreSQL, Firestore, In-Memory
@@ -256,7 +247,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Task 5.1: SetChargingProfile (CSMS→CS)
-**Complexity:** High
+**Complexity:** High  
 - [ ] Create `manager/handlers/ocpp201/set_charging_profile_result.go`
 - [ ] Add types if missing
 - [ ] Add to routing + CallMaker
@@ -265,7 +256,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Task 5.2: GetChargingProfiles (CSMS→CS)
-**Complexity:** Medium
+**Complexity:** Medium  
 - [ ] Create handler
 - [ ] Add to routing + CallMaker
 - [ ] Write tests
@@ -273,7 +264,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Task 5.3: GetCompositeSchedule (CSMS→CS)
-**Complexity:** High
+**Complexity:** High  
 - [ ] Create handler
 - [ ] Implement composite schedule calculation
 - [ ] Write tests
@@ -281,14 +272,14 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Task 5.4: ClearChargingProfile (CSMS→CS)
-**Complexity:** Low
+**Complexity:** Low  
 - [ ] Create handler
 - [ ] Write tests
 
 ---
 
 ### Task 5.5: ClearedChargingLimit (CS→CSMS)
-**Complexity:** Low
+**Complexity:** Low  
 - [ ] Create `manager/handlers/ocpp201/cleared_charging_limit.go`
 - [ ] Add Call route in routing
 - [ ] Write tests
@@ -296,28 +287,28 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Task 5.6: NotifyChargingLimit (CS→CSMS)
-**Complexity:** Low
+**Complexity:** Low  
 - [ ] Create handler + Call route
 - [ ] Write tests
 
 ---
 
 ### Task 5.7: NotifyEVChargingNeeds (CS→CSMS)
-**Complexity:** Medium
+**Complexity:** Medium  
 - [ ] Create handler + Call route
 - [ ] Write tests
 
 ---
 
 ### Task 5.8: NotifyEVChargingSchedule (CS→CSMS)
-**Complexity:** Low
+**Complexity:** Low  
 - [ ] Create handler + Call route
 - [ ] Write tests
 
 ---
 
 ### Task 5.9: ReportChargingProfiles (CS→CSMS)
-**Complexity:** Medium
+**Complexity:** Medium  
 - [ ] Create handler + Call route
 - [ ] Store reported profiles
 - [ ] Write tests
@@ -333,22 +324,22 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 ## Module 6: Availability
 
-**Branch:** `feature/ocpp201-availability`
-**Priority:** Medium
-**Status:** 📋 Not Started (1/3)
-**Complexity:** Low-Medium
+**Branch:** `feature/ocpp201-availability`  
+**Priority:** Medium  
+**Status:** 📋 Not Started (1/3)  
+**Complexity:** Low-Medium  
 
-### Task 6.1: ChangeAvailability - Upgrade
-**Status:** ⚠️ Partial → ✅
-**Complexity:** Low
+### Task 6.1: ChangeAvailability — Upgrade
+**Status:** ⚠️ Partial → ✅  
+**Complexity:** Low  
 - [ ] Optionally persist availability state
 - [ ] Update `change_availability_result.go`
 
 ---
 
 ### Task 6.2: CustomerInformation (CSMS→CS, New)
-**Status:** ❌ Missing
-**Complexity:** Medium
+**Status:** ❌ Missing  
+**Complexity:** Medium  
 - [ ] Create types + handler + routing
 - [ ] Write tests
 
@@ -362,41 +353,45 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 ## Module 7: Firmware Management
 
-**Branch:** `feature/ocpp201-firmware-management`
-**Priority:** Medium
-**Status:** 📋 Not Started (0/4)
-**Complexity:** High
+**Branch:** `feature/ocpp201-firmware-management`  
+**Priority:** Medium  
+**Status:** 📋 Not Started (0/4)  
+**Complexity:** High  
 
-### Task 7.1: FirmwareStatusNotification - Add Persistence
-**Complexity:** Low
-- [ ] Store firmware update status
-- [ ] Update existing handler
+### Task 7.1: FirmwareStatusNotification — Add Persistence
+**Status:** ✅ Complete  
+**Complexity:** Low  
+**Completed:** 2026-02-15  
+- [x] Store firmware update status via store.FirmwareStore
+- [x] Update handler to struct with Store dependency
+- [x] Update routing.go to inject engine
+- [x] 5 unit tests: basic, request_id, installed state, status progression, multiple stations
 
 ---
 
 ### Task 7.2: UpdateFirmware (CSMS→CS, New)
-**Complexity:** Medium
+**Complexity:** Medium  
 - [ ] Create handler + types + routing + CallMaker
 - [ ] Write tests
 
 ---
 
 ### Task 7.3: PublishFirmware (CSMS→CS, New)
-**Complexity:** Medium
+**Complexity:** Medium  
 - [ ] Create handler + types + routing
 - [ ] Write tests
 
 ---
 
 ### Task 7.4: PublishFirmwareStatusNotification (CS→CSMS, New)
-**Complexity:** Low
+**Complexity:** Low  
 - [ ] Create handler + Call route
 - [ ] Write tests
 
 ---
 
 ### Task 7.5: UnpublishFirmware (CSMS→CS, New)
-**Complexity:** Low
+**Complexity:** Low  
 - [ ] Create handler + routing
 - [ ] Write tests
 
@@ -416,69 +411,69 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 ## Module 8: Diagnostics & Monitoring
 
-**Branch:** `feature/ocpp201-diagnostics`
-**Priority:** Medium
-**Status:** 📋 Not Started (0/8)
-**Complexity:** High
+**Branch:** `feature/ocpp201-diagnostics`  
+**Priority:** Medium  
+**Status:** 📋 Not Started (0/8)  
+**Complexity:** High  
 
-### Task 8.1: LogStatusNotification - Add Persistence
-**Complexity:** Low
+### Task 8.1: LogStatusNotification — Add Persistence
+**Complexity:** Low  
 - [ ] Store log upload status
 
 ---
 
 ### Task 8.2: GetLog (CSMS→CS, New)
-**Complexity:** Medium
+**Complexity:** Medium  
 - [ ] Create handler + types + routing + CallMaker
 
 ---
 
 ### Task 8.3: GetMonitoringReport (CSMS→CS, New)
-**Complexity:** Medium
+**Complexity:** Medium  
 - [ ] Create handler + types + routing + CallMaker
 
 ---
 
 ### Task 8.4: SetMonitoringBase (CSMS→CS, New)
-**Complexity:** Low
+**Complexity:** Low  
 - [ ] Create handler + routing + CallMaker
 
 ---
 
 ### Task 8.5: SetMonitoringLevel (CSMS→CS, New)
-**Complexity:** Low
+**Complexity:** Low  
 - [ ] Create handler + routing + CallMaker
 
 ---
 
 ### Task 8.6: SetVariableMonitoring (CSMS→CS, New)
-**Complexity:** Medium
+**Complexity:** Medium  
 - [ ] Create handler + routing + CallMaker
 
 ---
 
 ### Task 8.7: ClearVariableMonitoring (CSMS→CS, New)
-**Complexity:** Low
+**Complexity:** Low  
 - [ ] Create handler + routing + CallMaker
 
 ---
 
 ### Task 8.8: NotifyMonitoringReport (CS→CSMS, New)
-**Complexity:** Medium
+**Complexity:** Medium  
 - [ ] Create handler + Call route
 - [ ] Store monitoring report data
 
 ---
 
 ### Task 8.9: NotifyEvent (CS→CSMS, New)
-**Complexity:** Medium
+**Complexity:** Medium  
 - [ ] Create handler + Call route
 - [ ] Store event data
 
 ---
 
 ### Task 8.10: NotifyCustomerInformation (CS→CSMS, New)
-**Complexity:** Low
+**Complexity:** Low  
 - [ ] Create handler + Call route
 
 ---
@@ -497,31 +492,31 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 ## Module 9: Display Message
 
-**Branch:** `feature/ocpp201-display-message`
-**Priority:** Low
-**Status:** 📋 Not Started (0/3)
-**Complexity:** Medium
+**Branch:** `feature/ocpp201-display-message`  
+**Priority:** Low  
+**Status:** 📋 Not Started (0/3)  
+**Complexity:** Medium  
 
 ### Task 9.1: SetDisplayMessage (CSMS→CS, New)
-**Complexity:** Medium
+**Complexity:** Medium  
 - [ ] Create types + handler + routing + CallMaker
 
 ---
 
 ### Task 9.2: GetDisplayMessages (CSMS→CS, New)
-**Complexity:** Medium
+**Complexity:** Medium  
 - [ ] Create handler + routing + CallMaker
 
 ---
 
 ### Task 9.3: ClearDisplayMessage (CSMS→CS, New)
-**Complexity:** Low
+**Complexity:** Low  
 - [ ] Create handler + routing + CallMaker
 
 ---
 
 ### Task 9.4: NotifyDisplayMessages (CS→CSMS, New)
-**Complexity:** Low
+**Complexity:** Low  
 - [ ] Create handler + Call route
 
 ---
@@ -540,27 +535,27 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 ## Module 10: Local Auth List
 
-**Branch:** `feature/ocpp201-local-auth-list`
-**Priority:** Low
-**Status:** 📋 Not Started (0/2 fully implemented)
-**Complexity:** Medium
+**Branch:** `feature/ocpp201-local-auth-list`  
+**Priority:** Low  
+**Status:** 📋 Not Started (0/2 fully implemented)  
+**Complexity:** Medium  
 
-### Task 10.1: GetLocalListVersion - Upgrade
-**Complexity:** Low
+### Task 10.1: GetLocalListVersion — Upgrade
+**Complexity:** Low  
 - [ ] Store/track list version per charge station
 - [ ] Update `get_local_list_version_result.go`
 
 ---
 
-### Task 10.2: SendLocalList - Upgrade
-**Complexity:** Medium
+### Task 10.2: SendLocalList — Upgrade
+**Complexity:** Medium  
 - [ ] Track list sync status
 - [ ] Update `send_local_list_result.go`
 
 ---
 
 **Store Requirements:**
-- **Interface:** `LocalAuthListStore` - version tracking per charge station
+- **Interface:** `LocalAuthListStore` — version tracking per charge station
 - **PostgreSQL/Firestore/In-Memory:** New methods
 
 ---
@@ -573,13 +568,13 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 ## Module 11: DataTransfer
 
-**Branch:** `feature/ocpp201-data-transfer`
-**Priority:** Low
-**Status:** 📋 Not Started (0/1)
-**Complexity:** Medium
+**Branch:** `feature/ocpp201-data-transfer`  
+**Priority:** Low  
+**Status:** 📋 Not Started (0/1)  
+**Complexity:** Medium  
 
 ### Task 11.1: DataTransfer Handler (New)
-**Complexity:** Medium
+**Complexity:** Medium  
 
 - [ ] Create `manager/handlers/ocpp201/data_transfer.go`
 - [ ] Support bidirectional DataTransfer
@@ -597,81 +592,66 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 ## Module 12: Reservation
 
-**Branch:** `feature/ocpp201-reservation`
-**Priority:** Low
-**Status:** ✅ Complete (3/3)
-**Complexity:** Medium
+**Branch:** `feature/ocpp201-reservation`  
+**Priority:** Low  
+**Status:** 📋 Not Started (0/2)  
+**Complexity:** Medium  
 
 ### Task 12.1: ReserveNow (CSMS→CS, New)
-**Status:** ✅ Complete
-**Completed:** 2026-02-17
-**Complexity:** Medium
-- [x] Create types + handler + routing + CallMaker
-- [x] Track reservation state
+**Complexity:** Medium  
+- [ ] Create types + handler + routing + CallMaker
+- [ ] Track reservation state
 
 ---
 
 ### Task 12.2: CancelReservation (CSMS→CS, New)
-**Status:** ✅ Complete
-**Completed:** 2026-02-17
-**Complexity:** Low
-- [x] Create handler + routing + CallMaker
+**Complexity:** Low  
+- [ ] Create handler + routing + CallMaker
 
 ---
 
 ### Task 12.3: ReservationStatusUpdate (CS→CSMS, New)
-**Status:** ✅ Complete
-**Completed:** 2026-02-17
-**Complexity:** Low
-- [x] Create handler + Call route
+**Complexity:** Low  
+- [ ] Create handler + Call route
 
 ---
 
 **Store Requirements:**
-- **Interface:** `ReservationStore` - reservation state management with expiry
+- **Interface:** `ReservationStore` — reservation state management with expiry
 - **PostgreSQL/Firestore/In-Memory:** New methods
 
 ---
 
 ### Module 12 Completion Checklist
-- [x] All Reservation handlers
-- [x] Create MR: `feature/ocpp201-reservation` → `main`
-- [x] Merge to `main` *(merged 2026-02-17)*
+- [ ] All Reservation handlers
+- [ ] Create PR → Merge
 
 ---
 
 ## Module 13: Security (Upgrade Existing)
 
-**Branch:** `feature/ocpp201-security`
-**Priority:** Medium
-**Status:** ✅ Complete (2/2 tasks upgraded)
-**Complexity:** Low
+**Branch:** `feature/ocpp201-security`  
+**Priority:** Medium  
+**Status:** 📋 Not Started (2/3 fully implemented)  
+**Complexity:** Low  
 
-### Task 13.1: DeleteCertificate - Upgrade
-**Status:** ✅ Complete
-**Completed:** 2026-02-16
-**Complexity:** Low
-- [x] Add store interaction to remove certificate record
-- [x] Update `delete_certificate_result.go`
-- [x] Update routing to inject store dependency
-- [x] Expand unit tests for accepted/non-accepted/error scenarios
+### Task 13.1: DeleteCertificate — Upgrade
+**Complexity:** Low  
+- [ ] Add store interaction to remove certificate record
+- [ ] Update `delete_certificate_result.go`
 
 ---
 
 ### Task 13.2: GetInstalledCertificateIds — Upgrade
 **Complexity:** Low  
-**Status:** ✅ Complete  
-**Completed:** 2026-02-16
-- [x] Store returned certificate list
-- [x] Update `get_installed_certificate_ids_result.go`
-- [x] Add/expand tests in `get_installed_certificate_ids_result_test.go`
+- [ ] Store returned certificate list
+- [ ] Update `get_installed_certificate_ids_result.go`
 
 ---
 
 ### Module 13 Completion Checklist
-- [x] All Security handlers with store logic
-- [x] Create MR: `feature/ocpp201-security` → `main` (MR !3)
-- [x] Merge to `main` *(merged 2026-02-17)*
+- [ ] All Security handlers with store logic
+- [ ] Create PR → Merge
 
 ---
 
@@ -679,19 +659,19 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 | Module | Branch | Priority | Messages | Status |
 |--------|--------|----------|----------|--------|
-| Provisioning | `feature/ocpp201-provisioning` | Critical | 5 to upgrade | ✅ (5/5) |
-| MeterValues | `feature/ocpp201-meter-values` | Critical | 1 to upgrade | ✅ (1/1) |
-| Remote Control | `feature/ocpp201-remote-control` | Critical | 3 to upgrade | ✅ (3/3) |
-| Transaction | `feature/ocpp201-transaction` | High | 1 new | ✅ (1/1) |
-| Smart Charging | `feature/ocpp201-smart-charging` | High | 9 new | ✅ (9/9) |
-| Availability | `feature/ocpp201-availability` | Medium | 2 to handle | ✅ (2/2) |
-| Firmware Management | `feature/ocpp201-firmware-management` | Medium | 5 new | ✅ (5/5) |
-| Diagnostics | `feature/ocpp201-diagnostics` | Medium | 10 new | ✅ (10/10) |
-| Display Message | `feature/ocpp201-display-message` | Low | 4 new | ✅ (4/4) |
-| Local Auth List | `feature/ocpp201-local-auth-list` | Low | 2 to upgrade | ✅ (2/2) |
-| DataTransfer | `feature/ocpp201-data-transfer` | Low | 1 new | ✅ (1/1) |
-| Reservation | `feature/ocpp201-reservation` | Low | 3 new | ✅ (3/3) |
-| Security | `feature/ocpp201-security` | Medium | 2 to upgrade | ✅ (2/2) |
+| Provisioning | `feature/ocpp201-provisioning` | Critical | 5 to upgrade | 📋 |
+| MeterValues | `feature/ocpp201-meter-values` | Critical | 1 to upgrade | 📋 |
+| Remote Control | `feature/ocpp201-remote-control` | Critical | 3 to upgrade | 📋 |
+| Transaction | `feature/ocpp201-transaction` | High | 1 new | 📋 |
+| Smart Charging | `feature/ocpp201-smart-charging` | High | 9 new | 📋 |
+| Availability | `feature/ocpp201-availability` | Medium | 2 to handle | 📋 |
+| Firmware Management | `feature/ocpp201-firmware-management` | Medium | 5 new | 📋 |
+| Diagnostics | `feature/ocpp201-diagnostics` | Medium | 10 new | 📋 |
+| Display Message | `feature/ocpp201-display-message` | Low | 4 new | 📋 |
+| Local Auth List | `feature/ocpp201-local-auth-list` | Low | 2 to upgrade | 📋 |
+| DataTransfer | `feature/ocpp201-data-transfer` | Low | 1 new | 📋 |
+| Reservation | `feature/ocpp201-reservation` | Low | 3 new | 📋 |
+| Security | `feature/ocpp201-security` | Medium | 2 to upgrade | 📋 |
 
 ---
 
@@ -719,5 +699,5 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 ---
 
-**Created by:** Patricio (AI Assistant)
-**Last Updated:** 2026-02-17
+**Created by:** Patricio (AI Assistant)  
+**Last Updated:** 2026-02-12
