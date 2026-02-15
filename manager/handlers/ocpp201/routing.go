@@ -58,7 +58,7 @@ func NewRouter(emitter transport.Emitter,
 				NewRequest:     func() ocpp.Request { return new(ocpp201.FirmwareStatusNotificationRequestJson) },
 				RequestSchema:  "ocpp201/FirmwareStatusNotificationRequest.json",
 				ResponseSchema: "ocpp201/FirmwareStatusNotificationResponse.json",
-				Handler:        FirmwareStatusNotificationHandler{},
+				Handler:        FirmwareStatusNotificationHandler{Store: engine},
 			},
 			"GetCertificateStatus": {
 				NewRequest:     func() ocpp.Request { return new(ocpp201.GetCertificateStatusRequestJson) },
