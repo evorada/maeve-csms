@@ -72,6 +72,12 @@ func NewRouter(emitter transport.Emitter,
 				ResponseSchema: "ocpp201/NotifyEVChargingNeedsResponse.json",
 				Handler:        NotifyEVChargingNeedsHandler{},
 			},
+			"NotifyEVChargingSchedule": {
+				NewRequest:     func() ocpp.Request { return new(ocpp201.NotifyEVChargingScheduleRequestJson) },
+				RequestSchema:  "ocpp201/NotifyEVChargingScheduleRequest.json",
+				ResponseSchema: "ocpp201/NotifyEVChargingScheduleResponse.json",
+				Handler:        NotifyEVChargingScheduleHandler{},
+			},
 			"FirmwareStatusNotification": {
 				NewRequest:     func() ocpp.Request { return new(ocpp201.FirmwareStatusNotificationRequestJson) },
 				RequestSchema:  "ocpp201/FirmwareStatusNotificationRequest.json",
