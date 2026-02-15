@@ -94,7 +94,7 @@ func NewRouter(emitter transport.Emitter,
 				NewRequest:     func() ocpp.Request { return new(ocpp201.LogStatusNotificationRequestJson) },
 				RequestSchema:  "ocpp201/LogStatusNotificationRequest.json",
 				ResponseSchema: "ocpp201/LogStatusNotificationResponse.json",
-				Handler:        LogStatusNotificationHandler{},
+				Handler:        LogStatusNotificationHandler{Store: engine},
 			},
 			"MeterValues": {
 				NewRequest:     func() ocpp.Request { return new(ocpp201.MeterValuesRequestJson) },
