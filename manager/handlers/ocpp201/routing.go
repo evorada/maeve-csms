@@ -333,6 +333,15 @@ func NewRouter(emitter transport.Emitter,
 					Store: engine,
 				},
 			},
+			"UnpublishFirmware": {
+				NewRequest:     func() ocpp.Request { return new(ocpp201.UnpublishFirmwareRequestJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp201.UnpublishFirmwareResponseJson) },
+				RequestSchema:  "ocpp201/UnpublishFirmwareRequest.json",
+				ResponseSchema: "ocpp201/UnpublishFirmwareResponse.json",
+				Handler: UnpublishFirmwareResultHandler{
+					Store: engine,
+				},
+			},
 		},
 	}
 }
@@ -364,7 +373,8 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 			reflect.TypeOf(&ocpp201.TriggerMessageRequestJson{}):             "TriggerMessage",
 			reflect.TypeOf(&ocpp201.UnlockConnectorRequestJson{}):            "UnlockConnector",
 			reflect.TypeOf(&ocpp201.PublishFirmwareRequestJson{}):            "PublishFirmware",
-		reflect.TypeOf(&ocpp201.UpdateFirmwareRequestJson{}):             "UpdateFirmware",
+			reflect.TypeOf(&ocpp201.UpdateFirmwareRequestJson{}):             "UpdateFirmware",
+			reflect.TypeOf(&ocpp201.UnpublishFirmwareRequestJson{}):          "UnpublishFirmware",
 		},
 	}
 }
