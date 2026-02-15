@@ -59,13 +59,19 @@ type DiagnosticsStatus struct {
 type PublishFirmwareStatusType string
 
 var (
-	PublishFirmwareStatusIdle        PublishFirmwareStatusType = "Idle"
-	PublishFirmwareStatusAccepted    PublishFirmwareStatusType = "Accepted"
-	PublishFirmwareStatusRejected    PublishFirmwareStatusType = "Rejected"
-	PublishFirmwareStatusDownloading PublishFirmwareStatusType = "Downloading"
-	PublishFirmwareStatusDownloaded  PublishFirmwareStatusType = "Downloaded"
-	PublishFirmwareStatusPublished   PublishFirmwareStatusType = "Published"
-	PublishFirmwareStatusFailed      PublishFirmwareStatusType = "Failed"
+	PublishFirmwareStatusIdle              PublishFirmwareStatusType = "Idle"
+	PublishFirmwareStatusAccepted          PublishFirmwareStatusType = "Accepted"
+	PublishFirmwareStatusRejected          PublishFirmwareStatusType = "Rejected"
+	PublishFirmwareStatusDownloadScheduled PublishFirmwareStatusType = "DownloadScheduled"
+	PublishFirmwareStatusDownloading       PublishFirmwareStatusType = "Downloading"
+	PublishFirmwareStatusDownloaded        PublishFirmwareStatusType = "Downloaded"
+	PublishFirmwareStatusPublished         PublishFirmwareStatusType = "Published"
+	PublishFirmwareStatusDownloadFailed    PublishFirmwareStatusType = "DownloadFailed"
+	PublishFirmwareStatusDownloadPaused    PublishFirmwareStatusType = "DownloadPaused"
+	PublishFirmwareStatusInvalidChecksum   PublishFirmwareStatusType = "InvalidChecksum"
+	PublishFirmwareStatusChecksumVerified  PublishFirmwareStatusType = "ChecksumVerified"
+	PublishFirmwareStatusPublishFailed     PublishFirmwareStatusType = "PublishFailed"
+	PublishFirmwareStatusFailed            PublishFirmwareStatusType = "Failed"
 )
 
 // PublishFirmwareStatus tracks the publish firmware status for a charge station (Local Controller)
