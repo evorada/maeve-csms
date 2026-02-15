@@ -396,9 +396,16 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Task 7.4: PublishFirmwareStatusNotification (CS→CSMS, New)
+**Status:** ✅ Complete  
 **Complexity:** Low  
-- [ ] Create handler + Call route
-- [ ] Write tests
+**Completed:** 2026-02-15  
+- [x] Create PublishFirmwareStatusNotificationRequestJson with full PublishFirmwareStatusEnumType enum
+- [x] Create PublishFirmwareStatusNotificationResponseJson
+- [x] Expand store.PublishFirmwareStatusType vars to cover all OCPP 2.0.1 states
+- [x] Implement PublishFirmwareStatusNotificationHandler (CS→CSMS Call):
+      persists status, preserves existing location/checksum/requestId metadata
+- [x] Register in routing.go CallRoutes
+- [x] 5 unit tests: Basic, WithRequestId, PublishedWithLocations, PreservesExistingMetadata, MultipleLocalControllers
 
 ---
 
