@@ -182,7 +182,9 @@ func NewRouter(emitter transport.Emitter,
 				NewResponse:    func() ocpp.Response { return new(ocpp201.GetInstalledCertificateIdsResponseJson) },
 				RequestSchema:  "ocpp201/GetInstalledCertificateIdsRequest.json",
 				ResponseSchema: "ocpp201/GetInstalledCertificateIdsResponse.json",
-				Handler:        GetInstalledCertificateIdsResultHandler{},
+				Handler: GetInstalledCertificateIdsResultHandler{
+					Store: engine,
+				},
 			},
 			"GetLocalListVersion": {
 				NewRequest:     func() ocpp.Request { return new(ocpp201.GetLocalListVersionRequestJson) },
