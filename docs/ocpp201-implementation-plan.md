@@ -539,8 +539,13 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Task 9.2: GetDisplayMessages (CSMS→CS, New)
+**Status:** ✅ Complete
 **Complexity:** Medium
-- [ ] Create handler + routing + CallMaker
+**Completed:** 2026-02-16
+- [x] Create `GetDisplayMessagesRequestJson` / `GetDisplayMessagesResponseJson` types
+- [x] Implement `GetDisplayMessagesResultHandler` with trace attributes for request criteria/status
+- [x] Register in `routing.go` CallResultRoutes + CallMaker Actions
+- [x] Add unit tests (`get_display_messages_result_test.go`)
 
 ---
 
