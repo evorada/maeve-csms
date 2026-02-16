@@ -438,7 +438,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 **Branch:** `feature/ocpp201-diagnostics`
 **Priority:** Medium
-**Status:** 🔄 In Progress (3/10)
+**Status:** 🔄 In Progress (4/10)
 **Complexity:** High
 
 ### Task 8.1: LogStatusNotification - Add Persistence
@@ -476,8 +476,13 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Task 8.4: SetMonitoringBase (CSMS→CS, New)
+**Status:** ✅ Complete
 **Complexity:** Low
-- [ ] Create handler + routing + CallMaker
+**Completed:** 2026-02-16
+- [x] Create `SetMonitoringBaseRequestJson` / `SetMonitoringBaseResponseJson` types
+- [x] Implement `SetMonitoringBaseResultHandler`
+- [x] Register in `routing.go` CallResultRoutes + CallMaker Actions
+- [x] Add unit tests (`set_monitoring_base_result_test.go`) + routing coverage updates
 
 ---
 
@@ -707,7 +712,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 | Smart Charging | `feature/ocpp201-smart-charging` | High | 9 new | 📋 |
 | Availability | `feature/ocpp201-availability` | Medium | 2 to handle | 📋 |
 | Firmware Management | `feature/ocpp201-firmware-management` | Medium | 5 new | 📋 |
-| Diagnostics | `feature/ocpp201-diagnostics` | Medium | 10 new | 📋 |
+| Diagnostics | `feature/ocpp201-diagnostics` | Medium | 10 new | 🔄 (4/10) |
 | Display Message | `feature/ocpp201-display-message` | Low | 4 new | 📋 |
 | Local Auth List | `feature/ocpp201-local-auth-list` | Low | 2 to upgrade | 📋 |
 | DataTransfer | `feature/ocpp201-data-transfer` | Low | 1 new | 📋 |

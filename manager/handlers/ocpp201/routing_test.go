@@ -459,6 +459,14 @@ func TestRoutingCallResults(t *testing.T) {
 				Status: types.SetNetworkProfileStatusEnumTypeFailed,
 			},
 		},
+		"SetMonitoringBase": {
+			request: &types.SetMonitoringBaseRequestJson{
+				MonitoringBase: types.MonitoringBaseEnumTypeFactoryDefault,
+			},
+			response: &types.SetMonitoringBaseResponseJson{
+				Status: types.GenericDeviceModelStatusEnumTypeAccepted,
+			},
+		},
 		"SetVariables": {
 			request: &types.SetVariablesRequestJson{
 				SetVariableData: []types.SetVariableDataType{
@@ -631,6 +639,9 @@ func TestCallMaker(t *testing.T) {
 				OcppVersion:     types.OCPPVersionEnumTypeOCPP20,
 				SecurityProfile: 2,
 			},
+		},
+		"SetMonitoringBase": &types.SetMonitoringBaseRequestJson{
+			MonitoringBase: types.MonitoringBaseEnumTypeFactoryDefault,
 		},
 		"SetVariables": &types.SetVariablesRequestJson{
 			SetVariableData: []types.SetVariableDataType{
