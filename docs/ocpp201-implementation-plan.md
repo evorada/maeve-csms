@@ -559,7 +559,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 ### Module 8 Completion Checklist
 - [x] All Diagnostics handlers
-- [ ] Create PR → Merge
+- [x] Create PR → Merge (MR !2 opened 2026-02-16)
 
 ---
 
