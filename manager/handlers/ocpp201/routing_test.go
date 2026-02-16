@@ -275,6 +275,15 @@ func TestRoutingCallResults(t *testing.T) {
 				Status: types.ClearCacheStatusEnumTypeAccepted,
 			},
 		},
+		"ClearVariableMonitoring": {
+			request: &types.ClearVariableMonitoringRequestJson{Id: []int{1001, 1002}},
+			response: &types.ClearVariableMonitoringResponseJson{
+				ClearMonitoringResult: []types.ClearMonitoringResultType{
+					{Id: 1001, Status: types.ClearMonitoringStatusEnumTypeAccepted},
+					{Id: 1002, Status: types.ClearMonitoringStatusEnumTypeNotFound},
+				},
+			},
+		},
 		"DeleteCertificate": {
 			request: &types.DeleteCertificateRequestJson{
 				CertificateHashData: types.CertificateHashDataType{
@@ -561,7 +570,8 @@ func TestCallMaker(t *testing.T) {
 		"CancelReservation": &types.CancelReservationRequestJson{
 			ReservationId: 123,
 		},
-		"ClearCache": &types.ClearCacheRequestJson{},
+		"ClearCache":              &types.ClearCacheRequestJson{},
+		"ClearVariableMonitoring": &types.ClearVariableMonitoringRequestJson{Id: []int{1}},
 		"DeleteCertificate": &types.DeleteCertificateRequestJson{
 			CertificateHashData: types.CertificateHashDataType{
 				HashAlgorithm:  types.HashAlgorithmEnumTypeSHA256,
