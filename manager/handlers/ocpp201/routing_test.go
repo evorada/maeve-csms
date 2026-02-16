@@ -160,6 +160,21 @@ func TestRoutingCalls(t *testing.T) {
 				},
 			},
 		},
+		"NotifyEvent": &types.NotifyEventRequestJson{
+			GeneratedAt: "2026-02-16T18:06:00.000Z",
+			SeqNo:       0,
+			EventData: []types.EventDataType{
+				{
+					EventId:               1,
+					Timestamp:             "2026-02-16T18:05:59.000Z",
+					Trigger:               types.EventTriggerEnumTypeAlerting,
+					ActualValue:           "OverCurrent",
+					EventNotificationType: types.EventNotificationEnumTypeCustomMonitor,
+					Component:             types.ComponentType{Name: "Connector"},
+					Variable:              types.VariableType{Name: "Current"},
+				},
+			},
+		},
 		"SecurityEventNotification": &types.SecurityEventNotificationRequestJson{
 			Timestamp: "2023-06-15T15:05:00+01:00",
 			Type:      "SettingSystemTime",

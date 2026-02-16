@@ -116,6 +116,14 @@ func NewRouter(emitter transport.Emitter,
 					Store: engine,
 				},
 			},
+			"NotifyEvent": {
+				NewRequest:     func() ocpp.Request { return new(ocpp201.NotifyEventRequestJson) },
+				RequestSchema:  "ocpp201/NotifyEventRequest.json",
+				ResponseSchema: "ocpp201/NotifyEventResponse.json",
+				Handler: NotifyEventHandler{
+					Store: engine,
+				},
+			},
 			"StatusNotification": {
 				NewRequest:     func() ocpp.Request { return new(ocpp201.StatusNotificationRequestJson) },
 				RequestSchema:  "ocpp201/StatusNotificationRequest.json",
