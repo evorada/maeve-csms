@@ -438,7 +438,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 **Branch:** `feature/ocpp201-diagnostics`
 **Priority:** Medium
-**Status:** 🔄 In Progress (9/10)
+**Status:** ✅ Complete (10/10)
 **Complexity:** High
 
 ### Task 8.1: LogStatusNotification - Add Persistence
@@ -542,7 +542,12 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 ### Task 8.10: NotifyCustomerInformation (CS→CSMS, New)
 **Complexity:** Low
-- [ ] Create handler + Call route
+**Status:** ✅ Complete
+**Completed:** 2026-02-16
+- [x] Create `NotifyCustomerInformationRequestJson` / `NotifyCustomerInformationResponseJson` types
+- [x] Implement `NotifyCustomerInformationHandler` with persistence of fragments by requestId/seqNo
+- [x] Register in `routing.go` CallRoutes
+- [x] Add unit tests (`notify_customer_information_test.go`) + routing coverage updates
 
 ---
 
@@ -553,7 +558,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Module 8 Completion Checklist
-- [ ] All Diagnostics handlers
+- [x] All Diagnostics handlers
 - [ ] Create PR → Merge
 
 ---
@@ -734,7 +739,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 | Smart Charging | `feature/ocpp201-smart-charging` | High | 9 new | 📋 |
 | Availability | `feature/ocpp201-availability` | Medium | 2 to handle | 📋 |
 | Firmware Management | `feature/ocpp201-firmware-management` | Medium | 5 new | 📋 |
-| Diagnostics | `feature/ocpp201-diagnostics` | Medium | 10 new | 🔄 (9/10) |
+| Diagnostics | `feature/ocpp201-diagnostics` | Medium | 10 new | ✅ (10/10) |
 | Display Message | `feature/ocpp201-display-message` | Low | 4 new | 📋 |
 | Local Auth List | `feature/ocpp201-local-auth-list` | Low | 2 to upgrade | 📋 |
 | DataTransfer | `feature/ocpp201-data-transfer` | Low | 1 new | 📋 |
