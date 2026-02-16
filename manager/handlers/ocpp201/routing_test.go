@@ -330,6 +330,14 @@ func TestRoutingCallResults(t *testing.T) {
 				Status: types.LogStatusEnumTypeAccepted,
 			},
 		},
+		"GetMonitoringReport": {
+			request: &types.GetMonitoringReportRequestJson{
+				RequestId: 19,
+			},
+			response: &types.GetMonitoringReportResponseJson{
+				Status: types.GenericDeviceModelStatusEnumTypeAccepted,
+			},
+		},
 		"GetLocalListVersion": {
 			request: &types.GetLocalListVersionRequestJson{},
 			response: &types.GetLocalListVersionResponseJson{
@@ -561,6 +569,9 @@ func TestCallMaker(t *testing.T) {
 			Log: types.LogParametersType{
 				RemoteLocation: "https://logs.example.com/upload",
 			},
+		},
+		"GetMonitoringReport": &types.GetMonitoringReportRequestJson{
+			RequestId: 42,
 		},
 		"GetLocalListVersion": &types.GetLocalListVersionRequestJson{},
 		"GetReport": &types.GetReportRequestJson{

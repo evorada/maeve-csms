@@ -438,7 +438,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 **Branch:** `feature/ocpp201-diagnostics`
 **Priority:** Medium
-**Status:** 🔄 In Progress (2/10)
+**Status:** 🔄 In Progress (3/10)
 **Complexity:** High
 
 ### Task 8.1: LogStatusNotification - Add Persistence
@@ -465,8 +465,13 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Task 8.3: GetMonitoringReport (CSMS→CS, New)
+**Status:** ✅ Complete
 **Complexity:** Medium
-- [ ] Create handler + types + routing + CallMaker
+**Completed:** 2026-02-16
+- [x] Create `GetMonitoringReportRequestJson` / `GetMonitoringReportResponseJson` types
+- [x] Implement `GetMonitoringReportResultHandler`
+- [x] Register in `routing.go` CallResultRoutes + CallMaker Actions
+- [x] Add unit tests (`get_monitoring_report_result_test.go`) + routing coverage updates
 
 ---
 
