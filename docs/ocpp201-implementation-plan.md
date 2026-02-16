@@ -550,8 +550,13 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Task 9.3: ClearDisplayMessage (CSMS→CS, New)
+**Status:** ✅ Complete
 **Complexity:** Low
-- [ ] Create handler + routing + CallMaker
+**Completed:** 2026-02-16
+- [x] Create `ClearDisplayMessageRequestJson` / `ClearDisplayMessageResponseJson` types (+ enums)
+- [x] Implement `ClearDisplayMessageResultHandler`
+- [x] Register in `routing.go` CallResultRoutes + CallMaker Actions
+- [x] Add unit tests (`clear_display_message_result_test.go`) + routing coverage updates
 
 ---
 

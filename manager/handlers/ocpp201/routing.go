@@ -201,6 +201,13 @@ func NewRouter(emitter transport.Emitter,
 				ResponseSchema: "ocpp201/ChangeAvailabilityResponse.json",
 				Handler:        ChangeAvailabilityResultHandler{},
 			},
+			"ClearDisplayMessage": {
+				NewRequest:     func() ocpp.Request { return new(ocpp201.ClearDisplayMessageRequestJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp201.ClearDisplayMessageResponseJson) },
+				RequestSchema:  "ocpp201/ClearDisplayMessageRequest.json",
+				ResponseSchema: "ocpp201/ClearDisplayMessageResponse.json",
+				Handler:        ClearDisplayMessageResultHandler{},
+			},
 			"ClearCache": {
 				NewRequest:     func() ocpp.Request { return new(ocpp201.ClearCacheRequestJson) },
 				NewResponse:    func() ocpp.Response { return new(ocpp201.ClearCacheResponseJson) },
