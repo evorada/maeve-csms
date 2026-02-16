@@ -628,16 +628,17 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 **Branch:** `feature/ocpp201-security`
 **Priority:** Medium
-**Status:** 📋 Not Started (2/3 fully implemented)
+**Status:** 🚧 In Progress (1/2 tasks upgraded)
 **Complexity:** Low
 
 ### Task 13.1: DeleteCertificate - Upgrade
-**Complexity:** Low
 **Status:** ✅ Complete
 **Completed:** 2026-02-16
+**Complexity:** Low
 - [x] Add store interaction to remove certificate record
 - [x] Update `delete_certificate_result.go`
-- [x] Add tests for accepted/rejected behavior in `delete_certificate_result_test.go`
+- [x] Update routing to inject store dependency
+- [x] Expand unit tests for accepted/non-accepted/error scenarios
 
 ---
 
