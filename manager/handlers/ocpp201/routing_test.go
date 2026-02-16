@@ -501,6 +501,21 @@ func TestRoutingCallResults(t *testing.T) {
 				Status: types.SendLocalListStatusEnumTypeAccepted,
 			},
 		},
+		"SetDisplayMessage": {
+			request: &types.SetDisplayMessageRequestJson{
+				Message: types.MessageInfoType{
+					Id:       11,
+					Priority: types.MessagePriorityEnumTypeAlwaysFront,
+					Message: types.MessageContentType{
+						Format:  types.MessageFormatEnumTypeUTF8,
+						Content: "Ready to charge",
+					},
+				},
+			},
+			response: &types.SetDisplayMessageResponseJson{
+				Status: types.DisplayMessageStatusEnumTypeAccepted,
+			},
+		},
 		"SetNetworkProfile": {
 			request: &types.SetNetworkProfileRequestJson{
 				ConfigurationSlot: 1,
@@ -714,6 +729,16 @@ func TestCallMaker(t *testing.T) {
 			},
 			UpdateType:    types.UpdateEnumTypeDifferential,
 			VersionNumber: 12,
+		},
+		"SetDisplayMessage": &types.SetDisplayMessageRequestJson{
+			Message: types.MessageInfoType{
+				Id:       12,
+				Priority: types.MessagePriorityEnumTypeNormalCycle,
+				Message: types.MessageContentType{
+					Format:  types.MessageFormatEnumTypeUTF8,
+					Content: "Welcome",
+				},
+			},
 		},
 		"SetNetworkProfile": &types.SetNetworkProfileRequestJson{
 			ConfigurationSlot: 1,
