@@ -233,6 +233,15 @@ func NewRouter(emitter transport.Emitter,
 				ResponseSchema: "ocpp201/RequestStopTransactionResponse.json",
 				Handler:        RequestStopTransactionResultHandler{},
 			},
+			"ReserveNow": {
+				NewRequest:     func() ocpp.Request { return new(ocpp201.ReserveNowRequestJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp201.ReserveNowResponseJson) },
+				RequestSchema:  "ocpp201/ReserveNowRequest.json",
+				ResponseSchema: "ocpp201/ReserveNowResponse.json",
+				Handler: ReserveNowResultHandler{
+					ReservationStore: engine,
+				},
+			},
 			"Reset": {
 				NewRequest:     func() ocpp.Request { return new(ocpp201.ResetRequestJson) },
 				NewResponse:    func() ocpp.Response { return new(ocpp201.ResetResponseJson) },
@@ -301,6 +310,7 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 			reflect.TypeOf(&ocpp201.InstallCertificateRequestJson{}):         "InstallCertificate",
 			reflect.TypeOf(&ocpp201.RequestStartTransactionRequestJson{}):    "RequestStartTransaction",
 			reflect.TypeOf(&ocpp201.RequestStopTransactionRequestJson{}):     "RequestStopTransaction",
+			reflect.TypeOf(&ocpp201.ReserveNowRequestJson{}):                 "ReserveNow",
 			reflect.TypeOf(&ocpp201.ResetRequestJson{}):                      "Reset",
 			reflect.TypeOf(&ocpp201.SendLocalListRequestJson{}):              "SendLocalList",
 			reflect.TypeOf(&ocpp201.SetNetworkProfileRequestJson{}):          "SetNetworkProfile",
