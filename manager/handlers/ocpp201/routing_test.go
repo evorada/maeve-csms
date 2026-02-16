@@ -318,6 +318,18 @@ func TestRoutingCallResults(t *testing.T) {
 				},
 			},
 		},
+		"GetLog": {
+			request: &types.GetLogRequestJson{
+				RequestId: 42,
+				LogType:   types.LogEnumTypeDiagnosticsLog,
+				Log: types.LogParametersType{
+					RemoteLocation: "https://logs.example.com/upload",
+				},
+			},
+			response: &types.GetLogResponseJson{
+				Status: types.LogStatusEnumTypeAccepted,
+			},
+		},
 		"GetLocalListVersion": {
 			request: &types.GetLocalListVersionRequestJson{},
 			response: &types.GetLocalListVersionResponseJson{
@@ -541,6 +553,13 @@ func TestCallMaker(t *testing.T) {
 		"GetInstalledCertificateIds": &types.GetInstalledCertificateIdsRequestJson{
 			CertificateType: []types.GetCertificateIdUseEnumType{
 				types.GetCertificateIdUseEnumTypeCSMSRootCertificate,
+			},
+		},
+		"GetLog": &types.GetLogRequestJson{
+			RequestId: 42,
+			LogType:   types.LogEnumTypeDiagnosticsLog,
+			Log: types.LogParametersType{
+				RemoteLocation: "https://logs.example.com/upload",
 			},
 		},
 		"GetLocalListVersion": &types.GetLocalListVersionRequestJson{},

@@ -209,6 +209,15 @@ func NewRouter(emitter transport.Emitter,
 					Store: engine,
 				},
 			},
+			"GetLog": {
+				NewRequest:     func() ocpp.Request { return new(ocpp201.GetLogRequestJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp201.GetLogResponseJson) },
+				RequestSchema:  "ocpp201/GetLogRequest.json",
+				ResponseSchema: "ocpp201/GetLogResponse.json",
+				Handler: GetLogResultHandler{
+					Store: engine,
+				},
+			},
 			"GetLocalListVersion": {
 				NewRequest:     func() ocpp.Request { return new(ocpp201.GetLocalListVersionRequestJson) },
 				NewResponse:    func() ocpp.Response { return new(ocpp201.GetLocalListVersionResponseJson) },
@@ -358,6 +367,7 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 			reflect.TypeOf(&ocpp201.DeleteCertificateRequestJson{}):          "DeleteCertificate",
 			reflect.TypeOf(&ocpp201.GetBaseReportRequestJson{}):              "GetBaseReport",
 			reflect.TypeOf(&ocpp201.GetInstalledCertificateIdsRequestJson{}): "GetInstalledCertificateIds",
+			reflect.TypeOf(&ocpp201.GetLogRequestJson{}):                     "GetLog",
 			reflect.TypeOf(&ocpp201.GetLocalListVersionRequestJson{}):        "GetLocalListVersion",
 			reflect.TypeOf(&ocpp201.GetReportRequestJson{}):                  "GetReport",
 			reflect.TypeOf(&ocpp201.GetTransactionStatusRequestJson{}):       "GetTransactionStatus",
