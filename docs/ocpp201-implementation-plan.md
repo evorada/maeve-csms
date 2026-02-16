@@ -52,16 +52,17 @@ feature/ocpp201-security
 ### Messages to Upgrade/Implement
 
 #### Task 1.1: StatusNotification - Add Persistence
-**Status:** ⚠️ Partial → ✅
+**Status:** ✅ Complete
 **Complexity:** Low
+**Completed:** 2026-02-16
 
-**Current:** Traces connector status but doesn't store it.
+**Current:** Connector status persistence implemented.
 
-- [ ] Add `store.Engine` dependency to handler (convert from function to struct)
-- [ ] Create/use store method to persist EVSE/connector status
-- [ ] Update `manager/handlers/ocpp201/status_notification.go`
-- [ ] Update `manager/handlers/ocpp201/status_notification_test.go`
-- [ ] Update routing in `manager/handlers/ocpp201/routing.go`
+- [x] Add `store.Engine` dependency to handler (convert from function to struct)
+- [x] Create/use store method to persist EVSE/connector status
+- [x] Update `manager/handlers/ocpp201/status_notification.go`
+- [x] Update `manager/handlers/ocpp201/status_notification_test.go`
+- [x] Update routing in `manager/handlers/ocpp201/routing.go`
 
 **Store Requirements:**
 - **Interface:** `UpdateConnectorStatus(ctx, chargeStationId string, evseId int, connectorId int, status string) error`
