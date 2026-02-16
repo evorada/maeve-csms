@@ -467,6 +467,14 @@ func TestRoutingCallResults(t *testing.T) {
 				Status: types.GenericDeviceModelStatusEnumTypeAccepted,
 			},
 		},
+		"SetMonitoringLevel": {
+			request: &types.SetMonitoringLevelRequestJson{
+				Severity: 4,
+			},
+			response: &types.SetMonitoringLevelResponseJson{
+				Status: types.GenericStatusEnumTypeAccepted,
+			},
+		},
 		"SetVariables": {
 			request: &types.SetVariablesRequestJson{
 				SetVariableData: []types.SetVariableDataType{
@@ -642,6 +650,9 @@ func TestCallMaker(t *testing.T) {
 		},
 		"SetMonitoringBase": &types.SetMonitoringBaseRequestJson{
 			MonitoringBase: types.MonitoringBaseEnumTypeFactoryDefault,
+		},
+		"SetMonitoringLevel": &types.SetMonitoringLevelRequestJson{
+			Severity: 5,
 		},
 		"SetVariables": &types.SetVariablesRequestJson{
 			SetVariableData: []types.SetVariableDataType{
