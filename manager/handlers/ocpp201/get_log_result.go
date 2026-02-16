@@ -14,9 +14,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// GetLogResultHandler handles the call result to GetLog (CSMS -> CS).
-// On acceptance, diagnostics upload state is persisted as Uploading and later
-// updated by LogStatusNotification.
 type GetLogResultHandler struct {
 	Store store.FirmwareStore
 }
@@ -26,6 +23,7 @@ func (h GetLogResultHandler) HandleCallResult(ctx context.Context, chargeStation
 	resp := response.(*types.GetLogResponseJson)
 
 	span := trace.SpanFromContext(ctx)
+
 	span.SetAttributes(
 		attribute.String("get_log.log_type", string(req.LogType)),
 		attribute.Int("get_log.request_id", req.RequestId),
@@ -33,50 +31,43 @@ func (h GetLogResultHandler) HandleCallResult(ctx context.Context, chargeStation
 		attribute.String("get_log.status", string(resp.Status)),
 	)
 
-	if req.Log.OldestTimestamp != nil {
-		span.SetAttributes(attribute.String("get_log.oldest_timestamp", *req.Log.OldestTimestamp))
-	}
-	if req.Log.LatestTimestamp != nil {
-		span.SetAttributes(attribute.String("get_log.latest_timestamp", *req.Log.LatestTimestamp))
-	}
-	if req.Retries != nil {
-		span.SetAttributes(attribute.Int("get_log.retries", *req.Retries))
-	}
-	if req.RetryInterval != nil {
-		span.SetAttributes(attribute.Int("get_log.retry_interval", *req.RetryInterval))
-	}
 	if resp.Filename != nil {
 		span.SetAttributes(attribute.String("get_log.filename", *resp.Filename))
 	}
 
-	if resp.Status == types.LogStatusEnumTypeRejected {
-		slog.Warn("get log request rejected by charge station",
-			"chargeStationId", chargeStationId,
-			"requestId", req.RequestId,
-		)
-		return nil
-	}
-
 	diagnosticsStatus := &store.DiagnosticsStatus{
 		ChargeStationId: chargeStationId,
-		Status:          store.DiagnosticsStatusUploading,
 		Location:        req.Log.RemoteLocation,
-		UpdatedAt:       time.Now().UTC(),
+		UpdatedAt:       time.Now(),
 	}
 
-	if err := h.Store.SetDiagnosticsStatus(ctx, chargeStationId, diagnosticsStatus); err != nil {
-		slog.Error("failed to store diagnostics status after get log acceptance",
+	if resp.Status == types.LogStatusEnumTypeAccepted {
+		diagnosticsStatus.Status = store.DiagnosticsStatusUploading
+		slog.Info("get log accepted",
 			"chargeStationId", chargeStationId,
-			"error", err,
+			"logType", req.LogType,
+			"requestId", req.RequestId,
+			"remoteLocation", req.Log.RemoteLocation,
 		)
-		return err
+	} else {
+		diagnosticsStatus.Status = store.DiagnosticsStatusUploadFailed
+		slog.Warn("get log not accepted",
+			"chargeStationId", chargeStationId,
+			"logType", req.LogType,
+			"requestId", req.RequestId,
+			"status", resp.Status,
+		)
 	}
 
-	slog.Info("get log request accepted by charge station",
-		"chargeStationId", chargeStationId,
-		"requestId", req.RequestId,
-		"status", resp.Status,
-	)
+	if h.Store != nil {
+		if err := h.Store.SetDiagnosticsStatus(ctx, chargeStationId, diagnosticsStatus); err != nil {
+			slog.Warn("failed to persist get log result",
+				"chargeStationId", chargeStationId,
+				"requestId", req.RequestId,
+				"error", err,
+			)
+		}
+	}
 
 	return nil
 }

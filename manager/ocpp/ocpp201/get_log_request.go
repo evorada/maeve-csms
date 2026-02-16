@@ -2,45 +2,43 @@
 
 package ocpp201
 
-// LogEnumType indicates the type of log file requested from the Charging Station.
 type LogEnumType string
 
 const LogEnumTypeDiagnosticsLog LogEnumType = "DiagnosticsLog"
 const LogEnumTypeSecurityLog LogEnumType = "SecurityLog"
 
-// LogParametersType configures the log upload target and optional time bounds.
+// Generic class for the configuration of logging entries.
 type LogParametersType struct {
 	// CustomData corresponds to the JSON schema field "customData".
 	CustomData *CustomDataType `json:"customData,omitempty" yaml:"customData,omitempty" mapstructure:"customData,omitempty"`
 
-	// RemoteLocation is the URI where the log should be uploaded.
-	RemoteLocation string `json:"remoteLocation" yaml:"remoteLocation" mapstructure:"remoteLocation"`
+	// The date and time of the latest logging information to include in the diagnostics.
+	LatestTimestamp *string `json:"latestTimestamp,omitempty" yaml:"latestTimestamp,omitempty" mapstructure:"latestTimestamp,omitempty"`
 
-	// OldestTimestamp is the oldest timestamp to include in the exported logs.
+	// The date and time of the oldest logging information to include in the diagnostics.
 	OldestTimestamp *string `json:"oldestTimestamp,omitempty" yaml:"oldestTimestamp,omitempty" mapstructure:"oldestTimestamp,omitempty"`
 
-	// LatestTimestamp is the newest timestamp to include in the exported logs.
-	LatestTimestamp *string `json:"latestTimestamp,omitempty" yaml:"latestTimestamp,omitempty" mapstructure:"latestTimestamp,omitempty"`
+	// The URL of the location at the remote system where the log should be stored.
+	RemoteLocation string `json:"remoteLocation" yaml:"remoteLocation" mapstructure:"remoteLocation"`
 }
 
-// GetLogRequestJson requests a Charging Station to upload diagnostics or security logs.
 type GetLogRequestJson struct {
 	// CustomData corresponds to the JSON schema field "customData".
 	CustomData *CustomDataType `json:"customData,omitempty" yaml:"customData,omitempty" mapstructure:"customData,omitempty"`
 
-	// Log contains upload location and optional timestamp filters.
+	// Log corresponds to the JSON schema field "log".
 	Log LogParametersType `json:"log" yaml:"log" mapstructure:"log"`
 
-	// LogType identifies which log class should be uploaded.
+	// The type of log file that the Charging Station should send.
 	LogType LogEnumType `json:"logType" yaml:"logType" mapstructure:"logType"`
 
-	// RequestId identifies this request.
+	// The Id of this request.
 	RequestId int `json:"requestId" yaml:"requestId" mapstructure:"requestId"`
 
-	// Retries is the maximum number of upload retries.
+	// Number of times the Charging Station should try to upload the log before giving up.
 	Retries *int `json:"retries,omitempty" yaml:"retries,omitempty" mapstructure:"retries,omitempty"`
 
-	// RetryInterval is the retry interval in seconds.
+	// Interval in seconds after which a retry may be attempted.
 	RetryInterval *int `json:"retryInterval,omitempty" yaml:"retryInterval,omitempty" mapstructure:"retryInterval,omitempty"`
 }
 
