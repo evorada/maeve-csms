@@ -123,6 +123,14 @@ func NewRouter(emitter transport.Emitter,
 				ResponseSchema: "ocpp201/SecurityEventNotificationResponse.json",
 				Handler:        SecurityEventNotificationHandler{},
 			},
+			"ReservationStatusUpdate": {
+				NewRequest:     func() ocpp.Request { return new(ocpp201.ReservationStatusUpdateRequestJson) },
+				RequestSchema:  "ocpp201/ReservationStatusUpdateRequest.json",
+				ResponseSchema: "ocpp201/ReservationStatusUpdateResponse.json",
+				Handler: ReservationStatusUpdateHandler{
+					ReservationStore: engine,
+				},
+			},
 			"TransactionEvent": {
 				NewRequest:     func() ocpp.Request { return new(ocpp201.TransactionEventRequestJson) },
 				RequestSchema:  "ocpp201/TransactionEventRequest.json",

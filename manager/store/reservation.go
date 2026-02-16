@@ -34,6 +34,7 @@ type ReservationStore interface {
 	CreateReservation(ctx context.Context, reservation *Reservation) error
 	GetReservation(ctx context.Context, reservationId int) (*Reservation, error)
 	CancelReservation(ctx context.Context, reservationId int) error
+	UpdateReservationStatus(ctx context.Context, reservationId int, status ReservationStatus) error
 	GetActiveReservations(ctx context.Context, chargeStationId string) ([]*Reservation, error)
 	GetReservationByConnector(ctx context.Context, chargeStationId string, connectorId int) (*Reservation, error)
 	ExpireReservations(ctx context.Context) (int, error)

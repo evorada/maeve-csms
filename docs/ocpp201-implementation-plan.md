@@ -590,7 +590,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 **Branch:** `feature/ocpp201-reservation`
 **Priority:** Low
-**Status:** 🚧 In Progress (2/3)
+**Status:** ✅ Complete (3/3)
 **Complexity:** Medium
 
 ### Task 12.1: ReserveNow (CSMS→CS, New)
@@ -613,7 +613,13 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 ### Task 12.3: ReservationStatusUpdate (CS→CSMS, New)
 **Complexity:** Low
-- [ ] Create handler + Call route
+**Status:** ✅ Complete
+**Completed:** 2026-02-16
+- [x] Create `ReservationStatusUpdateRequestJson` / `ReservationStatusUpdateResponseJson` types
+- [x] Implement `ReservationStatusUpdateHandler` with reservation status persistence
+- [x] Add `UpdateReservationStatus` to ReservationStore and implement in PostgreSQL/Firestore/In-Memory stores
+- [x] Register Call route in `routing.go`
+- [x] Add unit tests (`reservation_status_update_test.go`) + routing coverage updates
 
 ---
 
@@ -624,7 +630,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Module 12 Completion Checklist
-- [ ] All Reservation handlers
+- [x] All Reservation handlers
 - [ ] Create PR → Merge
 
 ---
