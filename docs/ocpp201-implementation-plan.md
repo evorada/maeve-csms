@@ -633,8 +633,11 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 ### Task 13.1: DeleteCertificate — Upgrade
 **Complexity:** Low  
-- [ ] Add store interaction to remove certificate record
-- [ ] Update `delete_certificate_result.go`
+**Status:** ✅ Complete  
+**Completed:** 2026-02-16  
+- [x] Add store interaction to remove certificate record
+- [x] Update `delete_certificate_result.go`
+- [x] Add tests for accepted/rejected behavior in `delete_certificate_result_test.go`
 
 ---
 
@@ -667,7 +670,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 | Local Auth List | `feature/ocpp201-local-auth-list` | Low | 2 to upgrade | 📋 |
 | DataTransfer | `feature/ocpp201-data-transfer` | Low | 1 new | 📋 |
 | Reservation | `feature/ocpp201-reservation` | Low | 3 new | 📋 |
-| Security | `feature/ocpp201-security` | Medium | 2 to upgrade | 📋 |
+| Security | `feature/ocpp201-security` | Medium | 2 to upgrade | ⚠️ (1/2) |
 
 ---
 
@@ -696,4 +699,4 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 **Created by:** Patricio (AI Assistant)  
-**Last Updated:** 2026-02-12
+**Last Updated:** 2026-02-16
