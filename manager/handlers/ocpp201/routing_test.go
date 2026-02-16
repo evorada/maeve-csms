@@ -146,6 +146,20 @@ func TestRoutingCalls(t *testing.T) {
 			SeqNo:       1,
 			Tbc:         false,
 		},
+		"NotifyMonitoringReport": &types.NotifyMonitoringReportRequestJson{
+			GeneratedAt: "2026-02-16T17:50:00.000Z",
+			RequestId:   34,
+			SeqNo:       0,
+			Monitor: []types.MonitoringDataType{
+				{
+					Component: types.ComponentType{Name: "EVSE"},
+					Variable:  types.VariableType{Name: "Voltage"},
+					VariableMonitoring: []types.VariableMonitoringType{
+						{Id: 1001, Transaction: false, Value: 400, Type: types.MonitorEnumTypeUpperThreshold, Severity: 5},
+					},
+				},
+			},
+		},
 		"SecurityEventNotification": &types.SecurityEventNotificationRequestJson{
 			Timestamp: "2023-06-15T15:05:00+01:00",
 			Type:      "SettingSystemTime",
