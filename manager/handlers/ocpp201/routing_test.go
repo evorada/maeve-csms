@@ -518,6 +518,9 @@ func TestCallMaker(t *testing.T) {
 		"ChangeAvailability": &types.ChangeAvailabilityRequestJson{
 			OperationalStatus: types.OperationalStatusEnumTypeInoperative,
 		},
+		"CancelReservation": &types.CancelReservationRequestJson{
+			ReservationId: 123,
+		},
 		"ClearCache": &types.ClearCacheRequestJson{},
 		"DeleteCertificate": &types.DeleteCertificateRequestJson{
 			CertificateHashData: types.CertificateHashDataType{

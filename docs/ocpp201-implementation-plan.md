@@ -590,7 +590,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 **Branch:** `feature/ocpp201-reservation`
 **Priority:** Low
-**Status:** 🚧 In Progress (1/3)
+**Status:** 🚧 In Progress (2/3)
 **Complexity:** Medium
 
 ### Task 12.1: ReserveNow (CSMS→CS, New)
@@ -602,7 +602,12 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 ### Task 12.2: CancelReservation (CSMS→CS, New)
 **Complexity:** Low
-- [ ] Create handler + routing + CallMaker
+**Status:** ✅ Complete
+**Completed:** 2026-02-16
+- [x] Create `CancelReservationRequestJson` / `CancelReservationResponseJson` types (+ enum)
+- [x] Implement `CancelReservationResultHandler` with reservation store cancellation on Accepted
+- [x] Register in `routing.go` CallResultRoutes + CallMaker Actions
+- [x] Add unit tests (`cancel_reservation_result_test.go`) + routing coverage updates
 
 ---
 

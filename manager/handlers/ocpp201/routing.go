@@ -138,6 +138,15 @@ func NewRouter(emitter transport.Emitter,
 			},
 		},
 		CallResultRoutes: map[string]handlers.CallResultRoute{
+			"CancelReservation": {
+				NewRequest:     func() ocpp.Request { return new(ocpp201.CancelReservationRequestJson) },
+				NewResponse:    func() ocpp.Response { return new(ocpp201.CancelReservationResponseJson) },
+				RequestSchema:  "ocpp201/CancelReservationRequest.json",
+				ResponseSchema: "ocpp201/CancelReservationResponse.json",
+				Handler: CancelReservationResultHandler{
+					ReservationStore: engine,
+				},
+			},
 			"CertificateSigned": {
 				NewRequest:     func() ocpp.Request { return new(ocpp201.CertificateSignedRequestJson) },
 				NewResponse:    func() ocpp.Response { return new(ocpp201.CertificateSignedResponseJson) },
@@ -297,6 +306,7 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 		Emitter:     e,
 		OcppVersion: transport.OcppVersion201,
 		Actions: map[reflect.Type]string{
+			reflect.TypeOf(&ocpp201.CancelReservationRequestJson{}):          "CancelReservation",
 			reflect.TypeOf(&ocpp201.CertificateSignedRequestJson{}):          "CertificateSigned",
 			reflect.TypeOf(&ocpp201.ChangeAvailabilityRequestJson{}):         "ChangeAvailability",
 			reflect.TypeOf(&ocpp201.ClearCacheRequestJson{}):                 "ClearCache",
