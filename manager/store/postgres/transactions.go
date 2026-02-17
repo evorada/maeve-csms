@@ -50,6 +50,18 @@ func (s *Store) FindTransaction(ctx context.Context, chargeStationId, transactio
 	return s.toStoreTransaction(ctx, &txn)
 }
 
+func (s *Store) FindActiveTransaction(ctx context.Context, chargeStationId string) (*store.Transaction, error) {
+	txn, err := s.q.FindActiveTransaction(ctx, chargeStationId)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to find active transaction: %w", err)
+	}
+
+	return s.toStoreTransaction(ctx, &txn)
+}
+
 // CreateTransaction creates a new transaction with initial meter values
 func (s *Store) CreateTransaction(ctx context.Context, chargeStationId, transactionId, idToken, tokenType string, meterValues []store.MeterValue, seqNo int, offline bool) error {
 	// Extract meter start from first meter value if available

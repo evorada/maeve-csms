@@ -45,6 +45,7 @@ type Store struct {
 	localAuthListVersions            map[string]int
 	localAuthListEntries             map[string]map[string]*store.LocalAuthListEntry
 	reservations                     map[int]*store.Reservation
+	meterValues                      map[meterValueKey][]store.StoredMeterValue
 }
 
 func NewStore(clock clock.PassiveClock) *Store {
@@ -68,6 +69,7 @@ func NewStore(clock clock.PassiveClock) *Store {
 		localAuthListVersions:            make(map[string]int),
 		localAuthListEntries:             make(map[string]map[string]*store.LocalAuthListEntry),
 		reservations:                     make(map[int]*store.Reservation),
+		meterValues:                      make(map[meterValueKey][]store.StoredMeterValue),
 	}
 }
 
@@ -357,6 +359,19 @@ func (s *Store) FindTransaction(_ context.Context, chargeStationId, transactionI
 	s.Lock()
 	defer s.Unlock()
 	return s.getTransaction(chargeStationId, transactionId), nil
+}
+
+func (s *Store) FindActiveTransaction(_ context.Context, chargeStationId string) (*store.Transaction, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	for _, transaction := range s.transactions {
+		if transaction.ChargeStationId == chargeStationId && transaction.EndedSeqNo == 0 {
+			return transaction, nil
+		}
+	}
+
+	return nil, nil
 }
 
 func (s *Store) CreateTransaction(_ context.Context, chargeStationId, transactionId, idToken, tokenType string, meterValues []store.MeterValue, seqNo int, offline bool) error {

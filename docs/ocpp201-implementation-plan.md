@@ -46,7 +46,7 @@ feature/ocpp201-security
 
 **Branch:** `feature/ocpp201-provisioning`
 **Priority:** Critical
-**Status:** 📋 Not Started (3/8 fully implemented)
+**Status:** ✅ Complete - Ready for PR (5/5 tasks complete)
 **Complexity:** Medium
 
 ### Messages to Upgrade/Implement
@@ -54,9 +54,11 @@ feature/ocpp201-security
 #### Task 1.1: StatusNotification - Add Persistence
 **Status:** ✅ Complete
 **Complexity:** Low
-**Completed:** 2026-02-16
+**Completed:** 2026-02-14
+**Commit:** 08357fd
+**Follow-up:** 2026-02-16 test hardening for timestamp fallback and store error handling
 
-**Current:** Connector status persistence implemented.
+**Current:** Traces connector status but doesn't store it.
 
 - [x] Add `store.Engine` dependency to handler (convert from function to struct)
 - [x] Create/use store method to persist EVSE/connector status
@@ -65,21 +67,23 @@ feature/ocpp201-security
 - [x] Update routing in `manager/handlers/ocpp201/routing.go`
 
 **Store Requirements:**
-- **Interface:** `UpdateConnectorStatus(ctx, chargeStationId string, evseId int, connectorId int, status string) error`
-- **PostgreSQL:** `manager/store/postgres/` - new query/method
+- **Interface:** `UpdateConnectorStatus(ctx, chargeStationId string, evseId int, connectorId int, status string, timestamp time.Time) error`
+- **PostgreSQL:** `manager/store/postgres/` - new query/method + migration 000011
 - **Firestore:** `manager/store/firestore/` - new method
 - **In-Memory:** `manager/store/inmemory/` - new method
 
 ---
 
 #### Task 1.2: NotifyReport - Add Persistence
-**Status:** ⚠️ Partial → ✅
+**Status:** ✅ Complete
 **Complexity:** Medium
+**Completed:** 2026-02-14
+**Commit:** 466de1f
 
-- [ ] Add store dependency
-- [ ] Store reported variable/component data
-- [ ] Update `manager/handlers/ocpp201/notify_report.go`
-- [ ] Update `manager/handlers/ocpp201/notify_report_test.go`
+- [x] Add store dependency
+- [x] Store reported variable/component data
+- [x] Update `manager/handlers/ocpp201/notify_report.go`
+- [x] Update `manager/handlers/ocpp201/notify_report_test.go`
 
 **Store Requirements:**
 - **Interface:** `StoreChargeStationReport(ctx, chargeStationId string, requestId int, reportData []ReportDataType) error`
@@ -88,38 +92,69 @@ feature/ocpp201-security
 ---
 
 #### Task 1.3: GetBaseReport - Meaningful CallResult Processing
-**Status:** ⚠️ Partial → ✅
+**Status:** ✅ Complete
 **Complexity:** Low
+**Completed:** 2026-02-14
+**Commit:** 3e2b4fb
 
-- [ ] Track pending report requests
-- [ ] Update `manager/handlers/ocpp201/get_base_report_result.go`
-- [ ] Update test
+- [x] Track pending report requests
+- [x] Update `manager/handlers/ocpp201/get_base_report_result.go`
+- [x] Update test
+
+**Implementation:**
+- Added `ReportRequestStatus` enum and `ChargeStationReportRequest` type to store
+- Added `UpdateReportRequestStatus` method to `ChargeStationReportStore` interface
+- Implemented in PostgreSQL (migration 000013), Firestore, and In-Memory stores
+- Handler now persists request status (Accepted/Rejected/NotSupported/EmptyResultSet)
+- Updated tests to verify status persistence
 
 ---
 
 #### Task 1.4: GetVariables - Store Retrieved Values
-**Status:** ⚠️ Partial → ✅
+**Status:** ✅ Complete
 **Complexity:** Low
+**Completed:** 2026-02-14
+**Commit:** 49b845f
 
-- [ ] Store retrieved variable values
-- [ ] Update `manager/handlers/ocpp201/get_variables_result.go`
-- [ ] Update test
+- [x] Store retrieved variable values
+- [x] Update `manager/handlers/ocpp201/get_variables_result.go`
+- [x] Update test
+
+**Store Requirements:**
+- **Interface:** `ChargeStationVariableStore.StoreVariableValues(ctx, values []VariableValue) error`
+- **PostgreSQL:** Migration 000014 + InsertVariableValue query
+- **Firestore:** Subcollection ChargeStation/{id}/Variables
+- **In-Memory:** New map in store
+
+**Implementation:**
+- Added ChargeStationVariableStore interface to store.Engine
+- Handler now stores component/variable metadata with attribute type, value, and status
+- Supports EVSE and connector scoping
+- Updated tests to verify persistence
 
 ---
 
 #### Task 1.5: Reset - Track Reset Status
-**Status:** ⚠️ Partial → ✅
+**Status:** ✅ Complete
 **Complexity:** Low
+**Completed:** 2026-02-14
+**Commit:** b3d3dcd
 
-- [ ] Log reset acceptance/rejection meaningfully
-- [ ] Update `manager/handlers/ocpp201/reset_result.go`
+- [x] Log reset acceptance/rejection meaningfully
+- [x] Update `manager/handlers/ocpp201/reset_result.go`
+
+**Implementation:**
+- Added structured logging with slog
+- Info level for Accepted/Scheduled, Warn level for Rejected
+- Logs StatusInfo details (reason_code, additional_info) when present
+- Added comprehensive test coverage for all reset statuses
 
 ---
 
 ### Module 1 Completion Checklist
-- [ ] All Provisioning handlers store meaningful data
-- [ ] Unit tests updated
-- [ ] Create PR: `feature/ocpp201-provisioning` → `main`
+- [x] All Provisioning handlers store meaningful data
+- [x] Unit tests updated
+- [x] Create PR: `feature/ocpp201-provisioning` → `main` (MR !1: https://gitlab.com/evorada/maeve-csms/-/merge_requests/1)
 - [ ] Merge to main
 
 ---
@@ -128,24 +163,26 @@ feature/ocpp201-security
 
 **Branch:** `feature/ocpp201-meter-values`
 **Priority:** Critical
-**Status:** 📋 Not Started
+**Status:** ✅ Complete (1/1)
 **Complexity:** Medium
 
 ### Task 2.1: MeterValues - Add Storage
-**Status:** ⚠️ Partial → ✅
+**Status:** ✅ Complete
 **Complexity:** Medium
+**Completed:** 2026-02-17
 
 **Current:** Only traces EVSE ID. Meter data is discarded.
 
-- [ ] Add `store.Engine` dependency
-- [ ] Parse and store `MeterValue` data (sampled values, measurands, phases, units)
-- [ ] Associate meter values with active transactions
-- [ ] Update `manager/handlers/ocpp201/meter_values.go`
-- [ ] Update `manager/handlers/ocpp201/meter_values_test.go`
-- [ ] Update routing in `routing.go`
+- [x] Add store dependency (`StoreMeterValues`)
+- [x] Parse and store `MeterValue` data (sampled values, measurands, phases, units)
+- [x] Persist meter values per charge station/EVSE with backend support (PostgreSQL, Firestore, In-Memory)
+- [x] Resolve and attach active transaction IDs when present
+- [x] Update `manager/handlers/ocpp201/meter_values.go`
+- [x] Update `manager/handlers/ocpp201/meter_values_test.go`
+- [x] Update routing in `routing.go`
 
 **Store Requirements:**
-- **Interface:** `StoreMeterValues(ctx, chargeStationId string, evseId int, meterValues []MeterValueType) error`
+- **Interface:** `StoreMeterValues(ctx, chargeStationId string, evseId int, transactionId string, meterValues []MeterValueType) error`
 - **PostgreSQL:** Migration for meter_values table, sqlc queries
 - **Firestore:** New subcollection under charge station
 - **In-Memory:** New map in store
@@ -153,9 +190,10 @@ feature/ocpp201-security
 ---
 
 ### Module 2 Completion Checklist
-- [ ] MeterValues stored with full fidelity
-- [ ] Unit tests
-- [ ] Create PR → Merge
+- [x] MeterValues stored with full fidelity
+- [x] Unit tests
+- [x] Create MR: `feature/ocpp201-meter-values` → `main` (MR !4: https://gitlab.com/evorada/maeve-csms/-/merge_requests/4)
+- [ ] Merge to main
 
 ---
 
@@ -169,14 +207,12 @@ feature/ocpp201-security
 All three handlers exist as CallResult-only. The CallMaker can already initiate these. Just need meaningful result processing.
 
 ### Task 3.1: RequestStartTransaction - Track Result
-**Status:** ✅ Complete
+**Status:** ⚠️ Partial → ✅
 **Complexity:** Low
-**Completed:** 2026-02-16
-**Commits:** `4410483`, `bb03578`
 
-- [x] Store remote start result (transaction ID mapping)
-- [x] Update `manager/handlers/ocpp201/request_start_transaction_result.go`
-- [x] Update test
+- [ ] Store remote start result (transaction ID mapping)
+- [ ] Update `manager/handlers/ocpp201/request_start_transaction_result.go`
+- [ ] Update test
 
 ---
 
@@ -209,7 +245,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 **Branch:** `feature/ocpp201-transaction`
 **Priority:** High
-**Status:** 📋 Not Started
+**Status:** ✅ Complete (1/1)
 **Complexity:** Medium
 
 ### Task 4.1: CostUpdated Handler (New)
@@ -362,66 +398,37 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 **Complexity:** High
 
 ### Task 7.1: FirmwareStatusNotification - Add Persistence
-**Status:** ✅ Complete
 **Complexity:** Low
-**Completed:** 2026-02-15
-- [x] Store firmware update status via store.FirmwareStore
-- [x] Update handler to struct with Store dependency
-- [x] Update routing.go to inject engine
-- [x] 5 unit tests: basic, request_id, installed state, status progression, multiple stations
+- [ ] Store firmware update status
+- [ ] Update existing handler
 
 ---
 
 ### Task 7.2: UpdateFirmware (CSMS→CS, New)
-**Status:** ✅ Complete
 **Complexity:** Medium
-**Completed:** 2026-02-15
-- [x] Create UpdateFirmwareRequestJson/ResponseJson types + FirmwareType in ocpp/ocpp201/
-- [x] Create UpdateFirmwareResultHandler with store persistence on Accepted
-- [x] Register in routing.go CallResultRoutes + CallMaker Actions
-- [x] 5 unit tests: Accepted, Rejected, AcceptedWithRetries, InvalidCertificate, AcceptedInvalidDate
+- [ ] Create handler + types + routing + CallMaker
+- [ ] Write tests
 
 ---
 
 ### Task 7.3: PublishFirmware (CSMS→CS, New)
-**Status:** ✅ Complete
 **Complexity:** Medium
-**Completed:** 2026-02-15
-- [x] Create PublishFirmwareRequestJson/ResponseJson types in ocpp/ocpp201/
-- [x] Add PublishFirmwareStatus store types + interface methods (FirmwareStore)
-- [x] Implement SetPublishFirmwareStatus/GetPublishFirmwareStatus in inmemory, firestore, postgres stores
-- [x] Add postgres migration 000011: publish_firmware_status table + sqlc-generated queries
-- [x] Create PublishFirmwareResultHandler with store persistence on Accepted
-- [x] Register in routing.go CallResultRoutes + CallMaker Actions
-- [x] 5 unit tests: Accepted, Rejected, AcceptedWithRetries, MultipleStations, SpanAttributes
-- [x] Fix MockFirmwareStore in ocpp16 tests to implement new interface
+- [ ] Create handler + types + routing
+- [ ] Write tests
 
 ---
 
 ### Task 7.4: PublishFirmwareStatusNotification (CS→CSMS, New)
-**Status:** ✅ Complete
 **Complexity:** Low
-**Completed:** 2026-02-15
-- [x] Create PublishFirmwareStatusNotificationRequestJson with full PublishFirmwareStatusEnumType enum
-- [x] Create PublishFirmwareStatusNotificationResponseJson
-- [x] Expand store.PublishFirmwareStatusType vars to cover all OCPP 2.0.1 states
-- [x] Implement PublishFirmwareStatusNotificationHandler (CS→CSMS Call):
-      persists status, preserves existing location/checksum/requestId metadata
-- [x] Register in routing.go CallRoutes
-- [x] 5 unit tests: Basic, WithRequestId, PublishedWithLocations, PreservesExistingMetadata, MultipleLocalControllers
+- [ ] Create handler + Call route
+- [ ] Write tests
 
 ---
 
 ### Task 7.5: UnpublishFirmware (CSMS→CS, New)
-**Status:** ✅ Complete
 **Complexity:** Low
-**Completed:** 2026-02-15
-- [x] Create UnpublishFirmwareRequestJson type (checksum field per OCPP 2.0.1 schema)
-- [x] Create UnpublishFirmwareResponseJson with UnpublishFirmwareStatusEnumType enum
-- [x] Implement UnpublishFirmwareResultHandler with FirmwareStore:
-      Unpublished → sets store to Idle; DownloadOngoing/NoFirmware → log only
-- [x] Register in routing.go CallResultRoutes + CallMaker Actions
-- [x] 5 unit tests: Unpublished, DownloadOngoing, NoFirmware, MultipleStations, SpanAttributes
+- [ ] Create handler + routing
+- [ ] Write tests
 
 ---
 
@@ -432,7 +439,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Module 7 Completion Checklist
-- [x] All Firmware handlers (Tasks 7.1-7.5) ✅
+- [ ] All Firmware handlers
 - [ ] Create PR → Merge
 
 ---
@@ -441,117 +448,68 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 **Branch:** `feature/ocpp201-diagnostics`
 **Priority:** Medium
-**Status:** ✅ Complete (10/10)
+**Status:** 📋 Not Started (0/8)
 **Complexity:** High
 
 ### Task 8.1: LogStatusNotification - Add Persistence
-**Status:** ✅ Complete
 **Complexity:** Low
-**Completed:** 2026-02-15
-- [x] Convert handler to struct with FirmwareStore dependency
-- [x] Add mapLogUploadStatus() mapping all 8 UploadLogStatusEnumType values to DiagnosticsStatusType
-- [x] Persist status via existing SetDiagnosticsStatus store method
-- [x] Update routing.go to inject engine
-- [x] 5 unit tests: basic, request_id, upload failure, status progression, multiple stations
+- [ ] Store log upload status
 
 ---
 
 ### Task 8.2: GetLog (CSMS→CS, New)
-**Status:** ✅ Complete
 **Complexity:** Medium
-**Completed:** 2026-02-16
-- [x] Create `GetLogRequestJson` / `GetLogResponseJson` types (+ enums)
-- [x] Implement `GetLogResultHandler` with diagnostics status persistence on Accepted/AcceptedCanceled
-- [x] Register in `routing.go` CallResultRoutes + CallMaker Actions
-- [x] Add unit tests (`get_log_result_test.go`) + routing coverage updates
-- [x] 2026-02-17 follow-up: restore missing OCPP 2.0.1 GetLog type files and align handler wiring with diagnostics persistence
+- [ ] Create handler + types + routing + CallMaker
 
 ---
 
 ### Task 8.3: GetMonitoringReport (CSMS→CS, New)
-**Status:** ✅ Complete
 **Complexity:** Medium
-**Completed:** 2026-02-16
-- [x] Create `GetMonitoringReportRequestJson` / `GetMonitoringReportResponseJson` types
-- [x] Implement `GetMonitoringReportResultHandler`
-- [x] Register in `routing.go` CallResultRoutes + CallMaker Actions
-- [x] Add unit tests (`get_monitoring_report_result_test.go`) + routing coverage updates
+- [ ] Create handler + types + routing + CallMaker
 
 ---
 
 ### Task 8.4: SetMonitoringBase (CSMS→CS, New)
-**Status:** ✅ Complete
 **Complexity:** Low
-**Completed:** 2026-02-16
-- [x] Create `SetMonitoringBaseRequestJson` / `SetMonitoringBaseResponseJson` types
-- [x] Implement `SetMonitoringBaseResultHandler`
-- [x] Register in `routing.go` CallResultRoutes + CallMaker Actions
-- [x] Add unit tests (`set_monitoring_base_result_test.go`) + routing coverage updates
+- [ ] Create handler + routing + CallMaker
 
 ---
 
 ### Task 8.5: SetMonitoringLevel (CSMS→CS, New)
-**Status:** ✅ Complete
 **Complexity:** Low
-**Completed:** 2026-02-16
-- [x] Create `SetMonitoringLevelRequestJson` / `SetMonitoringLevelResponseJson` types
-- [x] Implement `SetMonitoringLevelResultHandler`
-- [x] Register in `routing.go` CallResultRoutes + CallMaker Actions
-- [x] Add unit tests (`set_monitoring_level_result_test.go`) + routing coverage updates
+- [ ] Create handler + routing + CallMaker
 
 ---
 
 ### Task 8.6: SetVariableMonitoring (CSMS→CS, New)
 **Complexity:** Medium
-**Status:** ✅ Complete  
-**Completed:** 2026-02-16
-- [x] Create handler + routing + CallMaker
-- [x] Add OCPP request/response types
-- [x] Write unit test
+- [ ] Create handler + routing + CallMaker
 
 ---
 
 ### Task 8.7: ClearVariableMonitoring (CSMS→CS, New)
 **Complexity:** Low
-**Status:** ✅ Complete
-**Completed:** 2026-02-16
-- [x] Create `ClearVariableMonitoringRequestJson` / `ClearVariableMonitoringResponseJson` types (+ enums)
-- [x] Implement `ClearVariableMonitoringResultHandler`
-- [x] Register in `routing.go` CallResultRoutes + CallMaker Actions
-- [x] Add unit tests (`clear_variable_monitoring_result_test.go`) + routing coverage updates
+- [ ] Create handler + routing + CallMaker
 
 ---
 
 ### Task 8.8: NotifyMonitoringReport (CS→CSMS, New)
 **Complexity:** Medium
-**Status:** ✅ Complete
-**Completed:** 2026-02-16
-- [x] Create `NotifyMonitoringReportRequestJson` / `NotifyMonitoringReportResponseJson` types
-- [x] Implement `NotifyMonitoringReportHandler` with persistence of report fragments
-- [x] Register in `routing.go` CallRoutes
-- [x] Add unit tests (`notify_monitoring_report_test.go`) + routing coverage updates
+- [ ] Create handler + Call route
+- [ ] Store monitoring report data
 
 ---
 
 ### Task 8.9: NotifyEvent (CS→CSMS, New)
 **Complexity:** Medium
-**Status:** ✅ Complete
-**Completed:** 2026-02-16
-- [x] Create `NotifyEventRequestJson` / `NotifyEventResponseJson` types (+ enums)
-- [x] Implement `NotifyEventHandler` with persistence of event data fragments by seqNo
-- [x] Register in `routing.go` CallRoutes
-- [x] Add unit tests (`notify_event_test.go`) + routing coverage updates
+- [ ] Create handler + Call route
+- [ ] Store event data
 
 ---
 
 ### Task 8.10: NotifyCustomerInformation (CS→CSMS, New)
 **Complexity:** Low
-**Status:** ✅ Complete
-**Completed:** 2026-02-16
-- [x] Create `NotifyCustomerInformationRequestJson` / `NotifyCustomerInformationResponseJson` types
-- [x] Implement `NotifyCustomerInformationHandler` with persistence of fragments by requestId/seqNo
-- [x] Register in `routing.go` CallRoutes
-- [x] Add unit tests (`notify_customer_information_test.go`) + routing coverage updates
+- [ ] Create handler + Call route
 
 ---
 
@@ -562,8 +520,8 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Module 8 Completion Checklist
-- [x] All Diagnostics handlers
-- [x] Create PR → Merge (MR !2 opened 2026-02-16)
+- [ ] All Diagnostics handlers
+- [ ] Create PR → Merge
 
 ---
 
@@ -571,35 +529,24 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 **Branch:** `feature/ocpp201-display-message`
 **Priority:** Low
-**Status:** 🚧 In Progress (3/4)
+**Status:** 📋 Not Started (0/3)
 **Complexity:** Medium
 
 ### Task 9.1: SetDisplayMessage (CSMS→CS, New)
-**Status:** ✅ Complete
-**Completed:** 2026-02-17
 **Complexity:** Medium
-- [x] Create types + handler + routing + CallMaker
-- [x] Write unit tests
+- [ ] Create types + handler + routing + CallMaker
 
 ---
 
 ### Task 9.2: GetDisplayMessages (CSMS→CS, New)
-**Status:** ✅ Complete
-**Completed:** 2026-02-17
 **Complexity:** Medium
-- [x] Create handler + routing + CallMaker
-- [x] Add OCPP request/response types + status enum
-- [x] Write unit tests (`get_display_messages_result_test.go`) + routing coverage updates
+- [ ] Create handler + routing + CallMaker
 
 ---
 
 ### Task 9.3: ClearDisplayMessage (CSMS→CS, New)
-**Status:** ✅ Complete
-**Completed:** 2026-02-17
 **Complexity:** Low
-- [x] Create handler + routing + CallMaker
-- [x] Add OCPP request/response types + status enum
-- [x] Write unit tests (`clear_display_message_result_test.go`) + routing coverage updates
+- [ ] Create handler + routing + CallMaker
 
 ---
 
@@ -748,13 +695,13 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 | Module | Branch | Priority | Messages | Status |
 |--------|--------|----------|----------|--------|
 | Provisioning | `feature/ocpp201-provisioning` | Critical | 5 to upgrade | 📋 |
-| MeterValues | `feature/ocpp201-meter-values` | Critical | 1 to upgrade | 📋 |
+| MeterValues | `feature/ocpp201-meter-values` | Critical | 1 to upgrade | ✅ (1/1) |
 | Remote Control | `feature/ocpp201-remote-control` | Critical | 3 to upgrade | 📋 |
 | Transaction | `feature/ocpp201-transaction` | High | 1 new | 📋 |
 | Smart Charging | `feature/ocpp201-smart-charging` | High | 9 new | 📋 |
 | Availability | `feature/ocpp201-availability` | Medium | 2 to handle | 📋 |
 | Firmware Management | `feature/ocpp201-firmware-management` | Medium | 5 new | 📋 |
-| Diagnostics | `feature/ocpp201-diagnostics` | Medium | 10 new | ✅ (10/10) |
+| Diagnostics | `feature/ocpp201-diagnostics` | Medium | 10 new | 📋 |
 | Display Message | `feature/ocpp201-display-message` | Low | 4 new | 📋 |
 | Local Auth List | `feature/ocpp201-local-auth-list` | Low | 2 to upgrade | 📋 |
 | DataTransfer | `feature/ocpp201-data-transfer` | Low | 1 new | 📋 |

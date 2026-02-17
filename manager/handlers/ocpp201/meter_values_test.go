@@ -4,50 +4,95 @@ package ocpp201_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp201"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
-	"github.com/thoughtworks/maeve-csms/manager/testutil"
+	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
-func TestMeterValuesHandler(t *testing.T) {
-	handler := ocpp201.MeterValuesHandler{}
+type meterValuesStoreStub struct {
+	storeMeterValuesFn    func(ctx context.Context, chargeStationId string, evseId int, transactionId string, meterValues []store.MeterValue) error
+	findActiveTxnFn       func(ctx context.Context, chargeStationId string) (*store.Transaction, error)
+}
 
-	tracer, exporter := testutil.GetTracer()
+func (s meterValuesStoreStub) StoreMeterValues(ctx context.Context, chargeStationId string, evseId int, transactionId string, meterValues []store.MeterValue) error {
+	if s.storeMeterValuesFn != nil {
+		return s.storeMeterValuesFn(ctx, chargeStationId, evseId, transactionId, meterValues)
+	}
+	return nil
+}
 
-	ctx := context.Background()
+func (s meterValuesStoreStub) FindActiveTransaction(ctx context.Context, chargeStationId string) (*store.Transaction, error) {
+	if s.findActiveTxnFn != nil {
+		return s.findActiveTxnFn(ctx, chargeStationId)
+	}
+	return nil, nil
+}
 
-	func() {
-		ctx, span := tracer.Start(ctx, "test")
-		defer span.End()
+func TestMeterValuesHandler_StoresMeterValues(t *testing.T) {
+	var gotChargeStationID string
+	var gotEvseID int
+	var gotTransactionID string
+	var gotMeterValues []store.MeterValue
 
-		req := &types.MeterValuesRequestJson{
-			EvseId: 1,
-			MeterValue: []types.MeterValueType{
-				{
-					SampledValue: []types.SampledValueType{
-						{
-							Measurand: makePtr(types.MeasurandEnumTypeEnergyActiveImportRegister),
-							Location:  makePtr(types.LocationEnumTypeOutlet),
-							Value:     100,
-						},
-					},
-					Timestamp: "2023-06-15T15:05:00+01:00",
-				},
+	handler := ocpp201.MeterValuesHandler{
+		Store: meterValuesStoreStub{
+			findActiveTxnFn: func(_ context.Context, chargeStationId string) (*store.Transaction, error) {
+				return &store.Transaction{ChargeStationId: chargeStationId, TransactionId: "txn-123"}, nil
 			},
-		}
+			storeMeterValuesFn: func(_ context.Context, chargeStationId string, evseId int, transactionId string, meterValues []store.MeterValue) error {
+				gotChargeStationID = chargeStationId
+				gotEvseID = evseId
+				gotTransactionID = transactionId
+				gotMeterValues = meterValues
+				return nil
+			},
+		},
+	}
 
-		resp, err := handler.HandleCall(ctx, "cs001", req)
-		require.NoError(t, err)
+	req := &types.MeterValuesRequestJson{
+		EvseId: 1,
+		MeterValue: []types.MeterValueType{{
+			Timestamp: "2026-02-16T18:30:00Z",
+			SampledValue: []types.SampledValueType{{
+				Value:     100,
+				Measurand: makePtr(types.MeasurandEnumTypeEnergyActiveImportRegister),
+				Phase:     makePtr(types.PhaseEnumTypeL1),
+				Location:  makePtr(types.LocationEnumTypeOutlet),
+				UnitOfMeasure: &types.UnitOfMeasureType{
+					Unit:       "Wh",
+					Multiplier: 0,
+				},
+			}},
+		}},
+	}
 
-		assert.Equal(t, &types.MeterValuesResponseJson{}, resp)
-	}()
+	resp, err := handler.HandleCall(context.Background(), "cs001", req)
+	require.NoError(t, err)
+	assert.Equal(t, &types.MeterValuesResponseJson{}, resp)
 
-	testutil.AssertSpan(t, &exporter.GetSpans()[0], "test", map[string]any{
-		"meter_values.evse_id": 1,
-	})
+	assert.Equal(t, "cs001", gotChargeStationID)
+	assert.Equal(t, 1, gotEvseID)
+	assert.Equal(t, "txn-123", gotTransactionID)
+	require.Len(t, gotMeterValues, 1)
+	require.Len(t, gotMeterValues[0].SampledValues, 1)
+	assert.Equal(t, 100.0, gotMeterValues[0].SampledValues[0].Value)
+	require.NotNil(t, gotMeterValues[0].SampledValues[0].Measurand)
+	assert.Equal(t, "Energy.Active.Import.Register", *gotMeterValues[0].SampledValues[0].Measurand)
+}
 
+func TestMeterValuesHandler_StoreErrorDoesNotFailRequest(t *testing.T) {
+	handler := ocpp201.MeterValuesHandler{
+		Store: meterValuesStoreStub{storeMeterValuesFn: func(_ context.Context, _ string, _ int, _ string, _ []store.MeterValue) error {
+			return errors.New("db unavailable")
+		}},
+	}
+
+	resp, err := handler.HandleCall(context.Background(), "cs001", &types.MeterValuesRequestJson{EvseId: 1})
+	require.NoError(t, err)
+	assert.Equal(t, &types.MeterValuesResponseJson{}, resp)
 }
