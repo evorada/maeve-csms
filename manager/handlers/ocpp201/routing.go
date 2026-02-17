@@ -166,7 +166,9 @@ func NewRouter(emitter transport.Emitter,
 				NewResponse:    func() ocpp.Response { return new(ocpp201.DeleteCertificateResponseJson) },
 				RequestSchema:  "ocpp201/DeleteCertificateRequest.json",
 				ResponseSchema: "ocpp201/DeleteCertificateResponse.json",
-				Handler:        DeleteCertificateResultHandler{},
+				Handler: DeleteCertificateResultHandler{
+					Store: engine,
+				},
 			},
 			"GetBaseReport": {
 				NewRequest:     func() ocpp.Request { return new(ocpp201.GetBaseReportRequestJson) },
@@ -180,7 +182,9 @@ func NewRouter(emitter transport.Emitter,
 				NewResponse:    func() ocpp.Response { return new(ocpp201.GetInstalledCertificateIdsResponseJson) },
 				RequestSchema:  "ocpp201/GetInstalledCertificateIdsRequest.json",
 				ResponseSchema: "ocpp201/GetInstalledCertificateIdsResponse.json",
-				Handler:        GetInstalledCertificateIdsResultHandler{},
+				Handler: GetInstalledCertificateIdsResultHandler{
+					Store: engine,
+				},
 			},
 			"GetLocalListVersion": {
 				NewRequest:     func() ocpp.Request { return new(ocpp201.GetLocalListVersionRequestJson) },
