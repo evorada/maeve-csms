@@ -65,7 +65,7 @@ services:
       interval: 10s
       timeout: 10s
       retries: 3
-    user: "${UID}:${GID}"
+    user: "${USER_ID}:${GROUP_ID}"
 
   manager:
     build:
@@ -98,7 +98,7 @@ services:
       interval: 10s
       timeout: 10s
       retries: 3
-    user: "${UID}:${GID}"
+    user: "${USER_ID}:${GROUP_ID}"
 
   postgres:
     image: postgres:15-alpine
