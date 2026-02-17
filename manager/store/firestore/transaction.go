@@ -135,6 +135,24 @@ func (s *Store) EndTransaction(ctx context.Context, chargeStationId, transaction
 	return s.updateTransaction(ctx, chargeStationId, transactionId, transaction)
 }
 
+func (s *Store) UpdateTransactionCost(ctx context.Context, chargeStationId, transactionId string, totalCost float64) error {
+	transaction, err := s.FindTransaction(ctx, chargeStationId, transactionId)
+	if err != nil {
+		return fmt.Errorf("finding transaction %s/%s: %w", chargeStationId, transactionId, err)
+	}
+	if transaction == nil {
+		transaction = &store.Transaction{
+			ChargeStationId: chargeStationId,
+			TransactionId:   transactionId,
+			LastCost:        &totalCost,
+		}
+	} else {
+		cost := totalCost
+		transaction.LastCost = &cost
+	}
+	return s.updateTransaction(ctx, chargeStationId, transactionId, transaction)
+}
+
 func (s *Store) updateTransaction(ctx context.Context, chargeStationId, transactionId string, transaction *store.Transaction) error {
 	transactionRef := s.client.Doc(getPath(chargeStationId, transactionId))
 	_, err := transactionRef.Set(ctx, transaction)

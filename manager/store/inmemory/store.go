@@ -420,6 +420,25 @@ func (s *Store) UpdateTransaction(_ context.Context, chargeStationId, transactio
 	return nil
 }
 
+func (s *Store) UpdateTransactionCost(_ context.Context, chargeStationId, transactionId string, totalCost float64) error {
+	s.Lock()
+	defer s.Unlock()
+	transaction := s.getTransaction(chargeStationId, transactionId)
+	if transaction == nil {
+		// Create a minimal record if the transaction doesn't exist yet
+		transaction = &store.Transaction{
+			ChargeStationId: chargeStationId,
+			TransactionId:   transactionId,
+			LastCost:        &totalCost,
+		}
+		s.updateTransaction(transaction)
+	} else {
+		cost := totalCost
+		transaction.LastCost = &cost
+	}
+	return nil
+}
+
 func (s *Store) EndTransaction(_ context.Context, chargeStationId, transactionId, idToken, tokenType string, meterValues []store.MeterValue, seqNo int) error {
 	s.Lock()
 	defer s.Unlock()
