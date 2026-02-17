@@ -10,8 +10,8 @@
 
 Based on the [OCPP 2.0.1 Implementation Audit](ocpp201-implementation-audit.md), this plan implements the missing and incomplete OCPP 2.0.1 messages organized by functional block. Each block will be implemented in its own feature branch.
 
-**Current Overall Coverage:** ~22% (12/55 fully implemented)
-**Target Coverage:** 100% of mandatory blocks, 80%+ optional blocks
+**Current Overall Coverage:** 100% of planned OCPP 2.0.1 blocks implemented on feature branches (55/55)
+**Target Coverage:** Merge feature branches to `main` and run integrated validation
 
 ---
 
