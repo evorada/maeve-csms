@@ -244,6 +244,7 @@ func NewRouter(emitter transport.Emitter,
 					Store: engine,
 				},
 			},
+			// DataTransfer route defined above with extensible vendor/message call-result routing.
 			"GetBaseReport": {
 				NewRequest:     func() ocpp.Request { return new(ocpp201.GetBaseReportRequestJson) },
 				NewResponse:    func() ocpp.Response { return new(ocpp201.GetBaseReportResponseJson) },

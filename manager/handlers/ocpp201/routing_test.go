@@ -104,6 +104,10 @@ func TestRoutingCalls(t *testing.T) {
 			},
 			Reason: types.BootReasonEnumTypePowerUp,
 		},
+		"DataTransfer": &types.DataTransferRequestJson{
+			VendorId: "com.example",
+			Data:     []byte(`{"ping":"pong"}`),
+		},
 		"FirmwareStatusNotification": &types.FirmwareStatusNotificationRequestJson{
 			Status: types.FirmwareStatusEnumTypeDownloading,
 		},
@@ -704,6 +708,10 @@ func TestCallMaker(t *testing.T) {
 		"InstallCertificate": &types.InstallCertificateRequestJson{
 			Certificate:     "",
 			CertificateType: types.InstallCertificateUseEnumTypeMORootCertificate,
+		},
+		"DataTransfer": &types.DataTransferRequestJson{
+			VendorId: "com.example",
+			Data:     []byte(`{"foo":"bar"}`),
 		},
 		"RequestStartTransaction": &types.RequestStartTransactionRequestJson{
 			IdToken: types.IdTokenType{

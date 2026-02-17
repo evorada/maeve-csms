@@ -646,6 +646,14 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 - [ ] Add Call route + CallResult route in `routing.go`
 - [ ] Write tests
 
+**Implementation:**
+- Added OCPP 2.0.1 `DataTransferRequestJson` / `DataTransferResponseJson` types with `DataTransferStatusEnumType`
+- Implemented `DataTransferHandler` for CS→CSMS Call routing by `vendorId + messageId`
+- Implemented `DataTransferResultHandler` for CSMS→CS CallResult routing by `vendorId + messageId`
+- Wired both routes into `routing.go` and added `DataTransfer` to CallMaker actions
+- Added focused tests in `data_transfer_test.go` covering call routing, unknown vendor/message handling, and CallResult routing
+- 2026-02-17 follow-up: added missing `DataTransfer` CallResult route registration and routing coverage assertions
+
 ---
 
 ### Module 11 Completion Checklist
