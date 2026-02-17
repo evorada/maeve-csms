@@ -104,10 +104,6 @@ func TestRoutingCalls(t *testing.T) {
 			},
 			Reason: types.BootReasonEnumTypePowerUp,
 		},
-		"DataTransfer": &types.DataTransferRequestJson{
-			VendorId: "com.example",
-			Data:     []byte(`{"ping":"pong"}`),
-		},
 		"FirmwareStatusNotification": &types.FirmwareStatusNotificationRequestJson{
 			Status: types.FirmwareStatusEnumTypeDownloading,
 		},
@@ -536,21 +532,6 @@ func TestRoutingCallResults(t *testing.T) {
 				Status: types.SetNetworkProfileStatusEnumTypeFailed,
 			},
 		},
-		"SetDisplayMessage": {
-			request: &types.SetDisplayMessageRequestJson{
-				Message: types.MessageInfoType{
-					Id:       100,
-					Priority: types.MessagePriorityEnumTypeInFront,
-					Message: types.MessageContentType{
-						Format:  types.MessageFormatEnumTypeUTF8,
-						Content: "Welcome",
-					},
-				},
-			},
-			response: &types.SetDisplayMessageResponseJson{
-				Status: types.DisplayMessageStatusEnumTypeAccepted,
-			},
-		},
 		"SetMonitoringBase": {
 			request: &types.SetMonitoringBaseRequestJson{
 				MonitoringBase: types.MonitoringBaseEnumTypeFactoryDefault,
@@ -709,10 +690,6 @@ func TestCallMaker(t *testing.T) {
 			Certificate:     "",
 			CertificateType: types.InstallCertificateUseEnumTypeMORootCertificate,
 		},
-		"DataTransfer": &types.DataTransferRequestJson{
-			VendorId: "com.example",
-			Data:     []byte(`{"foo":"bar"}`),
-		},
 		"RequestStartTransaction": &types.RequestStartTransactionRequestJson{
 			IdToken: types.IdTokenType{
 				Type:    types.IdTokenEnumTypeISO14443,
@@ -757,16 +734,6 @@ func TestCallMaker(t *testing.T) {
 				OcppTransport:   types.OCPPTransportEnumTypeJSON,
 				OcppVersion:     types.OCPPVersionEnumTypeOCPP20,
 				SecurityProfile: 2,
-			},
-		},
-		"SetDisplayMessage": &types.SetDisplayMessageRequestJson{
-			Message: types.MessageInfoType{
-				Id:       7,
-				Priority: types.MessagePriorityEnumTypeAlwaysFront,
-				Message: types.MessageContentType{
-					Format:  types.MessageFormatEnumTypeASCII,
-					Content: "Hello",
-				},
 			},
 		},
 		"SetMonitoringBase": &types.SetMonitoringBaseRequestJson{
