@@ -529,12 +529,17 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 **Branch:** `feature/ocpp201-display-message`
 **Priority:** Low
-**Status:** 📋 Not Started (0/3)
+**Status:** ✅ Complete (4/4)
 **Complexity:** Medium
 
 ### Task 9.1: SetDisplayMessage (CSMS→CS, New)
+**Status:** ✅ Complete
 **Complexity:** Medium
-- [ ] Create types + handler + routing + CallMaker
+**Completed:** 2026-02-17
+- [x] Create `SetDisplayMessageRequestJson` / `SetDisplayMessageResponseJson` types (+ enums)
+- [x] Implement `SetDisplayMessageResultHandler`
+- [x] Register in `routing.go` CallResultRoutes + CallMaker Actions
+- [x] Add unit tests (`set_display_message_result_test.go`) + routing coverage updates
 
 ---
 
@@ -561,8 +566,13 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Task 9.4: NotifyDisplayMessages (CS→CSMS, New)
+**Status:** ✅ Complete
 **Complexity:** Low
-- [ ] Create handler + Call route
+**Completed:** 2026-02-17
+- [x] Create `NotifyDisplayMessagesRequestJson` / `NotifyDisplayMessagesResponseJson` types
+- [x] Implement `NotifyDisplayMessagesHandler` with trace attributes for request fragments
+- [x] Register in `routing.go` CallRoutes
+- [x] Add unit tests (`notify_display_messages_test.go`)
 
 ---
 
@@ -573,7 +583,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Module 9 Completion Checklist
-- [ ] All DisplayMessage handlers
+- [x] All DisplayMessage handlers
 - [ ] Create PR → Merge
 
 ---
