@@ -145,3 +145,17 @@ func (q *Queries) GetReservationByConnector(ctx context.Context, arg GetReservat
 	)
 	return i, err
 }
+
+const UpdateReservationStatus = `-- name: UpdateReservationStatus :exec
+UPDATE reservations SET status = $2 WHERE reservation_id = $1
+`
+
+type UpdateReservationStatusParams struct {
+	ReservationID int32  `db:"reservation_id" json:"reservation_id"`
+	Status        string `db:"status" json:"status"`
+}
+
+func (q *Queries) UpdateReservationStatus(ctx context.Context, arg UpdateReservationStatusParams) error {
+	_, err := q.db.Exec(ctx, UpdateReservationStatus, arg.ReservationID, arg.Status)
+	return err
+}

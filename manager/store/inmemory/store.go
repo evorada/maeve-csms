@@ -633,6 +633,17 @@ func (s *Store) CancelReservation(_ context.Context, reservationId int) error {
 	return nil
 }
 
+func (s *Store) UpdateReservationStatus(_ context.Context, reservationId int, status store.ReservationStatus) error {
+	s.Lock()
+	defer s.Unlock()
+	r, ok := s.reservations[reservationId]
+	if !ok {
+		return fmt.Errorf("reservation %d not found", reservationId)
+	}
+	r.Status = status
+	return nil
+}
+
 func (s *Store) GetActiveReservations(_ context.Context, chargeStationId string) ([]*store.Reservation, error) {
 	s.Lock()
 	defer s.Unlock()

@@ -77,6 +77,7 @@ type Querier interface {
 	SetOcpiParty(ctx context.Context, arg SetOcpiPartyParams) (OcpiParty, error)
 	SetOcpiRegistration(ctx context.Context, arg SetOcpiRegistrationParams) (OcpiRegistration, error)
 	UpdateChargeStationCertificate(ctx context.Context, arg UpdateChargeStationCertificateParams) (ChargeStationCertificate, error)
+	UpdateReservationStatus(ctx context.Context, arg UpdateReservationStatusParams) error
 	UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token, error)
 	UpdateTransaction(ctx context.Context, arg UpdateTransactionParams) (Transaction, error)
 	UpsertChargingProfile(ctx context.Context, arg UpsertChargingProfileParams) error

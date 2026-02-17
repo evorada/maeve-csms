@@ -9,6 +9,9 @@ SELECT * FROM reservations WHERE reservation_id = $1;
 -- name: CancelReservation :exec
 UPDATE reservations SET status = 'Cancelled' WHERE reservation_id = $1;
 
+-- name: UpdateReservationStatus :exec
+UPDATE reservations SET status = $2 WHERE reservation_id = $1;
+
 -- name: GetActiveReservations :many
 SELECT * FROM reservations
 WHERE charge_station_id = $1 AND status = 'Accepted'

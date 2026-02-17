@@ -628,7 +628,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ### Module 12 Completion Checklist
 - [x] All Reservation handlers
 - [x] Create MR: `feature/ocpp201-reservation` → `main`
-- [ ] Merge to `main` *(pending maintainer merge; automation remote currently exposes feature branches only)*
+- [x] Merge to `main` *(merged 2026-02-17)*
 
 ---
 

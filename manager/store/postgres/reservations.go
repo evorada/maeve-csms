@@ -51,6 +51,17 @@ func (s *Store) CancelReservation(ctx context.Context, reservationId int) error 
 	return nil
 }
 
+func (s *Store) UpdateReservationStatus(ctx context.Context, reservationId int, status store.ReservationStatus) error {
+	err := s.q.UpdateReservationStatus(ctx, UpdateReservationStatusParams{
+		ReservationID: int32(reservationId),
+		Status:        string(status),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update reservation status: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) GetActiveReservations(ctx context.Context, chargeStationId string) ([]*store.Reservation, error) {
 	rows, err := s.q.GetActiveReservations(ctx, chargeStationId)
 	if err != nil {

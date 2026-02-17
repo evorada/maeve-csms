@@ -150,6 +150,10 @@ func TestRoutingCalls(t *testing.T) {
 			Timestamp: "2023-06-15T15:05:00+01:00",
 			Type:      "SettingSystemTime",
 		},
+		"ReservationStatusUpdate": &types.ReservationStatusUpdateRequestJson{
+			ReservationId:           99,
+			ReservationUpdateStatus: types.ReservationUpdateStatusEnumTypeExpired,
+		},
 		"SignCertificate": &types.SignCertificateRequestJson{
 			CertificateType: makePtr(types.CertificateSigningUseEnumTypeChargingStationCertificate),
 			Csr:             "",
@@ -517,6 +521,9 @@ func TestCallMaker(t *testing.T) {
 		},
 		"ChangeAvailability": &types.ChangeAvailabilityRequestJson{
 			OperationalStatus: types.OperationalStatusEnumTypeInoperative,
+		},
+		"CancelReservation": &types.CancelReservationRequestJson{
+			ReservationId: 123,
 		},
 		"ClearCache": &types.ClearCacheRequestJson{},
 		"DeleteCertificate": &types.DeleteCertificateRequestJson{
