@@ -10,8 +10,8 @@
 
 Based on the [OCPP 2.0.1 Implementation Audit](ocpp201-implementation-audit.md), this plan implements the missing and incomplete OCPP 2.0.1 messages organized by functional block. Each block will be implemented in its own feature branch.
 
-**Current Overall Coverage:** ~22% (12/55 fully implemented)
-**Target Coverage:** 100% of mandatory blocks, 80%+ optional blocks
+**Current Overall Coverage:** 100% of planned OCPP 2.0.1 blocks implemented on feature branches (55/55)
+**Target Coverage:** Merge feature branches to `main` and run integrated validation
 
 ---
 
@@ -108,11 +108,13 @@ feature/ocpp201-security
 ---
 
 #### Task 1.5: Reset - Track Reset Status
-**Status:** ⚠️ Partial → ✅
+**Status:** ✅ Complete
 **Complexity:** Low
+**Completed:** 2026-02-17
+**Commit:** 789b256
 
-- [ ] Log reset acceptance/rejection meaningfully
-- [ ] Update `manager/handlers/ocpp201/reset_result.go`
+- [x] Log reset acceptance/rejection meaningfully
+- [x] Update `manager/handlers/ocpp201/reset_result.go`
 
 ---
 
@@ -128,21 +130,24 @@ feature/ocpp201-security
 
 **Branch:** `feature/ocpp201-meter-values`
 **Priority:** Critical
-**Status:** 📋 Not Started
+**Status:** ✅ Complete (1/1)
+**Completed:** 2026-02-17
 **Complexity:** Medium
 
 ### Task 2.1: MeterValues - Add Storage
-**Status:** ⚠️ Partial → ✅
+**Status:** ✅ Complete
+**Completed:** 2026-02-17
+**Commit:** 1bda038
 **Complexity:** Medium
 
-**Current:** Only traces EVSE ID. Meter data is discarded.
+**Current:** MeterValues payloads are persisted and linked to active transactions.
 
-- [ ] Add `store.Engine` dependency
-- [ ] Parse and store `MeterValue` data (sampled values, measurands, phases, units)
-- [ ] Associate meter values with active transactions
-- [ ] Update `manager/handlers/ocpp201/meter_values.go`
-- [ ] Update `manager/handlers/ocpp201/meter_values_test.go`
-- [ ] Update routing in `routing.go`
+- [x] Add `store.Engine` dependency
+- [x] Parse and store `MeterValue` data (sampled values, measurands, phases, units)
+- [x] Associate meter values with active transactions
+- [x] Update `manager/handlers/ocpp201/meter_values.go`
+- [x] Update `manager/handlers/ocpp201/meter_values_test.go`
+- [x] Update routing in `routing.go`
 
 **Store Requirements:**
 - **Interface:** `StoreMeterValues(ctx, chargeStationId string, evseId int, meterValues []MeterValueType) error`
@@ -153,9 +158,10 @@ feature/ocpp201-security
 ---
 
 ### Module 2 Completion Checklist
-- [ ] MeterValues stored with full fidelity
-- [ ] Unit tests
-- [ ] Create PR → Merge
+- [x] MeterValues stored with full fidelity
+- [x] Unit tests
+- [x] Create MR: `feature/ocpp201-meter-values` → `main`
+- [ ] Merge to `main` *(pending maintainer merge; automation remote currently exposes feature branches only)*
 
 ---
 
@@ -163,42 +169,44 @@ feature/ocpp201-security
 
 **Branch:** `feature/ocpp201-remote-control`
 **Priority:** Critical
-**Status:** 📋 Not Started (0/3 fully implemented)
+**Status:** ✅ Complete (3/3 fully implemented)
+**Completed:** 2026-02-17
 **Complexity:** Low
 
 All three handlers exist as CallResult-only. The CallMaker can already initiate these. Just need meaningful result processing.
 
 ### Task 3.1: RequestStartTransaction - Track Result
-**Status:** ⚠️ Partial → ✅
+**Status:** ✅ Complete
 **Complexity:** Low
 
-- [ ] Store remote start result (transaction ID mapping)
-- [ ] Update `manager/handlers/ocpp201/request_start_transaction_result.go`
-- [ ] Update test
+- [x] Store remote start result (transaction ID mapping)
+- [x] Update `manager/handlers/ocpp201/request_start_transaction_result.go`
+- [x] Update tests (`request_start_transaction_result_test.go`)
 
 ---
 
 ### Task 3.2: RequestStopTransaction - Track Result
-**Status:** ⚠️ Partial → ✅
+**Status:** ✅ Complete
 **Complexity:** Low
 
-- [ ] Store remote stop result
-- [ ] Update `manager/handlers/ocpp201/request_stop_transaction_result.go`
-- [ ] Update test
+- [x] Store remote stop result
+- [x] Update `manager/handlers/ocpp201/request_stop_transaction_result.go`
+- [x] Update tests (`request_stop_transaction_result_test.go`)
 
 ---
 
 ### Task 3.3: UnlockConnector - Track Result
-**Status:** ⚠️ Partial → ✅
+**Status:** ✅ Complete
 **Complexity:** Low
 
-- [ ] Already functional as trace-only; optionally persist
-- [ ] Update `manager/handlers/ocpp201/unlock_connector_result.go`
+- [x] Persist unlock connector results from CallResult handling
+- [x] Update `manager/handlers/ocpp201/unlock_connector_result.go`
+- [x] Update tests (`unlock_connector_result_test.go`)
 
 ---
 
 ### Module 3 Completion Checklist
-- [ ] All 3 Remote Control handlers upgraded
+- [x] All 3 Remote Control handlers upgraded
 - [ ] Create PR → Merge
 
 ---
@@ -636,7 +644,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 **Branch:** `feature/ocpp201-security`
 **Priority:** Medium
-**Status:** 🚧 In Progress (1/2 tasks upgraded)
+**Status:** ✅ Complete (2/2 tasks upgraded)
 **Complexity:** Low
 
 ### Task 13.1: DeleteCertificate - Upgrade
