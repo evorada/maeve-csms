@@ -288,7 +288,9 @@ func NewRouter(emitter transport.Emitter,
 				NewResponse:    func() ocpp.Response { return new(ocpp201.GetLocalListVersionResponseJson) },
 				RequestSchema:  "ocpp201/GetLocalListVersionRequest.json",
 				ResponseSchema: "ocpp201/GetLocalListVersionResponse.json",
-				Handler:        GetLocalListVersionResultHandler{},
+				Handler: GetLocalListVersionResultHandler{
+					Store: engine,
+				},
 			},
 			"GetReport": {
 				NewRequest:     func() ocpp.Request { return new(ocpp201.GetReportRequestJson) },

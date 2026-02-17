@@ -582,13 +582,22 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 **Branch:** `feature/ocpp201-local-auth-list`
 **Priority:** Low
-**Status:** 📋 Not Started (0/2 fully implemented)
+**Status:** 🚧 In Progress (1/2 fully implemented)
 **Complexity:** Medium
 
 ### Task 10.1: GetLocalListVersion - Upgrade
+**Status:** ✅ Complete
 **Complexity:** Low
-- [ ] Store/track list version per charge station
-- [ ] Update `get_local_list_version_result.go`
+**Completed:** 2026-02-17
+- [x] Store/track list version per charge station
+- [x] Update `get_local_list_version_result.go`
+- [x] Update `get_local_list_version_result_test.go`
+- [x] Update routing to inject LocalAuthListStore
+
+**Implementation:**
+- Handler now persists reported local auth list version per charge station via `LocalAuthListStore`
+- Uses `UpdateLocalAuthList(..., Differential, nil)` to safely update version without mutating entries
+- Added test coverage to verify version persistence and trace attributes
 
 ---
 
