@@ -662,18 +662,18 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 | Module | Branch | Priority | Messages | Status |
 |--------|--------|----------|----------|--------|
-| Provisioning | `feature/ocpp201-provisioning` | Critical | 5 to upgrade | 📋 |
-| MeterValues | `feature/ocpp201-meter-values` | Critical | 1 to upgrade | 📋 |
-| Remote Control | `feature/ocpp201-remote-control` | Critical | 3 to upgrade | 📋 |
-| Transaction | `feature/ocpp201-transaction` | High | 1 new | 📋 |
-| Smart Charging | `feature/ocpp201-smart-charging` | High | 9 new | 📋 |
-| Availability | `feature/ocpp201-availability` | Medium | 2 to handle | 📋 |
-| Firmware Management | `feature/ocpp201-firmware-management` | Medium | 5 new | 📋 |
-| Diagnostics | `feature/ocpp201-diagnostics` | Medium | 10 new | 📋 |
-| Display Message | `feature/ocpp201-display-message` | Low | 4 new | 📋 |
-| Local Auth List | `feature/ocpp201-local-auth-list` | Low | 2 to upgrade | 📋 |
-| DataTransfer | `feature/ocpp201-data-transfer` | Low | 1 new | 📋 |
-| Reservation | `feature/ocpp201-reservation` | Low | 3 new | 📋 |
+| Provisioning | `feature/ocpp201-provisioning` | Critical | 5 to upgrade | ✅ (5/5) |
+| MeterValues | `feature/ocpp201-meter-values` | Critical | 1 to upgrade | ✅ (1/1) |
+| Remote Control | `feature/ocpp201-remote-control` | Critical | 3 to upgrade | ✅ (3/3) |
+| Transaction | `feature/ocpp201-transaction` | High | 1 new | ✅ (1/1) |
+| Smart Charging | `feature/ocpp201-smart-charging` | High | 9 new | ✅ (9/9) |
+| Availability | `feature/ocpp201-availability` | Medium | 2 to handle | ✅ (2/2) |
+| Firmware Management | `feature/ocpp201-firmware-management` | Medium | 5 new | ✅ (5/5) |
+| Diagnostics | `feature/ocpp201-diagnostics` | Medium | 10 new | ✅ (10/10) |
+| Display Message | `feature/ocpp201-display-message` | Low | 4 new | ✅ (4/4) |
+| Local Auth List | `feature/ocpp201-local-auth-list` | Low | 2 to upgrade | ✅ (2/2) |
+| DataTransfer | `feature/ocpp201-data-transfer` | Low | 1 new | ✅ (1/1) |
+| Reservation | `feature/ocpp201-reservation` | Low | 3 new | ✅ (3/3) |
 | Security | `feature/ocpp201-security` | Medium | 2 to upgrade | ✅ (2/2) |
 
 ---
@@ -703,4 +703,4 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 **Created by:** Patricio (AI Assistant)
-**Last Updated:** 2026-02-16
+**Last Updated:** 2026-02-17
