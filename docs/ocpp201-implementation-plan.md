@@ -46,7 +46,8 @@ feature/ocpp201-security
 
 **Branch:** `feature/ocpp201-provisioning`
 **Priority:** Critical
-**Status:** 📋 Not Started (3/8 fully implemented)
+**Status:** ✅ Complete (5/5)
+**Completed:** 2026-02-17
 **Complexity:** Medium
 
 ### Messages to Upgrade/Implement
@@ -116,10 +117,10 @@ feature/ocpp201-security
 ---
 
 ### Module 1 Completion Checklist
-- [ ] All Provisioning handlers store meaningful data
-- [ ] Unit tests updated
-- [ ] Create PR: `feature/ocpp201-provisioning` → `main`
-- [ ] Merge to main
+- [x] All Provisioning handlers store meaningful data
+- [x] Unit tests updated
+- [x] Create MR: `feature/ocpp201-provisioning` → `main`
+- [ ] Merge to main *(pending maintainer merge; automation remote currently exposes feature branches only)*
 
 ---
 
