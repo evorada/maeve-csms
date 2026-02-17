@@ -142,7 +142,7 @@ func NewRouter(emitter transport.Emitter,
 				NewRequest:     func() ocpp.Request { return new(ocpp201.StatusNotificationRequestJson) },
 				RequestSchema:  "ocpp201/StatusNotificationRequest.json",
 				ResponseSchema: "ocpp201/StatusNotificationResponse.json",
-				Handler:        handlers.CallHandlerFunc(StatusNotificationHandler),
+				Handler:        StatusNotificationHandler{Store: engine},
 			},
 			"SignCertificate": {
 				NewRequest:     func() ocpp.Request { return new(ocpp201.SignCertificateRequestJson) },
