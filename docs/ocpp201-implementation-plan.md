@@ -590,25 +590,31 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 **Branch:** `feature/ocpp201-reservation`
 **Priority:** Low
-**Status:** 📋 Not Started (0/2)
+**Status:** ✅ Complete (3/3)
 **Complexity:** Medium
 
 ### Task 12.1: ReserveNow (CSMS→CS, New)
+**Status:** ✅ Complete
+**Completed:** 2026-02-17
 **Complexity:** Medium
-- [ ] Create types + handler + routing + CallMaker
-- [ ] Track reservation state
+- [x] Create types + handler + routing + CallMaker
+- [x] Track reservation state
 
 ---
 
 ### Task 12.2: CancelReservation (CSMS→CS, New)
+**Status:** ✅ Complete
+**Completed:** 2026-02-17
 **Complexity:** Low
-- [ ] Create handler + routing + CallMaker
+- [x] Create handler + routing + CallMaker
 
 ---
 
 ### Task 12.3: ReservationStatusUpdate (CS→CSMS, New)
+**Status:** ✅ Complete
+**Completed:** 2026-02-17
 **Complexity:** Low
-- [ ] Create handler + Call route
+- [x] Create handler + Call route
 
 ---
 
@@ -619,8 +625,9 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Module 12 Completion Checklist
-- [ ] All Reservation handlers
-- [ ] Create PR → Merge
+- [x] All Reservation handlers
+- [x] Create MR: `feature/ocpp201-reservation` → `main`
+- [ ] Merge to `main`
 
 ---
 
