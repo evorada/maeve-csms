@@ -582,8 +582,12 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Task 9.2: GetDisplayMessages (CSMS→CS, New)
+**Status:** ✅ Complete
+**Completed:** 2026-02-17
 **Complexity:** Medium
-- [ ] Create handler + routing + CallMaker
+- [x] Create handler + routing + CallMaker
+- [x] Add OCPP request/response types + status enum
+- [x] Write unit tests (`get_display_messages_result_test.go`) + routing coverage updates
 
 ---
 

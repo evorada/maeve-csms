@@ -341,6 +341,14 @@ func TestRoutingCallResults(t *testing.T) {
 				Status: types.GenericDeviceModelStatusEnumTypeEmptyResultSet,
 			},
 		},
+		"GetDisplayMessages": {
+			request: &types.GetDisplayMessagesRequestJson{
+				RequestId: 52,
+			},
+			response: &types.GetDisplayMessagesResponseJson{
+				Status: types.GetDisplayMessagesStatusEnumTypeAccepted,
+			},
+		},
 		"GetInstalledCertificateIds": {
 			request: &types.GetInstalledCertificateIdsRequestJson{
 				CertificateType: []types.GetCertificateIdUseEnumType{
@@ -633,6 +641,9 @@ func TestCallMaker(t *testing.T) {
 		"GetBaseReport": &types.GetBaseReportRequestJson{
 			RequestId:  42,
 			ReportBase: types.ReportBaseEnumTypeSummaryInventory,
+		},
+		"GetDisplayMessages": &types.GetDisplayMessagesRequestJson{
+			RequestId: 42,
 		},
 		"GetInstalledCertificateIds": &types.GetInstalledCertificateIdsRequestJson{
 			CertificateType: []types.GetCertificateIdUseEnumType{
