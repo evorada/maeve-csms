@@ -11,8 +11,8 @@ CREATE TABLE meter_values (
 );
 
 -- Index for querying by charge station and EVSE
-CREATE INDEX idx_meter_values_station_evse ON meter_values(charge_station_id, evse_id);
+CREATE INDEX idx_standalone_meter_values_station_evse ON meter_values(charge_station_id, evse_id);
 -- Index for querying by timestamp
-CREATE INDEX idx_meter_values_timestamp ON meter_values(timestamp);
+CREATE INDEX idx_standalone_meter_values_timestamp ON meter_values(timestamp);
 -- Index for querying by transaction (when present)
-CREATE INDEX idx_meter_values_transaction ON meter_values(transaction_id) WHERE transaction_id IS NOT NULL;
+CREATE INDEX idx_standalone_meter_values_transaction ON meter_values(transaction_id) WHERE transaction_id IS NOT NULL;
