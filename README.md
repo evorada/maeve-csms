@@ -1,7 +1,7 @@
 [![Manager](https://github.com/evorada/maeve-csms/workflows/Manager/badge.svg)](https://github.com/evorada/maeve-csms/actions/workflows/manager.yml)
 [![Gateway](https://github.com/evorada/maeve-csms/workflows/Gateway/badge.svg)](https://github.com/evorada/maeve-csms/actions/workflows/gateway.yml)
 
-![](./docs/assets/maeve_logo.svg)
+![](https://github.com/evorada/maeve-csms/raw/refs/heads/main/docs/assets/maeve_logo.svg)
 
 MaEVe is an EV charge station management system (CSMS). It began life as a simple proof of concept for
 implementing ISO-15118-2 Plug and Charge (PnC) functionality and remains a work in progress. It is hoped that over
