@@ -169,42 +169,44 @@ feature/ocpp201-security
 
 **Branch:** `feature/ocpp201-remote-control`
 **Priority:** Critical
-**Status:** 📋 Not Started (0/3 fully implemented)
+**Status:** ✅ Complete (3/3 fully implemented)
+**Completed:** 2026-02-17
 **Complexity:** Low
 
 All three handlers exist as CallResult-only. The CallMaker can already initiate these. Just need meaningful result processing.
 
 ### Task 3.1: RequestStartTransaction - Track Result
-**Status:** ⚠️ Partial → ✅
+**Status:** ✅ Complete
 **Complexity:** Low
 
-- [ ] Store remote start result (transaction ID mapping)
-- [ ] Update `manager/handlers/ocpp201/request_start_transaction_result.go`
-- [ ] Update test
+- [x] Store remote start result (transaction ID mapping)
+- [x] Update `manager/handlers/ocpp201/request_start_transaction_result.go`
+- [x] Update tests (`request_start_transaction_result_test.go`)
 
 ---
 
 ### Task 3.2: RequestStopTransaction - Track Result
-**Status:** ⚠️ Partial → ✅
+**Status:** ✅ Complete
 **Complexity:** Low
 
-- [ ] Store remote stop result
-- [ ] Update `manager/handlers/ocpp201/request_stop_transaction_result.go`
-- [ ] Update test
+- [x] Store remote stop result
+- [x] Update `manager/handlers/ocpp201/request_stop_transaction_result.go`
+- [x] Update tests (`request_stop_transaction_result_test.go`)
 
 ---
 
 ### Task 3.3: UnlockConnector - Track Result
-**Status:** ⚠️ Partial → ✅
+**Status:** ✅ Complete
 **Complexity:** Low
 
-- [ ] Already functional as trace-only; optionally persist
-- [ ] Update `manager/handlers/ocpp201/unlock_connector_result.go`
+- [x] Persist unlock connector results from CallResult handling
+- [x] Update `manager/handlers/ocpp201/unlock_connector_result.go`
+- [x] Update tests (`unlock_connector_result_test.go`)
 
 ---
 
 ### Module 3 Completion Checklist
-- [ ] All 3 Remote Control handlers upgraded
+- [x] All 3 Remote Control handlers upgraded
 - [ ] Create PR → Merge
 
 ---
