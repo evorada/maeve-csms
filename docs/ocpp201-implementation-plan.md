@@ -163,7 +163,7 @@ feature/ocpp201-security
 
 **Branch:** `feature/ocpp201-meter-values`
 **Priority:** Critical
-**Status:** 🚧 In Progress (1/1)
+**Status:** ✅ Complete (1/1)
 **Complexity:** Medium
 
 ### Task 2.1: MeterValues - Add Storage
@@ -191,7 +191,8 @@ feature/ocpp201-security
 ### Module 2 Completion Checklist
 - [x] MeterValues stored with full fidelity
 - [x] Unit tests
-- [ ] Create PR → Merge
+- [x] Create MR: `feature/ocpp201-meter-values` → `main` (MR !4: https://gitlab.com/evorada/maeve-csms/-/merge_requests/4)
+- [ ] Merge to main
 
 ---
 
