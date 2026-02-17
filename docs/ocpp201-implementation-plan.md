@@ -569,7 +569,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 **Branch:** `feature/ocpp201-display-message`
 **Priority:** Low
-**Status:** 🚧 In Progress (1/4)
+**Status:** 🚧 In Progress (3/4)
 **Complexity:** Medium
 
 ### Task 9.1: SetDisplayMessage (CSMS→CS, New)
@@ -592,8 +592,12 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Task 9.3: ClearDisplayMessage (CSMS→CS, New)
+**Status:** ✅ Complete
+**Completed:** 2026-02-17
 **Complexity:** Low
-- [ ] Create handler + routing + CallMaker
+- [x] Create handler + routing + CallMaker
+- [x] Add OCPP request/response types + status enum
+- [x] Write unit tests (`clear_display_message_result_test.go`) + routing coverage updates
 
 ---
 

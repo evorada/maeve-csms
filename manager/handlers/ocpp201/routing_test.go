@@ -319,6 +319,12 @@ func TestRoutingCallResults(t *testing.T) {
 				},
 			},
 		},
+		"ClearDisplayMessage": {
+			request: &types.ClearDisplayMessageRequestJson{Id: 123},
+			response: &types.ClearDisplayMessageResponseJson{
+				Status: types.ClearMessageStatusEnumTypeAccepted,
+			},
+		},
 		"DeleteCertificate": {
 			request: &types.DeleteCertificateRequestJson{
 				CertificateHashData: types.CertificateHashDataType{
@@ -630,6 +636,7 @@ func TestCallMaker(t *testing.T) {
 		},
 		"ClearCache":              &types.ClearCacheRequestJson{},
 		"ClearVariableMonitoring": &types.ClearVariableMonitoringRequestJson{Id: []int{1}},
+		"ClearDisplayMessage":     &types.ClearDisplayMessageRequestJson{Id: 1},
 		"DeleteCertificate": &types.DeleteCertificateRequestJson{
 			CertificateHashData: types.CertificateHashDataType{
 				HashAlgorithm:  types.HashAlgorithmEnumTypeSHA256,
