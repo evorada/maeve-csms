@@ -594,9 +594,13 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 **Complexity:** Medium
 
 ### Task 12.1: ReserveNow (CSMS→CS, New)
+**Status:** ✅ Complete
 **Complexity:** Medium
-- [x] Create types + handler + routing + CallMaker
-- [x] Track reservation state
+**Completed:** 2026-02-17
+- [x] Create `ReserveNowRequestJson` / `ReserveNowResponseJson` types (+ enums)
+- [x] Implement `ReserveNowResultHandler` with reservation persistence on Accepted
+- [x] Register in `routing.go` CallResultRoutes + CallMaker Actions
+- [x] Add unit tests (`reserve_now_result_test.go`) + routing coverage updates
 
 ---
 
