@@ -108,11 +108,13 @@ feature/ocpp201-security
 ---
 
 #### Task 1.5: Reset - Track Reset Status
-**Status:** ⚠️ Partial → ✅
+**Status:** ✅ Complete
 **Complexity:** Low
+**Completed:** 2026-02-17
+**Commit:** 789b256
 
-- [ ] Log reset acceptance/rejection meaningfully
-- [ ] Update `manager/handlers/ocpp201/reset_result.go`
+- [x] Log reset acceptance/rejection meaningfully
+- [x] Update `manager/handlers/ocpp201/reset_result.go`
 
 ---
 
