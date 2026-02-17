@@ -1,20 +1,149 @@
 [![Manager](https://github.com/evorada/maeve-csms/workflows/Manager/badge.svg)](https://github.com/evorada/maeve-csms/actions/workflows/manager.yml)
 [![Gateway](https://github.com/evorada/maeve-csms/workflows/Gateway/badge.svg)](https://github.com/evorada/maeve-csms/actions/workflows/gateway.yml)
 
-# MaEVe
+![](./docs/assets/maeve_logo.svg)
 
 MaEVe is an EV charge station management system (CSMS). It began life as a simple proof of concept for
 implementing ISO-15118-2 Plug and Charge (PnC) functionality and remains a work in progress. It is hoped that over
 time it will become more complete, but already provides a useful basis for experimentation.
 
-The system currently integrates with [Hubject](https://hubject.stoplight.io/) for PnC functionality.
+Originally developed by [Thoughtworks](https://github.com/thoughtworks/maeve-csms), the project was archived on Jun 2, 2025 and has been revived and maintained by [EVorada](https://github.com/evorada/maeve-csms) since then. 
+
+The system currently integrates with [Hubject](https://hubject.stoplight.io/) for PnC functionality and fully supports OCPP 1.6 and 2.0.1.
 
 ## Table of Contents
+- [OCPP Support](#ocpp-support)
+- [Storage Backends](#storage-backends)
 - [Documentation](#documentation)
 - [Getting Started](#getting-started)
 - [Configuration](#configuration)
 - [Contributing](#contributing)
 - [License](#license)
+
+## OCPP Support
+
+MaEVe fully supports **OCPP 1.6j** and **OCPP 2.0.1**. Charge stations negotiate the protocol version via the WebSocket `Sec-WebSocket-Protocol` header; the gateway defaults to OCPP 2.0.1 when no preference is indicated.
+
+### Message Handler Coverage
+
+The table below lists every implemented action:
+
+| Action | 1.6 Call | 1.6 CallResult | 2.0.1 Call | 2.0.1 CallResult |
+|---|:---:|:---:|:---:|:---:|
+| Authorize | ✅ | | ✅ | |
+| BootNotification | ✅ | | ✅ | |
+| CancelReservation | | ✅ | | |
+| CertificateSigned | | ✅ | | ✅ |
+| ChangeAvailability | | ✅ | | ✅ |
+| ChangeConfiguration | | ✅ | | |
+| ClearCache | | ✅ | | ✅ |
+| ClearChargingProfile | | ✅ | | ✅ |
+| ClearedChargingLimit | | | ✅ | |
+| CostUpdated | | | | ✅ |
+| DataTransfer (PnC) | ✅ | ✅ | | |
+| DeleteCertificate | | ✅ | | ✅ |
+| DiagnosticsStatusNotification | ✅ | | | |
+| ExtendedTriggerMessage | | ✅ | | |
+| FirmwareStatusNotification | ✅ | | ✅ | |
+| Get15118EVCertificate | ✅ | | ✅ | |
+| GetBaseReport | | | | ✅ |
+| GetCertificateStatus | ✅ | | ✅ | |
+| GetChargingProfiles | | | | ✅ |
+| GetCompositeSchedule | | ✅ | | ✅ |
+| GetConfiguration | | ✅ | | |
+| GetDiagnostics | | ✅ | | |
+| GetInstalledCertificateIds | | ✅ | | ✅ |
+| GetLocalListVersion | | ✅ | | ✅ |
+| GetLog | | ✅ | | |
+| GetReport | | | | ✅ |
+| GetTransactionStatus | | | | ✅ |
+| GetVariables | | | | ✅ |
+| Heartbeat | ✅ | | ✅ | |
+| InstallCertificate | | ✅ | | ✅ |
+| LogStatusNotification | ✅ | | ✅ | |
+| MeterValues | ✅ | | ✅ | |
+| NotifyChargingLimit | | | ✅ | |
+| NotifyEVChargingNeeds | | | ✅ | |
+| NotifyEVChargingSchedule | | | ✅ | |
+| NotifyReport | | | ✅ | |
+| RemoteStartTransaction | | ✅ | | |
+| RemoteStopTransaction | | ✅ | | |
+| ReportChargingProfiles | | | ✅ | |
+| RequestStartTransaction | | | | ✅ |
+| RequestStopTransaction | | | | ✅ |
+| ReserveNow | | ✅ | | |
+| Reset | | ✅ | | ✅ |
+| SecurityEventNotification | ✅ | | ✅ | |
+| SendLocalList | | ✅ | | ✅ |
+| SetChargingProfile | | ✅ | | ✅ |
+| SetNetworkProfile | | | | ✅ |
+| SetVariables | | | | ✅ |
+| SignCertificate | ✅ | | ✅ | |
+| SignedFirmwareStatusNotification | ✅ | | | |
+| SignedUpdateFirmware | | ✅ | | |
+| StartTransaction | ✅ | | | |
+| StatusNotification | ✅ | | ✅ | |
+| StopTransaction | ✅ | | | |
+| TransactionEvent | | | ✅ | |
+| TriggerMessage | | ✅ | | ✅ |
+| UnlockConnector | | ✅ | | ✅ |
+| UpdateFirmware | | ✅ | | |
+
+## Storage Backends
+
+MaEVe supports three pluggable storage backends, selected via the `type` field in the `[storage]` section of the manager configuration.
+
+| Feature | PostgreSQL | Firestore | In-Memory |
+|---|:---:|:---:|:---:|
+| **Config type key** | `postgres` | `firestore` | `in_memory` |
+| **Persistent storage** | ✅ | ✅ | |
+| **Self-hosted** | ✅ | | ✅ |
+| **Open source** | ✅ | | ✅ |
+| **ACID transactions** | ✅ | | |
+| **Multi-instance support** | ✅ | ✅ | |
+| **Auto-migrations** | ✅ | | |
+| **Recommended for production** | ✅ | ✅ | |
+
+### PostgreSQL
+
+A self-hosted, open-source option backed by [pgx/v5](https://github.com/jackc/pgx) with connection pooling and type-safe queries via [sqlc](https://sqlc.dev/). Schema migrations run automatically on startup or via the `manager migrate` command. A ready-to-use Docker Compose file is provided at `docker-compose-postgres.yml`.
+
+```toml
+[storage]
+type = "postgres"
+
+[storage.postgres]
+host = "localhost"
+port = 5432
+database = "maeve_csms"
+user = "maeve"
+password = "your_secure_password"
+ssl_mode = "disable"  # use "require" or "verify-full" in production
+run_migrations = true
+```
+
+See [manager/store/postgres/README.md](./manager/store/postgres/README.md) for full setup instructions, migration commands, and performance tuning.
+
+### Firestore
+
+Google Cloud Firestore — a managed, serverless document database. Requires a GCP project ID. This is the default backend in the example configuration.
+
+```toml
+[storage]
+type = "firestore"
+
+[storage.firestore]
+project_id = "your-gcp-project-id"
+```
+
+### In-Memory
+
+A volatile, non-persistent store held entirely in process memory. All data is lost on restart. Does not support running more than one manager instance simultaneously. Intended for unit testing and local development only — no configuration parameters required.
+
+```toml
+[storage]
+type = "in_memory"
+```
 
 ## Documentation
 MaEVe is implemented in Go 1.20. Learn more about MaEVe and its existing components through this [High-level design document](./docs/design.md).
@@ -83,16 +212,6 @@ The gateway is configured through command-line flags. The available flags can be
 The manager is configured through a TOML configuration file. An example configuration file can be found in 
 [./config/manager/config.toml](./config/manager/config.toml). Details of the available configuration options
 can be found in [./manager/config/README.md](./manager/config/README.md).
-
-### Storage Options
-
-MaEVe supports multiple storage backends:
-
-- **Firestore** - Google Cloud Firestore (default in the example configuration)
-- **PostgreSQL** - Self-hosted PostgreSQL database (recommended for production deployments)
-- **In-Memory** - Volatile storage for testing and development
-
-To use PostgreSQL as your storage backend, see the [PostgreSQL storage documentation](./manager/store/postgres/README.md) for setup instructions and configuration examples. A ready-to-use Docker Compose setup with PostgreSQL is available in `docker-compose-postgres.yml`.
 
 ## Contributing
 
