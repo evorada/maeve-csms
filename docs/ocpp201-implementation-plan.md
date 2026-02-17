@@ -655,7 +655,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ### Module 13 Completion Checklist
 - [x] All Security handlers with store logic
 - [x] Create MR: `feature/ocpp201-security` → `main` (MR !3)
-- [ ] Merge to `main`
+- [ ] Merge to `main` *(pending maintainer merge; automation remote currently exposes feature branches only)*
 
 ---
 
