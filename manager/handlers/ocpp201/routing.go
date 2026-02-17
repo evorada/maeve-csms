@@ -357,7 +357,9 @@ func NewRouter(emitter transport.Emitter,
 				NewResponse:    func() ocpp.Response { return new(ocpp201.SendLocalListResponseJson) },
 				RequestSchema:  "ocpp201/SendLocalListRequest.json",
 				ResponseSchema: "ocpp201/SendLocalListResponse.json",
-				Handler:        SendLocalListResultHandler{},
+				Handler: SendLocalListResultHandler{
+					Store: engine,
+				},
 			},
 			"SetDisplayMessage": {
 				NewRequest:     func() ocpp.Request { return new(ocpp201.SetDisplayMessageRequestJson) },

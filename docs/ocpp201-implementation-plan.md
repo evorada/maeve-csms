@@ -602,9 +602,19 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Task 10.2: SendLocalList - Upgrade
+**Status:** ✅ Complete
 **Complexity:** Medium
-- [ ] Track list sync status
-- [ ] Update `send_local_list_result.go`
+**Completed:** 2026-02-17
+- [x] Track list sync status
+- [x] Update `send_local_list_result.go`
+- [x] Update `send_local_list_result_test.go`
+- [x] Update routing to inject LocalAuthListStore
+
+**Implementation:**
+- Handler now persists full local auth list payload when `SendLocalList` is accepted
+- Maps OCPP id token / id token info into `store.LocalAuthListEntry` records
+- Keeps trace attributes and ignores non-accepted statuses without mutating store
+- Added tests covering accepted persistence and rejected/no-op behavior
 
 ---
 
@@ -615,7 +625,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Module 10 Completion Checklist
-- [ ] Both LocalAuthList handlers upgraded
+- [x] Both LocalAuthList handlers upgraded
 - [ ] Create PR → Merge
 
 ---
@@ -722,7 +732,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 | Firmware Management | `feature/ocpp201-firmware-management` | Medium | 5 new | 📋 |
 | Diagnostics | `feature/ocpp201-diagnostics` | Medium | 10 new | 📋 |
 | Display Message | `feature/ocpp201-display-message` | Low | 4 new | 📋 |
-| Local Auth List | `feature/ocpp201-local-auth-list` | Low | 2 to upgrade | 📋 |
+| Local Auth List | `feature/ocpp201-local-auth-list` | Low | 2 to upgrade | ✅ (2/2) |
 | DataTransfer | `feature/ocpp201-data-transfer` | Low | 1 new | 📋 |
 | Reservation | `feature/ocpp201-reservation` | Low | 3 new | 📋 |
 | Security | `feature/ocpp201-security` | Medium | 2 to upgrade | 📋 |
