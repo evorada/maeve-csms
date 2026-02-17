@@ -501,6 +501,21 @@ func TestRoutingCallResults(t *testing.T) {
 				Status: types.SendLocalListStatusEnumTypeAccepted,
 			},
 		},
+		"SetDisplayMessage": {
+			request: &types.SetDisplayMessageRequestJson{
+				Message: types.MessageInfoType{
+					Id:       11,
+					Priority: types.MessagePriorityEnumTypeAlwaysFront,
+					Message: types.MessageContentType{
+						Format:  types.MessageFormatEnumTypeUTF8,
+						Content: "Ready to charge",
+					},
+				},
+			},
+			response: &types.SetDisplayMessageResponseJson{
+				Status: types.DisplayMessageStatusEnumTypeAccepted,
+			},
+		},
 		"SetNetworkProfile": {
 			request: &types.SetNetworkProfileRequestJson{
 				ConfigurationSlot: 1,
@@ -515,21 +530,6 @@ func TestRoutingCallResults(t *testing.T) {
 			},
 			response: &types.SetNetworkProfileResponseJson{
 				Status: types.SetNetworkProfileStatusEnumTypeFailed,
-			},
-		},
-		"SetDisplayMessage": {
-			request: &types.SetDisplayMessageRequestJson{
-				Message: types.MessageInfoType{
-					Id:       100,
-					Priority: types.MessagePriorityEnumTypeInFront,
-					Message: types.MessageContentType{
-						Format:  types.MessageFormatEnumTypeUTF8,
-						Content: "Welcome",
-					},
-				},
-			},
-			response: &types.SetDisplayMessageResponseJson{
-				Status: types.DisplayMessageStatusEnumTypeAccepted,
 			},
 		},
 		"SetMonitoringBase": {
@@ -715,6 +715,16 @@ func TestCallMaker(t *testing.T) {
 			UpdateType:    types.UpdateEnumTypeDifferential,
 			VersionNumber: 12,
 		},
+		"SetDisplayMessage": &types.SetDisplayMessageRequestJson{
+			Message: types.MessageInfoType{
+				Id:       12,
+				Priority: types.MessagePriorityEnumTypeNormalCycle,
+				Message: types.MessageContentType{
+					Format:  types.MessageFormatEnumTypeUTF8,
+					Content: "Welcome",
+				},
+			},
+		},
 		"SetNetworkProfile": &types.SetNetworkProfileRequestJson{
 			ConfigurationSlot: 1,
 			ConnectionData: types.NetworkConnectionProfileType{
@@ -724,16 +734,6 @@ func TestCallMaker(t *testing.T) {
 				OcppTransport:   types.OCPPTransportEnumTypeJSON,
 				OcppVersion:     types.OCPPVersionEnumTypeOCPP20,
 				SecurityProfile: 2,
-			},
-		},
-		"SetDisplayMessage": &types.SetDisplayMessageRequestJson{
-			Message: types.MessageInfoType{
-				Id:       7,
-				Priority: types.MessagePriorityEnumTypeAlwaysFront,
-				Message: types.MessageContentType{
-					Format:  types.MessageFormatEnumTypeASCII,
-					Content: "Hello",
-				},
 			},
 		},
 		"SetMonitoringBase": &types.SetMonitoringBaseRequestJson{

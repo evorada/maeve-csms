@@ -529,30 +529,50 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 **Branch:** `feature/ocpp201-display-message`
 **Priority:** Low
-**Status:** 📋 Not Started (0/3)
+**Status:** ✅ Complete (4/4)
 **Complexity:** Medium
 
 ### Task 9.1: SetDisplayMessage (CSMS→CS, New)
+**Status:** ✅ Complete
 **Complexity:** Medium
-- [ ] Create types + handler + routing + CallMaker
+**Completed:** 2026-02-17
+- [x] Create `SetDisplayMessageRequestJson` / `SetDisplayMessageResponseJson` types (+ enums)
+- [x] Implement `SetDisplayMessageResultHandler`
+- [x] Register in `routing.go` CallResultRoutes + CallMaker Actions
+- [x] Add unit tests (`set_display_message_result_test.go`) + routing coverage updates
 
 ---
 
 ### Task 9.2: GetDisplayMessages (CSMS→CS, New)
+**Status:** ✅ Complete
 **Complexity:** Medium
-- [ ] Create handler + routing + CallMaker
+**Completed:** 2026-02-16
+- [x] Create `GetDisplayMessagesRequestJson` / `GetDisplayMessagesResponseJson` types
+- [x] Implement `GetDisplayMessagesResultHandler` with trace attributes for request criteria/status
+- [x] Register in `routing.go` CallResultRoutes + CallMaker Actions
+- [x] Add unit tests (`get_display_messages_result_test.go`)
 
 ---
 
 ### Task 9.3: ClearDisplayMessage (CSMS→CS, New)
+**Status:** ✅ Complete
 **Complexity:** Low
-- [ ] Create handler + routing + CallMaker
+**Completed:** 2026-02-16
+- [x] Create `ClearDisplayMessageRequestJson` / `ClearDisplayMessageResponseJson` types (+ enums)
+- [x] Implement `ClearDisplayMessageResultHandler`
+- [x] Register in `routing.go` CallResultRoutes + CallMaker Actions
+- [x] Add unit tests (`clear_display_message_result_test.go`) + routing coverage updates
 
 ---
 
 ### Task 9.4: NotifyDisplayMessages (CS→CSMS, New)
+**Status:** ✅ Complete
 **Complexity:** Low
-- [ ] Create handler + Call route
+**Completed:** 2026-02-17
+- [x] Create `NotifyDisplayMessagesRequestJson` / `NotifyDisplayMessagesResponseJson` types
+- [x] Implement `NotifyDisplayMessagesHandler` with trace attributes for request fragments
+- [x] Register in `routing.go` CallRoutes
+- [x] Add unit tests (`notify_display_messages_test.go`)
 
 ---
 
@@ -563,7 +583,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Module 9 Completion Checklist
-- [ ] All DisplayMessage handlers
+- [x] All DisplayMessage handlers
 - [ ] Create PR → Merge
 
 ---
@@ -572,20 +592,39 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 **Branch:** `feature/ocpp201-local-auth-list`
 **Priority:** Low
-**Status:** 📋 Not Started (0/2 fully implemented)
+**Status:** 🚧 In Progress (1/2 fully implemented)
 **Complexity:** Medium
 
 ### Task 10.1: GetLocalListVersion - Upgrade
+**Status:** ✅ Complete
 **Complexity:** Low
-- [ ] Store/track list version per charge station
-- [ ] Update `get_local_list_version_result.go`
+**Completed:** 2026-02-17
+- [x] Store/track list version per charge station
+- [x] Update `get_local_list_version_result.go`
+- [x] Update `get_local_list_version_result_test.go`
+- [x] Update routing to inject LocalAuthListStore
+
+**Implementation:**
+- Handler now persists reported local auth list version per charge station via `LocalAuthListStore`
+- Uses `UpdateLocalAuthList(..., Differential, nil)` to safely update version without mutating entries
+- Added test coverage to verify version persistence and trace attributes
 
 ---
 
 ### Task 10.2: SendLocalList - Upgrade
+**Status:** ✅ Complete
 **Complexity:** Medium
-- [ ] Track list sync status
-- [ ] Update `send_local_list_result.go`
+**Completed:** 2026-02-17
+- [x] Track list sync status
+- [x] Update `send_local_list_result.go`
+- [x] Update `send_local_list_result_test.go`
+- [x] Update routing to inject LocalAuthListStore
+
+**Implementation:**
+- Handler now persists full local auth list payload when `SendLocalList` is accepted
+- Maps OCPP id token / id token info into `store.LocalAuthListEntry` records
+- Keeps trace attributes and ignores non-accepted statuses without mutating store
+- Added tests covering accepted persistence and rejected/no-op behavior
 
 ---
 
@@ -596,7 +635,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 ---
 
 ### Module 10 Completion Checklist
-- [ ] Both LocalAuthList handlers upgraded
+- [x] Both LocalAuthList handlers upgraded
 - [ ] Create PR → Merge
 
 ---
@@ -616,6 +655,14 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 - [ ] Create extensible vendor routing (similar to OCPP 1.6 pattern)
 - [ ] Add Call route + CallResult route in `routing.go`
 - [ ] Write tests
+
+**Implementation:**
+- Added OCPP 2.0.1 `DataTransferRequestJson` / `DataTransferResponseJson` types with `DataTransferStatusEnumType`
+- Implemented `DataTransferHandler` for CS→CSMS Call routing by `vendorId + messageId`
+- Implemented `DataTransferResultHandler` for CSMS→CS CallResult routing by `vendorId + messageId`
+- Wired both routes into `routing.go` and added `DataTransfer` to CallMaker actions
+- Added focused tests in `data_transfer_test.go` covering call routing, unknown vendor/message handling, and CallResult routing
+- 2026-02-17 follow-up: added missing `DataTransfer` CallResult route registration and routing coverage assertions
 
 ---
 
@@ -703,7 +750,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 | Firmware Management | `feature/ocpp201-firmware-management` | Medium | 5 new | 📋 |
 | Diagnostics | `feature/ocpp201-diagnostics` | Medium | 10 new | 📋 |
 | Display Message | `feature/ocpp201-display-message` | Low | 4 new | 📋 |
-| Local Auth List | `feature/ocpp201-local-auth-list` | Low | 2 to upgrade | 📋 |
+| Local Auth List | `feature/ocpp201-local-auth-list` | Low | 2 to upgrade | ✅ (2/2) |
 | DataTransfer | `feature/ocpp201-data-transfer` | Low | 1 new | 📋 |
 | Reservation | `feature/ocpp201-reservation` | Low | 3 new | 📋 |
 | Security | `feature/ocpp201-security` | Medium | 2 to upgrade | 📋 |
