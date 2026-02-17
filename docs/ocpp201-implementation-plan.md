@@ -569,12 +569,15 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 **Branch:** `feature/ocpp201-display-message`
 **Priority:** Low
-**Status:** 📋 Not Started (0/3)
+**Status:** 🚧 In Progress (1/4)
 **Complexity:** Medium
 
 ### Task 9.1: SetDisplayMessage (CSMS→CS, New)
+**Status:** ✅ Complete
+**Completed:** 2026-02-17
 **Complexity:** Medium
-- [ ] Create types + handler + routing + CallMaker
+- [x] Create types + handler + routing + CallMaker
+- [x] Write unit tests
 
 ---
 

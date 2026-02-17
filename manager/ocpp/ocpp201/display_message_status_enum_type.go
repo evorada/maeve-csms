@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+
+package ocpp201
+
+type DisplayMessageStatusEnumType string
+
+const DisplayMessageStatusEnumTypeAccepted DisplayMessageStatusEnumType = "Accepted"
+const DisplayMessageStatusEnumTypeNotSupportedMessageFormat DisplayMessageStatusEnumType = "NotSupportedMessageFormat"
+const DisplayMessageStatusEnumTypeRejected DisplayMessageStatusEnumType = "Rejected"
+const DisplayMessageStatusEnumTypeNotSupportedPriority DisplayMessageStatusEnumType = "NotSupportedPriority"
+const DisplayMessageStatusEnumTypeNotSupportedState DisplayMessageStatusEnumType = "NotSupportedState"
+const DisplayMessageStatusEnumTypeUnknownTransaction DisplayMessageStatusEnumType = "UnknownTransaction"

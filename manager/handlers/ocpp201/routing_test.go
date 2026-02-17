@@ -503,6 +503,21 @@ func TestRoutingCallResults(t *testing.T) {
 				Status: types.SetNetworkProfileStatusEnumTypeFailed,
 			},
 		},
+		"SetDisplayMessage": {
+			request: &types.SetDisplayMessageRequestJson{
+				Message: types.MessageInfoType{
+					Id:       100,
+					Priority: types.MessagePriorityEnumTypeInFront,
+					Message: types.MessageContentType{
+						Format:  types.MessageFormatEnumTypeUTF8,
+						Content: "Welcome",
+					},
+				},
+			},
+			response: &types.SetDisplayMessageResponseJson{
+				Status: types.DisplayMessageStatusEnumTypeAccepted,
+			},
+		},
 		"SetMonitoringBase": {
 			request: &types.SetMonitoringBaseRequestJson{
 				MonitoringBase: types.MonitoringBaseEnumTypeFactoryDefault,
@@ -691,6 +706,16 @@ func TestCallMaker(t *testing.T) {
 				OcppTransport:   types.OCPPTransportEnumTypeJSON,
 				OcppVersion:     types.OCPPVersionEnumTypeOCPP20,
 				SecurityProfile: 2,
+			},
+		},
+		"SetDisplayMessage": &types.SetDisplayMessageRequestJson{
+			Message: types.MessageInfoType{
+				Id:       7,
+				Priority: types.MessagePriorityEnumTypeAlwaysFront,
+				Message: types.MessageContentType{
+					Format:  types.MessageFormatEnumTypeASCII,
+					Content: "Hello",
+				},
 			},
 		},
 		"SetMonitoringBase": &types.SetMonitoringBaseRequestJson{
