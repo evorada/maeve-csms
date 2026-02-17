@@ -34,7 +34,7 @@ Example: `2026.02.17`
    - Create a GitHub Release with all artifacts
 
 4. **Review and publish the release**
-   - Go to [Releases](../../releases)
+   - Go to the Releases page on GitHub
    - The release will be created automatically
    - Review the release notes and assets
    - Publish if everything looks correct
@@ -138,7 +138,7 @@ echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
 
 ### Release workflow failed
 
-Check the [Actions tab](../../actions) for detailed logs. Common issues:
+Check the Actions tab on GitHub for detailed logs. Common issues:
 - Build failures (check tests pass locally first)
 - Docker authentication (ensure GITHUB_TOKEN has package write permissions)
 - Tag format incorrect (must match `YYYY.MM.DD` or `YYYY.MM.DD.N`)
