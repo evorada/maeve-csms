@@ -146,6 +146,41 @@ func TestRoutingCalls(t *testing.T) {
 			SeqNo:       1,
 			Tbc:         false,
 		},
+		"NotifyMonitoringReport": &types.NotifyMonitoringReportRequestJson{
+			GeneratedAt: "2026-02-16T17:50:00.000Z",
+			RequestId:   34,
+			SeqNo:       0,
+			Monitor: []types.MonitoringDataType{
+				{
+					Component: types.ComponentType{Name: "EVSE"},
+					Variable:  types.VariableType{Name: "Voltage"},
+					VariableMonitoring: []types.VariableMonitoringType{
+						{Id: 1001, Transaction: false, Value: 400, Type: types.MonitorEnumTypeUpperThreshold, Severity: 5},
+					},
+				},
+			},
+		},
+		"NotifyEvent": &types.NotifyEventRequestJson{
+			GeneratedAt: "2026-02-16T18:06:00.000Z",
+			SeqNo:       0,
+			EventData: []types.EventDataType{
+				{
+					EventId:               1,
+					Timestamp:             "2026-02-16T18:05:59.000Z",
+					Trigger:               types.EventTriggerEnumTypeAlerting,
+					ActualValue:           "OverCurrent",
+					EventNotificationType: types.EventNotificationEnumTypeCustomMonitor,
+					Component:             types.ComponentType{Name: "Connector"},
+					Variable:              types.VariableType{Name: "Current"},
+				},
+			},
+		},
+		"NotifyCustomerInformation": &types.NotifyCustomerInformationRequestJson{
+			RequestId:   35,
+			SeqNo:       0,
+			GeneratedAt: "2026-02-16T18:08:00.000Z",
+			Data:        "Customer info fragment",
+		},
 		"SecurityEventNotification": &types.SecurityEventNotificationRequestJson{
 			Timestamp: "2023-06-15T15:05:00+01:00",
 			Type:      "SettingSystemTime",
@@ -275,6 +310,21 @@ func TestRoutingCallResults(t *testing.T) {
 				Status: types.ClearCacheStatusEnumTypeAccepted,
 			},
 		},
+		"ClearVariableMonitoring": {
+			request: &types.ClearVariableMonitoringRequestJson{Id: []int{1001, 1002}},
+			response: &types.ClearVariableMonitoringResponseJson{
+				ClearMonitoringResult: []types.ClearMonitoringResultType{
+					{Id: 1001, Status: types.ClearMonitoringStatusEnumTypeAccepted},
+					{Id: 1002, Status: types.ClearMonitoringStatusEnumTypeNotFound},
+				},
+			},
+		},
+		"ClearDisplayMessage": {
+			request: &types.ClearDisplayMessageRequestJson{Id: 123},
+			response: &types.ClearDisplayMessageResponseJson{
+				Status: types.ClearMessageStatusEnumTypeAccepted,
+			},
+		},
 		"DeleteCertificate": {
 			request: &types.DeleteCertificateRequestJson{
 				CertificateHashData: types.CertificateHashDataType{
@@ -297,6 +347,14 @@ func TestRoutingCallResults(t *testing.T) {
 				Status: types.GenericDeviceModelStatusEnumTypeEmptyResultSet,
 			},
 		},
+		"GetDisplayMessages": {
+			request: &types.GetDisplayMessagesRequestJson{
+				RequestId: 52,
+			},
+			response: &types.GetDisplayMessagesResponseJson{
+				Status: types.GetDisplayMessagesStatusEnumTypeAccepted,
+			},
+		},
 		"GetInstalledCertificateIds": {
 			request: &types.GetInstalledCertificateIdsRequestJson{
 				CertificateType: []types.GetCertificateIdUseEnumType{
@@ -316,6 +374,26 @@ func TestRoutingCallResults(t *testing.T) {
 						CertificateType: types.GetCertificateIdUseEnumTypeCSMSRootCertificate,
 					},
 				},
+			},
+		},
+		"GetLog": {
+			request: &types.GetLogRequestJson{
+				RequestId: 42,
+				LogType:   types.LogEnumTypeDiagnosticsLog,
+				Log: types.LogParametersType{
+					RemoteLocation: "https://logs.example.com/upload",
+				},
+			},
+			response: &types.GetLogResponseJson{
+				Status: types.LogStatusEnumTypeAccepted,
+			},
+		},
+		"GetMonitoringReport": {
+			request: &types.GetMonitoringReportRequestJson{
+				RequestId: 19,
+			},
+			response: &types.GetMonitoringReportResponseJson{
+				Status: types.GenericDeviceModelStatusEnumTypeAccepted,
 			},
 		},
 		"GetLocalListVersion": {
@@ -439,6 +517,37 @@ func TestRoutingCallResults(t *testing.T) {
 				Status: types.SetNetworkProfileStatusEnumTypeFailed,
 			},
 		},
+		"SetDisplayMessage": {
+			request: &types.SetDisplayMessageRequestJson{
+				Message: types.MessageInfoType{
+					Id:       100,
+					Priority: types.MessagePriorityEnumTypeInFront,
+					Message: types.MessageContentType{
+						Format:  types.MessageFormatEnumTypeUTF8,
+						Content: "Welcome",
+					},
+				},
+			},
+			response: &types.SetDisplayMessageResponseJson{
+				Status: types.DisplayMessageStatusEnumTypeAccepted,
+			},
+		},
+		"SetMonitoringBase": {
+			request: &types.SetMonitoringBaseRequestJson{
+				MonitoringBase: types.MonitoringBaseEnumTypeFactoryDefault,
+			},
+			response: &types.SetMonitoringBaseResponseJson{
+				Status: types.GenericDeviceModelStatusEnumTypeAccepted,
+			},
+		},
+		"SetMonitoringLevel": {
+			request: &types.SetMonitoringLevelRequestJson{
+				Severity: 4,
+			},
+			response: &types.SetMonitoringLevelResponseJson{
+				Status: types.GenericStatusEnumTypeAccepted,
+			},
+		},
 		"SetVariables": {
 			request: &types.SetVariablesRequestJson{
 				SetVariableData: []types.SetVariableDataType{
@@ -525,7 +634,9 @@ func TestCallMaker(t *testing.T) {
 		"CancelReservation": &types.CancelReservationRequestJson{
 			ReservationId: 123,
 		},
-		"ClearCache": &types.ClearCacheRequestJson{},
+		"ClearCache":              &types.ClearCacheRequestJson{},
+		"ClearVariableMonitoring": &types.ClearVariableMonitoringRequestJson{Id: []int{1}},
+		"ClearDisplayMessage":     &types.ClearDisplayMessageRequestJson{Id: 1},
 		"DeleteCertificate": &types.DeleteCertificateRequestJson{
 			CertificateHashData: types.CertificateHashDataType{
 				HashAlgorithm:  types.HashAlgorithmEnumTypeSHA256,
@@ -538,10 +649,23 @@ func TestCallMaker(t *testing.T) {
 			RequestId:  42,
 			ReportBase: types.ReportBaseEnumTypeSummaryInventory,
 		},
+		"GetDisplayMessages": &types.GetDisplayMessagesRequestJson{
+			RequestId: 42,
+		},
 		"GetInstalledCertificateIds": &types.GetInstalledCertificateIdsRequestJson{
 			CertificateType: []types.GetCertificateIdUseEnumType{
 				types.GetCertificateIdUseEnumTypeCSMSRootCertificate,
 			},
+		},
+		"GetLog": &types.GetLogRequestJson{
+			RequestId: 42,
+			LogType:   types.LogEnumTypeDiagnosticsLog,
+			Log: types.LogParametersType{
+				RemoteLocation: "https://logs.example.com/upload",
+			},
+		},
+		"GetMonitoringReport": &types.GetMonitoringReportRequestJson{
+			RequestId: 42,
 		},
 		"GetLocalListVersion": &types.GetLocalListVersionRequestJson{},
 		"GetReport": &types.GetReportRequestJson{
@@ -601,6 +725,22 @@ func TestCallMaker(t *testing.T) {
 				OcppVersion:     types.OCPPVersionEnumTypeOCPP20,
 				SecurityProfile: 2,
 			},
+		},
+		"SetDisplayMessage": &types.SetDisplayMessageRequestJson{
+			Message: types.MessageInfoType{
+				Id:       7,
+				Priority: types.MessagePriorityEnumTypeAlwaysFront,
+				Message: types.MessageContentType{
+					Format:  types.MessageFormatEnumTypeASCII,
+					Content: "Hello",
+				},
+			},
+		},
+		"SetMonitoringBase": &types.SetMonitoringBaseRequestJson{
+			MonitoringBase: types.MonitoringBaseEnumTypeFactoryDefault,
+		},
+		"SetMonitoringLevel": &types.SetMonitoringLevelRequestJson{
+			Severity: 5,
 		},
 		"SetVariables": &types.SetVariablesRequestJson{
 			SetVariableData: []types.SetVariableDataType{

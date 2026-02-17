@@ -49,6 +49,26 @@ func (q *Queries) GetFirmwareUpdateStatus(ctx context.Context, chargeStationID s
 	return i, err
 }
 
+const GetPublishFirmwareStatus = `-- name: GetPublishFirmwareStatus :one
+SELECT charge_station_id, status, location, checksum, request_id, updated_at
+FROM publish_firmware_status
+WHERE charge_station_id = $1
+`
+
+func (q *Queries) GetPublishFirmwareStatus(ctx context.Context, chargeStationID string) (PublishFirmwareStatus, error) {
+	row := q.db.QueryRow(ctx, GetPublishFirmwareStatus, chargeStationID)
+	var i PublishFirmwareStatus
+	err := row.Scan(
+		&i.ChargeStationID,
+		&i.Status,
+		&i.Location,
+		&i.Checksum,
+		&i.RequestID,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const UpsertDiagnosticsStatus = `-- name: UpsertDiagnosticsStatus :exec
 INSERT INTO diagnostics_status (charge_station_id, status, location, updated_at)
 VALUES ($1, $2, $3, $4)
@@ -102,6 +122,38 @@ func (q *Queries) UpsertFirmwareUpdateStatus(ctx context.Context, arg UpsertFirm
 		arg.Location,
 		arg.RetrieveDate,
 		arg.RetryCount,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
+const UpsertPublishFirmwareStatus = `-- name: UpsertPublishFirmwareStatus :exec
+INSERT INTO publish_firmware_status (charge_station_id, status, location, checksum, request_id, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (charge_station_id) DO UPDATE SET
+    status = EXCLUDED.status,
+    location = EXCLUDED.location,
+    checksum = EXCLUDED.checksum,
+    request_id = EXCLUDED.request_id,
+    updated_at = EXCLUDED.updated_at
+`
+
+type UpsertPublishFirmwareStatusParams struct {
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	Status          string             `db:"status" json:"status"`
+	Location        string             `db:"location" json:"location"`
+	Checksum        string             `db:"checksum" json:"checksum"`
+	RequestID       int32              `db:"request_id" json:"request_id"`
+	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
+func (q *Queries) UpsertPublishFirmwareStatus(ctx context.Context, arg UpsertPublishFirmwareStatusParams) error {
+	_, err := q.db.Exec(ctx, UpsertPublishFirmwareStatus,
+		arg.ChargeStationID,
+		arg.Status,
+		arg.Location,
+		arg.Checksum,
+		arg.RequestID,
 		arg.UpdatedAt,
 	)
 	return err

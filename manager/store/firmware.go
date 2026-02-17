@@ -55,10 +55,41 @@ type DiagnosticsStatus struct {
 	UpdatedAt       time.Time
 }
 
+// PublishFirmwareStatusType represents the status of a firmware publishing operation
+type PublishFirmwareStatusType string
+
+var (
+	PublishFirmwareStatusIdle              PublishFirmwareStatusType = "Idle"
+	PublishFirmwareStatusAccepted          PublishFirmwareStatusType = "Accepted"
+	PublishFirmwareStatusRejected          PublishFirmwareStatusType = "Rejected"
+	PublishFirmwareStatusDownloadScheduled PublishFirmwareStatusType = "DownloadScheduled"
+	PublishFirmwareStatusDownloading       PublishFirmwareStatusType = "Downloading"
+	PublishFirmwareStatusDownloaded        PublishFirmwareStatusType = "Downloaded"
+	PublishFirmwareStatusPublished         PublishFirmwareStatusType = "Published"
+	PublishFirmwareStatusDownloadFailed    PublishFirmwareStatusType = "DownloadFailed"
+	PublishFirmwareStatusDownloadPaused    PublishFirmwareStatusType = "DownloadPaused"
+	PublishFirmwareStatusInvalidChecksum   PublishFirmwareStatusType = "InvalidChecksum"
+	PublishFirmwareStatusChecksumVerified  PublishFirmwareStatusType = "ChecksumVerified"
+	PublishFirmwareStatusPublishFailed     PublishFirmwareStatusType = "PublishFailed"
+	PublishFirmwareStatusFailed            PublishFirmwareStatusType = "Failed"
+)
+
+// PublishFirmwareStatus tracks the publish firmware status for a charge station (Local Controller)
+type PublishFirmwareStatus struct {
+	ChargeStationId string
+	Status          PublishFirmwareStatusType
+	Location        string
+	Checksum        string
+	RequestId       int
+	UpdatedAt       time.Time
+}
+
 // FirmwareStore defines the interface for firmware and diagnostics status tracking
 type FirmwareStore interface {
 	SetFirmwareUpdateStatus(ctx context.Context, chargeStationId string, status *FirmwareUpdateStatus) error
 	GetFirmwareUpdateStatus(ctx context.Context, chargeStationId string) (*FirmwareUpdateStatus, error)
 	SetDiagnosticsStatus(ctx context.Context, chargeStationId string, status *DiagnosticsStatus) error
 	GetDiagnosticsStatus(ctx context.Context, chargeStationId string) (*DiagnosticsStatus, error)
+	SetPublishFirmwareStatus(ctx context.Context, chargeStationId string, status *PublishFirmwareStatus) error
+	GetPublishFirmwareStatus(ctx context.Context, chargeStationId string) (*PublishFirmwareStatus, error)
 }

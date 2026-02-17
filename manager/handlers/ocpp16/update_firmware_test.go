@@ -45,6 +45,19 @@ func (m *MockFirmwareStore) GetDiagnosticsStatus(ctx context.Context, chargeStat
 	return args.Get(0).(*store.DiagnosticsStatus), args.Error(1)
 }
 
+func (m *MockFirmwareStore) SetPublishFirmwareStatus(ctx context.Context, chargeStationId string, status *store.PublishFirmwareStatus) error {
+	args := m.Called(ctx, chargeStationId, status)
+	return args.Error(0)
+}
+
+func (m *MockFirmwareStore) GetPublishFirmwareStatus(ctx context.Context, chargeStationId string) (*store.PublishFirmwareStatus, error) {
+	args := m.Called(ctx, chargeStationId)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*store.PublishFirmwareStatus), args.Error(1)
+}
+
 func TestUpdateFirmwareHandler_Success(t *testing.T) {
 	mockStore := new(MockFirmwareStore)
 	handler := handlers.UpdateFirmwareHandler{

@@ -55,6 +55,7 @@ type Querier interface {
 	GetOcpiParty(ctx context.Context, arg GetOcpiPartyParams) (OcpiParty, error)
 	// Registrations (by token)
 	GetOcpiRegistration(ctx context.Context, token string) (OcpiRegistration, error)
+	GetPublishFirmwareStatus(ctx context.Context, chargeStationID string) (PublishFirmwareStatus, error)
 	GetReservation(ctx context.Context, reservationID int32) (Reservation, error)
 	GetReservationByConnector(ctx context.Context, arg GetReservationByConnectorParams) (Reservation, error)
 	GetToken(ctx context.Context, uid string) (Token, error)
@@ -85,6 +86,7 @@ type Querier interface {
 	UpsertFirmwareUpdateStatus(ctx context.Context, arg UpsertFirmwareUpdateStatusParams) error
 	UpsertLocalAuthListEntry(ctx context.Context, arg UpsertLocalAuthListEntryParams) error
 	UpsertLocalListVersion(ctx context.Context, arg UpsertLocalListVersionParams) error
+	UpsertPublishFirmwareStatus(ctx context.Context, arg UpsertPublishFirmwareStatusParams) error
 }
 
 var _ Querier = (*Queries)(nil)
