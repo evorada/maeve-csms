@@ -59,6 +59,15 @@ func (h GetLogResultHandler) HandleCallResult(ctx context.Context, chargeStation
 		)
 	}
 
+	if h.Store == nil {
+		slog.Warn("firmware store is nil, skipping diagnostics status update", "chargeStationId", chargeStationId)
+		return nil
+	}
+
+	if diagnosticsStatus.Status == "" {
+		return nil
+	}
+
 	if err := h.Store.SetDiagnosticsStatus(ctx, chargeStationId, diagnosticsStatus); err != nil {
 		slog.Error("failed to store diagnostics status after get log result",
 			"chargeStationId", chargeStationId,

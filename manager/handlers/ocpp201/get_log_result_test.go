@@ -58,3 +58,42 @@ func TestGetLogResultHandler(t *testing.T) {
 	assert.Equal(t, store.DiagnosticsStatusUploading, diagStatus.Status)
 	assert.Equal(t, "https://example.com/logs", diagStatus.Location)
 }
+
+func TestGetLogResultHandler_RejectedStoresFailedStatus(t *testing.T) {
+	memStore := inmemory.NewStore(clock.RealClock{})
+	handler := ocpp201.GetLogResultHandler{Store: memStore}
+	ctx := context.Background()
+
+	req := &types.GetLogRequestJson{
+		LogType:   types.LogEnumTypeDiagnosticsLog,
+		RequestId: 84,
+		Log: types.LogParametersType{
+			RemoteLocation: "https://example.com/logs/rejected",
+		},
+	}
+	resp := &types.GetLogResponseJson{Status: types.LogStatusEnumTypeRejected}
+
+	err := handler.HandleCallResult(ctx, "cs002", req, resp, nil)
+	require.NoError(t, err)
+
+	diagStatus, err := memStore.GetDiagnosticsStatus(ctx, "cs002")
+	require.NoError(t, err)
+	require.NotNil(t, diagStatus)
+	assert.Equal(t, store.DiagnosticsStatusUploadFailed, diagStatus.Status)
+	assert.Equal(t, "https://example.com/logs/rejected", diagStatus.Location)
+}
+
+func TestGetLogResultHandler_NilStoreDoesNotFail(t *testing.T) {
+	handler := ocpp201.GetLogResultHandler{}
+	ctx := context.Background()
+
+	req := &types.GetLogRequestJson{
+		LogType:   types.LogEnumTypeDiagnosticsLog,
+		RequestId: 21,
+		Log: types.LogParametersType{RemoteLocation: "https://example.com/logs/nil-store"},
+	}
+	resp := &types.GetLogResponseJson{Status: types.LogStatusEnumTypeAccepted}
+
+	err := handler.HandleCallResult(ctx, "cs003", req, resp, nil)
+	require.NoError(t, err)
+}
