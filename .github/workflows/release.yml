@@ -1,0 +1,222 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'  # Match date format: YYYY.MM.DD
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME_MANAGER: ${{ github.repository }}-manager
+  IMAGE_NAME_GATEWAY: ${{ github.repository }}-gateway
+
+jobs:
+  build-binaries:
+    name: Build Binaries
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # Manager binaries
+          - service: manager
+            goos: linux
+            goarch: amd64
+          - service: manager
+            goos: linux
+            goarch: arm64
+          - service: manager
+            goos: darwin
+            goarch: amd64
+          - service: manager
+            goos: darwin
+            goarch: arm64
+          - service: manager
+            goos: windows
+            goarch: amd64
+          # Gateway binaries
+          - service: gateway
+            goos: linux
+            goarch: amd64
+          - service: gateway
+            goos: linux
+            goarch: arm64
+          - service: gateway
+            goos: darwin
+            goarch: amd64
+          - service: gateway
+            goos: darwin
+            goarch: arm64
+          - service: gateway
+            goos: windows
+            goarch: amd64
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ matrix.service }}/go.mod
+          cache: true
+          cache-dependency-path: ${{ matrix.service }}/go.sum
+      
+      - name: Build binary
+        working-directory: ${{ matrix.service }}
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          BINARY_NAME="${{ matrix.service }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            BINARY_NAME="${BINARY_NAME}.exe"
+          fi
+          
+          go build -o "${BINARY_NAME}" \
+            -ldflags="-s -w -X main.version=${{ github.ref_name }}" \
+            .
+          
+          # Create archive
+          ARCHIVE_NAME="${{ matrix.service }}-${{ github.ref_name }}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            zip "${ARCHIVE_NAME}.zip" "${BINARY_NAME}"
+            echo "ASSET_PATH=${ARCHIVE_NAME}.zip" >> $GITHUB_ENV
+          else
+            tar czf "${ARCHIVE_NAME}.tar.gz" "${BINARY_NAME}"
+            echo "ASSET_PATH=${ARCHIVE_NAME}.tar.gz" >> $GITHUB_ENV
+          fi
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.service }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ matrix.service }}/${{ env.ASSET_PATH }}
+          retention-days: 1
+
+  build-docker-images:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [manager, gateway]
+        platform: [linux/amd64, linux/arm64]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ matrix.service == 'manager' && env.IMAGE_NAME_MANAGER || env.IMAGE_NAME_GATEWAY }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          file: ./${{ matrix.service }}/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            TARGETARCH=${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+
+  create-release:
+    name: Create Release
+    needs: [build-binaries, build-docker-images]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec cp {} release-assets/ \;
+          ls -lh release-assets/
+      
+      - name: Generate release notes
+        id: release-notes
+        run: |
+          cat > release-notes.md << 'EOF'
+          ## Maeve CSMS Release ${{ github.ref_name }}
+          
+          **Release Date:** $(date -u +"%Y-%m-%d")
+          
+          ### Docker Images
+          
+          Pull the images:
+          ```bash
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_MANAGER }}:${{ github.ref_name }}
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_GATEWAY }}:${{ github.ref_name }}
+          ```
+          
+          ### Binaries
+          
+          Download the appropriate binary for your platform from the assets below.
+          
+          #### Manager
+          - Linux: `manager-${{ github.ref_name }}-linux-{amd64,arm64}.tar.gz`
+          - macOS: `manager-${{ github.ref_name }}-darwin-{amd64,arm64}.tar.gz`
+          - Windows: `manager-${{ github.ref_name }}-windows-amd64.zip`
+          
+          #### Gateway
+          - Linux: `gateway-${{ github.ref_name }}-linux-{amd64,arm64}.tar.gz`
+          - macOS: `gateway-${{ github.ref_name }}-darwin-{amd64,arm64}.tar.gz`
+          - Windows: `gateway-${{ github.ref_name }}-windows-amd64.zip`
+          
+          ### Installation
+          
+          Extract the archive and run the binary:
+          ```bash
+          # Linux/macOS
+          tar xzf manager-${{ github.ref_name }}-linux-amd64.tar.gz
+          ./manager
+          
+          # Windows
+          unzip manager-${{ github.ref_name }}-windows-amd64.zip
+          manager.exe
+          ```
+          
+          ---
+          
+          For more information, see the [documentation](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/README.md).
+          EOF
+          
+          echo "Release notes generated."
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ github.ref_name }}
+          body_path: release-notes.md
+          files: release-assets/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
