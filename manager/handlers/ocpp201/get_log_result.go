@@ -23,7 +23,6 @@ func (h GetLogResultHandler) HandleCallResult(ctx context.Context, chargeStation
 	resp := response.(*types.GetLogResponseJson)
 
 	span := trace.SpanFromContext(ctx)
-
 	span.SetAttributes(
 		attribute.String("get_log.log_type", string(req.LogType)),
 		attribute.Int("get_log.request_id", req.RequestId),
@@ -41,7 +40,8 @@ func (h GetLogResultHandler) HandleCallResult(ctx context.Context, chargeStation
 		UpdatedAt:       time.Now(),
 	}
 
-	if resp.Status == types.LogStatusEnumTypeAccepted {
+	switch resp.Status {
+	case types.LogStatusEnumTypeAccepted, types.LogStatusEnumTypeAcceptedCanceled:
 		diagnosticsStatus.Status = store.DiagnosticsStatusUploading
 		slog.Info("get log accepted",
 			"chargeStationId", chargeStationId,
@@ -49,7 +49,7 @@ func (h GetLogResultHandler) HandleCallResult(ctx context.Context, chargeStation
 			"requestId", req.RequestId,
 			"remoteLocation", req.Log.RemoteLocation,
 		)
-	} else {
+	case types.LogStatusEnumTypeRejected:
 		diagnosticsStatus.Status = store.DiagnosticsStatusUploadFailed
 		slog.Warn("get log not accepted",
 			"chargeStationId", chargeStationId,
@@ -59,14 +59,12 @@ func (h GetLogResultHandler) HandleCallResult(ctx context.Context, chargeStation
 		)
 	}
 
-	if h.Store != nil {
-		if err := h.Store.SetDiagnosticsStatus(ctx, chargeStationId, diagnosticsStatus); err != nil {
-			slog.Warn("failed to persist get log result",
-				"chargeStationId", chargeStationId,
-				"requestId", req.RequestId,
-				"error", err,
-			)
-		}
+	if err := h.Store.SetDiagnosticsStatus(ctx, chargeStationId, diagnosticsStatus); err != nil {
+		slog.Error("failed to store diagnostics status after get log result",
+			"chargeStationId", chargeStationId,
+			"error", err,
+		)
+		return err
 	}
 
 	return nil

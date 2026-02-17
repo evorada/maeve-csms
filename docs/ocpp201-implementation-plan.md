@@ -462,6 +462,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 - [x] Implement `GetLogResultHandler` with diagnostics status persistence on Accepted/AcceptedCanceled
 - [x] Register in `routing.go` CallResultRoutes + CallMaker Actions
 - [x] Add unit tests (`get_log_result_test.go`) + routing coverage updates
+- [x] 2026-02-17 follow-up: restore missing OCPP 2.0.1 GetLog type files and align handler wiring with diagnostics persistence
 
 ---
 
