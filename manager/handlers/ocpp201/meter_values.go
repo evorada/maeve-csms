@@ -17,6 +17,10 @@ type meterValuesStore interface {
 	StoreMeterValues(ctx context.Context, chargeStationId string, evseId int, transactionId string, meterValues []store.MeterValue) error
 }
 
+type activeTransactionStore interface {
+	FindActiveTransaction(ctx context.Context, chargeStationId string) (*store.Transaction, error)
+}
+
 type MeterValuesHandler struct {
 	Store meterValuesStore
 }
@@ -32,7 +36,19 @@ func (h MeterValuesHandler) HandleCall(ctx context.Context, chargeStationId stri
 
 	meterValues := toStoreMeterValues(req.MeterValue)
 	if h.Store != nil {
-		if err := h.Store.StoreMeterValues(ctx, chargeStationId, req.EvseId, "", meterValues); err != nil {
+		transactionId := ""
+		if activeStore, ok := h.Store.(activeTransactionStore); ok {
+			transaction, findErr := activeStore.FindActiveTransaction(ctx, chargeStationId)
+			if findErr != nil {
+				slog.Warn("failed to resolve active transaction for meter values", "charge_station_id", chargeStationId, "evse_id", req.EvseId, "error", findErr)
+				span.AddEvent("failed to resolve active transaction", trace.WithAttributes(attribute.String("error", findErr.Error())))
+			} else if transaction != nil {
+				transactionId = transaction.TransactionId
+				span.SetAttributes(attribute.String("meter_values.transaction_id", transactionId))
+			}
+		}
+
+		if err := h.Store.StoreMeterValues(ctx, chargeStationId, req.EvseId, transactionId, meterValues); err != nil {
 			slog.Error("failed to store meter values", "charge_station_id", chargeStationId, "evse_id", req.EvseId, "error", err)
 			span.AddEvent("failed to store meter values", trace.WithAttributes(attribute.String("error", err.Error())))
 		}

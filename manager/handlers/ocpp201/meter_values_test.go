@@ -15,7 +15,8 @@ import (
 )
 
 type meterValuesStoreStub struct {
-	storeMeterValuesFn func(ctx context.Context, chargeStationId string, evseId int, transactionId string, meterValues []store.MeterValue) error
+	storeMeterValuesFn    func(ctx context.Context, chargeStationId string, evseId int, transactionId string, meterValues []store.MeterValue) error
+	findActiveTxnFn       func(ctx context.Context, chargeStationId string) (*store.Transaction, error)
 }
 
 func (s meterValuesStoreStub) StoreMeterValues(ctx context.Context, chargeStationId string, evseId int, transactionId string, meterValues []store.MeterValue) error {
@@ -25,6 +26,13 @@ func (s meterValuesStoreStub) StoreMeterValues(ctx context.Context, chargeStatio
 	return nil
 }
 
+func (s meterValuesStoreStub) FindActiveTransaction(ctx context.Context, chargeStationId string) (*store.Transaction, error) {
+	if s.findActiveTxnFn != nil {
+		return s.findActiveTxnFn(ctx, chargeStationId)
+	}
+	return nil, nil
+}
+
 func TestMeterValuesHandler_StoresMeterValues(t *testing.T) {
 	var gotChargeStationID string
 	var gotEvseID int
@@ -32,13 +40,18 @@ func TestMeterValuesHandler_StoresMeterValues(t *testing.T) {
 	var gotMeterValues []store.MeterValue
 
 	handler := ocpp201.MeterValuesHandler{
-		Store: meterValuesStoreStub{storeMeterValuesFn: func(_ context.Context, chargeStationId string, evseId int, transactionId string, meterValues []store.MeterValue) error {
-			gotChargeStationID = chargeStationId
-			gotEvseID = evseId
-			gotTransactionID = transactionId
-			gotMeterValues = meterValues
-			return nil
-		}},
+		Store: meterValuesStoreStub{
+			findActiveTxnFn: func(_ context.Context, chargeStationId string) (*store.Transaction, error) {
+				return &store.Transaction{ChargeStationId: chargeStationId, TransactionId: "txn-123"}, nil
+			},
+			storeMeterValuesFn: func(_ context.Context, chargeStationId string, evseId int, transactionId string, meterValues []store.MeterValue) error {
+				gotChargeStationID = chargeStationId
+				gotEvseID = evseId
+				gotTransactionID = transactionId
+				gotMeterValues = meterValues
+				return nil
+			},
+		},
 	}
 
 	req := &types.MeterValuesRequestJson{
@@ -64,7 +77,7 @@ func TestMeterValuesHandler_StoresMeterValues(t *testing.T) {
 
 	assert.Equal(t, "cs001", gotChargeStationID)
 	assert.Equal(t, 1, gotEvseID)
-	assert.Equal(t, "", gotTransactionID)
+	assert.Equal(t, "txn-123", gotTransactionID)
 	require.Len(t, gotMeterValues, 1)
 	require.Len(t, gotMeterValues[0].SampledValues, 1)
 	assert.Equal(t, 100.0, gotMeterValues[0].SampledValues[0].Value)

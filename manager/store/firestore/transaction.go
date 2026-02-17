@@ -76,6 +76,21 @@ func (s *Store) Transactions(ctx context.Context) ([]*store.Transaction, error) 
 	return transactions, nil
 }
 
+func (s *Store) FindActiveTransaction(ctx context.Context, chargeStationId string) (*store.Transaction, error) {
+	transactions, err := s.Transactions(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, transaction := range transactions {
+		if transaction.ChargeStationId == chargeStationId && transaction.EndedSeqNo == 0 {
+			return transaction, nil
+		}
+	}
+
+	return nil, nil
+}
+
 func (s *Store) UpdateTransaction(ctx context.Context, chargeStationId, transactionId string, meterValue []store.MeterValue) error {
 	transaction, err := s.FindTransaction(ctx, chargeStationId, transactionId)
 	if err != nil {

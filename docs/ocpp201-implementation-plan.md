@@ -169,19 +169,20 @@ feature/ocpp201-security
 ### Task 2.1: MeterValues - Add Storage
 **Status:** ✅ Complete
 **Complexity:** Medium
-**Completed:** 2026-02-16
+**Completed:** 2026-02-17
 
 **Current:** Only traces EVSE ID. Meter data is discarded.
 
 - [x] Add store dependency (`StoreMeterValues`)
 - [x] Parse and store `MeterValue` data (sampled values, measurands, phases, units)
 - [x] Persist meter values per charge station/EVSE with backend support (PostgreSQL, Firestore, In-Memory)
+- [x] Resolve and attach active transaction IDs when present
 - [x] Update `manager/handlers/ocpp201/meter_values.go`
 - [x] Update `manager/handlers/ocpp201/meter_values_test.go`
 - [x] Update routing in `routing.go`
 
 **Store Requirements:**
-- **Interface:** `StoreMeterValues(ctx, chargeStationId string, evseId int, meterValues []MeterValueType) error`
+- **Interface:** `StoreMeterValues(ctx, chargeStationId string, evseId int, transactionId string, meterValues []MeterValueType) error`
 - **PostgreSQL:** Migration for meter_values table, sqlc queries
 - **Firestore:** New subcollection under charge station
 - **In-Memory:** New map in store
@@ -244,7 +245,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 **Branch:** `feature/ocpp201-transaction`
 **Priority:** High
-**Status:** 📋 Not Started
+**Status:** ✅ Complete (1/1)
 **Complexity:** Medium
 
 ### Task 4.1: CostUpdated Handler (New)
@@ -694,7 +695,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 | Module | Branch | Priority | Messages | Status |
 |--------|--------|----------|----------|--------|
 | Provisioning | `feature/ocpp201-provisioning` | Critical | 5 to upgrade | 📋 |
-| MeterValues | `feature/ocpp201-meter-values` | Critical | 1 to upgrade | 🚧 (Task 2.1 ✅) |
+| MeterValues | `feature/ocpp201-meter-values` | Critical | 1 to upgrade | ✅ (1/1) |
 | Remote Control | `feature/ocpp201-remote-control` | Critical | 3 to upgrade | 📋 |
 | Transaction | `feature/ocpp201-transaction` | High | 1 new | 📋 |
 | Smart Charging | `feature/ocpp201-smart-charging` | High | 9 new | 📋 |
