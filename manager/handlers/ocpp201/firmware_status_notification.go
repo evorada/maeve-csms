@@ -36,8 +36,10 @@ func (h FirmwareStatusNotificationHandler) HandleCall(ctx context.Context, charg
 		UpdatedAt:       time.Now().UTC(),
 	}
 
-	if err = h.Store.SetFirmwareUpdateStatus(ctx, chargeStationId, status); err != nil {
-		return nil, err
+	if h.Store != nil {
+		if err = h.Store.SetFirmwareUpdateStatus(ctx, chargeStationId, status); err != nil {
+			return nil, err
+		}
 	}
 
 	return &ocpp201.FirmwareStatusNotificationResponseJson{}, nil

@@ -37,28 +37,30 @@ func (h LogStatusNotificationHandler) HandleCall(ctx context.Context, chargeStat
 		return &ocpp201.LogStatusNotificationResponseJson{}, nil
 	}
 
-	// Get existing status to preserve location info
-	existing, err := h.Store.GetDiagnosticsStatus(ctx, chargeStationId)
-	if err != nil {
-		slog.Warn("failed to get existing log upload status, creating new entry",
-			"chargeStationId", chargeStationId,
-			"error", err)
-		existing = nil
-	}
-	if existing == nil {
-		existing = &store.DiagnosticsStatus{
-			ChargeStationId: chargeStationId,
+	if h.Store != nil {
+		// Get existing status to preserve location info
+		existing, err := h.Store.GetDiagnosticsStatus(ctx, chargeStationId)
+		if err != nil {
+			slog.Warn("failed to get existing log upload status, creating new entry",
+				"chargeStationId", chargeStationId,
+				"error", err)
+			existing = nil
 		}
-	}
+		if existing == nil {
+			existing = &store.DiagnosticsStatus{
+				ChargeStationId: chargeStationId,
+			}
+		}
 
-	existing.Status = storeStatus
-	existing.UpdatedAt = time.Now()
+		existing.Status = storeStatus
+		existing.UpdatedAt = time.Now()
 
-	if err := h.Store.SetDiagnosticsStatus(ctx, chargeStationId, existing); err != nil {
-		slog.Error("failed to store log upload status",
-			"chargeStationId", chargeStationId,
-			"error", err)
-		return &ocpp201.LogStatusNotificationResponseJson{}, err
+		if err := h.Store.SetDiagnosticsStatus(ctx, chargeStationId, existing); err != nil {
+			slog.Error("failed to store log upload status",
+				"chargeStationId", chargeStationId,
+				"error", err)
+			return &ocpp201.LogStatusNotificationResponseJson{}, err
+		}
 	}
 
 	slog.Info("log status notification received",
