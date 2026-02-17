@@ -159,6 +159,47 @@ func NewRouter(emitter transport.Emitter,
 				ResponseSchema: "ocpp201/SecurityEventNotificationResponse.json",
 				Handler:        SecurityEventNotificationHandler{},
 			},
+			"DataTransfer": {
+				NewRequest:     func() ocpp.Request { return new(ocpp201.DataTransferRequestJson) },
+				RequestSchema:  "ocpp201/DataTransferRequest.json",
+				ResponseSchema: "ocpp201/DataTransferResponse.json",
+				Handler: DataTransferHandler{
+					CallRoutes: nil, // Extensible, vendor-specific routes can be added here
+					SchemaFS:   schemaFS,
+				},
+			},
+			"NotifyEvent": {
+				NewRequest:     func() ocpp.Request { return new(ocpp201.NotifyEventRequestJson) },
+				RequestSchema:  "ocpp201/NotifyEventRequest.json",
+				ResponseSchema: "ocpp201/NotifyEventResponse.json",
+				Handler: NotifyEventHandler{
+					Store: engine,
+				},
+			},
+			"NotifyCustomerInformation": {
+				NewRequest:     func() ocpp.Request { return new(ocpp201.NotifyCustomerInformationRequestJson) },
+				RequestSchema:  "ocpp201/NotifyCustomerInformationRequest.json",
+				ResponseSchema: "ocpp201/NotifyCustomerInformationResponse.json",
+				Handler: NotifyCustomerInformationHandler{
+					Store: engine,
+				},
+			},
+			"NotifyMonitoringReport": {
+				NewRequest:     func() ocpp.Request { return new(ocpp201.NotifyMonitoringReportRequestJson) },
+				RequestSchema:  "ocpp201/NotifyMonitoringReportRequest.json",
+				ResponseSchema: "ocpp201/NotifyMonitoringReportResponse.json",
+				Handler: NotifyMonitoringReportHandler{
+					Store: engine,
+				},
+			},
+			"ReservationStatusUpdate": {
+				NewRequest:     func() ocpp.Request { return new(ocpp201.ReservationStatusUpdateRequestJson) },
+				RequestSchema:  "ocpp201/ReservationStatusUpdateRequest.json",
+				ResponseSchema: "ocpp201/ReservationStatusUpdateResponse.json",
+				Handler: ReservationStatusUpdateHandler{
+					ReservationStore: engine,
+				},
+			},
 			"TransactionEvent": {
 				NewRequest:     func() ocpp.Request { return new(ocpp201.TransactionEventRequestJson) },
 				RequestSchema:  "ocpp201/TransactionEventRequest.json",
