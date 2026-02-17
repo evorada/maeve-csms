@@ -169,12 +169,14 @@ feature/ocpp201-security
 All three handlers exist as CallResult-only. The CallMaker can already initiate these. Just need meaningful result processing.
 
 ### Task 3.1: RequestStartTransaction - Track Result
-**Status:** ⚠️ Partial → ✅
+**Status:** ✅ Complete
 **Complexity:** Low
+**Completed:** 2026-02-16
+**Commits:** `4410483`, `bb03578`
 
-- [ ] Store remote start result (transaction ID mapping)
-- [ ] Update `manager/handlers/ocpp201/request_start_transaction_result.go`
-- [ ] Update test
+- [x] Store remote start result (transaction ID mapping)
+- [x] Update `manager/handlers/ocpp201/request_start_transaction_result.go`
+- [x] Update test
 
 ---
 
