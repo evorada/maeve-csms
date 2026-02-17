@@ -76,3 +76,24 @@ func TestDataTransferHandlerUnknownVendor(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, types.DataTransferStatusEnumTypeUnknownVendorId, response.(*types.DataTransferResponseJson).Status)
 }
+
+func TestDataTransferHandlerUnknownMessage(t *testing.T) {
+	handler := ocpp201.DataTransferHandler{
+		CallRoutes: map[string]map[string]handlers.CallRoute{
+			"acme": {
+				"Known": {
+					NewRequest:     func() ocpp.Request { return &vendorPingRequest{} },
+					RequestSchema:  "request.json",
+					ResponseSchema: "response.json",
+					Handler:        vendorPingCallHandler{},
+				},
+			},
+		},
+	}
+
+	messageID := "Unknown"
+	request := &types.DataTransferRequestJson{VendorId: "acme", MessageId: &messageID}
+	response, err := handler.HandleCall(context.Background(), "cs001", request)
+	require.NoError(t, err)
+	require.Equal(t, types.DataTransferStatusEnumTypeUnknownMessageId, response.(*types.DataTransferResponseJson).Status)
+}
