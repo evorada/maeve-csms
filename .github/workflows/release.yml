@@ -159,12 +159,18 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: '*'
+          merge-multiple: false
       
       - name: Prepare release assets
         run: |
           mkdir -p release-assets
+          # In v4, artifacts are in subdirectories named after the artifact
           find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec cp {} release-assets/ \;
+          echo "Release assets:"
           ls -lh release-assets/
+          echo ""
+          echo "Total files: $(ls -1 release-assets/ | wc -l)"
       
       - name: Generate release notes
         id: release-notes
