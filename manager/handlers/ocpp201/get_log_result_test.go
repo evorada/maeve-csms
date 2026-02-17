@@ -90,7 +90,7 @@ func TestGetLogResultHandler_NilStoreDoesNotFail(t *testing.T) {
 	req := &types.GetLogRequestJson{
 		LogType:   types.LogEnumTypeDiagnosticsLog,
 		RequestId: 21,
-		Log: types.LogParametersType{RemoteLocation: "https://example.com/logs/nil-store"},
+		Log:       types.LogParametersType{RemoteLocation: "https://example.com/logs/nil-store"},
 	}
 	resp := &types.GetLogResponseJson{Status: types.LogStatusEnumTypeAccepted}
 

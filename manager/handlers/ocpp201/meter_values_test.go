@@ -15,8 +15,8 @@ import (
 )
 
 type meterValuesStoreStub struct {
-	storeMeterValuesFn    func(ctx context.Context, chargeStationId string, evseId int, transactionId string, meterValues []store.MeterValue) error
-	findActiveTxnFn       func(ctx context.Context, chargeStationId string) (*store.Transaction, error)
+	storeMeterValuesFn func(ctx context.Context, chargeStationId string, evseId int, transactionId string, meterValues []store.MeterValue) error
+	findActiveTxnFn    func(ctx context.Context, chargeStationId string) (*store.Transaction, error)
 }
 
 func (s meterValuesStoreStub) StoreMeterValues(ctx context.Context, chargeStationId string, evseId int, transactionId string, meterValues []store.MeterValue) error {

@@ -8,10 +8,10 @@ import "time"
 type EnergyTransferModeEnumType string
 
 const (
-	EnergyTransferModeEnumTypeDC           EnergyTransferModeEnumType = "DC"
+	EnergyTransferModeEnumTypeDC            EnergyTransferModeEnumType = "DC"
 	EnergyTransferModeEnumTypeACSinglePhase EnergyTransferModeEnumType = "AC_single_phase"
-	EnergyTransferModeEnumTypeACTwoPhase   EnergyTransferModeEnumType = "AC_two_phase"
-	EnergyTransferModeEnumTypeACThreePhase EnergyTransferModeEnumType = "AC_three_phase"
+	EnergyTransferModeEnumTypeACTwoPhase    EnergyTransferModeEnumType = "AC_two_phase"
+	EnergyTransferModeEnumTypeACThreePhase  EnergyTransferModeEnumType = "AC_three_phase"
 )
 
 // ACChargingParametersType contains EV AC charging parameters.

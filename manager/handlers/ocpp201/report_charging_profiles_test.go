@@ -75,11 +75,11 @@ func TestReportChargingProfilesSingleProfile(t *testing.T) {
 	assert.Equal(t, 7400.0, profiles[0].ChargingSchedule.ChargingSchedulePeriod[0].Limit)
 
 	testutil.AssertSpan(t, &exporter.GetSpans()[0], "test", map[string]any{
-		"report_charging_profiles.request_id":           10,
+		"report_charging_profiles.request_id":            10,
 		"report_charging_profiles.charging_limit_source": "CSO",
-		"report_charging_profiles.evse_id":              1,
-		"report_charging_profiles.profile_count":        1,
-		"report_charging_profiles.tbc":                  false,
+		"report_charging_profiles.evse_id":               1,
+		"report_charging_profiles.profile_count":         1,
+		"report_charging_profiles.tbc":                   false,
 	})
 }
 
@@ -138,11 +138,11 @@ func TestReportChargingProfilesWithTBC(t *testing.T) {
 	}()
 
 	testutil.AssertSpan(t, &exporter.GetSpans()[0], "test", map[string]any{
-		"report_charging_profiles.request_id":           30,
+		"report_charging_profiles.request_id":            30,
 		"report_charging_profiles.charging_limit_source": "SO",
-		"report_charging_profiles.evse_id":              2,
-		"report_charging_profiles.profile_count":        1,
-		"report_charging_profiles.tbc":                  true,
+		"report_charging_profiles.evse_id":               2,
+		"report_charging_profiles.profile_count":         1,
+		"report_charging_profiles.tbc":                   true,
 	})
 }
 

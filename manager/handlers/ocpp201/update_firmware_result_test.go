@@ -43,10 +43,10 @@ func TestUpdateFirmwareResultHandler_Accepted(t *testing.T) {
 	}()
 
 	testutil.AssertSpan(t, &exporter.GetSpans()[0], "test", map[string]any{
-		"update_firmware.request_id":        1,
-		"update_firmware.location":          "https://firmware.example.com/v2.0.bin",
+		"update_firmware.request_id":         1,
+		"update_firmware.location":           "https://firmware.example.com/v2.0.bin",
 		"update_firmware.retrieve_date_time": "2026-02-15T10:00:00Z",
-		"update_firmware.status":            "Accepted",
+		"update_firmware.status":             "Accepted",
 	})
 
 	// Verify firmware update status was persisted as Downloading

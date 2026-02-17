@@ -15,12 +15,12 @@ import (
 const meterValuesCollection = "MeterValues"
 
 type firestoreMeterValue struct {
-	ChargeStationId string            `firestore:"chargeStationId"`
-	EvseId          int               `firestore:"evseId"`
-	TransactionId   string            `firestore:"transactionId,omitempty"`
-	Timestamp       string            `firestore:"timestamp"`
+	ChargeStationId string               `firestore:"chargeStationId"`
+	EvseId          int                  `firestore:"evseId"`
+	TransactionId   string               `firestore:"transactionId,omitempty"`
+	Timestamp       string               `firestore:"timestamp"`
 	SampledValues   []store.SampledValue `firestore:"sampledValues"`
-	ReceivedAt      time.Time         `firestore:"receivedAt"`
+	ReceivedAt      time.Time            `firestore:"receivedAt"`
 }
 
 // StoreMeterValues stores meter values received from a charge station.

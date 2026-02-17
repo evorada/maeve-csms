@@ -198,11 +198,11 @@ func TestPublishFirmwareResultHandler_SpanAttributes(t *testing.T) {
 	}()
 
 	testutil.AssertSpan(t, &exporter.GetSpans()[0], "test", map[string]any{
-		"publish_firmware.request_id":    99,
-		"publish_firmware.location":      "ftp://updates.example.com/fw.bin",
-		"publish_firmware.checksum":      "11112222333344441111222233334444",
-		"publish_firmware.status":        "Accepted",
-		"publish_firmware.retries":       2,
+		"publish_firmware.request_id":     99,
+		"publish_firmware.location":       "ftp://updates.example.com/fw.bin",
+		"publish_firmware.checksum":       "11112222333344441111222233334444",
+		"publish_firmware.status":         "Accepted",
+		"publish_firmware.retries":        2,
 		"publish_firmware.retry_interval": 30,
 	})
 }

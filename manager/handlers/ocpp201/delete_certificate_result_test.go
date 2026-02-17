@@ -55,8 +55,8 @@ func TestDeleteCertificateResultHandler(t *testing.T) {
 
 		require.Equal(t, "SHA256:ABCDEF:ABC123:12345678", store.deleteCalledWith)
 		testutil.AssertSpan(t, &exporter.GetSpans()[0], "test", map[string]any{
-			"delete_certificate.serial_number":   "12345678",
-			"delete_certificate.status":          "Accepted",
+			"delete_certificate.serial_number":    "12345678",
+			"delete_certificate.status":           "Accepted",
 			"delete_certificate.certificate_hash": "SHA256:ABCDEF:ABC123:12345678",
 		})
 	})

@@ -114,11 +114,11 @@ func TestSetChargingProfileResultHandler_FullProfile_Stored(t *testing.T) {
 			ValidTo:                &validTo,
 			ChargingSchedule: []types.ChargingScheduleType{
 				{
-					Id:              1,
-					StartSchedule:   &startSchedule,
-					Duration:        &duration,
+					Id:               1,
+					StartSchedule:    &startSchedule,
+					Duration:         &duration,
 					ChargingRateUnit: types.ChargingRateUnitEnumTypeA,
-					MinChargingRate: &minRate,
+					MinChargingRate:  &minRate,
 					ChargingSchedulePeriod: []types.ChargingSchedulePeriodType{
 						{StartPeriod: 0, Limit: 32.0, NumberPhases: &numPhases},
 						{StartPeriod: 1800, Limit: 16.0},

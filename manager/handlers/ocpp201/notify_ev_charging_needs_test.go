@@ -46,12 +46,12 @@ func TestNotifyEVChargingNeedsACCharging(t *testing.T) {
 	}()
 
 	testutil.AssertSpan(t, &exporter.GetSpans()[0], "test", map[string]any{
-		"notify_ev_charging_needs.evse_id":                     1,
-		"notify_ev_charging_needs.requested_energy_transfer":   "AC_three_phase",
-		"notify_ev_charging_needs.ac.energy_amount":            50000,
-		"notify_ev_charging_needs.ac.ev_min_current":           6,
-		"notify_ev_charging_needs.ac.ev_max_current":           32,
-		"notify_ev_charging_needs.ac.ev_max_voltage":           400,
+		"notify_ev_charging_needs.evse_id":                   1,
+		"notify_ev_charging_needs.requested_energy_transfer": "AC_three_phase",
+		"notify_ev_charging_needs.ac.energy_amount":          50000,
+		"notify_ev_charging_needs.ac.ev_min_current":         6,
+		"notify_ev_charging_needs.ac.ev_max_current":         32,
+		"notify_ev_charging_needs.ac.ev_max_voltage":         400,
 	})
 }
 

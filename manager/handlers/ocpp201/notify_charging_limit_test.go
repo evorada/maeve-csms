@@ -140,7 +140,7 @@ func TestNotifyChargingLimitWithChargingSchedules(t *testing.T) {
 	}()
 
 	testutil.AssertSpan(t, &exporter.GetSpans()[0], "test", map[string]any{
-		"notify_charging_limit.charging_limit_source":    "EMS",
+		"notify_charging_limit.charging_limit_source":   "EMS",
 		"notify_charging_limit.charging_schedule_count": 1,
 	})
 }

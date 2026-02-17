@@ -16,11 +16,11 @@ func TestResetResultHandler(t *testing.T) {
 	handler := ocpp201.ResetResultHandler{}
 
 	tests := []struct {
-		name           string
-		resetType      types.ResetEnumType
-		status         types.ResetStatusEnumType
-		statusInfo     *types.StatusInfoType
-		expectedAttrs  map[string]any
+		name          string
+		resetType     types.ResetEnumType
+		status        types.ResetStatusEnumType
+		statusInfo    *types.StatusInfoType
+		expectedAttrs map[string]any
 	}{
 		{
 			name:      "accepted reset",

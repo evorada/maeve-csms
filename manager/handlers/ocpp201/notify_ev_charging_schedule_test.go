@@ -44,11 +44,11 @@ func TestNotifyEVChargingScheduleBasic(t *testing.T) {
 	}()
 
 	testutil.AssertSpan(t, &exporter.GetSpans()[0], "test", map[string]any{
-		"notify_ev_charging_schedule.evse_id":           1,
-		"notify_ev_charging_schedule.time_base":         "2026-02-15T03:00:00Z",
-		"notify_ev_charging_schedule.schedule_id":       1,
+		"notify_ev_charging_schedule.evse_id":            1,
+		"notify_ev_charging_schedule.time_base":          "2026-02-15T03:00:00Z",
+		"notify_ev_charging_schedule.schedule_id":        1,
 		"notify_ev_charging_schedule.charging_rate_unit": "W",
-		"notify_ev_charging_schedule.period_count":      1,
+		"notify_ev_charging_schedule.period_count":       1,
 	})
 }
 
