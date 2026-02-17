@@ -130,21 +130,24 @@ feature/ocpp201-security
 
 **Branch:** `feature/ocpp201-meter-values`
 **Priority:** Critical
-**Status:** 📋 Not Started
+**Status:** ✅ Complete (1/1)
+**Completed:** 2026-02-17
 **Complexity:** Medium
 
 ### Task 2.1: MeterValues - Add Storage
-**Status:** ⚠️ Partial → ✅
+**Status:** ✅ Complete
+**Completed:** 2026-02-17
+**Commit:** 1bda038
 **Complexity:** Medium
 
-**Current:** Only traces EVSE ID. Meter data is discarded.
+**Current:** MeterValues payloads are persisted and linked to active transactions.
 
-- [ ] Add `store.Engine` dependency
-- [ ] Parse and store `MeterValue` data (sampled values, measurands, phases, units)
-- [ ] Associate meter values with active transactions
-- [ ] Update `manager/handlers/ocpp201/meter_values.go`
-- [ ] Update `manager/handlers/ocpp201/meter_values_test.go`
-- [ ] Update routing in `routing.go`
+- [x] Add `store.Engine` dependency
+- [x] Parse and store `MeterValue` data (sampled values, measurands, phases, units)
+- [x] Associate meter values with active transactions
+- [x] Update `manager/handlers/ocpp201/meter_values.go`
+- [x] Update `manager/handlers/ocpp201/meter_values_test.go`
+- [x] Update routing in `routing.go`
 
 **Store Requirements:**
 - **Interface:** `StoreMeterValues(ctx, chargeStationId string, evseId int, meterValues []MeterValueType) error`
@@ -155,9 +158,10 @@ feature/ocpp201-security
 ---
 
 ### Module 2 Completion Checklist
-- [ ] MeterValues stored with full fidelity
-- [ ] Unit tests
-- [ ] Create PR → Merge
+- [x] MeterValues stored with full fidelity
+- [x] Unit tests
+- [x] Create MR: `feature/ocpp201-meter-values` → `main`
+- [ ] Merge to `main` *(pending maintainer merge; automation remote currently exposes feature branches only)*
 
 ---
 
