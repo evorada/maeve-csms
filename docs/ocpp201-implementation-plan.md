@@ -154,7 +154,7 @@ feature/ocpp201-security
 ### Module 1 Completion Checklist
 - [x] All Provisioning handlers store meaningful data
 - [x] Unit tests updated
-- [x] Create PR: `feature/ocpp201-provisioning` → `main` (MR !1: https://gitlab.com/evorada/maeve-csms/-/merge_requests/1)
+- [x] Create PR: `feature/ocpp201-provisioning` → `main` (MR merged)
 - [ ] Merge to main
 
 ---
@@ -192,7 +192,7 @@ feature/ocpp201-security
 ### Module 2 Completion Checklist
 - [x] MeterValues stored with full fidelity
 - [x] Unit tests
-- [x] Create MR: `feature/ocpp201-meter-values` → `main` (MR !4: https://gitlab.com/evorada/maeve-csms/-/merge_requests/4)
+- [x] Create MR: `feature/ocpp201-meter-values` → `main` (MR merged)
 - [ ] Merge to main
 
 ---
