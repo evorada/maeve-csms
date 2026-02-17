@@ -642,7 +642,7 @@ All three handlers exist as CallResult-only. The CallMaker can already initiate 
 
 **Branch:** `feature/ocpp201-security`
 **Priority:** Medium
-**Status:** 🚧 In Progress (1/2 tasks upgraded)
+**Status:** ✅ Complete (2/2 tasks upgraded)
 **Complexity:** Low
 
 ### Task 13.1: DeleteCertificate - Upgrade
