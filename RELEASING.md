@@ -31,6 +31,7 @@ Example: `2026.02.17`
 3. **GitHub Actions will automatically:**
    - Build binaries for multiple platforms (Linux, macOS, Windows) and architectures (amd64, arm64)
    - Build and push Docker images for both `manager` and `gateway` to GitHub Container Registry
+   - Build and publish the TypeScript client to GitLab npm registry
    - Create a GitHub Release with all artifacts
 
 4. **Review and publish the release**
@@ -42,6 +43,14 @@ Example: `2026.02.17`
 ## Release Artifacts
 
 Each release includes:
+
+### TypeScript Client
+
+The TypeScript client is published to the GitLab npm registry:
+- Package: `@evorada/maeve-csms-client@YYYY.MM.DD`
+- Registry: `https://gitlab.com/api/v4/projects/65031632/packages/npm/`
+
+See [client-ts/PUBLISHING.md](client-ts/PUBLISHING.md) for detailed installation and usage instructions.
 
 ### Docker Images
 - `ghcr.io/evorada/maeve-csms-manager:YYYY.MM.DD`
@@ -116,6 +125,42 @@ tar xzf manager-2026.02.17-linux-amd64.tar.gz
 .\manager.exe
 ```
 
+## Using the TypeScript Client
+
+### Configure npm
+
+Add to your project's `.npmrc`:
+
+```
+@evorada:registry=https://gitlab.com/api/v4/projects/65031632/packages/npm/
+```
+
+### Install
+
+```bash
+npm install @evorada/maeve-csms-client@2026.02.17
+```
+
+### Usage
+
+```typescript
+import { DefaultApi, Configuration } from '@evorada/maeve-csms-client';
+
+const config = new Configuration({
+  basePath: 'http://localhost:9410/api/v0',
+});
+
+const client = new DefaultApi(config);
+
+// Register a charge station
+await client.registerChargeStation('CS001', {
+  securityProfile: 0,
+  base64SHA256Password: 'password_hash_here',
+});
+```
+
+See [client-ts/README.md](client-ts/README.md) for more examples.
+
 ## Hotfix Releases
 
 For hotfix releases on the same day, append a patch number:
@@ -141,4 +186,13 @@ echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
 Check the Actions tab on GitHub for detailed logs. Common issues:
 - Build failures (check tests pass locally first)
 - Docker authentication (ensure GITHUB_TOKEN has package write permissions)
+- TypeScript client publishing (ensure GITLAB_TOKEN secret is set with `api` scope)
 - Tag format incorrect (must match `YYYY.MM.DD` or `YYYY.MM.DD.N`)
+
+### TypeScript client authentication issues
+
+If publishing to GitLab npm registry fails:
+1. Verify the `GITLAB_TOKEN` secret is set in GitHub repository settings
+2. Ensure the token has `api` scope
+3. Check if the token has expired
+4. See [client-ts/PUBLISHING.md](client-ts/PUBLISHING.md) for detailed setup instructions

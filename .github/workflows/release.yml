@@ -96,6 +96,45 @@ jobs:
           path: ${{ matrix.service }}/${{ env.ASSET_PATH }}
           retention-days: 1
 
+  build-typescript-client:
+    name: Build and Publish TypeScript Client
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://gitlab.com/api/v4/projects/65031632/packages/npm/'
+      
+      - name: Update package version
+        working-directory: client-ts
+        run: |
+          VERSION="${{ github.ref_name }}"
+          npm version "$VERSION" --no-git-tag-version
+      
+      - name: Install dependencies
+        working-directory: client-ts
+        run: npm install
+      
+      - name: Build package
+        working-directory: client-ts
+        run: npm run build
+      
+      - name: Publish to GitLab npm registry
+        working-directory: client-ts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: npm publish
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: typescript-client
+          path: client-ts/dist/
+          retention-days: 1
+
   build-docker-images:
     name: Build and Push Docker Images
     runs-on: ubuntu-latest
@@ -150,7 +189,7 @@ jobs:
 
   create-release:
     name: Create Release
-    needs: [build-binaries, build-docker-images]
+    needs: [build-binaries, build-docker-images, build-typescript-client]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -179,6 +218,18 @@ jobs:
           ## Maeve CSMS Release ${{ github.ref_name }}
           
           **Release Date:** $(date -u +"%Y-%m-%d")
+          
+          ### TypeScript Client
+          
+          Install the TypeScript client package:
+          ```bash
+          npm install @evorada/maeve-csms-client@${{ github.ref_name }}
+          ```
+          
+          Configure your `.npmrc` to use the GitLab registry:
+          ```
+          @evorada:registry=https://gitlab.com/api/v4/projects/65031632/packages/npm/
+          ```
           
           ### Docker Images
           

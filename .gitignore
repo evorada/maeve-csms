@@ -142,3 +142,9 @@ config/certificates/*.csr
 .DS_Store
 .AppleDouble
 .LSOverride
+
+# TypeScript client
+client-ts/node_modules/
+client-ts/dist/
+client-ts/src/generated/
+client-ts/*.log
