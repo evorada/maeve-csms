@@ -409,3 +409,162 @@ func getCertificateHash(cert *x509.Certificate) string {
 	b64Hash := base64.RawURLEncoding.EncodeToString(hash[:])
 	return b64Hash
 }
+
+func TestGetChargeStationConfiguration(t *testing.T) {
+	server, r, engine, _ := setupServer(t)
+	defer server.Close()
+
+	// Setup test data
+	err := engine.UpdateChargeStationSettings(context.Background(), "cs001", &store.ChargeStationSettings{
+		ChargeStationId: "cs001",
+		Settings: map[string]*store.ChargeStationSetting{
+			"HeartbeatInterval": {
+				Value:  "300",
+				Status: store.ChargeStationSettingStatusAccepted,
+			},
+			"MeterValueSampleInterval": {
+				Value:  "60",
+				Status: store.ChargeStationSettingStatusAccepted,
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/cs/cs001/configuration", nil)
+	req.Header.Set("accept", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
+	b, err := io.ReadAll(rr.Result().Body)
+	require.NoError(t, err)
+
+	var got api.ConfigurationResponse
+	err = json.Unmarshal(b, &got)
+	require.NoError(t, err)
+
+	assert.Len(t, got.ConfigurationKey, 2)
+	// Check that both keys are present (order may vary)
+	keys := make(map[string]string)
+	for _, kv := range got.ConfigurationKey {
+		if kv.Value != nil {
+			keys[kv.Key] = *kv.Value
+		}
+	}
+	assert.Equal(t, "300", keys["HeartbeatInterval"])
+	assert.Equal(t, "60", keys["MeterValueSampleInterval"])
+}
+
+func TestGetChargeStationConfigurationWithFilter(t *testing.T) {
+	server, r, engine, _ := setupServer(t)
+	defer server.Close()
+
+	// Setup test data
+	err := engine.UpdateChargeStationSettings(context.Background(), "cs001", &store.ChargeStationSettings{
+		ChargeStationId: "cs001",
+		Settings: map[string]*store.ChargeStationSetting{
+			"HeartbeatInterval": {
+				Value:  "300",
+				Status: store.ChargeStationSettingStatusAccepted,
+			},
+			"MeterValueSampleInterval": {
+				Value:  "60",
+				Status: store.ChargeStationSettingStatusAccepted,
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/cs/cs001/configuration?key=HeartbeatInterval", nil)
+	req.Header.Set("accept", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
+	b, err := io.ReadAll(rr.Result().Body)
+	require.NoError(t, err)
+
+	var got api.ConfigurationResponse
+	err = json.Unmarshal(b, &got)
+	require.NoError(t, err)
+
+	assert.Len(t, got.ConfigurationKey, 1)
+	assert.Equal(t, "HeartbeatInterval", got.ConfigurationKey[0].Key)
+	assert.NotNil(t, got.ConfigurationKey[0].Value)
+	assert.Equal(t, "300", *got.ConfigurationKey[0].Value)
+}
+
+func TestChangeChargeStationConfiguration(t *testing.T) {
+	server, r, engine, _ := setupServer(t)
+	defer server.Close()
+
+	reqBody := `{"HeartbeatInterval": "600", "MeterValueSampleInterval": "120"}`
+	req := httptest.NewRequest(http.MethodPatch, "/cs/cs001/configuration", strings.NewReader(reqBody))
+	req.Header.Set("content-type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusAccepted, rr.Result().StatusCode)
+	b, err := io.ReadAll(rr.Result().Body)
+	require.NoError(t, err)
+
+	var got api.ConfigurationChangeResponse
+	err = json.Unmarshal(b, &got)
+	require.NoError(t, err)
+
+	assert.Len(t, got.Results, 2)
+
+	// Verify settings were stored
+	settings, err := engine.LookupChargeStationSettings(context.Background(), "cs001")
+	require.NoError(t, err)
+	assert.NotNil(t, settings)
+	assert.Equal(t, "600", settings.Settings["HeartbeatInterval"].Value)
+	assert.Equal(t, store.ChargeStationSettingStatusPending, settings.Settings["HeartbeatInterval"].Status)
+	assert.Equal(t, "120", settings.Settings["MeterValueSampleInterval"].Value)
+	assert.Equal(t, store.ChargeStationSettingStatusPending, settings.Settings["MeterValueSampleInterval"].Status)
+}
+
+func TestGetChargeStationVariables(t *testing.T) {
+	server, r, _, _ := setupServer(t)
+	defer server.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/cs/cs001/variables", nil)
+	req.Header.Set("accept", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
+	b, err := io.ReadAll(rr.Result().Body)
+	require.NoError(t, err)
+
+	var got api.VariablesResponse
+	err = json.Unmarshal(b, &got)
+	require.NoError(t, err)
+
+	// Should return empty array for now (not implemented)
+	assert.Empty(t, got.Variables)
+}
+
+func TestSetChargeStationVariables(t *testing.T) {
+	server, r, _, _ := setupServer(t)
+	defer server.Close()
+
+	reqBody := `{"variables": [{"component": {"name": "OCPPCommCtrlr"}, "variable": {"name": "HeartbeatInterval"}, "attributeValue": "600"}]}`
+	req := httptest.NewRequest(http.MethodPatch, "/cs/cs001/variables", strings.NewReader(reqBody))
+	req.Header.Set("content-type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusAccepted, rr.Result().StatusCode)
+	b, err := io.ReadAll(rr.Result().Body)
+	require.NoError(t, err)
+
+	var got api.VariablesChangeResponse
+	err = json.Unmarshal(b, &got)
+	require.NoError(t, err)
+
+	assert.Len(t, got.Results, 1)
+	assert.Equal(t, "Accepted", string(got.Results[0].AttributeStatus))
+	assert.Equal(t, "OCPPCommCtrlr", got.Results[0].Component.Name)
+	assert.Equal(t, "HeartbeatInterval", got.Results[0].Variable.Name)
+}

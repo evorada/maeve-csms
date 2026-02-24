@@ -221,6 +221,170 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Status"
+  /cs/{csId}/configuration:
+    get:
+      summary: "Get charge station configuration (OCPP 1.6)"
+      description: |
+        Retrieves the current configuration of a charge station using OCPP 1.6 GetConfiguration.
+        Optionally filter by specific configuration keys.
+      operationId: "getChargeStationConfiguration"
+      parameters:
+        - name: "csId"
+          in: "path"
+          description: "The charge station identifier"
+          required: true
+          schema:
+            type: "string"
+            maxLength: 28
+        - name: "key"
+          in: "query"
+          description: "Comma-separated list of configuration keys to retrieve"
+          required: false
+          schema:
+            type: "string"
+      responses:
+        "200":
+          description: "Configuration response"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfigurationResponse"
+        "404":
+          description: "Unknown charge station"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        default:
+          description: "Unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+    patch:
+      summary: "Change charge station configuration (OCPP 1.6)"
+      description: |
+        Changes configuration values on a charge station using OCPP 1.6 ChangeConfiguration.
+        Returns 202 Accepted with per-key results. Some changes may require a reboot.
+      operationId: "changeChargeStationConfiguration"
+      parameters:
+        - name: "csId"
+          in: "path"
+          description: "The charge station identifier"
+          required: true
+          schema:
+            type: "string"
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ConfigurationChangeRequest"
+      responses:
+        "202":
+          description: "Accepted - configuration change initiated"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfigurationChangeResponse"
+        "404":
+          description: "Unknown charge station"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        default:
+          description: "Unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+  /cs/{csId}/variables:
+    get:
+      summary: "Get charge station variables (OCPP 2.0.1)"
+      description: |
+        Retrieves variables from a charge station using OCPP 2.0.1 GetVariables.
+        Optionally filter by component and/or variable name.
+      operationId: "getChargeStationVariables"
+      parameters:
+        - name: "csId"
+          in: "path"
+          description: "The charge station identifier"
+          required: true
+          schema:
+            type: "string"
+            maxLength: 28
+        - name: "component"
+          in: "query"
+          description: "Filter by component name"
+          required: false
+          schema:
+            type: "string"
+        - name: "variable"
+          in: "query"
+          description: "Filter by variable name"
+          required: false
+          schema:
+            type: "string"
+      responses:
+        "200":
+          description: "Variables response"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariablesResponse"
+        "404":
+          description: "Unknown charge station"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        default:
+          description: "Unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+    patch:
+      summary: "Set charge station variables (OCPP 2.0.1)"
+      description: |
+        Sets variable values on a charge station using OCPP 2.0.1 SetVariables.
+        Returns 202 Accepted with per-variable results.
+      operationId: "setChargeStationVariables"
+      parameters:
+        - name: "csId"
+          in: "path"
+          description: "The charge station identifier"
+          required: true
+          schema:
+            type: "string"
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/VariablesChangeRequest"
+      responses:
+        "202":
+          description: "Accepted - variable change initiated"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariablesChangeResponse"
+        "404":
+          description: "Unknown charge station"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        default:
+          description: "Unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
   /token:
     post:
       summary: "Create/update an authorization token"
@@ -837,6 +1001,229 @@ components:
         max_amperage:
           type: integer
           format: int32
+    ConfigurationResponse:
+      type: "object"
+      description: "Configuration response from GetConfiguration (OCPP 1.6)"
+      required:
+        - "configurationKey"
+      properties:
+        configurationKey:
+          type: "array"
+          description: "List of configuration key-value pairs"
+          items:
+            type: "object"
+            required:
+              - "key"
+              - "readonly"
+            properties:
+              key:
+                type: "string"
+                description: "Configuration key name"
+              readonly:
+                type: "boolean"
+                description: "Whether the key is read-only"
+              value:
+                type: "string"
+                description: "Current value of the configuration key"
+        unknownKey:
+          type: "array"
+          description: "List of requested keys that are unknown"
+          items:
+            type: "string"
+    ConfigurationChangeRequest:
+      type: "object"
+      description: "Request to change configuration values (OCPP 1.6)"
+      additionalProperties:
+        type: "string"
+        description: "Configuration key-value pairs to change"
+      example:
+        HeartbeatInterval: "600"
+        MeterValueSampleInterval: "120"
+    ConfigurationChangeResponse:
+      type: "object"
+      description: "Response from ChangeConfiguration (OCPP 1.6)"
+      required:
+        - "results"
+      properties:
+        results:
+          type: "array"
+          description: "Per-key change results"
+          items:
+            type: "object"
+            required:
+              - "key"
+              - "status"
+            properties:
+              key:
+                type: "string"
+                description: "Configuration key name"
+              status:
+                type: "string"
+                enum:
+                  - "Accepted"
+                  - "Rejected"
+                  - "RebootRequired"
+                  - "NotSupported"
+                description: "Result of the configuration change"
+    VariablesResponse:
+      type: "object"
+      description: "Variables response from GetVariables (OCPP 2.0.1)"
+      required:
+        - "variables"
+      properties:
+        variables:
+          type: "array"
+          description: "List of variables with their values"
+          items:
+            type: "object"
+            required:
+              - "component"
+              - "variable"
+              - "variableAttribute"
+            properties:
+              component:
+                type: "object"
+                required:
+                  - "name"
+                properties:
+                  name:
+                    type: "string"
+                    description: "Component name"
+                  instance:
+                    type: "string"
+                    description: "Component instance"
+                  evse:
+                    type: "object"
+                    properties:
+                      id:
+                        type: "integer"
+                        description: "EVSE identifier"
+                      connectorId:
+                        type: "integer"
+                        description: "Connector identifier"
+              variable:
+                type: "object"
+                required:
+                  - "name"
+                properties:
+                  name:
+                    type: "string"
+                    description: "Variable name"
+                  instance:
+                    type: "string"
+                    description: "Variable instance"
+              variableAttribute:
+                type: "array"
+                description: "Variable attributes"
+                items:
+                  type: "object"
+                  properties:
+                    value:
+                      type: "string"
+                      description: "Variable value"
+                    mutability:
+                      type: "string"
+                      enum:
+                        - "ReadOnly"
+                        - "WriteOnly"
+                        - "ReadWrite"
+                      description: "Whether the variable can be changed"
+                    persistent:
+                      type: "boolean"
+                      description: "Whether the variable persists across reboots"
+                    constant:
+                      type: "boolean"
+                      description: "Whether the variable is constant"
+    VariablesChangeRequest:
+      type: "object"
+      description: "Request to set variable values (OCPP 2.0.1)"
+      required:
+        - "variables"
+      properties:
+        variables:
+          type: "array"
+          description: "Variables to set"
+          items:
+            type: "object"
+            required:
+              - "component"
+              - "variable"
+              - "attributeValue"
+            properties:
+              component:
+                type: "object"
+                required:
+                  - "name"
+                properties:
+                  name:
+                    type: "string"
+                    description: "Component name"
+                  instance:
+                    type: "string"
+                    description: "Component instance"
+                  evse:
+                    type: "object"
+                    properties:
+                      id:
+                        type: "integer"
+                        description: "EVSE identifier"
+                      connectorId:
+                        type: "integer"
+                        description: "Connector identifier"
+              variable:
+                type: "object"
+                required:
+                  - "name"
+                properties:
+                  name:
+                    type: "string"
+                    description: "Variable name"
+                  instance:
+                    type: "string"
+                    description: "Variable instance"
+              attributeValue:
+                type: "string"
+                description: "Value to set"
+    VariablesChangeResponse:
+      type: "object"
+      description: "Response from SetVariables (OCPP 2.0.1)"
+      required:
+        - "results"
+      properties:
+        results:
+          type: "array"
+          description: "Per-variable change results"
+          items:
+            type: "object"
+            required:
+              - "component"
+              - "variable"
+              - "attributeStatus"
+            properties:
+              component:
+                type: "object"
+                required:
+                  - "name"
+                properties:
+                  name:
+                    type: "string"
+              variable:
+                type: "object"
+                required:
+                  - "name"
+                properties:
+                  name:
+                    type: "string"
+              attributeStatus:
+                type: "string"
+                enum:
+                  - "Accepted"
+                  - "Rejected"
+                  - "UnknownComponent"
+                  - "UnknownVariable"
+                  - "NotSupportedAttributeType"
+                  - "RebootRequired"
+                description: "Result of the variable change"
 
 
 

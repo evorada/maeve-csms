@@ -21,9 +21,9 @@ import (
 
 // Defines values for ChargeStationInstallCertificatesCertificatesStatus.
 const (
-	Accepted ChargeStationInstallCertificatesCertificatesStatus = "Accepted"
-	Pending  ChargeStationInstallCertificatesCertificatesStatus = "Pending"
-	Rejected ChargeStationInstallCertificatesCertificatesStatus = "Rejected"
+	ChargeStationInstallCertificatesCertificatesStatusAccepted ChargeStationInstallCertificatesCertificatesStatus = "Accepted"
+	ChargeStationInstallCertificatesCertificatesStatusPending  ChargeStationInstallCertificatesCertificatesStatus = "Pending"
+	ChargeStationInstallCertificatesCertificatesStatusRejected ChargeStationInstallCertificatesCertificatesStatus = "Rejected"
 )
 
 // Defines values for ChargeStationInstallCertificatesCertificatesType.
@@ -41,6 +41,14 @@ const (
 	SignCombinedCertificate        ChargeStationTriggerTrigger = "SignCombinedCertificate"
 	SignV2GCertificate             ChargeStationTriggerTrigger = "SignV2GCertificate"
 	StatusNotification             ChargeStationTriggerTrigger = "StatusNotification"
+)
+
+// Defines values for ConfigurationChangeResponseResultsStatus.
+const (
+	ConfigurationChangeResponseResultsStatusAccepted       ConfigurationChangeResponseResultsStatus = "Accepted"
+	ConfigurationChangeResponseResultsStatusNotSupported   ConfigurationChangeResponseResultsStatus = "NotSupported"
+	ConfigurationChangeResponseResultsStatusRebootRequired ConfigurationChangeResponseResultsStatus = "RebootRequired"
+	ConfigurationChangeResponseResultsStatusRejected       ConfigurationChangeResponseResultsStatus = "Rejected"
 )
 
 // Defines values for ConnectorFormat.
@@ -141,6 +149,23 @@ const (
 	RFID      TokenType = "RFID"
 )
 
+// Defines values for VariablesChangeResponseResultsAttributeStatus.
+const (
+	Accepted                  VariablesChangeResponseResultsAttributeStatus = "Accepted"
+	NotSupportedAttributeType VariablesChangeResponseResultsAttributeStatus = "NotSupportedAttributeType"
+	RebootRequired            VariablesChangeResponseResultsAttributeStatus = "RebootRequired"
+	Rejected                  VariablesChangeResponseResultsAttributeStatus = "Rejected"
+	UnknownComponent          VariablesChangeResponseResultsAttributeStatus = "UnknownComponent"
+	UnknownVariable           VariablesChangeResponseResultsAttributeStatus = "UnknownVariable"
+)
+
+// Defines values for VariablesResponseVariablesVariableAttributeMutability.
+const (
+	ReadOnly  VariablesResponseVariablesVariableAttributeMutability = "ReadOnly"
+	ReadWrite VariablesResponseVariablesVariableAttributeMutability = "ReadWrite"
+	WriteOnly VariablesResponseVariablesVariableAttributeMutability = "WriteOnly"
+)
+
 // Certificate A client certificate
 type Certificate struct {
 	// Certificate The PEM encoded certificate with newlines replaced by `\n`
@@ -188,6 +213,42 @@ type ChargeStationTrigger struct {
 
 // ChargeStationTriggerTrigger defines model for ChargeStationTrigger.Trigger.
 type ChargeStationTriggerTrigger string
+
+// ConfigurationChangeRequest Request to change configuration values (OCPP 1.6)
+type ConfigurationChangeRequest map[string]string
+
+// ConfigurationChangeResponse Response from ChangeConfiguration (OCPP 1.6)
+type ConfigurationChangeResponse struct {
+	// Results Per-key change results
+	Results []struct {
+		// Key Configuration key name
+		Key string `json:"key"`
+
+		// Status Result of the configuration change
+		Status ConfigurationChangeResponseResultsStatus `json:"status"`
+	} `json:"results"`
+}
+
+// ConfigurationChangeResponseResultsStatus Result of the configuration change
+type ConfigurationChangeResponseResultsStatus string
+
+// ConfigurationResponse Configuration response from GetConfiguration (OCPP 1.6)
+type ConfigurationResponse struct {
+	// ConfigurationKey List of configuration key-value pairs
+	ConfigurationKey []struct {
+		// Key Configuration key name
+		Key string `json:"key"`
+
+		// Readonly Whether the key is read-only
+		Readonly bool `json:"readonly"`
+
+		// Value Current value of the configuration key
+		Value *string `json:"value,omitempty"`
+	} `json:"configurationKey"`
+
+	// UnknownKey List of requested keys that are unknown
+	UnknownKey *[]string `json:"unknownKey,omitempty"`
+}
 
 // Connector defines model for Connector.
 type Connector struct {
@@ -355,6 +416,117 @@ type TokenCacheMode string
 // TokenType The type of token
 type TokenType string
 
+// VariablesChangeRequest Request to set variable values (OCPP 2.0.1)
+type VariablesChangeRequest struct {
+	// Variables Variables to set
+	Variables []struct {
+		// AttributeValue Value to set
+		AttributeValue string `json:"attributeValue"`
+		Component      struct {
+			Evse *struct {
+				// ConnectorId Connector identifier
+				ConnectorId *int `json:"connectorId,omitempty"`
+
+				// Id EVSE identifier
+				Id *int `json:"id,omitempty"`
+			} `json:"evse,omitempty"`
+
+			// Instance Component instance
+			Instance *string `json:"instance,omitempty"`
+
+			// Name Component name
+			Name string `json:"name"`
+		} `json:"component"`
+		Variable struct {
+			// Instance Variable instance
+			Instance *string `json:"instance,omitempty"`
+
+			// Name Variable name
+			Name string `json:"name"`
+		} `json:"variable"`
+	} `json:"variables"`
+}
+
+// VariablesChangeResponse Response from SetVariables (OCPP 2.0.1)
+type VariablesChangeResponse struct {
+	// Results Per-variable change results
+	Results []struct {
+		// AttributeStatus Result of the variable change
+		AttributeStatus VariablesChangeResponseResultsAttributeStatus `json:"attributeStatus"`
+		Component       struct {
+			Name string `json:"name"`
+		} `json:"component"`
+		Variable struct {
+			Name string `json:"name"`
+		} `json:"variable"`
+	} `json:"results"`
+}
+
+// VariablesChangeResponseResultsAttributeStatus Result of the variable change
+type VariablesChangeResponseResultsAttributeStatus string
+
+// VariablesResponse Variables response from GetVariables (OCPP 2.0.1)
+type VariablesResponse struct {
+	// Variables List of variables with their values
+	Variables []struct {
+		Component struct {
+			Evse *struct {
+				// ConnectorId Connector identifier
+				ConnectorId *int `json:"connectorId,omitempty"`
+
+				// Id EVSE identifier
+				Id *int `json:"id,omitempty"`
+			} `json:"evse,omitempty"`
+
+			// Instance Component instance
+			Instance *string `json:"instance,omitempty"`
+
+			// Name Component name
+			Name string `json:"name"`
+		} `json:"component"`
+		Variable struct {
+			// Instance Variable instance
+			Instance *string `json:"instance,omitempty"`
+
+			// Name Variable name
+			Name string `json:"name"`
+		} `json:"variable"`
+
+		// VariableAttribute Variable attributes
+		VariableAttribute []struct {
+			// Constant Whether the variable is constant
+			Constant *bool `json:"constant,omitempty"`
+
+			// Mutability Whether the variable can be changed
+			Mutability *VariablesResponseVariablesVariableAttributeMutability `json:"mutability,omitempty"`
+
+			// Persistent Whether the variable persists across reboots
+			Persistent *bool `json:"persistent,omitempty"`
+
+			// Value Variable value
+			Value *string `json:"value,omitempty"`
+		} `json:"variableAttribute"`
+	} `json:"variables"`
+}
+
+// VariablesResponseVariablesVariableAttributeMutability Whether the variable can be changed
+type VariablesResponseVariablesVariableAttributeMutability string
+
+// GetChargeStationConfigurationParams defines parameters for GetChargeStationConfiguration.
+type GetChargeStationConfigurationParams struct {
+	// Key Comma-separated list of configuration keys to retrieve
+	Key *string `form:"key,omitempty" json:"key,omitempty"`
+}
+
+// GetChargeStationVariablesParams defines parameters for GetChargeStationVariables.
+type GetChargeStationVariablesParams struct {
+	// Component Filter by component name
+	Component *string `form:"component,omitempty" json:"component,omitempty"`
+
+	// Variable Filter by variable name
+	Variable *string `form:"variable,omitempty" json:"variable,omitempty"`
+}
+
 // ListTokensParams defines parameters for ListTokens.
 type ListTokensParams struct {
 	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
@@ -370,6 +542,9 @@ type RegisterChargeStationJSONRequestBody = ChargeStationAuth
 // InstallChargeStationCertificatesJSONRequestBody defines body for InstallChargeStationCertificates for application/json ContentType.
 type InstallChargeStationCertificatesJSONRequestBody = ChargeStationInstallCertificates
 
+// ChangeChargeStationConfigurationJSONRequestBody defines body for ChangeChargeStationConfiguration for application/json ContentType.
+type ChangeChargeStationConfigurationJSONRequestBody = ConfigurationChangeRequest
+
 // UpdateChargeStationFirmwareJSONRequestBody defines body for UpdateChargeStationFirmware for application/json ContentType.
 type UpdateChargeStationFirmwareJSONRequestBody = FirmwareUpdateRequest
 
@@ -378,6 +553,9 @@ type ReconfigureChargeStationJSONRequestBody = ChargeStationSettings
 
 // TriggerChargeStationJSONRequestBody defines body for TriggerChargeStation for application/json ContentType.
 type TriggerChargeStationJSONRequestBody = ChargeStationTrigger
+
+// SetChargeStationVariablesJSONRequestBody defines body for SetChargeStationVariables for application/json ContentType.
+type SetChargeStationVariablesJSONRequestBody = VariablesChangeRequest
 
 // RegisterLocationJSONRequestBody defines body for RegisterLocation for application/json ContentType.
 type RegisterLocationJSONRequestBody = Location
@@ -408,6 +586,12 @@ type ServerInterface interface {
 	// Install certificates on the charge station
 	// (POST /cs/{csId}/certificates)
 	InstallChargeStationCertificates(w http.ResponseWriter, r *http.Request, csId string)
+	// Get charge station configuration (OCPP 1.6)
+	// (GET /cs/{csId}/configuration)
+	GetChargeStationConfiguration(w http.ResponseWriter, r *http.Request, csId string, params GetChargeStationConfigurationParams)
+	// Change charge station configuration (OCPP 1.6)
+	// (PATCH /cs/{csId}/configuration)
+	ChangeChargeStationConfiguration(w http.ResponseWriter, r *http.Request, csId string)
 	// Get firmware update status
 	// (GET /cs/{csId}/firmware/status)
 	GetChargeStationFirmwareStatus(w http.ResponseWriter, r *http.Request, csId string)
@@ -420,6 +604,12 @@ type ServerInterface interface {
 
 	// (POST /cs/{csId}/trigger)
 	TriggerChargeStation(w http.ResponseWriter, r *http.Request, csId string)
+	// Get charge station variables (OCPP 2.0.1)
+	// (GET /cs/{csId}/variables)
+	GetChargeStationVariables(w http.ResponseWriter, r *http.Request, csId string, params GetChargeStationVariablesParams)
+	// Set charge station variables (OCPP 2.0.1)
+	// (PATCH /cs/{csId}/variables)
+	SetChargeStationVariables(w http.ResponseWriter, r *http.Request, csId string)
 	// Registers a location with the CSMS
 	// (POST /location/{locationId})
 	RegisterLocation(w http.ResponseWriter, r *http.Request, locationId string)
@@ -454,8 +644,8 @@ func (siw *ServerInterfaceWrapper) UploadCertificate(w http.ResponseWriter, r *h
 		siw.Handler.UploadCertificate(w, r)
 	})
 
-	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
-		handler = siw.HandlerMiddlewares[i](handler)
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
 	}
 
 	handler.ServeHTTP(w, r.WithContext(ctx))
@@ -480,8 +670,8 @@ func (siw *ServerInterfaceWrapper) DeleteCertificate(w http.ResponseWriter, r *h
 		siw.Handler.DeleteCertificate(w, r, certificateHash)
 	})
 
-	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
-		handler = siw.HandlerMiddlewares[i](handler)
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
 	}
 
 	handler.ServeHTTP(w, r.WithContext(ctx))
@@ -506,8 +696,8 @@ func (siw *ServerInterfaceWrapper) LookupCertificate(w http.ResponseWriter, r *h
 		siw.Handler.LookupCertificate(w, r, certificateHash)
 	})
 
-	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
-		handler = siw.HandlerMiddlewares[i](handler)
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
 	}
 
 	handler.ServeHTTP(w, r.WithContext(ctx))
@@ -532,8 +722,8 @@ func (siw *ServerInterfaceWrapper) RegisterChargeStation(w http.ResponseWriter, 
 		siw.Handler.RegisterChargeStation(w, r, csId)
 	})
 
-	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
-		handler = siw.HandlerMiddlewares[i](handler)
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
 	}
 
 	handler.ServeHTTP(w, r.WithContext(ctx))
@@ -558,8 +748,8 @@ func (siw *ServerInterfaceWrapper) LookupChargeStationAuth(w http.ResponseWriter
 		siw.Handler.LookupChargeStationAuth(w, r, csId)
 	})
 
-	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
-		handler = siw.HandlerMiddlewares[i](handler)
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
 	}
 
 	handler.ServeHTTP(w, r.WithContext(ctx))
@@ -584,8 +774,71 @@ func (siw *ServerInterfaceWrapper) InstallChargeStationCertificates(w http.Respo
 		siw.Handler.InstallChargeStationCertificates(w, r, csId)
 	})
 
-	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
-		handler = siw.HandlerMiddlewares[i](handler)
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// GetChargeStationConfiguration operation middleware
+func (siw *ServerInterfaceWrapper) GetChargeStationConfiguration(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	// ------------- Path parameter "csId" -------------
+	var csId string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "csId", runtime.ParamLocationPath, chi.URLParam(r, "csId"), &csId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "csId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetChargeStationConfigurationParams
+
+	// ------------- Optional query parameter "key" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "key", r.URL.Query(), &params.Key)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetChargeStationConfiguration(w, r, csId, params)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// ChangeChargeStationConfiguration operation middleware
+func (siw *ServerInterfaceWrapper) ChangeChargeStationConfiguration(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	// ------------- Path parameter "csId" -------------
+	var csId string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "csId", runtime.ParamLocationPath, chi.URLParam(r, "csId"), &csId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "csId", Err: err})
+		return
+	}
+
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChangeChargeStationConfiguration(w, r, csId)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
 	}
 
 	handler.ServeHTTP(w, r.WithContext(ctx))
@@ -610,8 +863,8 @@ func (siw *ServerInterfaceWrapper) GetChargeStationFirmwareStatus(w http.Respons
 		siw.Handler.GetChargeStationFirmwareStatus(w, r, csId)
 	})
 
-	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
-		handler = siw.HandlerMiddlewares[i](handler)
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
 	}
 
 	handler.ServeHTTP(w, r.WithContext(ctx))
@@ -636,8 +889,8 @@ func (siw *ServerInterfaceWrapper) UpdateChargeStationFirmware(w http.ResponseWr
 		siw.Handler.UpdateChargeStationFirmware(w, r, csId)
 	})
 
-	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
-		handler = siw.HandlerMiddlewares[i](handler)
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
 	}
 
 	handler.ServeHTTP(w, r.WithContext(ctx))
@@ -662,8 +915,8 @@ func (siw *ServerInterfaceWrapper) ReconfigureChargeStation(w http.ResponseWrite
 		siw.Handler.ReconfigureChargeStation(w, r, csId)
 	})
 
-	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
-		handler = siw.HandlerMiddlewares[i](handler)
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
 	}
 
 	handler.ServeHTTP(w, r.WithContext(ctx))
@@ -688,8 +941,79 @@ func (siw *ServerInterfaceWrapper) TriggerChargeStation(w http.ResponseWriter, r
 		siw.Handler.TriggerChargeStation(w, r, csId)
 	})
 
-	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
-		handler = siw.HandlerMiddlewares[i](handler)
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// GetChargeStationVariables operation middleware
+func (siw *ServerInterfaceWrapper) GetChargeStationVariables(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	// ------------- Path parameter "csId" -------------
+	var csId string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "csId", runtime.ParamLocationPath, chi.URLParam(r, "csId"), &csId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "csId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetChargeStationVariablesParams
+
+	// ------------- Optional query parameter "component" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "component", r.URL.Query(), &params.Component)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "component", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "variable" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "variable", r.URL.Query(), &params.Variable)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "variable", Err: err})
+		return
+	}
+
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetChargeStationVariables(w, r, csId, params)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// SetChargeStationVariables operation middleware
+func (siw *ServerInterfaceWrapper) SetChargeStationVariables(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	// ------------- Path parameter "csId" -------------
+	var csId string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "csId", runtime.ParamLocationPath, chi.URLParam(r, "csId"), &csId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "csId", Err: err})
+		return
+	}
+
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetChargeStationVariables(w, r, csId)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
 	}
 
 	handler.ServeHTTP(w, r.WithContext(ctx))
@@ -714,8 +1038,8 @@ func (siw *ServerInterfaceWrapper) RegisterLocation(w http.ResponseWriter, r *ht
 		siw.Handler.RegisterLocation(w, r, locationId)
 	})
 
-	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
-		handler = siw.HandlerMiddlewares[i](handler)
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
 	}
 
 	handler.ServeHTTP(w, r.WithContext(ctx))
@@ -729,8 +1053,8 @@ func (siw *ServerInterfaceWrapper) RegisterParty(w http.ResponseWriter, r *http.
 		siw.Handler.RegisterParty(w, r)
 	})
 
-	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
-		handler = siw.HandlerMiddlewares[i](handler)
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
 	}
 
 	handler.ServeHTTP(w, r.WithContext(ctx))
@@ -765,8 +1089,8 @@ func (siw *ServerInterfaceWrapper) ListTokens(w http.ResponseWriter, r *http.Req
 		siw.Handler.ListTokens(w, r, params)
 	})
 
-	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
-		handler = siw.HandlerMiddlewares[i](handler)
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
 	}
 
 	handler.ServeHTTP(w, r.WithContext(ctx))
@@ -780,8 +1104,8 @@ func (siw *ServerInterfaceWrapper) SetToken(w http.ResponseWriter, r *http.Reque
 		siw.Handler.SetToken(w, r)
 	})
 
-	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
-		handler = siw.HandlerMiddlewares[i](handler)
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
 	}
 
 	handler.ServeHTTP(w, r.WithContext(ctx))
@@ -806,8 +1130,8 @@ func (siw *ServerInterfaceWrapper) LookupToken(w http.ResponseWriter, r *http.Re
 		siw.Handler.LookupToken(w, r, tokenUid)
 	})
 
-	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
-		handler = siw.HandlerMiddlewares[i](handler)
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
 	}
 
 	handler.ServeHTTP(w, r.WithContext(ctx))
@@ -945,6 +1269,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/cs/{csId}/certificates", wrapper.InstallChargeStationCertificates)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/cs/{csId}/configuration", wrapper.GetChargeStationConfiguration)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/cs/{csId}/configuration", wrapper.ChangeChargeStationConfiguration)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/cs/{csId}/firmware/status", wrapper.GetChargeStationFirmwareStatus)
 	})
 	r.Group(func(r chi.Router) {
@@ -955,6 +1285,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/cs/{csId}/trigger", wrapper.TriggerChargeStation)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/cs/{csId}/variables", wrapper.GetChargeStationVariables)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/cs/{csId}/variables", wrapper.SetChargeStationVariables)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/location/{locationId}", wrapper.RegisterLocation)
@@ -978,78 +1314,95 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/+x8bXPbOJL/V0Hx/3+RXNGWLCeui9/sKZJsa2NbKknO1N4oJUNkS8KGBDgAaI/W5e9+",
-	"hSeKD5Dlmdnc5jL7JhaeG+hfN7obzTwFEUszRoFKEZw/BSLaQIr1zx5wSVYkwhJUMQYRcZJJwmhwHnRR",
-	"lBCgEkWlXmGQcZapCtAzRC/NMNsAGg9uENCIxRCXJ0KPRG4QhceEUBCIQ5bgCGK03KL7+ZzeB2EgtxkE",
-	"54GQnNB18PwcBhx+yQmHODj/ubLwl6IzW/4dIhk8h0Fvg/kaphIrWrq53DTJ6zFKIVIFFIPEJBFoxTjC",
-	"KNJjkTCDG3teYgFn76ZX3c77szEW4pHx2L9509PtP0TTq+5R5/0Z2mCxQWyF5AZqi6HMTRgGKf71Guha",
-	"kX72rnEeYUDoA05IfCeAU5xCN0nYI3goGa6QAIkkQ5LnoBalCFNkh6PcjkePJEkQZRJlHB4U4z3kRfbM",
-	"6HrHoSVjCWCqSBIQ5ZzI7ZizFUn2QMJ1QpnppSjLBejDby55jv4D3bfv0RHKqR4JMZIcU5ExLg2MlliQ",
-	"COFcblTfE9V3dj31tXUqbU18z+luW4RKWANvIK++x4PoG1IhcZKUhE3sOxipUFGiR6izIWY8YtRzPMdI",
-	"jawM0XxcqumonFPF9iYfsdjSaMMZZblItsdz+pJk6zKRkP4uuv+FOiMM1H7zfWTrthDFsMJ5IjXNY6Cx",
-	"ATfQPFXs7kYRZBKUQE5A8Vf/dP2+eNY0FU/FDJ87l0EY3IzUPxdBGPSmN1PPwBrMdGt4UM/ZCsw53r6k",
-	"JMVhnE5BKsHWp4XjmKg6nIwrvGue4lfYIiI0xrQWsWpNmMmO0QXjaNQbj1HnuH18susnNixPYrTBD1ol",
-	"oRVT+ovQNcqwlMDp+ZzO83b7NCquL12Elql9wJzgZQKm0oqB62mWiLSWi5I8BqXwWGZ2VOqmIUojSxKm",
-	"MYIHAYjEcyogwxxLgy8BKTmKWMKoMCu51V9eqOjVXAdLyckyVypHcQW9vFyKfyVpnqJE3wdaU+ozPTk+",
-	"U4f/vt3WAo4jCVwYaS7dHiftdtuD0yovHff33YEvY2fGyVopyyZETENjRoQj7+UqdxM5+fnImLxlFshm",
-	"zFSLbr2SrOnnzmWvYq6oSk0poWtLq6cDS5eEQtzzCts+AbWUeuXKXJNM76O6wRXjKZbl/U1HvU+DmVIM",
-	"3Y/XA69KIfpab1Sn+NcFTjPgeA3ludXdddrxXGVmyANL5OtHZOwR+KKu1Lq9xclifNWdDoJQFU6LQr/n",
-	"3YISgBgbS8lN0rvq9gdaMfauuqO/DtXo0c1gOhv2Ft1y4WO50CsX+uXCoFy4KBcuy4WrcqGy6F/LhU/l",
-	"wnUQBpcfZ4tuz/7oqx/DQW9x1j5tf1h0FoLQdQKLk7Navdxw2Futz7xZffbOVXdOPpwtZie14qI3uvk4",
-	"qlZ2akVfn9Nuraw2cTu46S7eLzpt9/tscVr6/b74fdIuNZy0yy3vyi3vTMu4ezsbXU6646vFx9FsNrpZ",
-	"3I2r1bPReNEf/XQbhMFsML3uLibFr2kQBne3n25V60FRtCjWclKTiiriK2guYdInw4MHAU3xjZxkV42i",
-	"/89hFZwH/6+187Va1tFq7ZRB474OA3XfLIx40zxJ1G0RnCs73SNCOfFY93eU/JJDskUkBqq0F5jLePB5",
-	"OtAWEzFmY288EihLsFSHhd5gqu64fKn2hiXjRZN4e3zQ+cr1OVvbKiyfie8gLwhPHzGH6R5brJdzri7j",
-	"le1nDTNlSRz0xSIz9jNwoSfbM7c6HmONQrxb58GO8hx1goW8y2K/iUpSEBKnmbN1VGdHdG4GhTvNqspH",
-	"kqTgWyczduRe+m0DWoKyjGL2SBOGY4hbu+28ISu7KiJU+VRrDkK8/S3WcIMDdr6Cw05hD+NEbaNf0FEq",
-	"XGCSVCqMHW29H82+ooutrPSA+LCgW4JeQpnh2gR+yUHI5lZtg/Y5zSZrdok7gwbUEmYtjaYITobocQPc",
-	"GrLuEJVVuIQS09Cbq9ls3FL/TFsXs/HbMkxyTqpW2/uTjoeFHCT32uK3eboEriBpuyCyKtZGKx3eeGNd",
-	"nXPUfmsWU1alMhDDICXUFNo+I8DM+QB9r0SMnMGrVF6cK1QqwKtDFhJzWT0XR9QxGq5svIE9EB0gKejV",
-	"wwQiaQoxwRKS7atFSpG6HVIJ/AEnnmiIbVHCIiBiNBZoCfIRgOqT2yrTHNJMNo/rxRMSZE2xzLnneD5W",
-	"wkCo6On0R3EyyvRWrRBbcAqvFJM1JXT9YvBunwudC8UbpleprH1Q5xfw9wnfJbDrknjUBAdLIvMYvCZs",
-	"wuh6X2udAjdPeZSPmuu9ktqtS3uxq7q04zhWatRLc0Tk1t/AGI8JdSGTl4yC8onpkTmVfN+sum2huOnt",
-	"oGyI15sj2q55DveZG4VlolzVV5klGeZfCV03XYTr0e3l4mY0G01+6v5NW36TT8Pby8Vld9K9HJQqrkfK",
-	"/RndLvqT4eeB6Ty6XUxnk4F2jO5u+4PJ5WR0d9t3g7+EryJMbhd7fKeMqVunONQDk9Wg6NBhsbDjX41b",
-	"VUiUKPLBdgJrIiTfA90+rHTYSwktoUQSHcjwRrBVl1FvPES8NKPSspGhuYr0wyEyp6cq03FzkWolbhrN",
-	"xUoESjH/CjHCAt1PBpfD6WwwGfTvTeBZdZXsK9AiTIlN3BpJNqfLnYbCkaJWtSKgccYIlQLhB0aUXWHC",
-	"SKCMuUP7fZnAOb0fD277w9tLP32MJtsqkY4w1fG+xaKMtKwdKe5DV9M57tzrMM+u3Io4aAsdJ+J+Tos9",
-	"mWiNkxlLTBAGu5PzBxkVjX6mGfJLQfWIpWlOdaCErk0UVVEPN9MxetObDPqD29mwez1dzEafBreLrvYA",
-	"Dr0+5DzxL383uXaA0Su40ynYqDni7nzjm0xvpua8cSQVW0wEkcbGoFGlYhaHu6btdCBcow/MJ3f7/BJl",
-	"p+1M4KrQAOeM+/evm5w8/r6YNCo3/AGbeOYHSZfqBxHGyT+MqJizafhWONrAjdWPdSMqdo8NGyyRjmAq",
-	"RmnkqXEKaEQ4sSmH069/6v5NOffd6+vRT4P+7tdidHFxPbwd6DDC58HEC/uIUclxJId7XtxcOxr20Ru4",
-	"6Q77bxEWgkVEx1YL7BtK3+iyJy5so7GMaz/KBqSD8+DNz92j/8ZH//jy1Hl+++boL293FafVivbRhy9P",
-	"H5p1b/8ShHuv+J73sM2+dAekbhUnEkSIXJ2zkrKqwHa0sVoqNRZcc5Zn/kMkApEY6Q5COeAsz5Idd/Ur",
-	"SYq/ApKPDDGOUsbBNT0y/lWJL6NQJej0zBfUFCL3hYyHdl+KHZhuQ5QyId2mldXffG2wXVHGlUUeu6ey",
-	"ycWwjyLM41D7GRSU5sacJNtCPfmdf7rO8Rr2syPjsALOIUaur9O3zujGAg2nI3R2+uHoZNfJGgW/iVW7",
-	"UMQezGsv1txwEeMxesTChCSMDxGjN2RNGTfHEnHAElqm6e3r4xTKcNkndLpRgeYgME8ruz194fHMc62V",
-	"lUxZo/QXV6Pe4m46mChlMh67n6PZlf6rUOBVJt54mloq1zE1qyRI/Aos66d0H5SRVAJlZjKdfO/mD0Tk",
-	"ODEuvJ8k06PFAcfm3Un3bbmgX+RsngL/mO7gfziboqR/dswO3SOkifeVdG8hvG7nYem2aN5EzzpbYcVs",
-	"AFXiyDyApJgkwXmQYniAIwk4/S+5Yfl6I5UiEccRSwPnhwQ3ePAZkOrUfLvSPr3S4N3x0Lw8S9C3QKHv",
-	"zWhlZ4QIfrW9zfu/cE+RSnyVGalMi4REQE38167fzdQGUee4rWFKZLKjSr/ohoGLJ54H7eO26ccyoDgj",
-	"wXlwqqv0ZbLR12ur9g6uHBJPbClLGI61Im5kKyD7tq+WN++E2pCKMNV7kdXEAG275srIlTbXwZMXkAsl",
-	"uGkuc5yYRAlnFKuCCRZrMwxzsEFJtlrZ8JZaAKnfR0ucYBoBN8ZtMUwpELuj6iOcNeo+snjrMAJUnwbO",
-	"ssSiu/V3YRwj48keDLuXVniuAl65eLpCZIxa37nTPvEERrW2jA3idCzon0aetTo1ZfWIPvya6UQDY0tq",
-	"aRV5mmK+Lc5PAaKywbACqNZTqXCFxebZbC4BX7Sor+v3gUxZeBss0BKAojzbMbsw3Q1qcC3fqZLuNKf2",
-	"cugPJmi5lSB82DCEVLGhLLEUJHARnP/8FBBFsBKinWqobTWoszosseRlt+b5SwMV7zyhVoYcBJ7D4J3p",
-	"8o1BccskWrGcfl9YNPyqYzEM1uBRZdeMfc2zfz3IDB3fFcja307r1RRa6cydi/onx/AOlg19KlpPkRjG",
-	"z/uvZxOzA650J4VHb3Ke2AoJqY1vCJGnFu7N63dOlQgoV2UL0oiCjpMoq0L5FDQ2s+jEN19aH6H6Drav",
-	"iroa5lQwRKR9jgKdw7kia51IqW93InWsRW1hyZSbVEqr8cmP23MlAagpQx4ntkase7BWZqRP4oS2NL1i",
-	"1fnPPWL1DeyIRibxj2RNOGZ68VsTgxa2edRe9T4BmXNqfHMXjXaHhJbbnSJfYwmPeKuUe6zgkhIKaMMe",
-	"X2Og7lfnDS59J4D8Vnrej8oa4Gopd7ncIEfR/57av6NfKXukDWx9V1Kww24JgqWHlboo1NOj3fVQxaZL",
-	"/S4zq5IH/ufQmr4M+Fcp0bYn1+DTd4Ucu7Vq8rs3U7+OIPfy3tq9BxzUq9GLiTrFY5jIIFIQiWskhHNq",
-	"0pR1eNXOZaMWYWE12AqdWITp9m2oDQ+7kssv8hkGlyArbK8lfv3YCrm2WQ+SLmr5bf/WxB55uoS9aWj7",
-	"5Ccv8vT8NvpQv5ab+EZ9aiup+wTmGE3zLGNcCrRk+vJc5wnmc6okwmbq1Ka0Gfs1JGuzvchuUqPdVz3l",
-	"JJw5XXGW6qrifdRlqPhDaWpFr8z9uDeLP9HvVddJx/MWaj/vQUcNbBCLm+/LYHcfVHiQ/PJ9w6Fw/PbL",
-	"ioJ7QkAYZ8D2t4/Eyme1ofIlIL31XYim6fgSgYh2ZtWlI4HaeI5L8cBKHNdAgeOk8RGkc3p1MBqiDaZE",
-	"pKHyVNWsdrY5Vfcdo+ZRUM1B11DyOeKc61QREOZLpO5K+Tm7YzBXotcNd7kpHJRHDDESzKac1E9FedUS",
-	"fwUEqxVEEpGVlmyeawZK5negC078GX3o4juzH8QELLHzFWZf6QMnv89gBfzPiAz3Fdn/YWBobrs7u/Xk",
-	"fr06iOgG7J4u9eveC2G461IK6yGMFLMfQseO7uC3Brb/+RjZJcr+gIG3/Uw3moPbfq+CDzV5kCYho4og",
-	"1Afn4Dn3tHKR+RPy5hSI3AAvjCGEq1mWxSJmTeuAOgKSBD1iIgvH1NTrF3o73Zzum/AQ7sdqrm/0dlxJ",
-	"xf1BUbcfKwZ4RYap/zGPCGmyc11amDIP7ScvRQ6vzTKE4kMuX/yWCKkTFcWed7hfctCZ1VY1sdVKgKyq",
-	"pRe+zHgO/dMkJCWyrtzc5zDl72FOPHP+0UDCqxL1TfZm8xv/Bs/VCe4S9L6vxzVFmifZVLgU/H1iI5Qq",
-	"sR41wi6n+fdibAoGYt9IXVhO/UB6oldOE1S6wpcwvFMTrSf9544YM+fl5/8/yEszj2Pn4Yd7R9lrX+w9",
-	"+X3fNHBYAk8tNNE88n+/2Vff7PfhUv9XRPzhZUM4QTE8QMKy1KR8q/6B/bAh2EiZnbe0JZ9smJDnH96d",
-	"tFs4I62HdvD85fl/AgAA//9d4rKuVksAAA==",
+	"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",
+	"i1PSfewFzx+e/y8AAP//HwGNfrhrAAA=",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
