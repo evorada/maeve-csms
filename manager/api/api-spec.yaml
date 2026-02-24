@@ -221,6 +221,105 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Status"
+  /cs/{csId}/local-list/version:
+    get:
+      summary: "Get local authorization list version"
+      description: |
+        Returns the current version number of the local authorization list
+        stored on the charge station.
+      operationId: "getLocalListVersion"
+      parameters:
+        - name: "csId"
+          in: "path"
+          description: "The charge station identifier"
+          schema:
+            type: "string"
+            maxLength: 28
+      responses:
+        "200":
+          description: "Local list version response"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocalListVersionResponse"
+        "404":
+          description: "Unknown charge station or no local list"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        default:
+          description: "Unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+  /cs/{csId}/local-list:
+    get:
+      summary: "Get local authorization list"
+      description: |
+        Returns the complete local authorization list for the specified charge station.
+      operationId: "getLocalAuthorizationList"
+      parameters:
+        - name: "csId"
+          in: "path"
+          description: "The charge station identifier"
+          schema:
+            type: "string"
+            maxLength: 28
+      responses:
+        "200":
+          description: "Local authorization list response"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocalAuthorizationListResponse"
+        "404":
+          description: "Unknown charge station or no local list"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        default:
+          description: "Unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+    post:
+      summary: "Update local authorization list"
+      description: |
+        Updates the local authorization list on the specified charge station.
+        Supports both full replacement and differential updates.
+      operationId: "updateLocalAuthorizationList"
+      parameters:
+        - name: "csId"
+          in: "path"
+          description: "The charge station identifier"
+          schema:
+            type: "string"
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateLocalListRequest"
+      responses:
+        "202":
+          description: "Accepted - operation queued"
+        "404":
+          description: "Unknown charge station"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        default:
+          description: "Unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
   /token:
     post:
       summary: "Create/update an authorization token"
@@ -580,6 +679,93 @@ components:
         pendingVersion:
           type: "string"
           description: "Version being downloaded/installed (if update in progress)"
+    LocalListVersionResponse:
+      type: "object"
+      description: "Response containing the local list version"
+      required:
+        - "listVersion"
+      properties:
+        listVersion:
+          type: "integer"
+          format: "int32"
+          description: "The current version number of the local authorization list"
+    IdTagInfo:
+      type: "object"
+      description: "Authorization information for an ID tag"
+      required:
+        - "status"
+      properties:
+        status:
+          type: "string"
+          enum:
+            - "Accepted"
+            - "Blocked"
+            - "Expired"
+            - "Invalid"
+            - "ConcurrentTx"
+          description: "Authorization status"
+        expiryDate:
+          type: "string"
+          format: "date-time"
+          description: "Date when the ID tag expires"
+          nullable: true
+        parentIdTag:
+          type: "string"
+          maxLength: 20
+          description: "Parent ID tag for group authorization"
+          nullable: true
+    LocalAuthorizationEntry:
+      type: "object"
+      description: "Single entry in the local authorization list"
+      required:
+        - "idTag"
+        - "idTagInfo"
+      properties:
+        idTag:
+          type: "string"
+          maxLength: 20
+          description: "The identifier"
+        idTagInfo:
+          $ref: "#/components/schemas/IdTagInfo"
+    LocalAuthorizationListResponse:
+      type: "object"
+      description: "Response containing the complete local authorization list"
+      required:
+        - "listVersion"
+        - "localAuthorizationList"
+      properties:
+        listVersion:
+          type: "integer"
+          format: "int32"
+          description: "The current version number of the local authorization list"
+        localAuthorizationList:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/LocalAuthorizationEntry"
+          description: "Array of authorization entries"
+    UpdateLocalListRequest:
+      type: "object"
+      description: "Request to update the local authorization list"
+      required:
+        - "listVersion"
+        - "updateType"
+      properties:
+        listVersion:
+          type: "integer"
+          format: "int32"
+          description: "The new version number (must be greater than current)"
+        updateType:
+          type: "string"
+          enum:
+            - "Full"
+            - "Differential"
+          description: "Type of update (Full=replace entire list, Differential=update specific entries)"
+        localAuthorizationList:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/LocalAuthorizationEntry"
+          description: "Authorization entries to add/update"
+          nullable: true
     Token:
       type: "object"
       description: "An authorization token"

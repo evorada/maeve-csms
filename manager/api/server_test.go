@@ -409,3 +409,211 @@ func getCertificateHash(cert *x509.Certificate) string {
 	b64Hash := base64.RawURLEncoding.EncodeToString(hash[:])
 	return b64Hash
 }
+
+func TestGetLocalListVersion(t *testing.T) {
+	server, r, engine, _ := setupServer(t)
+	defer server.Close()
+
+	// Set up some data
+	err := engine.UpdateLocalAuthList(context.Background(), "cs001", 5, store.LocalAuthListUpdateTypeFull, nil)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/cs/cs001/local-list/version", nil)
+	req.Header.Set("accept", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
+	b, err := io.ReadAll(rr.Result().Body)
+	require.NoError(t, err)
+
+	var got api.LocalListVersionResponse
+	err = json.Unmarshal(b, &got)
+	require.NoError(t, err)
+
+	assert.Equal(t, int32(5), got.ListVersion)
+}
+
+func TestGetLocalListVersionForNewChargeStation(t *testing.T) {
+	server, r, _, _ := setupServer(t)
+	defer server.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/cs/new-cs/local-list/version", nil)
+	req.Header.Set("accept", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
+	b, err := io.ReadAll(rr.Result().Body)
+	require.NoError(t, err)
+
+	var got api.LocalListVersionResponse
+	err = json.Unmarshal(b, &got)
+	require.NoError(t, err)
+
+	assert.Equal(t, int32(0), got.ListVersion)
+}
+
+func TestGetLocalAuthorizationList(t *testing.T) {
+	server, r, engine, _ := setupServer(t)
+	defer server.Close()
+
+	// Set up test data
+	expiryDate := time.Now().Add(24 * time.Hour).Format(time.RFC3339)
+	parentIdTag := "PARENT001"
+	entries := []*store.LocalAuthListEntry{
+		{
+			IdTag: "USER001",
+			IdTagInfo: &store.IdTagInfo{
+				Status:      store.IdTagStatusAccepted,
+				ExpiryDate:  &expiryDate,
+				ParentIdTag: &parentIdTag,
+			},
+		},
+		{
+			IdTag: "USER002",
+			IdTagInfo: &store.IdTagInfo{
+				Status: store.IdTagStatusBlocked,
+			},
+		},
+	}
+
+	err := engine.UpdateLocalAuthList(context.Background(), "cs001", 3, store.LocalAuthListUpdateTypeFull, entries)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/cs/cs001/local-list", nil)
+	req.Header.Set("accept", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
+	b, err := io.ReadAll(rr.Result().Body)
+	require.NoError(t, err)
+
+	var got api.LocalAuthorizationListResponse
+	err = json.Unmarshal(b, &got)
+	require.NoError(t, err)
+
+	assert.Equal(t, int32(3), got.ListVersion)
+	assert.Len(t, got.LocalAuthorizationList, 2)
+	assert.Equal(t, "USER001", got.LocalAuthorizationList[0].IdTag)
+	assert.Equal(t, api.IdTagInfoStatusAccepted, got.LocalAuthorizationList[0].IdTagInfo.Status)
+	assert.NotNil(t, got.LocalAuthorizationList[0].IdTagInfo.ExpiryDate)
+	assert.NotNil(t, got.LocalAuthorizationList[0].IdTagInfo.ParentIdTag)
+	assert.Equal(t, parentIdTag, *got.LocalAuthorizationList[0].IdTagInfo.ParentIdTag)
+
+	assert.Equal(t, "USER002", got.LocalAuthorizationList[1].IdTag)
+	assert.Equal(t, api.IdTagInfoStatusBlocked, got.LocalAuthorizationList[1].IdTagInfo.Status)
+}
+
+func TestUpdateLocalAuthorizationListFull(t *testing.T) {
+	server, r, engine, _ := setupServer(t)
+	defer server.Close()
+
+	expiryDate := time.Now().Add(48 * time.Hour)
+	parentIdTag := "PARENT002"
+	reqBody := api.UpdateLocalListRequest{
+		ListVersion: 10,
+		UpdateType:  api.Full,
+		LocalAuthorizationList: &[]api.LocalAuthorizationEntry{
+			{
+				IdTag: "USER003",
+				IdTagInfo: api.IdTagInfo{
+					Status:      api.IdTagInfoStatusAccepted,
+					ExpiryDate:  &expiryDate,
+					ParentIdTag: &parentIdTag,
+				},
+			},
+		},
+	}
+
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/cs/cs001/local-list", bytes.NewReader(body))
+	req.Header.Set("content-type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusAccepted, rr.Result().StatusCode)
+
+	// Verify the update was stored
+	version, err := engine.GetLocalListVersion(context.Background(), "cs001")
+	require.NoError(t, err)
+	assert.Equal(t, 10, version)
+
+	entries, err := engine.GetLocalAuthList(context.Background(), "cs001")
+	require.NoError(t, err)
+	assert.Len(t, entries, 1)
+	assert.Equal(t, "USER003", entries[0].IdTag)
+}
+
+func TestUpdateLocalAuthorizationListDifferential(t *testing.T) {
+	server, r, engine, _ := setupServer(t)
+	defer server.Close()
+
+	// Set up initial list
+	initialEntries := []*store.LocalAuthListEntry{
+		{
+			IdTag: "USER001",
+			IdTagInfo: &store.IdTagInfo{
+				Status: store.IdTagStatusAccepted,
+			},
+		},
+	}
+	err := engine.UpdateLocalAuthList(context.Background(), "cs001", 5, store.LocalAuthListUpdateTypeFull, initialEntries)
+	require.NoError(t, err)
+
+	// Add new entry via differential update
+	reqBody := api.UpdateLocalListRequest{
+		ListVersion: 6,
+		UpdateType:  api.Differential,
+		LocalAuthorizationList: &[]api.LocalAuthorizationEntry{
+			{
+				IdTag: "USER002",
+				IdTagInfo: api.IdTagInfo{
+					Status: api.IdTagInfoStatusBlocked,
+				},
+			},
+		},
+	}
+
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/cs/cs001/local-list", bytes.NewReader(body))
+	req.Header.Set("content-type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusAccepted, rr.Result().StatusCode)
+
+	// Verify the update
+	version, err := engine.GetLocalListVersion(context.Background(), "cs001")
+	require.NoError(t, err)
+	assert.Equal(t, 6, version)
+
+	entries, err := engine.GetLocalAuthList(context.Background(), "cs001")
+	require.NoError(t, err)
+	assert.Len(t, entries, 2)
+}
+
+func TestUpdateLocalAuthorizationListInvalidUpdateType(t *testing.T) {
+	server, r, _, _ := setupServer(t)
+	defer server.Close()
+
+	reqBody := map[string]interface{}{
+		"listVersion": 1,
+		"updateType":  "Invalid",
+	}
+
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/cs/cs001/local-list", bytes.NewReader(body))
+	req.Header.Set("content-type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
+}
