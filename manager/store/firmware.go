@@ -114,7 +114,28 @@ type FirmwareUpdateRequestStore interface {
 	ListFirmwareUpdateRequests(ctx context.Context, pageSize int, previousChargeStationId string) ([]*FirmwareUpdateRequest, error)
 }
 
-// FirmwareStore defines the interface for firmware and diagnostics status tracking
+// LogStatusType represents the status of log upload
+type LogStatusType string
+
+var (
+	LogStatusIdle                  LogStatusType = "Idle"
+	LogStatusUploading             LogStatusType = "Uploading"
+	LogStatusUploaded              LogStatusType = "Uploaded"
+	LogStatusUploadFailure         LogStatusType = "UploadFailure"
+	LogStatusBadMessage            LogStatusType = "BadMessage"
+	LogStatusNotSupportedOperation LogStatusType = "NotSupportedOperation"
+	LogStatusPermissionDenied      LogStatusType = "PermissionDenied"
+)
+
+// LogStatus tracks the log upload status for a charge station
+type LogStatus struct {
+	ChargeStationId string
+	Status          LogStatusType
+	RequestId       int
+	UpdatedAt       time.Time
+}
+
+// FirmwareStore defines the interface for firmware, diagnostics, and log status tracking
 type FirmwareStore interface {
 	SetFirmwareUpdateStatus(ctx context.Context, chargeStationId string, status *FirmwareUpdateStatus) error
 	GetFirmwareUpdateStatus(ctx context.Context, chargeStationId string) (*FirmwareUpdateStatus, error)
@@ -122,4 +143,6 @@ type FirmwareStore interface {
 	GetDiagnosticsStatus(ctx context.Context, chargeStationId string) (*DiagnosticsStatus, error)
 	SetPublishFirmwareStatus(ctx context.Context, chargeStationId string, status *PublishFirmwareStatus) error
 	GetPublishFirmwareStatus(ctx context.Context, chargeStationId string) (*PublishFirmwareStatus, error)
+	SetLogStatus(ctx context.Context, chargeStationId string, status *LogStatus) error
+	GetLogStatus(ctx context.Context, chargeStationId string) (*LogStatus, error)
 }

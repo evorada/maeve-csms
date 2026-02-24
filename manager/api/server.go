@@ -540,6 +540,98 @@ func (s *Server) GetChargeStationFirmwareStatus(w http.ResponseWriter, r *http.R
 	_ = render.Render(w, r, resp)
 }
 
+func (s *Server) RequestChargeStationDiagnostics(w http.ResponseWriter, r *http.Request, csId string) {
+	req := new(DiagnosticsRequest)
+	if err := render.Bind(r, req); err != nil {
+		_ = render.Render(w, r, ErrInvalidRequest(err))
+		return
+	}
+
+	diagStatus := &store.DiagnosticsStatus{
+		ChargeStationId: csId,
+		Status:          store.DiagnosticsStatusUploading,
+		Location:        req.Location,
+		UpdatedAt:       s.clock.Now(),
+	}
+
+	if err := s.store.SetDiagnosticsStatus(r.Context(), csId, diagStatus); err != nil {
+		_ = render.Render(w, r, ErrInternalError(err))
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (s *Server) GetChargeStationDiagnosticsStatus(w http.ResponseWriter, r *http.Request, csId string) {
+	diagStatus, err := s.store.GetDiagnosticsStatus(r.Context(), csId)
+	if err != nil {
+		_ = render.Render(w, r, ErrInternalError(err))
+		return
+	}
+
+	if diagStatus == nil {
+		resp := DiagnosticsStatus{
+			Status: DiagnosticsStatusStatusIdle,
+		}
+		_ = render.Render(w, r, &resp)
+		return
+	}
+
+	lastUpdate := diagStatus.UpdatedAt
+	resp := DiagnosticsStatus{
+		Status:     DiagnosticsStatusStatus(diagStatus.Status),
+		LastUpdate: &lastUpdate,
+	}
+	_ = render.Render(w, r, &resp)
+}
+
+func (s *Server) RequestChargeStationLogs(w http.ResponseWriter, r *http.Request, csId string) {
+	req := new(LogRequest)
+	if err := render.Bind(r, req); err != nil {
+		_ = render.Render(w, r, ErrInvalidRequest(err))
+		return
+	}
+
+	logStatus := &store.LogStatus{
+		ChargeStationId: csId,
+		Status:          store.LogStatusUploading,
+		RequestId:       req.RequestId,
+		UpdatedAt:       s.clock.Now(),
+	}
+
+	if err := s.store.SetLogStatus(r.Context(), csId, logStatus); err != nil {
+		_ = render.Render(w, r, ErrInternalError(err))
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (s *Server) GetChargeStationLogStatus(w http.ResponseWriter, r *http.Request, csId string, params GetChargeStationLogStatusParams) {
+	logStatus, err := s.store.GetLogStatus(r.Context(), csId)
+	if err != nil {
+		_ = render.Render(w, r, ErrInternalError(err))
+		return
+	}
+
+	if logStatus == nil {
+		resp := LogStatus{
+			Status: Idle,
+		}
+		_ = render.Render(w, r, &resp)
+		return
+	}
+
+	lastUpdate := logStatus.UpdatedAt
+	requestId := logStatus.RequestId
+	resp := LogStatus{
+		Status:     LogStatusStatus(logStatus.Status),
+		LastUpdate: &lastUpdate,
+		RequestId:  &requestId,
+	}
+	_ = render.Render(w, r, &resp)
+}
+
 func (s *Server) CreateReservation(w http.ResponseWriter, r *http.Request, csId string) {
 	req := new(ReservationRequest)
 	if err := render.Bind(r, req); err != nil {

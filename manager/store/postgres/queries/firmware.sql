@@ -79,3 +79,16 @@ FROM firmware_update_request
 WHERE charge_station_id > $1
 ORDER BY charge_station_id
 LIMIT $2;
+
+-- name: UpsertLogStatus :exec
+INSERT INTO log_status (charge_station_id, status, request_id, updated_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (charge_station_id) DO UPDATE SET
+    status = EXCLUDED.status,
+    request_id = EXCLUDED.request_id,
+    updated_at = EXCLUDED.updated_at;
+
+-- name: GetLogStatus :one
+SELECT charge_station_id, status, request_id, updated_at
+FROM log_status
+WHERE charge_station_id = $1;

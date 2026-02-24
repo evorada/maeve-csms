@@ -53,6 +53,7 @@ type Querier interface {
 	GetLocalAuthListEntries(ctx context.Context, chargeStationID string) ([]LocalAuthListEntry, error)
 	GetLocalListVersion(ctx context.Context, chargeStationID string) (int32, error)
 	GetLocation(ctx context.Context, id string) (Location, error)
+	GetLogStatus(ctx context.Context, chargeStationID string) (LogStatus, error)
 	GetMeterValues(ctx context.Context, transactionID string) ([]TransactionMeterValue, error)
 	GetMeterValuesByStationAndEvse(ctx context.Context, arg GetMeterValuesByStationAndEvseParams) ([]MeterValue, error)
 	// Party Details (by role + country_code + party_id)
@@ -93,6 +94,7 @@ type Querier interface {
 	UpsertFirmwareUpdateStatus(ctx context.Context, arg UpsertFirmwareUpdateStatusParams) error
 	UpsertLocalAuthListEntry(ctx context.Context, arg UpsertLocalAuthListEntryParams) error
 	UpsertLocalListVersion(ctx context.Context, arg UpsertLocalListVersionParams) error
+	UpsertLogStatus(ctx context.Context, arg UpsertLogStatusParams) error
 	UpsertPublishFirmwareStatus(ctx context.Context, arg UpsertPublishFirmwareStatusParams) error
 }
 

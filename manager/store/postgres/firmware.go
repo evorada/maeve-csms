@@ -247,3 +247,33 @@ func (s *Store) ListFirmwareUpdateRequests(ctx context.Context, pageSize int, pr
 
 	return results, nil
 }
+
+func (s *Store) SetLogStatus(ctx context.Context, chargeStationId string, logStatus *store.LogStatus) error {
+	err := s.q.UpsertLogStatus(ctx, UpsertLogStatusParams{
+		ChargeStationID: chargeStationId,
+		Status:          string(logStatus.Status),
+		RequestID:       int32(logStatus.RequestId),
+		UpdatedAt:       pgtype.Timestamptz{Time: logStatus.UpdatedAt, Valid: true},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to set log status: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) GetLogStatus(ctx context.Context, chargeStationId string) (*store.LogStatus, error) {
+	row, err := s.q.GetLogStatus(ctx, chargeStationId)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get log status: %w", err)
+	}
+
+	return &store.LogStatus{
+		ChargeStationId: row.ChargeStationID,
+		Status:          store.LogStatusType(row.Status),
+		RequestId:       int(row.RequestID),
+		UpdatedAt:       row.UpdatedAt.Time,
+	}, nil
+}

@@ -165,6 +165,52 @@ func (s *Store) GetPublishFirmwareStatus(ctx context.Context, chargeStationId st
 }
 
 // Ensure firestore.Store still satisfies the interface at compile time
+type firestoreLogStatus struct {
+	ChargeStationId string `firestore:"chargeStationId"`
+	Status          string `firestore:"status"`
+	RequestId       int    `firestore:"requestId"`
+	UpdatedAt       string `firestore:"updatedAt"`
+}
+
+func (s *Store) SetLogStatus(ctx context.Context, chargeStationId string, logStatus *store.LogStatus) error {
+	doc := &firestoreLogStatus{
+		ChargeStationId: chargeStationId,
+		Status:          string(logStatus.Status),
+		RequestId:       logStatus.RequestId,
+		UpdatedAt:       logStatus.UpdatedAt.Format(time.RFC3339),
+	}
+
+	_, err := s.client.Collection("LogStatus").Doc(chargeStationId).Set(ctx, doc)
+	if err != nil {
+		return fmt.Errorf("setting log status for %s: %w", chargeStationId, err)
+	}
+	return nil
+}
+
+func (s *Store) GetLogStatus(ctx context.Context, chargeStationId string) (*store.LogStatus, error) {
+	snap, err := s.client.Collection("LogStatus").Doc(chargeStationId).Get(ctx)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("getting log status for %s: %w", chargeStationId, err)
+	}
+
+	var doc firestoreLogStatus
+	if err := snap.DataTo(&doc); err != nil {
+		return nil, fmt.Errorf("decoding log status for %s: %w", chargeStationId, err)
+	}
+
+	updatedAt, _ := time.Parse(time.RFC3339, doc.UpdatedAt)
+
+	return &store.LogStatus{
+		ChargeStationId: doc.ChargeStationId,
+		Status:          store.LogStatusType(doc.Status),
+		RequestId:       doc.RequestId,
+		UpdatedAt:       updatedAt,
+	}, nil
+}
+
 var _ store.FirmwareStore = (*Store)(nil)
 
 type firestoreFirmwareUpdateRequest struct {
