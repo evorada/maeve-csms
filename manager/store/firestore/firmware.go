@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"cloud.google.com/go/firestore"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -166,23 +167,141 @@ func (s *Store) GetPublishFirmwareStatus(ctx context.Context, chargeStationId st
 // Ensure firestore.Store still satisfies the interface at compile time
 var _ store.FirmwareStore = (*Store)(nil)
 
-// FirmwareUpdateRequest store methods (stub implementations)
+type firestoreFirmwareUpdateRequest struct {
+	ChargeStationId    string  `firestore:"chargeStationId"`
+	Location           string  `firestore:"location"`
+	RetrieveDate       *string `firestore:"retrieveDate,omitempty"`
+	Retries            *int    `firestore:"retries,omitempty"`
+	RetryInterval      *int    `firestore:"retryInterval,omitempty"`
+	Signature          *string `firestore:"signature,omitempty"`
+	SigningCertificate *string `firestore:"signingCertificate,omitempty"`
+	Status             string  `firestore:"status"`
+	SendAfter          string  `firestore:"sendAfter"`
+}
+
+// FirmwareUpdateRequest store methods
 func (s *Store) SetFirmwareUpdateRequest(ctx context.Context, chargeStationId string, request *store.FirmwareUpdateRequest) error {
-	// TODO: Implement Firestore persistence for firmware update requests
-	return fmt.Errorf("SetFirmwareUpdateRequest not yet implemented for Firestore")
+	doc := &firestoreFirmwareUpdateRequest{
+		ChargeStationId:    chargeStationId,
+		Location:           request.Location,
+		Retries:            request.Retries,
+		RetryInterval:      request.RetryInterval,
+		Signature:          request.Signature,
+		SigningCertificate: request.SigningCertificate,
+		Status:             string(request.Status),
+		SendAfter:          request.SendAfter.Format(time.RFC3339),
+	}
+
+	if request.RetrieveDate != nil {
+		retrieveDate := request.RetrieveDate.Format(time.RFC3339)
+		doc.RetrieveDate = &retrieveDate
+	}
+
+	_, err := s.client.Collection("FirmwareUpdateRequests").Doc(chargeStationId).Set(ctx, doc)
+	if err != nil {
+		return fmt.Errorf("setting firmware update request for %s: %w", chargeStationId, err)
+	}
+	return nil
 }
 
 func (s *Store) GetFirmwareUpdateRequest(ctx context.Context, chargeStationId string) (*store.FirmwareUpdateRequest, error) {
-	// TODO: Implement Firestore persistence for firmware update requests
-	return nil, fmt.Errorf("GetFirmwareUpdateRequest not yet implemented for Firestore")
+	snap, err := s.client.Collection("FirmwareUpdateRequests").Doc(chargeStationId).Get(ctx)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("getting firmware update request for %s: %w", chargeStationId, err)
+	}
+
+	var doc firestoreFirmwareUpdateRequest
+	if err := snap.DataTo(&doc); err != nil {
+		return nil, fmt.Errorf("decoding firmware update request for %s: %w", chargeStationId, err)
+	}
+
+	result := &store.FirmwareUpdateRequest{
+		ChargeStationId:    doc.ChargeStationId,
+		Location:           doc.Location,
+		Retries:            doc.Retries,
+		RetryInterval:      doc.RetryInterval,
+		Signature:          doc.Signature,
+		SigningCertificate: doc.SigningCertificate,
+		Status:             store.FirmwareUpdateRequestStatus(doc.Status),
+	}
+
+	if doc.RetrieveDate != nil {
+		if retrieveDate, err := time.Parse(time.RFC3339, *doc.RetrieveDate); err == nil {
+			result.RetrieveDate = &retrieveDate
+		}
+	}
+
+	if sendAfter, err := time.Parse(time.RFC3339, doc.SendAfter); err == nil {
+		result.SendAfter = sendAfter
+	}
+
+	return result, nil
 }
 
 func (s *Store) DeleteFirmwareUpdateRequest(ctx context.Context, chargeStationId string) error {
-	// TODO: Implement Firestore persistence for firmware update requests
-	return fmt.Errorf("DeleteFirmwareUpdateRequest not yet implemented for Firestore")
+	_, err := s.client.Collection("FirmwareUpdateRequests").Doc(chargeStationId).Delete(ctx)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil
+		}
+		return fmt.Errorf("deleting firmware update request for %s: %w", chargeStationId, err)
+	}
+	return nil
 }
 
 func (s *Store) ListFirmwareUpdateRequests(ctx context.Context, pageSize int, previousChargeStationId string) ([]*store.FirmwareUpdateRequest, error) {
-	// TODO: Implement Firestore persistence for firmware update requests
-	return nil, fmt.Errorf("ListFirmwareUpdateRequests not yet implemented for Firestore")
+	query := s.client.Collection("FirmwareUpdateRequests").
+		OrderBy(firestore.DocumentID, firestore.Asc).
+		Limit(pageSize)
+
+	if previousChargeStationId != "" {
+		query = query.StartAfter(previousChargeStationId)
+	}
+
+	iter := query.Documents(ctx)
+	defer iter.Stop()
+
+	var requests []*store.FirmwareUpdateRequest
+
+	for {
+		snap, err := iter.Next()
+		if err != nil {
+			if status.Code(err) == codes.NotFound {
+				break
+			}
+			return nil, fmt.Errorf("listing firmware update requests: %w", err)
+		}
+
+		var doc firestoreFirmwareUpdateRequest
+		if err := snap.DataTo(&doc); err != nil {
+			return nil, fmt.Errorf("decoding firmware update request: %w", err)
+		}
+
+		result := &store.FirmwareUpdateRequest{
+			ChargeStationId:    doc.ChargeStationId,
+			Location:           doc.Location,
+			Retries:            doc.Retries,
+			RetryInterval:      doc.RetryInterval,
+			Signature:          doc.Signature,
+			SigningCertificate: doc.SigningCertificate,
+			Status:             store.FirmwareUpdateRequestStatus(doc.Status),
+		}
+
+		if doc.RetrieveDate != nil {
+			if retrieveDate, err := time.Parse(time.RFC3339, *doc.RetrieveDate); err == nil {
+				result.RetrieveDate = &retrieveDate
+			}
+		}
+
+		if sendAfter, err := time.Parse(time.RFC3339, doc.SendAfter); err == nil {
+			result.SendAfter = sendAfter
+		}
+
+		requests = append(requests, result)
+	}
+
+	return requests, nil
 }
