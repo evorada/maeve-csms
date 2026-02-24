@@ -19,4 +19,5 @@ type Engine interface {
 	LocalAuthListStore
 	ReservationStore
 	MeterValuesStore
+	DisplayMessageStore
 }

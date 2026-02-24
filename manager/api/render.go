@@ -55,3 +55,7 @@ func (f FirmwareUpdateRequest) Bind(r *http.Request) error {
 func (f FirmwareStatus) Render(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
+
+func (s SetDisplayMessageRequest) Bind(r *http.Request) error {
+	return nil
+}

@@ -90,6 +90,21 @@ type DiagnosticsStatus struct {
 	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
 
+type DisplayMessage struct {
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	MessageID       int32              `db:"message_id" json:"message_id"`
+	Priority        string             `db:"priority" json:"priority"`
+	State           pgtype.Text        `db:"state" json:"state"`
+	StartDateTime   pgtype.Timestamptz `db:"start_date_time" json:"start_date_time"`
+	EndDateTime     pgtype.Timestamptz `db:"end_date_time" json:"end_date_time"`
+	TransactionID   pgtype.Text        `db:"transaction_id" json:"transaction_id"`
+	Content         string             `db:"content" json:"content"`
+	Language        pgtype.Text        `db:"language" json:"language"`
+	Format          string             `db:"format" json:"format"`
+	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
 type FirmwareUpdateRequest struct {
 	ChargeStationID    string             `db:"charge_station_id" json:"charge_station_id"`
 	Location           string             `db:"location" json:"location"`
