@@ -158,6 +158,69 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Status"
+  /cs/{csId}/firmware/update:
+    post:
+      summary: "Trigger firmware update on charge station"
+      description: |
+        Initiates a firmware update on the specified charge station. Supports both regular
+        and signed firmware updates. The charge station will download and install the firmware
+        from the provided location.
+      operationId: "updateChargeStationFirmware"
+      parameters:
+        - name: "csId"
+          in: "path"
+          description: "The charge station identifier"
+          schema:
+            type: "string"
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/FirmwareUpdateRequest"
+      responses:
+        "202":
+          description: "Accepted - firmware update initiated"
+        default:
+          description: "Unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+  /cs/{csId}/firmware/status:
+    get:
+      summary: "Get firmware update status"
+      description: |
+        Returns the current firmware update status for the specified charge station,
+        including current version, pending version (if any), and update progress.
+      operationId: "getChargeStationFirmwareStatus"
+      parameters:
+        - name: "csId"
+          in: "path"
+          description: "The charge station identifier"
+          schema:
+            type: "string"
+            maxLength: 28
+      responses:
+        "200":
+          description: "Firmware status response"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FirmwareStatus"
+        "404":
+          description: "Unknown charge station"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        default:
+          description: "Unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
   /token:
     post:
       summary: "Create/update an authorization token"
@@ -460,6 +523,63 @@ components:
             - "SignV2GCertificate"
             - "SignChargingStationCertificate"
             - "SignCombinedCertificate"
+    FirmwareUpdateRequest:
+      type: "object"
+      description: "Request to update charge station firmware"
+      required:
+        - "location"
+      properties:
+        location:
+          type: "string"
+          format: "uri"
+          description: "URI where the firmware can be downloaded (HTTP/HTTPS/FTP)"
+          maxLength: 512
+        retrieveDate:
+          type: "string"
+          format: "date-time"
+          description: "Optional scheduled time to start the firmware download. If not provided, download starts immediately"
+        retries:
+          type: "integer"
+          minimum: 0
+          maximum: 10
+          description: "Number of retries if download fails (default: 0)"
+        retryInterval:
+          type: "integer"
+          minimum: 0
+          description: "Interval in seconds between retry attempts (default: 0)"
+        signature:
+          type: "string"
+          description: "Base64 encoded signature of the firmware for signed updates"
+        signingCertificate:
+          type: "string"
+          description: "PEM encoded certificate used to sign the firmware"
+    FirmwareStatus:
+      type: "object"
+      description: "Current firmware status of a charge station"
+      required:
+        - "status"
+      properties:
+        status:
+          type: "string"
+          enum:
+            - "Idle"
+            - "Downloaded"
+            - "DownloadFailed"
+            - "Downloading"
+            - "InstallationFailed"
+            - "Installing"
+            - "Installed"
+          description: "Current firmware update status"
+        lastUpdate:
+          type: "string"
+          format: "date-time"
+          description: "Timestamp of the last status update"
+        currentVersion:
+          type: "string"
+          description: "Currently installed firmware version"
+        pendingVersion:
+          type: "string"
+          description: "Version being downloaded/installed (if update in progress)"
     Token:
       type: "object"
       description: "An authorization token"

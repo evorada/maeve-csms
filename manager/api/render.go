@@ -47,3 +47,11 @@ func (r Registration) Bind(req *http.Request) error {
 func (r Location) Bind(req *http.Request) error {
 	return nil
 }
+
+func (f FirmwareUpdateRequest) Bind(r *http.Request) error {
+	return nil
+}
+
+func (f FirmwareStatus) Render(w http.ResponseWriter, r *http.Request) error {
+	return nil
+}

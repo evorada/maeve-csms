@@ -165,3 +165,24 @@ func (s *Store) GetPublishFirmwareStatus(ctx context.Context, chargeStationId st
 
 // Ensure firestore.Store still satisfies the interface at compile time
 var _ store.FirmwareStore = (*Store)(nil)
+
+// FirmwareUpdateRequest store methods (stub implementations)
+func (s *Store) SetFirmwareUpdateRequest(ctx context.Context, chargeStationId string, request *store.FirmwareUpdateRequest) error {
+	// TODO: Implement Firestore persistence for firmware update requests
+	return fmt.Errorf("SetFirmwareUpdateRequest not yet implemented for Firestore")
+}
+
+func (s *Store) GetFirmwareUpdateRequest(ctx context.Context, chargeStationId string) (*store.FirmwareUpdateRequest, error) {
+	// TODO: Implement Firestore persistence for firmware update requests
+	return nil, fmt.Errorf("GetFirmwareUpdateRequest not yet implemented for Firestore")
+}
+
+func (s *Store) DeleteFirmwareUpdateRequest(ctx context.Context, chargeStationId string) error {
+	// TODO: Implement Firestore persistence for firmware update requests
+	return fmt.Errorf("DeleteFirmwareUpdateRequest not yet implemented for Firestore")
+}
+
+func (s *Store) ListFirmwareUpdateRequests(ctx context.Context, pageSize int, previousChargeStationId string) ([]*store.FirmwareUpdateRequest, error) {
+	// TODO: Implement Firestore persistence for firmware update requests
+	return nil, fmt.Errorf("ListFirmwareUpdateRequests not yet implemented for Firestore")
+}

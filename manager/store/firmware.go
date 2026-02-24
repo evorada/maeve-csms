@@ -84,6 +84,36 @@ type PublishFirmwareStatus struct {
 	UpdatedAt       time.Time
 }
 
+// FirmwareUpdateRequestStatus represents whether a firmware update request is pending or processed
+type FirmwareUpdateRequestStatus string
+
+var (
+	FirmwareUpdateRequestStatusPending  FirmwareUpdateRequestStatus = "Pending"
+	FirmwareUpdateRequestStatusAccepted FirmwareUpdateRequestStatus = "Accepted"
+	FirmwareUpdateRequestStatusRejected FirmwareUpdateRequestStatus = "Rejected"
+)
+
+// FirmwareUpdateRequest represents a firmware update request that should be sent to the charge station
+type FirmwareUpdateRequest struct {
+	ChargeStationId    string
+	Location           string
+	RetrieveDate       *time.Time
+	Retries            *int
+	RetryInterval      *int
+	Signature          *string
+	SigningCertificate *string
+	Status             FirmwareUpdateRequestStatus
+	SendAfter          time.Time
+}
+
+// FirmwareUpdateRequestStore defines the interface for managing firmware update requests
+type FirmwareUpdateRequestStore interface {
+	SetFirmwareUpdateRequest(ctx context.Context, chargeStationId string, request *FirmwareUpdateRequest) error
+	GetFirmwareUpdateRequest(ctx context.Context, chargeStationId string) (*FirmwareUpdateRequest, error)
+	DeleteFirmwareUpdateRequest(ctx context.Context, chargeStationId string) error
+	ListFirmwareUpdateRequests(ctx context.Context, pageSize int, previousChargeStationId string) ([]*FirmwareUpdateRequest, error)
+}
+
 // FirmwareStore defines the interface for firmware and diagnostics status tracking
 type FirmwareStore interface {
 	SetFirmwareUpdateStatus(ctx context.Context, chargeStationId string, status *FirmwareUpdateStatus) error

@@ -15,6 +15,7 @@ type Engine interface {
 	LocationStore
 	ChargingProfileStore
 	FirmwareStore
+	FirmwareUpdateRequestStore
 	LocalAuthListStore
 	ReservationStore
 	MeterValuesStore

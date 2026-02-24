@@ -108,3 +108,28 @@ func (s *Store) GetPublishFirmwareStatus(ctx context.Context, chargeStationId st
 		UpdatedAt:       row.UpdatedAt.Time,
 	}, nil
 }
+
+// FirmwareUpdateRequest store methods (stub implementations)
+func (s *Store) SetFirmwareUpdateRequest(ctx context.Context, chargeStationId string, request *store.FirmwareUpdateRequest) error {
+	// TODO: Implement Postgres persistence for firmware update requests
+	// Requires migration and sqlc query generation
+	return fmt.Errorf("SetFirmwareUpdateRequest not yet implemented for Postgres")
+}
+
+func (s *Store) GetFirmwareUpdateRequest(ctx context.Context, chargeStationId string) (*store.FirmwareUpdateRequest, error) {
+	// TODO: Implement Postgres persistence for firmware update requests
+	// Requires migration and sqlc query generation
+	return nil, fmt.Errorf("GetFirmwareUpdateRequest not yet implemented for Postgres")
+}
+
+func (s *Store) DeleteFirmwareUpdateRequest(ctx context.Context, chargeStationId string) error {
+	// TODO: Implement Postgres persistence for firmware update requests
+	// Requires migration and sqlc query generation
+	return fmt.Errorf("DeleteFirmwareUpdateRequest not yet implemented for Postgres")
+}
+
+func (s *Store) ListFirmwareUpdateRequests(ctx context.Context, pageSize int, previousChargeStationId string) ([]*store.FirmwareUpdateRequest, error) {
+	// TODO: Implement Postgres persistence for firmware update requests
+	// Requires migration and sqlc query generation
+	return nil, fmt.Errorf("ListFirmwareUpdateRequests not yet implemented for Postgres")
+}

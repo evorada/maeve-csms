@@ -40,6 +40,7 @@ type Store struct {
 	locations                        map[string]*store.Location
 	chargingProfiles                 map[int]*store.ChargingProfile
 	firmwareUpdateStatus             map[string]*store.FirmwareUpdateStatus
+	firmwareUpdateRequests           map[string]*store.FirmwareUpdateRequest
 	diagnosticsStatus                map[string]*store.DiagnosticsStatus
 	publishFirmwareStatus            map[string]*store.PublishFirmwareStatus
 	localAuthListVersions            map[string]int
@@ -64,6 +65,7 @@ func NewStore(clock clock.PassiveClock) *Store {
 		locations:                        make(map[string]*store.Location),
 		chargingProfiles:                 make(map[int]*store.ChargingProfile),
 		firmwareUpdateStatus:             make(map[string]*store.FirmwareUpdateStatus),
+		firmwareUpdateRequests:           make(map[string]*store.FirmwareUpdateRequest),
 		diagnosticsStatus:                make(map[string]*store.DiagnosticsStatus),
 		publishFirmwareStatus:            make(map[string]*store.PublishFirmwareStatus),
 		localAuthListVersions:            make(map[string]int),
@@ -113,6 +115,49 @@ func (s *Store) GetPublishFirmwareStatus(_ context.Context, chargeStationId stri
 	s.Lock()
 	defer s.Unlock()
 	return s.publishFirmwareStatus[chargeStationId], nil
+}
+
+func (s *Store) SetFirmwareUpdateRequest(_ context.Context, chargeStationId string, request *store.FirmwareUpdateRequest) error {
+	s.Lock()
+	defer s.Unlock()
+	request.ChargeStationId = chargeStationId
+	s.firmwareUpdateRequests[chargeStationId] = request
+	return nil
+}
+
+func (s *Store) GetFirmwareUpdateRequest(_ context.Context, chargeStationId string) (*store.FirmwareUpdateRequest, error) {
+	s.Lock()
+	defer s.Unlock()
+	return s.firmwareUpdateRequests[chargeStationId], nil
+}
+
+func (s *Store) DeleteFirmwareUpdateRequest(_ context.Context, chargeStationId string) error {
+	s.Lock()
+	defer s.Unlock()
+	delete(s.firmwareUpdateRequests, chargeStationId)
+	return nil
+}
+
+func (s *Store) ListFirmwareUpdateRequests(_ context.Context, pageSize int, previousChargeStationId string) ([]*store.FirmwareUpdateRequest, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	ids := maps.Keys(s.firmwareUpdateRequests)
+	sort.Strings(ids)
+
+	var requests []*store.FirmwareUpdateRequest
+	count := 0
+	startIndex := 0
+	if previousChargeStationId != "" {
+		startIndex = sort.SearchStrings(ids, previousChargeStationId) + 1
+	}
+
+	for i := startIndex; i < len(ids) && count < pageSize; i++ {
+		requests = append(requests, s.firmwareUpdateRequests[ids[i]])
+		count++
+	}
+
+	return requests, nil
 }
 
 func (s *Store) SetChargeStationAuth(_ context.Context, chargeStationId string, auth *store.ChargeStationAuth) error {
