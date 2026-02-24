@@ -409,3 +409,186 @@ func getCertificateHash(cert *x509.Certificate) string {
 	b64Hash := base64.RawURLEncoding.EncodeToString(hash[:])
 	return b64Hash
 }
+
+func TestCreateReservation(t *testing.T) {
+	server, r, _, _ := setupServer(t)
+	defer server.Close()
+
+	expiryTime := time.Now().Add(1 * time.Hour).Format(time.RFC3339)
+	body := fmt.Sprintf(`{
+		"reservationId": 12345,
+		"connectorId": 1,
+		"idTag": "USER001",
+		"expiryDate": "%s"
+	}`, expiryTime)
+
+	req := httptest.NewRequest(http.MethodPost, "/cs/cs001/reservation", strings.NewReader(body))
+	req.Header.Set("content-type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusAccepted, rr.Result().StatusCode)
+}
+
+func TestCreateReservationWithParentIdTag(t *testing.T) {
+	server, r, _, _ := setupServer(t)
+	defer server.Close()
+
+	expiryTime := time.Now().Add(1 * time.Hour).Format(time.RFC3339)
+	body := fmt.Sprintf(`{
+		"reservationId": 12346,
+		"connectorId": 2,
+		"idTag": "USER002",
+		"parentIdTag": "PARENT001",
+		"expiryDate": "%s"
+	}`, expiryTime)
+
+	req := httptest.NewRequest(http.MethodPost, "/cs/cs001/reservation", strings.NewReader(body))
+	req.Header.Set("content-type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusAccepted, rr.Result().StatusCode)
+}
+
+func TestCancelReservation(t *testing.T) {
+	server, r, engine, c := setupServer(t)
+	defer server.Close()
+
+	// First create a reservation
+	ctx := context.Background()
+	parentTag := "PARENT001"
+	err := engine.CreateReservation(ctx, &store.Reservation{
+		ReservationId:   12345,
+		ChargeStationId: "cs001",
+		ConnectorId:     1,
+		IdTag:           "USER001",
+		ParentIdTag:     &parentTag,
+		ExpiryDate:      c.Now().Add(1 * time.Hour),
+		Status:          store.ReservationStatusAccepted,
+		CreatedAt:       c.Now(),
+	})
+	require.NoError(t, err)
+
+	// Now cancel it
+	req := httptest.NewRequest(http.MethodDelete, "/cs/cs001/reservation/12345", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusAccepted, rr.Result().StatusCode)
+
+	// Verify it was cancelled
+	reservation, err := engine.GetReservation(ctx, 12345)
+	require.NoError(t, err)
+	assert.Equal(t, store.ReservationStatusCancelled, reservation.Status)
+}
+
+func TestCancelReservationNotFound(t *testing.T) {
+	server, r, _, _ := setupServer(t)
+	defer server.Close()
+
+	req := httptest.NewRequest(http.MethodDelete, "/cs/cs001/reservation/99999", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusNotFound, rr.Result().StatusCode)
+}
+
+func TestCancelReservationWrongChargeStation(t *testing.T) {
+	server, r, engine, c := setupServer(t)
+	defer server.Close()
+
+	// Create a reservation for cs001
+	ctx := context.Background()
+	err := engine.CreateReservation(ctx, &store.Reservation{
+		ReservationId:   12345,
+		ChargeStationId: "cs001",
+		ConnectorId:     1,
+		IdTag:           "USER001",
+		ExpiryDate:      c.Now().Add(1 * time.Hour),
+		Status:          store.ReservationStatusAccepted,
+		CreatedAt:       c.Now(),
+	})
+	require.NoError(t, err)
+
+	// Try to cancel it from cs002
+	req := httptest.NewRequest(http.MethodDelete, "/cs/cs002/reservation/12345", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusNotFound, rr.Result().StatusCode)
+}
+
+func TestListReservations(t *testing.T) {
+	server, r, engine, c := setupServer(t)
+	defer server.Close()
+
+	// Create some reservations
+	ctx := context.Background()
+	err := engine.CreateReservation(ctx, &store.Reservation{
+		ReservationId:   12345,
+		ChargeStationId: "cs001",
+		ConnectorId:     1,
+		IdTag:           "USER001",
+		ExpiryDate:      c.Now().Add(1 * time.Hour),
+		Status:          store.ReservationStatusAccepted,
+		CreatedAt:       c.Now(),
+	})
+	require.NoError(t, err)
+
+	err = engine.CreateReservation(ctx, &store.Reservation{
+		ReservationId:   12346,
+		ChargeStationId: "cs001",
+		ConnectorId:     2,
+		IdTag:           "USER002",
+		ExpiryDate:      c.Now().Add(2 * time.Hour),
+		Status:          store.ReservationStatusAccepted,
+		CreatedAt:       c.Now(),
+	})
+	require.NoError(t, err)
+
+	// Create a cancelled reservation (should not appear in active list)
+	err = engine.CreateReservation(ctx, &store.Reservation{
+		ReservationId:   12347,
+		ChargeStationId: "cs001",
+		ConnectorId:     3,
+		IdTag:           "USER003",
+		ExpiryDate:      c.Now().Add(1 * time.Hour),
+		Status:          store.ReservationStatusCancelled,
+		CreatedAt:       c.Now(),
+	})
+	require.NoError(t, err)
+
+	// List active reservations
+	req := httptest.NewRequest(http.MethodGet, "/cs/cs001/reservations?status=active", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
+
+	var response api.ReservationList
+	err = json.NewDecoder(rr.Result().Body).Decode(&response)
+	require.NoError(t, err)
+
+	// Should only have 2 active reservations
+	assert.Len(t, response.Reservations, 2)
+	assert.Equal(t, int32(12345), response.Reservations[0].ReservationId)
+	assert.Equal(t, int32(12346), response.Reservations[1].ReservationId)
+}
+
+func TestListReservationsEmpty(t *testing.T) {
+	server, r, _, _ := setupServer(t)
+	defer server.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/cs/cs001/reservations", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
+
+	var response api.ReservationList
+	err := json.NewDecoder(rr.Result().Body).Decode(&response)
+	require.NoError(t, err)
+
+	assert.Empty(t, response.Reservations)
+}
