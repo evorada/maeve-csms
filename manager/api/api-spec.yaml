@@ -221,6 +221,125 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Status"
+  /cs/{csId}/diagnostics:
+    post:
+      summary: "Request diagnostics from charge station"
+      description: |
+        Initiates a diagnostics upload from the specified charge station (OCPP 1.6).
+        The charge station will collect diagnostics and upload them to the provided location.
+      operationId: "requestChargeStationDiagnostics"
+      parameters:
+        - name: "csId"
+          in: "path"
+          required: true
+          description: "The charge station identifier"
+          schema:
+            type: "string"
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiagnosticsRequest"
+      responses:
+        "202":
+          description: "Accepted - diagnostics request initiated"
+        "404":
+          description: "Unknown charge station"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+  /cs/{csId}/diagnostics/status:
+    get:
+      summary: "Get diagnostics upload status"
+      description: |
+        Returns the current diagnostics upload status for the specified charge station.
+      operationId: "getChargeStationDiagnosticsStatus"
+      parameters:
+        - name: "csId"
+          in: "path"
+          required: true
+          description: "The charge station identifier"
+          schema:
+            type: "string"
+            maxLength: 28
+      responses:
+        "200":
+          description: "Diagnostics status response"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiagnosticsStatus"
+        "404":
+          description: "Unknown charge station"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+  /cs/{csId}/logs:
+    post:
+      summary: "Request log upload from charge station"
+      description: |
+        Initiates a log upload from the specified charge station (OCPP 2.0.1 GetLog).
+      operationId: "requestChargeStationLogs"
+      parameters:
+        - name: "csId"
+          in: "path"
+          required: true
+          description: "The charge station identifier"
+          schema:
+            type: "string"
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogRequest"
+      responses:
+        "202":
+          description: "Accepted - log request initiated"
+        "404":
+          description: "Unknown charge station"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+  /cs/{csId}/logs/status:
+    get:
+      summary: "Get log upload status"
+      description: |
+        Returns the current log upload status for the specified charge station.
+      operationId: "getChargeStationLogStatus"
+      parameters:
+        - name: "csId"
+          in: "path"
+          required: true
+          description: "The charge station identifier"
+          schema:
+            type: "string"
+            maxLength: 28
+        - name: "requestId"
+          in: "query"
+          required: false
+          description: "Filter by specific request ID"
+          schema:
+            type: "integer"
+      responses:
+        "200":
+          description: "Log status response"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogStatus"
+        "404":
+          description: "Unknown charge station"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
   /cs/{csId}/reservation:
     post:
       summary: "Create a connector reservation"
@@ -704,6 +823,123 @@ components:
         pendingVersion:
           type: "string"
           description: "Version being downloaded/installed (if update in progress)"
+    DiagnosticsRequest:
+      type: "object"
+      description: "Request to upload diagnostics from charge station"
+      required:
+        - "location"
+      properties:
+        location:
+          type: "string"
+          format: "uri"
+          description: "URI where diagnostics should be uploaded"
+          maxLength: 512
+        startTime:
+          type: "string"
+          format: "date-time"
+          description: "Optional start time for diagnostics collection period"
+        stopTime:
+          type: "string"
+          format: "date-time"
+          description: "Optional end time for diagnostics collection period"
+        retries:
+          type: "integer"
+          minimum: 0
+          maximum: 10
+          description: "Number of retries if upload fails"
+        retryInterval:
+          type: "integer"
+          minimum: 0
+          description: "Interval in seconds between retry attempts"
+    DiagnosticsStatus:
+      type: "object"
+      description: "Current diagnostics upload status"
+      required:
+        - "status"
+      properties:
+        status:
+          type: "string"
+          enum:
+            - "Idle"
+            - "Uploaded"
+            - "UploadFailed"
+            - "Uploading"
+          description: "Current diagnostics upload status"
+        lastUpdate:
+          type: "string"
+          format: "date-time"
+          description: "Timestamp of the last status update"
+        fileName:
+          type: "string"
+          description: "Name of the diagnostics file being uploaded"
+    LogRequest:
+      type: "object"
+      description: "Request to upload logs from charge station (OCPP 2.0.1)"
+      required:
+        - "logType"
+        - "requestId"
+        - "log"
+      properties:
+        logType:
+          type: "string"
+          enum:
+            - "DiagnosticsLog"
+            - "SecurityLog"
+          description: "Type of log to retrieve"
+        requestId:
+          type: "integer"
+          description: "Unique request ID to track this log request"
+        log:
+          type: "object"
+          required:
+            - "remoteLocation"
+          properties:
+            remoteLocation:
+              type: "string"
+              format: "uri"
+              description: "URI where logs should be uploaded"
+              maxLength: 512
+            oldestTimestamp:
+              type: "string"
+              format: "date-time"
+              description: "Optional oldest timestamp for log entries"
+            latestTimestamp:
+              type: "string"
+              format: "date-time"
+              description: "Optional latest timestamp for log entries"
+        retries:
+          type: "integer"
+          minimum: 0
+          maximum: 10
+          description: "Number of retries if upload fails"
+        retryInterval:
+          type: "integer"
+          minimum: 0
+          description: "Interval in seconds between retry attempts"
+    LogStatus:
+      type: "object"
+      description: "Current log upload status"
+      required:
+        - "status"
+      properties:
+        status:
+          type: "string"
+          enum:
+            - "Idle"
+            - "Uploading"
+            - "Uploaded"
+            - "UploadFailure"
+            - "BadMessage"
+            - "NotSupportedOperation"
+            - "PermissionDenied"
+          description: "Current log upload status"
+        requestId:
+          type: "integer"
+          description: "Request ID associated with this status"
+        lastUpdate:
+          type: "string"
+          format: "date-time"
+          description: "Timestamp of the last status update"
     Token:
       type: "object"
       description: "An authorization token"

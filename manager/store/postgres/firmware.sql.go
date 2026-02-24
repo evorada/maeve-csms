@@ -82,6 +82,24 @@ func (q *Queries) GetFirmwareUpdateStatus(ctx context.Context, chargeStationID s
 	return i, err
 }
 
+const GetLogStatus = `-- name: GetLogStatus :one
+SELECT charge_station_id, status, request_id, updated_at
+FROM log_status
+WHERE charge_station_id = $1
+`
+
+func (q *Queries) GetLogStatus(ctx context.Context, chargeStationID string) (LogStatus, error) {
+	row := q.db.QueryRow(ctx, GetLogStatus, chargeStationID)
+	var i LogStatus
+	err := row.Scan(
+		&i.ChargeStationID,
+		&i.Status,
+		&i.RequestID,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const GetPublishFirmwareStatus = `-- name: GetPublishFirmwareStatus :one
 SELECT charge_station_id, status, location, checksum, request_id, updated_at
 FROM publish_firmware_status
@@ -249,6 +267,32 @@ func (q *Queries) UpsertFirmwareUpdateStatus(ctx context.Context, arg UpsertFirm
 		arg.Location,
 		arg.RetrieveDate,
 		arg.RetryCount,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
+const UpsertLogStatus = `-- name: UpsertLogStatus :exec
+INSERT INTO log_status (charge_station_id, status, request_id, updated_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (charge_station_id) DO UPDATE SET
+    status = EXCLUDED.status,
+    request_id = EXCLUDED.request_id,
+    updated_at = EXCLUDED.updated_at
+`
+
+type UpsertLogStatusParams struct {
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	Status          string             `db:"status" json:"status"`
+	RequestID       int32              `db:"request_id" json:"request_id"`
+	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
+func (q *Queries) UpsertLogStatus(ctx context.Context, arg UpsertLogStatusParams) error {
+	_, err := q.db.Exec(ctx, UpsertLogStatus,
+		arg.ChargeStationID,
+		arg.Status,
+		arg.RequestID,
 		arg.UpdatedAt,
 	)
 	return err

@@ -63,3 +63,19 @@ func (r ReservationRequest) Bind(req *http.Request) error {
 func (r ReservationList) Render(w http.ResponseWriter, req *http.Request) error {
 	return nil
 }
+
+func (d DiagnosticsRequest) Bind(r *http.Request) error {
+	return nil
+}
+
+func (d DiagnosticsStatus) Render(w http.ResponseWriter, r *http.Request) error {
+	return nil
+}
+
+func (l LogRequest) Bind(r *http.Request) error {
+	return nil
+}
+
+func (l LogStatus) Render(w http.ResponseWriter, r *http.Request) error {
+	return nil
+}

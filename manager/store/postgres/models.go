@@ -136,6 +136,13 @@ type Location struct {
 	UpdatedAt    pgtype.Timestamp `db:"updated_at" json:"updated_at"`
 }
 
+type LogStatus struct {
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	Status          string             `db:"status" json:"status"`
+	RequestID       int32              `db:"request_id" json:"request_id"`
+	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
 type MeterValue struct {
 	ID              int64            `db:"id" json:"id"`
 	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
