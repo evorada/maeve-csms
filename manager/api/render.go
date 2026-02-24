@@ -55,3 +55,11 @@ func (f FirmwareUpdateRequest) Bind(r *http.Request) error {
 func (f FirmwareStatus) Render(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
+
+func (r ReservationRequest) Bind(req *http.Request) error {
+	return nil
+}
+
+func (r ReservationList) Render(w http.ResponseWriter, req *http.Request) error {
+	return nil
+}

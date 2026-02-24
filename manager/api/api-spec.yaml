@@ -221,6 +221,130 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Status"
+  /cs/{csId}/reservation:
+    post:
+      summary: "Create a connector reservation"
+      description: |
+        Creates a reservation for a specific connector on the charge station.
+        The charge station will be instructed to reserve the connector via OCPP ReserveNow.
+      operationId: "createReservation"
+      parameters:
+        - name: "csId"
+          in: "path"
+          description: "The charge station identifier"
+          required: true
+          schema:
+            type: "string"
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ReservationRequest"
+      responses:
+        "202":
+          description: "Accepted - reservation request initiated"
+        "400":
+          description: "Bad request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        "404":
+          description: "Unknown charge station"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        default:
+          description: "Unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+  /cs/{csId}/reservation/{reservationId}:
+    delete:
+      summary: "Cancel a reservation"
+      description: |
+        Cancels an active reservation on the charge station.
+        The charge station will be instructed to cancel the reservation via OCPP CancelReservation.
+      operationId: "cancelReservation"
+      parameters:
+        - name: "csId"
+          in: "path"
+          description: "The charge station identifier"
+          required: true
+          schema:
+            type: "string"
+            maxLength: 28
+        - name: "reservationId"
+          in: "path"
+          description: "The reservation identifier"
+          required: true
+          schema:
+            type: "integer"
+            format: "int32"
+      responses:
+        "202":
+          description: "Accepted - cancellation request initiated"
+        "404":
+          description: "Unknown charge station or reservation"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        default:
+          description: "Unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+  /cs/{csId}/reservations:
+    get:
+      summary: "List reservations"
+      description: |
+        Lists reservations for the specified charge station.
+        By default returns active reservations only.
+      operationId: "listReservations"
+      parameters:
+        - name: "csId"
+          in: "path"
+          description: "The charge station identifier"
+          required: true
+          schema:
+            type: "string"
+            maxLength: 28
+        - name: "status"
+          in: "query"
+          description: "Filter by reservation status (default: active)"
+          required: false
+          schema:
+            type: "string"
+            enum:
+              - "active"
+              - "expired"
+              - "all"
+            default: "active"
+      responses:
+        "200":
+          description: "List of reservations"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReservationList"
+        "404":
+          description: "Unknown charge station"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        default:
+          description: "Unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
   /token:
     post:
       summary: "Create/update an authorization token"
@@ -837,6 +961,88 @@ components:
         max_amperage:
           type: integer
           format: int32
+    ReservationRequest:
+      type: "object"
+      description: "Request to create a connector reservation"
+      required:
+        - "connectorId"
+        - "expiryDate"
+        - "idTag"
+        - "reservationId"
+      properties:
+        connectorId:
+          type: "integer"
+          format: "int32"
+          description: "The connector ID to reserve"
+        expiryDate:
+          type: "string"
+          format: "date-time"
+          description: "ISO 8601 timestamp when the reservation expires"
+        idTag:
+          type: "string"
+          maxLength: 20
+          description: "The identifier for which the charge station has to reserve a connector"
+        reservationId:
+          type: "integer"
+          format: "int32"
+          description: "Unique identifier for this reservation"
+        parentIdTag:
+          type: "string"
+          maxLength: 20
+          description: "Optional parent idTag"
+    ReservationList:
+      type: "object"
+      description: "List of reservations"
+      required:
+        - "reservations"
+      properties:
+        reservations:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/ReservationResponse"
+    ReservationResponse:
+      type: "object"
+      description: "Reservation details"
+      required:
+        - "reservationId"
+        - "connectorId"
+        - "expiryDate"
+        - "idTag"
+        - "status"
+      properties:
+        reservationId:
+          type: "integer"
+          format: "int32"
+          description: "Unique identifier for this reservation"
+        connectorId:
+          type: "integer"
+          format: "int32"
+          description: "The connector ID"
+        expiryDate:
+          type: "string"
+          format: "date-time"
+          description: "ISO 8601 timestamp when the reservation expires"
+        idTag:
+          type: "string"
+          description: "The identifier for which the connector is reserved"
+        parentIdTag:
+          type: "string"
+          description: "Optional parent idTag"
+        status:
+          type: "string"
+          enum:
+            - "Accepted"
+            - "Faulted"
+            - "Occupied"
+            - "Rejected"
+            - "Unavailable"
+            - "Cancelled"
+            - "Expired"
+          description: "Current status of the reservation"
+        createdAt:
+          type: "string"
+          format: "date-time"
+          description: "ISO 8601 timestamp when the reservation was created"
 
 
 
