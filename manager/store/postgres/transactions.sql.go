@@ -32,7 +32,7 @@ INSERT INTO transactions (
     id, charge_station_id, token_uid, token_type,
     meter_start, start_timestamp, offline
 ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at
+RETURNING id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost
 `
 
 type CreateTransactionParams struct {
@@ -70,12 +70,13 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 		&i.Offline,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LastCost,
 	)
 	return i, err
 }
 
 const FindActiveTransaction = `-- name: FindActiveTransaction :one
-SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at FROM transactions 
+SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost FROM transactions 
 WHERE charge_station_id = $1 AND stop_timestamp IS NULL
 ORDER BY start_timestamp DESC
 LIMIT 1
@@ -98,6 +99,7 @@ func (q *Queries) FindActiveTransaction(ctx context.Context, chargeStationID str
 		&i.Offline,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LastCost,
 	)
 	return i, err
 }
@@ -135,7 +137,7 @@ func (q *Queries) GetMeterValues(ctx context.Context, transactionID string) ([]T
 }
 
 const GetTransaction = `-- name: GetTransaction :one
-SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at FROM transactions WHERE id = $1
+SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost FROM transactions WHERE id = $1
 `
 
 func (q *Queries) GetTransaction(ctx context.Context, id string) (Transaction, error) {
@@ -155,12 +157,13 @@ func (q *Queries) GetTransaction(ctx context.Context, id string) (Transaction, e
 		&i.Offline,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LastCost,
 	)
 	return i, err
 }
 
 const ListTransactions = `-- name: ListTransactions :many
-SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at FROM transactions
+SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost FROM transactions
 ORDER BY start_timestamp DESC
 `
 
@@ -187,6 +190,7 @@ func (q *Queries) ListTransactions(ctx context.Context) ([]Transaction, error) {
 			&i.Offline,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.LastCost,
 		); err != nil {
 			return nil, err
 		}
@@ -206,7 +210,7 @@ SET meter_stop = $2,
     updated_seq_no = $5,
     updated_at = NOW()
 WHERE id = $1
-RETURNING id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at
+RETURNING id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost
 `
 
 type UpdateTransactionParams struct {
@@ -240,6 +244,7 @@ func (q *Queries) UpdateTransaction(ctx context.Context, arg UpdateTransactionPa
 		&i.Offline,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LastCost,
 	)
 	return i, err
 }
