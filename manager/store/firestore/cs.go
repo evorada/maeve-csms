@@ -346,3 +346,95 @@ func (s *Store) ListChargeStationTriggerMessages(ctx context.Context, pageSize i
 	}
 	return triggerMessages, nil
 }
+
+type resetRequest struct {
+	Type      string    `firestore:"type"`
+	Status    string    `firestore:"status"`
+	CreatedAt time.Time `firestore:"createdAt"`
+	UpdatedAt time.Time `firestore:"updatedAt"`
+}
+
+func (s *Store) SetResetRequest(ctx context.Context, chargeStationId string, request *store.ResetRequest) error {
+	ref := s.client.Doc(fmt.Sprintf("ResetRequest/%s", chargeStationId))
+	_, err := ref.Set(ctx, &resetRequest{
+		Type:      string(request.Type),
+		Status:    string(request.Status),
+		CreatedAt: request.CreatedAt,
+		UpdatedAt: request.UpdatedAt,
+	})
+	return err
+}
+
+func (s *Store) GetResetRequest(ctx context.Context, chargeStationId string) (*store.ResetRequest, error) {
+	ref := s.client.Doc(fmt.Sprintf("ResetRequest/%s", chargeStationId))
+	snap, err := ref.Get(ctx)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get reset request %s: %w", chargeStationId, err)
+	}
+	var data resetRequest
+	if err = snap.DataTo(&data); err != nil {
+		return nil, fmt.Errorf("map reset request %s: %w", chargeStationId, err)
+	}
+	return &store.ResetRequest{
+		ChargeStationId: chargeStationId,
+		Type:            store.ResetType(data.Type),
+		Status:          store.ResetRequestStatus(data.Status),
+		CreatedAt:       data.CreatedAt,
+		UpdatedAt:       data.UpdatedAt,
+	}, nil
+}
+
+func (s *Store) DeleteResetRequest(ctx context.Context, chargeStationId string) error {
+	ref := s.client.Doc(fmt.Sprintf("ResetRequest/%s", chargeStationId))
+	_, err := ref.Delete(ctx)
+	return err
+}
+
+type unlockConnectorRequest struct {
+	ConnectorId int       `firestore:"connectorId"`
+	Status      string    `firestore:"status"`
+	CreatedAt   time.Time `firestore:"createdAt"`
+	UpdatedAt   time.Time `firestore:"updatedAt"`
+}
+
+func (s *Store) SetUnlockConnectorRequest(ctx context.Context, chargeStationId string, request *store.UnlockConnectorRequest) error {
+	ref := s.client.Doc(fmt.Sprintf("UnlockConnectorRequest/%s", chargeStationId))
+	_, err := ref.Set(ctx, &unlockConnectorRequest{
+		ConnectorId: request.ConnectorId,
+		Status:      string(request.Status),
+		CreatedAt:   request.CreatedAt,
+		UpdatedAt:   request.UpdatedAt,
+	})
+	return err
+}
+
+func (s *Store) GetUnlockConnectorRequest(ctx context.Context, chargeStationId string) (*store.UnlockConnectorRequest, error) {
+	ref := s.client.Doc(fmt.Sprintf("UnlockConnectorRequest/%s", chargeStationId))
+	snap, err := ref.Get(ctx)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get unlock connector request %s: %w", chargeStationId, err)
+	}
+	var data unlockConnectorRequest
+	if err = snap.DataTo(&data); err != nil {
+		return nil, fmt.Errorf("map unlock connector request %s: %w", chargeStationId, err)
+	}
+	return &store.UnlockConnectorRequest{
+		ChargeStationId: chargeStationId,
+		ConnectorId:     data.ConnectorId,
+		Status:          store.UnlockConnectorRequestStatus(data.Status),
+		CreatedAt:       data.CreatedAt,
+		UpdatedAt:       data.UpdatedAt,
+	}, nil
+}
+
+func (s *Store) DeleteUnlockConnectorRequest(ctx context.Context, chargeStationId string) error {
+	ref := s.client.Doc(fmt.Sprintf("UnlockConnectorRequest/%s", chargeStationId))
+	_, err := ref.Delete(ctx)
+	return err
+}

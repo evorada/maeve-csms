@@ -191,6 +191,14 @@ type Reservation struct {
 	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
+type ResetRequest struct {
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	Type            string             `db:"type" json:"type"`
+	Status          string             `db:"status" json:"status"`
+	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
 type Token struct {
 	ID           int64            `db:"id" json:"id"`
 	CountryCode  string           `db:"country_code" json:"country_code"`
@@ -232,4 +240,12 @@ type TransactionMeterValue struct {
 	Timestamp     pgtype.Timestamp `db:"timestamp" json:"timestamp"`
 	SampledValues []byte           `db:"sampled_values" json:"sampled_values"`
 	CreatedAt     pgtype.Timestamp `db:"created_at" json:"created_at"`
+}
+
+type UnlockConnectorRequest struct {
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	ConnectorID     int32              `db:"connector_id" json:"connector_id"`
+	Status          string             `db:"status" json:"status"`
+	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }

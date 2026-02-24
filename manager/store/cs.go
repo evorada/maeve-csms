@@ -138,3 +138,55 @@ type ChargeStationTriggerMessageStore interface {
 	LookupChargeStationTriggerMessage(ctx context.Context, chargeStationId string) (*ChargeStationTriggerMessage, error)
 	ListChargeStationTriggerMessages(ctx context.Context, pageSize int, previousChargeStationId string) ([]*ChargeStationTriggerMessage, error)
 }
+
+type ResetType string
+
+var (
+	ResetTypeSoft ResetType = "Soft"
+	ResetTypeHard ResetType = "Hard"
+)
+
+type ResetRequestStatus string
+
+var (
+	ResetRequestStatusPending  ResetRequestStatus = "Pending"
+	ResetRequestStatusAccepted ResetRequestStatus = "Accepted"
+	ResetRequestStatusRejected ResetRequestStatus = "Rejected"
+)
+
+type ResetRequest struct {
+	ChargeStationId string
+	Type            ResetType
+	Status          ResetRequestStatus
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type ResetRequestStore interface {
+	SetResetRequest(ctx context.Context, chargeStationId string, request *ResetRequest) error
+	GetResetRequest(ctx context.Context, chargeStationId string) (*ResetRequest, error)
+	DeleteResetRequest(ctx context.Context, chargeStationId string) error
+}
+
+type UnlockConnectorRequestStatus string
+
+var (
+	UnlockConnectorRequestStatusPending   UnlockConnectorRequestStatus = "Pending"
+	UnlockConnectorRequestStatusUnlocked  UnlockConnectorRequestStatus = "Unlocked"
+	UnlockConnectorRequestStatusNotLocked UnlockConnectorRequestStatus = "NotLocked"
+	UnlockConnectorRequestStatusFailed    UnlockConnectorRequestStatus = "Failed"
+)
+
+type UnlockConnectorRequest struct {
+	ChargeStationId string
+	ConnectorId     int
+	Status          UnlockConnectorRequestStatus
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type UnlockConnectorRequestStore interface {
+	SetUnlockConnectorRequest(ctx context.Context, chargeStationId string, request *UnlockConnectorRequest) error
+	GetUnlockConnectorRequest(ctx context.Context, chargeStationId string) (*UnlockConnectorRequest, error)
+	DeleteUnlockConnectorRequest(ctx context.Context, chargeStationId string) error
+}

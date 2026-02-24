@@ -79,3 +79,11 @@ func (l LogRequest) Bind(r *http.Request) error {
 func (l LogStatus) Render(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
+
+func (r ResetRequest) Bind(req *http.Request) error {
+	return nil
+}
+
+func (u UnlockConnectorRequest) Bind(r *http.Request) error {
+	return nil
+}

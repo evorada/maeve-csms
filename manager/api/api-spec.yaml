@@ -158,6 +158,78 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Status"
+  /cs/{csId}/reset:
+    post:
+      summary: "Reset charge station"
+      description: |
+        Resets the charge station. A soft reset restarts software/services while a hard reset
+        power cycles the device. This operation is async and returns 202 Accepted immediately.
+      operationId: "resetChargeStation"
+      parameters:
+        - name: "csId"
+          in: "path"
+          required: true
+          description: "The charge station identifier"
+          schema:
+            type: "string"
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetRequest"
+      responses:
+        "202":
+          description: "Accepted - reset command initiated"
+        "404":
+          description: "Unknown charge station"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        default:
+          description: "Unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+  /cs/{csId}/unlock-connector:
+    post:
+      summary: "Unlock connector"
+      description: |
+        Manually unlocks a connector on the charge station. Should only be used in exceptional
+        circumstances when a cable is stuck. This operation is async and returns 202 Accepted immediately.
+      operationId: "unlockConnector"
+      parameters:
+        - name: "csId"
+          in: "path"
+          required: true
+          description: "The charge station identifier"
+          schema:
+            type: "string"
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnlockConnectorRequest"
+      responses:
+        "202":
+          description: "Accepted - unlock command initiated"
+        "404":
+          description: "Unknown charge station"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        default:
+          description: "Unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
   /cs/{csId}/firmware/update:
     post:
       summary: "Trigger firmware update on charge station"
@@ -766,6 +838,29 @@ components:
             - "SignV2GCertificate"
             - "SignChargingStationCertificate"
             - "SignCombinedCertificate"
+    ResetRequest:
+      type: "object"
+      description: "Request to reset a charge station"
+      required:
+        - "type"
+      properties:
+        type:
+          type: "string"
+          enum:
+            - "Soft"
+            - "Hard"
+          description: "Reset type: Soft (restart software/services) or Hard (power cycle)"
+    UnlockConnectorRequest:
+      type: "object"
+      description: "Request to unlock a connector"
+      required:
+        - "connectorId"
+      properties:
+        connectorId:
+          type: "integer"
+          format: "int32"
+          minimum: 0
+          description: "The connector ID to unlock (0 for the whole charge station in OCPP 2.0.1)"
     FirmwareUpdateRequest:
       type: "object"
       description: "Request to update charge station firmware"

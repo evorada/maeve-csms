@@ -19,4 +19,6 @@ type Engine interface {
 	LocalAuthListStore
 	ReservationStore
 	MeterValuesStore
+	ResetRequestStore
+	UnlockConnectorRequestStore
 }

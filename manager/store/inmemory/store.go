@@ -48,6 +48,8 @@ type Store struct {
 	localAuthListEntries             map[string]map[string]*store.LocalAuthListEntry
 	reservations                     map[int]*store.Reservation
 	meterValues                      map[meterValueKey][]store.StoredMeterValue
+	resetRequests                    map[string]*store.ResetRequest
+	unlockConnectorRequests          map[string]*store.UnlockConnectorRequest
 }
 
 func NewStore(clock clock.PassiveClock) *Store {
@@ -74,6 +76,8 @@ func NewStore(clock clock.PassiveClock) *Store {
 		localAuthListEntries:             make(map[string]map[string]*store.LocalAuthListEntry),
 		reservations:                     make(map[int]*store.Reservation),
 		meterValues:                      make(map[meterValueKey][]store.StoredMeterValue),
+		resetRequests:                    make(map[string]*store.ResetRequest),
+		unlockConnectorRequests:          make(map[string]*store.UnlockConnectorRequest),
 	}
 }
 
@@ -795,4 +799,58 @@ func (s *Store) ExpireReservations(_ context.Context) (int, error) {
 		}
 	}
 	return count, nil
+}
+
+func (s *Store) SetResetRequest(_ context.Context, chargeStationId string, request *store.ResetRequest) error {
+	s.Lock()
+	defer s.Unlock()
+	request.ChargeStationId = chargeStationId
+	request.UpdatedAt = s.clock.Now()
+	s.resetRequests[chargeStationId] = request
+	return nil
+}
+
+func (s *Store) GetResetRequest(_ context.Context, chargeStationId string) (*store.ResetRequest, error) {
+	s.Lock()
+	defer s.Unlock()
+	req := s.resetRequests[chargeStationId]
+	if req == nil {
+		return nil, nil
+	}
+	copy := *req
+	return &copy, nil
+}
+
+func (s *Store) DeleteResetRequest(_ context.Context, chargeStationId string) error {
+	s.Lock()
+	defer s.Unlock()
+	delete(s.resetRequests, chargeStationId)
+	return nil
+}
+
+func (s *Store) SetUnlockConnectorRequest(_ context.Context, chargeStationId string, request *store.UnlockConnectorRequest) error {
+	s.Lock()
+	defer s.Unlock()
+	request.ChargeStationId = chargeStationId
+	request.UpdatedAt = s.clock.Now()
+	s.unlockConnectorRequests[chargeStationId] = request
+	return nil
+}
+
+func (s *Store) GetUnlockConnectorRequest(_ context.Context, chargeStationId string) (*store.UnlockConnectorRequest, error) {
+	s.Lock()
+	defer s.Unlock()
+	req := s.unlockConnectorRequests[chargeStationId]
+	if req == nil {
+		return nil, nil
+	}
+	copy := *req
+	return &copy, nil
+}
+
+func (s *Store) DeleteUnlockConnectorRequest(_ context.Context, chargeStationId string) error {
+	s.Lock()
+	defer s.Unlock()
+	delete(s.unlockConnectorRequests, chargeStationId)
+	return nil
 }
