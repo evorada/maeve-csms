@@ -40,3 +40,42 @@ ON CONFLICT (charge_station_id) DO UPDATE SET
 SELECT charge_station_id, status, location, checksum, request_id, updated_at
 FROM publish_firmware_status
 WHERE charge_station_id = $1;
+
+-- name: UpsertFirmwareUpdateRequest :exec
+INSERT INTO firmware_update_request (
+    charge_station_id,
+    location,
+    retrieve_date,
+    retries,
+    retry_interval,
+    signature,
+    signing_certificate,
+    status,
+    send_after
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+ON CONFLICT (charge_station_id) DO UPDATE SET
+    location = EXCLUDED.location,
+    retrieve_date = EXCLUDED.retrieve_date,
+    retries = EXCLUDED.retries,
+    retry_interval = EXCLUDED.retry_interval,
+    signature = EXCLUDED.signature,
+    signing_certificate = EXCLUDED.signing_certificate,
+    status = EXCLUDED.status,
+    send_after = EXCLUDED.send_after;
+
+-- name: GetFirmwareUpdateRequest :one
+SELECT charge_station_id, location, retrieve_date, retries, retry_interval, signature, signing_certificate, status, send_after
+FROM firmware_update_request
+WHERE charge_station_id = $1;
+
+-- name: DeleteFirmwareUpdateRequest :exec
+DELETE FROM firmware_update_request
+WHERE charge_station_id = $1;
+
+-- name: ListFirmwareUpdateRequests :many
+SELECT charge_station_id, location, retrieve_date, retries, retry_interval, signature, signing_certificate, status, send_after
+FROM firmware_update_request
+WHERE charge_station_id > $1
+ORDER BY charge_station_id
+LIMIT $2;

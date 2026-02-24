@@ -11,6 +11,16 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const DeleteFirmwareUpdateRequest = `-- name: DeleteFirmwareUpdateRequest :exec
+DELETE FROM firmware_update_request
+WHERE charge_station_id = $1
+`
+
+func (q *Queries) DeleteFirmwareUpdateRequest(ctx context.Context, chargeStationID string) error {
+	_, err := q.db.Exec(ctx, DeleteFirmwareUpdateRequest, chargeStationID)
+	return err
+}
+
 const GetDiagnosticsStatus = `-- name: GetDiagnosticsStatus :one
 SELECT charge_station_id, status, location, updated_at
 FROM diagnostics_status
@@ -25,6 +35,29 @@ func (q *Queries) GetDiagnosticsStatus(ctx context.Context, chargeStationID stri
 		&i.Status,
 		&i.Location,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const GetFirmwareUpdateRequest = `-- name: GetFirmwareUpdateRequest :one
+SELECT charge_station_id, location, retrieve_date, retries, retry_interval, signature, signing_certificate, status, send_after
+FROM firmware_update_request
+WHERE charge_station_id = $1
+`
+
+func (q *Queries) GetFirmwareUpdateRequest(ctx context.Context, chargeStationID string) (FirmwareUpdateRequest, error) {
+	row := q.db.QueryRow(ctx, GetFirmwareUpdateRequest, chargeStationID)
+	var i FirmwareUpdateRequest
+	err := row.Scan(
+		&i.ChargeStationID,
+		&i.Location,
+		&i.RetrieveDate,
+		&i.Retries,
+		&i.RetryInterval,
+		&i.Signature,
+		&i.SigningCertificate,
+		&i.Status,
+		&i.SendAfter,
 	)
 	return i, err
 }
@@ -69,6 +102,49 @@ func (q *Queries) GetPublishFirmwareStatus(ctx context.Context, chargeStationID 
 	return i, err
 }
 
+const ListFirmwareUpdateRequests = `-- name: ListFirmwareUpdateRequests :many
+SELECT charge_station_id, location, retrieve_date, retries, retry_interval, signature, signing_certificate, status, send_after
+FROM firmware_update_request
+WHERE charge_station_id > $1
+ORDER BY charge_station_id
+LIMIT $2
+`
+
+type ListFirmwareUpdateRequestsParams struct {
+	ChargeStationID string `db:"charge_station_id" json:"charge_station_id"`
+	Limit           int32  `db:"limit" json:"limit"`
+}
+
+func (q *Queries) ListFirmwareUpdateRequests(ctx context.Context, arg ListFirmwareUpdateRequestsParams) ([]FirmwareUpdateRequest, error) {
+	rows, err := q.db.Query(ctx, ListFirmwareUpdateRequests, arg.ChargeStationID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FirmwareUpdateRequest{}
+	for rows.Next() {
+		var i FirmwareUpdateRequest
+		if err := rows.Scan(
+			&i.ChargeStationID,
+			&i.Location,
+			&i.RetrieveDate,
+			&i.Retries,
+			&i.RetryInterval,
+			&i.Signature,
+			&i.SigningCertificate,
+			&i.Status,
+			&i.SendAfter,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const UpsertDiagnosticsStatus = `-- name: UpsertDiagnosticsStatus :exec
 INSERT INTO diagnostics_status (charge_station_id, status, location, updated_at)
 VALUES ($1, $2, $3, $4)
@@ -91,6 +167,57 @@ func (q *Queries) UpsertDiagnosticsStatus(ctx context.Context, arg UpsertDiagnos
 		arg.Status,
 		arg.Location,
 		arg.UpdatedAt,
+	)
+	return err
+}
+
+const UpsertFirmwareUpdateRequest = `-- name: UpsertFirmwareUpdateRequest :exec
+INSERT INTO firmware_update_request (
+    charge_station_id,
+    location,
+    retrieve_date,
+    retries,
+    retry_interval,
+    signature,
+    signing_certificate,
+    status,
+    send_after
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+ON CONFLICT (charge_station_id) DO UPDATE SET
+    location = EXCLUDED.location,
+    retrieve_date = EXCLUDED.retrieve_date,
+    retries = EXCLUDED.retries,
+    retry_interval = EXCLUDED.retry_interval,
+    signature = EXCLUDED.signature,
+    signing_certificate = EXCLUDED.signing_certificate,
+    status = EXCLUDED.status,
+    send_after = EXCLUDED.send_after
+`
+
+type UpsertFirmwareUpdateRequestParams struct {
+	ChargeStationID    string             `db:"charge_station_id" json:"charge_station_id"`
+	Location           string             `db:"location" json:"location"`
+	RetrieveDate       pgtype.Timestamptz `db:"retrieve_date" json:"retrieve_date"`
+	Retries            pgtype.Int4        `db:"retries" json:"retries"`
+	RetryInterval      pgtype.Int4        `db:"retry_interval" json:"retry_interval"`
+	Signature          pgtype.Text        `db:"signature" json:"signature"`
+	SigningCertificate pgtype.Text        `db:"signing_certificate" json:"signing_certificate"`
+	Status             string             `db:"status" json:"status"`
+	SendAfter          pgtype.Timestamptz `db:"send_after" json:"send_after"`
+}
+
+func (q *Queries) UpsertFirmwareUpdateRequest(ctx context.Context, arg UpsertFirmwareUpdateRequestParams) error {
+	_, err := q.db.Exec(ctx, UpsertFirmwareUpdateRequest,
+		arg.ChargeStationID,
+		arg.Location,
+		arg.RetrieveDate,
+		arg.Retries,
+		arg.RetryInterval,
+		arg.Signature,
+		arg.SigningCertificate,
+		arg.Status,
+		arg.SendAfter,
 	)
 	return err
 }

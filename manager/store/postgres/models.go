@@ -90,6 +90,18 @@ type DiagnosticsStatus struct {
 	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
 
+type FirmwareUpdateRequest struct {
+	ChargeStationID    string             `db:"charge_station_id" json:"charge_station_id"`
+	Location           string             `db:"location" json:"location"`
+	RetrieveDate       pgtype.Timestamptz `db:"retrieve_date" json:"retrieve_date"`
+	Retries            pgtype.Int4        `db:"retries" json:"retries"`
+	RetryInterval      pgtype.Int4        `db:"retry_interval" json:"retry_interval"`
+	Signature          pgtype.Text        `db:"signature" json:"signature"`
+	SigningCertificate pgtype.Text        `db:"signing_certificate" json:"signing_certificate"`
+	Status             string             `db:"status" json:"status"`
+	SendAfter          pgtype.Timestamptz `db:"send_after" json:"send_after"`
+}
+
 type FirmwareUpdateStatus struct {
 	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
 	Status          string             `db:"status" json:"status"`
@@ -204,6 +216,7 @@ type Transaction struct {
 	Offline         bool             `db:"offline" json:"offline"`
 	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	LastCost        pgtype.Numeric   `db:"last_cost" json:"last_cost"`
 }
 
 type TransactionMeterValue struct {
