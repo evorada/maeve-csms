@@ -58,6 +58,33 @@ func (q *Queries) DeleteChargeStationCertificates(ctx context.Context, chargeSta
 	return err
 }
 
+const DeleteChargeStationChangeAvailability = `-- name: DeleteChargeStationChangeAvailability :exec
+DELETE FROM charge_station_change_availability WHERE charge_station_id = $1
+`
+
+func (q *Queries) DeleteChargeStationChangeAvailability(ctx context.Context, chargeStationID string) error {
+	_, err := q.db.Exec(ctx, DeleteChargeStationChangeAvailability, chargeStationID)
+	return err
+}
+
+const DeleteChargeStationClearCache = `-- name: DeleteChargeStationClearCache :exec
+DELETE FROM charge_station_clear_cache WHERE charge_station_id = $1
+`
+
+func (q *Queries) DeleteChargeStationClearCache(ctx context.Context, chargeStationID string) error {
+	_, err := q.db.Exec(ctx, DeleteChargeStationClearCache, chargeStationID)
+	return err
+}
+
+const DeleteChargeStationDataTransfer = `-- name: DeleteChargeStationDataTransfer :exec
+DELETE FROM charge_station_data_transfer WHERE charge_station_id = $1
+`
+
+func (q *Queries) DeleteChargeStationDataTransfer(ctx context.Context, chargeStationID string) error {
+	_, err := q.db.Exec(ctx, DeleteChargeStationDataTransfer, chargeStationID)
+	return err
+}
+
 const DeleteChargeStationSettings = `-- name: DeleteChargeStationSettings :exec
 DELETE FROM charge_station_settings WHERE charge_station_id = $1
 `
@@ -129,6 +156,70 @@ func (q *Queries) GetChargeStationCertificates(ctx context.Context, chargeStatio
 		return nil, err
 	}
 	return items, nil
+}
+
+const GetChargeStationChangeAvailability = `-- name: GetChargeStationChangeAvailability :one
+SELECT charge_station_id, connector_id, evse_id, availability_type, status, send_after, created_at, updated_at FROM charge_station_change_availability
+WHERE charge_station_id = $1
+`
+
+// Change Availability
+func (q *Queries) GetChargeStationChangeAvailability(ctx context.Context, chargeStationID string) (ChargeStationChangeAvailability, error) {
+	row := q.db.QueryRow(ctx, GetChargeStationChangeAvailability, chargeStationID)
+	var i ChargeStationChangeAvailability
+	err := row.Scan(
+		&i.ChargeStationID,
+		&i.ConnectorID,
+		&i.EvseID,
+		&i.AvailabilityType,
+		&i.Status,
+		&i.SendAfter,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const GetChargeStationClearCache = `-- name: GetChargeStationClearCache :one
+SELECT charge_station_id, status, send_after, created_at, updated_at FROM charge_station_clear_cache
+WHERE charge_station_id = $1
+`
+
+// Clear Cache
+func (q *Queries) GetChargeStationClearCache(ctx context.Context, chargeStationID string) (ChargeStationClearCache, error) {
+	row := q.db.QueryRow(ctx, GetChargeStationClearCache, chargeStationID)
+	var i ChargeStationClearCache
+	err := row.Scan(
+		&i.ChargeStationID,
+		&i.Status,
+		&i.SendAfter,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const GetChargeStationDataTransfer = `-- name: GetChargeStationDataTransfer :one
+SELECT charge_station_id, vendor_id, message_id, data, status, response_data, send_after, created_at, updated_at FROM charge_station_data_transfer
+WHERE charge_station_id = $1
+`
+
+// Data Transfer
+func (q *Queries) GetChargeStationDataTransfer(ctx context.Context, chargeStationID string) (ChargeStationDataTransfer, error) {
+	row := q.db.QueryRow(ctx, GetChargeStationDataTransfer, chargeStationID)
+	var i ChargeStationDataTransfer
+	err := row.Scan(
+		&i.ChargeStationID,
+		&i.VendorID,
+		&i.MessageID,
+		&i.Data,
+		&i.Status,
+		&i.ResponseData,
+		&i.SendAfter,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const GetChargeStationRuntime = `-- name: GetChargeStationRuntime :one
@@ -229,6 +320,127 @@ func (q *Queries) ListChargeStationCertificates(ctx context.Context, arg ListCha
 			&i.CertificateInstallationStatus,
 			&i.SendAfter,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const ListChargeStationChangeAvailabilities = `-- name: ListChargeStationChangeAvailabilities :many
+SELECT charge_station_id, connector_id, evse_id, availability_type, status, send_after, created_at, updated_at FROM charge_station_change_availability
+WHERE charge_station_id > $1
+ORDER BY charge_station_id ASC
+LIMIT $2
+`
+
+type ListChargeStationChangeAvailabilitiesParams struct {
+	ChargeStationID string `db:"charge_station_id" json:"charge_station_id"`
+	Limit           int32  `db:"limit" json:"limit"`
+}
+
+func (q *Queries) ListChargeStationChangeAvailabilities(ctx context.Context, arg ListChargeStationChangeAvailabilitiesParams) ([]ChargeStationChangeAvailability, error) {
+	rows, err := q.db.Query(ctx, ListChargeStationChangeAvailabilities, arg.ChargeStationID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChargeStationChangeAvailability{}
+	for rows.Next() {
+		var i ChargeStationChangeAvailability
+		if err := rows.Scan(
+			&i.ChargeStationID,
+			&i.ConnectorID,
+			&i.EvseID,
+			&i.AvailabilityType,
+			&i.Status,
+			&i.SendAfter,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const ListChargeStationClearCaches = `-- name: ListChargeStationClearCaches :many
+SELECT charge_station_id, status, send_after, created_at, updated_at FROM charge_station_clear_cache
+WHERE charge_station_id > $1
+ORDER BY charge_station_id ASC
+LIMIT $2
+`
+
+type ListChargeStationClearCachesParams struct {
+	ChargeStationID string `db:"charge_station_id" json:"charge_station_id"`
+	Limit           int32  `db:"limit" json:"limit"`
+}
+
+func (q *Queries) ListChargeStationClearCaches(ctx context.Context, arg ListChargeStationClearCachesParams) ([]ChargeStationClearCache, error) {
+	rows, err := q.db.Query(ctx, ListChargeStationClearCaches, arg.ChargeStationID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChargeStationClearCache{}
+	for rows.Next() {
+		var i ChargeStationClearCache
+		if err := rows.Scan(
+			&i.ChargeStationID,
+			&i.Status,
+			&i.SendAfter,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const ListChargeStationDataTransfers = `-- name: ListChargeStationDataTransfers :many
+SELECT charge_station_id, vendor_id, message_id, data, status, response_data, send_after, created_at, updated_at FROM charge_station_data_transfer
+WHERE charge_station_id > $1
+ORDER BY charge_station_id ASC
+LIMIT $2
+`
+
+type ListChargeStationDataTransfersParams struct {
+	ChargeStationID string `db:"charge_station_id" json:"charge_station_id"`
+	Limit           int32  `db:"limit" json:"limit"`
+}
+
+func (q *Queries) ListChargeStationDataTransfers(ctx context.Context, arg ListChargeStationDataTransfersParams) ([]ChargeStationDataTransfer, error) {
+	rows, err := q.db.Query(ctx, ListChargeStationDataTransfers, arg.ChargeStationID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChargeStationDataTransfer{}
+	for rows.Next() {
+		var i ChargeStationDataTransfer
+		if err := rows.Scan(
+			&i.ChargeStationID,
+			&i.VendorID,
+			&i.MessageID,
+			&i.Data,
+			&i.Status,
+			&i.ResponseData,
+			&i.SendAfter,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -348,6 +560,126 @@ func (q *Queries) SetChargeStationAuth(ctx context.Context, arg SetChargeStation
 		&i.SecurityProfile,
 		&i.Base64Sha256Password,
 		&i.InvalidUsernameAllowed,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const SetChargeStationChangeAvailability = `-- name: SetChargeStationChangeAvailability :one
+INSERT INTO charge_station_change_availability (charge_station_id, connector_id, evse_id, availability_type, status, send_after)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (charge_station_id) DO UPDATE
+SET connector_id = EXCLUDED.connector_id,
+    evse_id = EXCLUDED.evse_id,
+    availability_type = EXCLUDED.availability_type,
+    status = EXCLUDED.status,
+    send_after = EXCLUDED.send_after,
+    updated_at = NOW()
+RETURNING charge_station_id, connector_id, evse_id, availability_type, status, send_after, created_at, updated_at
+`
+
+type SetChargeStationChangeAvailabilityParams struct {
+	ChargeStationID  string             `db:"charge_station_id" json:"charge_station_id"`
+	ConnectorID      pgtype.Int4        `db:"connector_id" json:"connector_id"`
+	EvseID           pgtype.Int4        `db:"evse_id" json:"evse_id"`
+	AvailabilityType string             `db:"availability_type" json:"availability_type"`
+	Status           string             `db:"status" json:"status"`
+	SendAfter        pgtype.Timestamptz `db:"send_after" json:"send_after"`
+}
+
+func (q *Queries) SetChargeStationChangeAvailability(ctx context.Context, arg SetChargeStationChangeAvailabilityParams) (ChargeStationChangeAvailability, error) {
+	row := q.db.QueryRow(ctx, SetChargeStationChangeAvailability,
+		arg.ChargeStationID,
+		arg.ConnectorID,
+		arg.EvseID,
+		arg.AvailabilityType,
+		arg.Status,
+		arg.SendAfter,
+	)
+	var i ChargeStationChangeAvailability
+	err := row.Scan(
+		&i.ChargeStationID,
+		&i.ConnectorID,
+		&i.EvseID,
+		&i.AvailabilityType,
+		&i.Status,
+		&i.SendAfter,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const SetChargeStationClearCache = `-- name: SetChargeStationClearCache :one
+INSERT INTO charge_station_clear_cache (charge_station_id, status, send_after)
+VALUES ($1, $2, $3)
+ON CONFLICT (charge_station_id) DO UPDATE
+SET status = EXCLUDED.status,
+    send_after = EXCLUDED.send_after,
+    updated_at = NOW()
+RETURNING charge_station_id, status, send_after, created_at, updated_at
+`
+
+type SetChargeStationClearCacheParams struct {
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	Status          string             `db:"status" json:"status"`
+	SendAfter       pgtype.Timestamptz `db:"send_after" json:"send_after"`
+}
+
+func (q *Queries) SetChargeStationClearCache(ctx context.Context, arg SetChargeStationClearCacheParams) (ChargeStationClearCache, error) {
+	row := q.db.QueryRow(ctx, SetChargeStationClearCache, arg.ChargeStationID, arg.Status, arg.SendAfter)
+	var i ChargeStationClearCache
+	err := row.Scan(
+		&i.ChargeStationID,
+		&i.Status,
+		&i.SendAfter,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const SetChargeStationDataTransfer = `-- name: SetChargeStationDataTransfer :one
+INSERT INTO charge_station_data_transfer (charge_station_id, vendor_id, message_id, data, status, send_after)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (charge_station_id) DO UPDATE
+SET vendor_id = EXCLUDED.vendor_id,
+    message_id = EXCLUDED.message_id,
+    data = EXCLUDED.data,
+    status = EXCLUDED.status,
+    send_after = EXCLUDED.send_after,
+    updated_at = NOW()
+RETURNING charge_station_id, vendor_id, message_id, data, status, response_data, send_after, created_at, updated_at
+`
+
+type SetChargeStationDataTransferParams struct {
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	VendorID        string             `db:"vendor_id" json:"vendor_id"`
+	MessageID       pgtype.Text        `db:"message_id" json:"message_id"`
+	Data            pgtype.Text        `db:"data" json:"data"`
+	Status          string             `db:"status" json:"status"`
+	SendAfter       pgtype.Timestamptz `db:"send_after" json:"send_after"`
+}
+
+func (q *Queries) SetChargeStationDataTransfer(ctx context.Context, arg SetChargeStationDataTransferParams) (ChargeStationDataTransfer, error) {
+	row := q.db.QueryRow(ctx, SetChargeStationDataTransfer,
+		arg.ChargeStationID,
+		arg.VendorID,
+		arg.MessageID,
+		arg.Data,
+		arg.Status,
+		arg.SendAfter,
+	)
+	var i ChargeStationDataTransfer
+	err := row.Scan(
+		&i.ChargeStationID,
+		&i.VendorID,
+		&i.MessageID,
+		&i.Data,
+		&i.Status,
+		&i.ResponseData,
+		&i.SendAfter,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

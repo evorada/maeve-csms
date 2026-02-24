@@ -221,6 +221,169 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Status"
+  /cs/{csId}/data-transfer:
+    post:
+      summary: "Send data transfer to charge station"
+      description: |
+        Sends vendor-specific data to a charge station. The data format and semantics
+        are defined by the vendor. Supports both OCPP 1.6 and OCPP 2.0.1.
+      operationId: "sendDataTransfer"
+      parameters:
+        - name: "csId"
+          in: "path"
+          description: "The charge station identifier"
+          schema:
+            type: "string"
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/DataTransferRequest"
+      responses:
+        "202":
+          description: "Accepted - data transfer request submitted"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataTransferResponse"
+        default:
+          description: "Unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+  /cs/{csId}/cache/clear:
+    post:
+      summary: "Clear authorization cache on charge station"
+      description: |
+        Requests the charge station to clear its local authorization cache. 
+        The next authorization request will query the CSMS. Supports both OCPP 1.6 and OCPP 2.0.1.
+      operationId: "clearAuthorizationCache"
+      parameters:
+        - name: "csId"
+          in: "path"
+          description: "The charge station identifier"
+          schema:
+            type: "string"
+            maxLength: 28
+      responses:
+        "202":
+          description: "Accepted - cache clear request submitted"
+        default:
+          description: "Unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+  /cs/{csId}/availability:
+    post:
+      summary: "Change charge station availability"
+      description: |
+        Changes the operational status of a charge station or specific connector.
+        Used to take equipment out of service for maintenance or make it available again.
+        Supports both OCPP 1.6 and OCPP 2.0.1.
+      operationId: "changeAvailability"
+      parameters:
+        - name: "csId"
+          in: "path"
+          description: "The charge station identifier"
+          schema:
+            type: "string"
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ChangeAvailabilityRequest"
+      responses:
+        "202":
+          description: "Accepted - availability change request submitted"
+        default:
+          description: "Unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+  /cs/{csId}/meter-values:
+    get:
+      summary: "Get meter values from charge station"
+      description: |
+        Retrieves historical meter values (energy consumption, power, voltage, etc.) 
+        reported by the charge station. Supports filtering and pagination.
+      operationId: "getMeterValues"
+      parameters:
+        - name: "csId"
+          in: "path"
+          description: "The charge station identifier"
+          schema:
+            type: "string"
+            maxLength: 28
+        - name: "connectorId"
+          in: "query"
+          description: "Filter by connector ID"
+          required: false
+          schema:
+            type: "integer"
+            minimum: 0
+        - name: "transactionId"
+          in: "query"
+          description: "Filter by transaction ID"
+          required: false
+          schema:
+            type: "string"
+        - name: "startTime"
+          in: "query"
+          description: "Filter by start time (ISO 8601)"
+          required: false
+          schema:
+            type: "string"
+            format: "date-time"
+        - name: "endTime"
+          in: "query"
+          description: "Filter by end time (ISO 8601)"
+          required: false
+          schema:
+            type: "string"
+            format: "date-time"
+        - name: "limit"
+          in: "query"
+          description: "Maximum number of results to return"
+          required: false
+          schema:
+            type: "integer"
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - name: "offset"
+          in: "query"
+          description: "Number of results to skip (pagination)"
+          required: false
+          schema:
+            type: "integer"
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: "Meter values retrieved successfully"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeterValuesResponse"
+        "404":
+          description: "Unknown charge station"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        default:
+          description: "Unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
   /token:
     post:
       summary: "Create/update an authorization token"
@@ -661,6 +824,134 @@ components:
         error:
           type: "string"
           description: "The error details"
+    DataTransferRequest:
+      type: "object"
+      description: "Request to send vendor-specific data to charge station"
+      required:
+        - "vendorId"
+      properties:
+        vendorId:
+          type: "string"
+          maxLength: 255
+          description: "Vendor identifier (vendor-specific)"
+        messageId:
+          type: "string"
+          maxLength: 50
+          description: "Optional message identifier for the data transfer"
+        data:
+          type: "string"
+          description: "Arbitrary string data (format defined by vendor)"
+    DataTransferResponse:
+      type: "object"
+      description: "Response from data transfer request"
+      properties:
+        status:
+          type: "string"
+          enum:
+            - "Accepted"
+            - "Rejected"
+            - "UnknownMessageId"
+            - "UnknownVendorId"
+          description: "Status of the data transfer"
+        data:
+          type: "string"
+          description: "Response data from the charge station (vendor-specific)"
+    ChangeAvailabilityRequest:
+      type: "object"
+      description: "Request to change charge station or connector availability"
+      required:
+        - "type"
+      properties:
+        connectorId:
+          type: "integer"
+          minimum: 0
+          description: "Connector ID (0 = entire station, >0 = specific connector)"
+          default: 0
+        evseId:
+          type: "integer"
+          minimum: 0
+          description: "EVSE ID for OCPP 2.0.1 (optional)"
+        type:
+          type: "string"
+          enum:
+            - "Operative"
+            - "Inoperative"
+          description: "Target availability state"
+    MeterValuesSampledValue:
+      type: "object"
+      description: "A single sampled value in a meter reading"
+      required:
+        - "value"
+      properties:
+        value:
+          type: "string"
+          description: "Measured value (numeric as string)"
+        context:
+          type: "string"
+          description: "Reading context (e.g., Sample.Periodic, Transaction.Begin)"
+        format:
+          type: "string"
+          description: "Value format (Raw or SignedData)"
+        measurand:
+          type: "string"
+          description: "Type of measurement (e.g., Energy.Active.Import.Register, Power.Active.Import)"
+        phase:
+          type: "string"
+          description: "Phase measured (L1, L2, L3, N, L1-N, L2-N, L3-N, L1-L2, L2-L3, L3-L1)"
+        location:
+          type: "string"
+          description: "Location of measurement (Cable, EV, Inlet, Outlet, Body)"
+        unit:
+          type: "string"
+          description: "Unit of measurement (Wh, kWh, varh, kvarh, W, kW, VA, kVA, var, kvar, A, V, K, Celsius, Fahrenheit, Percent)"
+    MeterValue:
+      type: "object"
+      description: "A set of meter values at a specific timestamp"
+      required:
+        - "timestamp"
+        - "sampledValue"
+      properties:
+        timestamp:
+          type: "string"
+          format: "date-time"
+          description: "Timestamp of the meter reading"
+        connectorId:
+          type: "integer"
+          description: "Connector ID for the reading"
+        evseId:
+          type: "integer"
+          description: "EVSE ID for OCPP 2.0.1"
+        transactionId:
+          type: "string"
+          description: "Transaction ID (if part of a transaction)"
+        sampledValue:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/MeterValuesSampledValue"
+          description: "Array of sampled values"
+    MeterValuesResponse:
+      type: "object"
+      description: "Paginated list of meter values"
+      required:
+        - "meterValues"
+        - "total"
+        - "limit"
+        - "offset"
+      properties:
+        meterValues:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/MeterValue"
+          description: "Array of meter value records"
+        total:
+          type: "integer"
+          description: "Total number of matching records"
+        limit:
+          type: "integer"
+          description: "Maximum number of results returned"
+        offset:
+          type: "integer"
+          description: "Number of results skipped"
     Certificate:
       type: "object"
       description: "A client certificate"

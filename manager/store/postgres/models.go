@@ -35,6 +35,37 @@ type ChargeStationCertificate struct {
 	SendAfter                     pgtype.Timestamp `db:"send_after" json:"send_after"`
 }
 
+type ChargeStationChangeAvailability struct {
+	ChargeStationID  string             `db:"charge_station_id" json:"charge_station_id"`
+	ConnectorID      pgtype.Int4        `db:"connector_id" json:"connector_id"`
+	EvseID           pgtype.Int4        `db:"evse_id" json:"evse_id"`
+	AvailabilityType string             `db:"availability_type" json:"availability_type"`
+	Status           string             `db:"status" json:"status"`
+	SendAfter        pgtype.Timestamptz `db:"send_after" json:"send_after"`
+	CreatedAt        pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
+type ChargeStationClearCache struct {
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	Status          string             `db:"status" json:"status"`
+	SendAfter       pgtype.Timestamptz `db:"send_after" json:"send_after"`
+	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
+type ChargeStationDataTransfer struct {
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	VendorID        string             `db:"vendor_id" json:"vendor_id"`
+	MessageID       pgtype.Text        `db:"message_id" json:"message_id"`
+	Data            pgtype.Text        `db:"data" json:"data"`
+	Status          string             `db:"status" json:"status"`
+	ResponseData    pgtype.Text        `db:"response_data" json:"response_data"`
+	SendAfter       pgtype.Timestamptz `db:"send_after" json:"send_after"`
+	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
 type ChargeStationRuntime struct {
 	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
 	OcppVersion     string           `db:"ocpp_version" json:"ocpp_version"`

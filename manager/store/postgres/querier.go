@@ -12,12 +12,16 @@ type Querier interface {
 	AddChargeStationCertificate(ctx context.Context, arg AddChargeStationCertificateParams) (ChargeStationCertificate, error)
 	AddMeterValues(ctx context.Context, arg AddMeterValuesParams) error
 	CancelReservation(ctx context.Context, reservationID int32) error
+	CountMeterValues(ctx context.Context, arg CountMeterValuesParams) (int64, error)
 	CreateReservation(ctx context.Context, arg CreateReservationParams) error
 	CreateToken(ctx context.Context, arg CreateTokenParams) (Token, error)
 	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
 	DeleteAllLocalAuthListEntries(ctx context.Context, chargeStationID string) error
 	DeleteCertificate(ctx context.Context, certificateHash string) error
 	DeleteChargeStationCertificates(ctx context.Context, chargeStationID string) error
+	DeleteChargeStationChangeAvailability(ctx context.Context, chargeStationID string) error
+	DeleteChargeStationClearCache(ctx context.Context, chargeStationID string) error
+	DeleteChargeStationDataTransfer(ctx context.Context, chargeStationID string) error
 	DeleteChargeStationSettings(ctx context.Context, chargeStationID string) error
 	DeleteChargeStationTrigger(ctx context.Context, chargeStationID string) error
 	DeleteChargingProfileById(ctx context.Context, arg DeleteChargingProfileByIdParams) (int64, error)
@@ -39,6 +43,12 @@ type Querier interface {
 	GetChargeStationAuth(ctx context.Context, chargeStationID string) (ChargeStation, error)
 	// Certificates
 	GetChargeStationCertificates(ctx context.Context, chargeStationID string) ([]ChargeStationCertificate, error)
+	// Change Availability
+	GetChargeStationChangeAvailability(ctx context.Context, chargeStationID string) (ChargeStationChangeAvailability, error)
+	// Clear Cache
+	GetChargeStationClearCache(ctx context.Context, chargeStationID string) (ChargeStationClearCache, error)
+	// Data Transfer
+	GetChargeStationDataTransfer(ctx context.Context, chargeStationID string) (ChargeStationDataTransfer, error)
 	// Runtime
 	GetChargeStationRuntime(ctx context.Context, chargeStationID string) (ChargeStationRuntime, error)
 	// Settings
@@ -67,6 +77,9 @@ type Querier interface {
 	ListAllLocations(ctx context.Context, arg ListAllLocationsParams) ([]Location, error)
 	ListCertificates(ctx context.Context) ([]Certificate, error)
 	ListChargeStationCertificates(ctx context.Context, arg ListChargeStationCertificatesParams) ([]ListChargeStationCertificatesRow, error)
+	ListChargeStationChangeAvailabilities(ctx context.Context, arg ListChargeStationChangeAvailabilitiesParams) ([]ChargeStationChangeAvailability, error)
+	ListChargeStationClearCaches(ctx context.Context, arg ListChargeStationClearCachesParams) ([]ChargeStationClearCache, error)
+	ListChargeStationDataTransfers(ctx context.Context, arg ListChargeStationDataTransfersParams) ([]ChargeStationDataTransfer, error)
 	ListChargeStationSettings(ctx context.Context, arg ListChargeStationSettingsParams) ([]ChargeStationSetting, error)
 	ListChargeStationTriggers(ctx context.Context, arg ListChargeStationTriggersParams) ([]ChargeStationTrigger, error)
 	ListFirmwareUpdateRequests(ctx context.Context, arg ListFirmwareUpdateRequestsParams) ([]FirmwareUpdateRequest, error)
@@ -74,8 +87,12 @@ type Querier interface {
 	ListOcpiPartiesForRole(ctx context.Context, role string) ([]OcpiParty, error)
 	ListTokens(ctx context.Context, arg ListTokensParams) ([]Token, error)
 	ListTransactions(ctx context.Context) ([]Transaction, error)
+	QueryMeterValues(ctx context.Context, arg QueryMeterValuesParams) ([]MeterValue, error)
 	SetCertificate(ctx context.Context, arg SetCertificateParams) (Certificate, error)
 	SetChargeStationAuth(ctx context.Context, arg SetChargeStationAuthParams) (ChargeStation, error)
+	SetChargeStationChangeAvailability(ctx context.Context, arg SetChargeStationChangeAvailabilityParams) (ChargeStationChangeAvailability, error)
+	SetChargeStationClearCache(ctx context.Context, arg SetChargeStationClearCacheParams) (ChargeStationClearCache, error)
+	SetChargeStationDataTransfer(ctx context.Context, arg SetChargeStationDataTransferParams) (ChargeStationDataTransfer, error)
 	SetChargeStationRuntime(ctx context.Context, arg SetChargeStationRuntimeParams) (ChargeStationRuntime, error)
 	SetChargeStationSettings(ctx context.Context, arg SetChargeStationSettingsParams) (ChargeStationSetting, error)
 	SetChargeStationTrigger(ctx context.Context, arg SetChargeStationTriggerParams) (ChargeStationTrigger, error)

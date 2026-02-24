@@ -55,3 +55,19 @@ func (f FirmwareUpdateRequest) Bind(r *http.Request) error {
 func (f FirmwareStatus) Render(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
+
+func (d DataTransferRequest) Bind(r *http.Request) error {
+	return nil
+}
+
+func (d DataTransferResponse) Render(w http.ResponseWriter, r *http.Request) error {
+	return nil
+}
+
+func (c ChangeAvailabilityRequest) Bind(r *http.Request) error {
+	return nil
+}
+
+func (m MeterValuesResponse) Render(w http.ResponseWriter, r *http.Request) error {
+	return nil
+}

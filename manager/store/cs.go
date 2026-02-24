@@ -138,3 +138,90 @@ type ChargeStationTriggerMessageStore interface {
 	LookupChargeStationTriggerMessage(ctx context.Context, chargeStationId string) (*ChargeStationTriggerMessage, error)
 	ListChargeStationTriggerMessages(ctx context.Context, pageSize int, previousChargeStationId string) ([]*ChargeStationTriggerMessage, error)
 }
+
+// DataTransferStatus represents the status of a data transfer request
+type DataTransferStatus string
+
+var (
+	DataTransferStatusPending          DataTransferStatus = "Pending"
+	DataTransferStatusAccepted         DataTransferStatus = "Accepted"
+	DataTransferStatusRejected         DataTransferStatus = "Rejected"
+	DataTransferStatusUnknownMessageId DataTransferStatus = "UnknownMessageId"
+	DataTransferStatusUnknownVendorId  DataTransferStatus = "UnknownVendorId"
+)
+
+// ChargeStationDataTransfer represents a pending data transfer request
+type ChargeStationDataTransfer struct {
+	ChargeStationId string
+	VendorId        string
+	MessageId       *string
+	Data            *string
+	Status          DataTransferStatus
+	ResponseData    *string
+	SendAfter       time.Time
+}
+
+type ChargeStationDataTransferStore interface {
+	SetChargeStationDataTransfer(ctx context.Context, chargeStationId string, dataTransfer *ChargeStationDataTransfer) error
+	LookupChargeStationDataTransfer(ctx context.Context, chargeStationId string) (*ChargeStationDataTransfer, error)
+	ListChargeStationDataTransfers(ctx context.Context, pageSize int, previousChargeStationId string) ([]*ChargeStationDataTransfer, error)
+	DeleteChargeStationDataTransfer(ctx context.Context, chargeStationId string) error
+}
+
+// ClearCacheStatus represents the status of a clear cache request
+type ClearCacheStatus string
+
+var (
+	ClearCacheStatusPending  ClearCacheStatus = "Pending"
+	ClearCacheStatusAccepted ClearCacheStatus = "Accepted"
+	ClearCacheStatusRejected ClearCacheStatus = "Rejected"
+)
+
+// ChargeStationClearCache represents a pending clear cache request
+type ChargeStationClearCache struct {
+	ChargeStationId string
+	Status          ClearCacheStatus
+	SendAfter       time.Time
+}
+
+type ChargeStationClearCacheStore interface {
+	SetChargeStationClearCache(ctx context.Context, chargeStationId string, clearCache *ChargeStationClearCache) error
+	LookupChargeStationClearCache(ctx context.Context, chargeStationId string) (*ChargeStationClearCache, error)
+	ListChargeStationClearCaches(ctx context.Context, pageSize int, previousChargeStationId string) ([]*ChargeStationClearCache, error)
+	DeleteChargeStationClearCache(ctx context.Context, chargeStationId string) error
+}
+
+// AvailabilityType represents the requested availability state
+type AvailabilityType string
+
+var (
+	AvailabilityTypeOperative   AvailabilityType = "Operative"
+	AvailabilityTypeInoperative AvailabilityType = "Inoperative"
+)
+
+// AvailabilityStatus represents the status of a change availability request
+type AvailabilityStatus string
+
+var (
+	AvailabilityStatusPending   AvailabilityStatus = "Pending"
+	AvailabilityStatusAccepted  AvailabilityStatus = "Accepted"
+	AvailabilityStatusRejected  AvailabilityStatus = "Rejected"
+	AvailabilityStatusScheduled AvailabilityStatus = "Scheduled"
+)
+
+// ChargeStationChangeAvailability represents a pending change availability request
+type ChargeStationChangeAvailability struct {
+	ChargeStationId string
+	ConnectorId     *int // nil or 0 = entire station
+	EvseId          *int // OCPP 2.0.1 only
+	Type            AvailabilityType
+	Status          AvailabilityStatus
+	SendAfter       time.Time
+}
+
+type ChargeStationChangeAvailabilityStore interface {
+	SetChargeStationChangeAvailability(ctx context.Context, chargeStationId string, changeAvailability *ChargeStationChangeAvailability) error
+	LookupChargeStationChangeAvailability(ctx context.Context, chargeStationId string) (*ChargeStationChangeAvailability, error)
+	ListChargeStationChangeAvailabilities(ctx context.Context, pageSize int, previousChargeStationId string) ([]*ChargeStationChangeAvailability, error)
+	DeleteChargeStationChangeAvailability(ctx context.Context, chargeStationId string) error
+}
