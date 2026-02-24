@@ -73,6 +73,7 @@ func SyncTriggers(ctx context.Context,
 							span.SetAttributes(attribute.String("sync.trigger.ocpp_version", details.OcppVersion))
 							err = engine.SetChargeStationTriggerMessage(ctx, csId, &store.ChargeStationTriggerMessage{
 								TriggerMessage: pendingTriggerMessage.TriggerMessage,
+								ConnectorId:    pendingTriggerMessage.ConnectorId,
 								TriggerStatus:  store.TriggerStatusPending,
 								SendAfter:      clock.Now().Add(retryAfter),
 							})
@@ -90,15 +91,30 @@ func SyncTriggers(ctx context.Context,
 									pendingTriggerMessage.TriggerMessage == store.TriggerMessageStatusNotification {
 									err = v16CallMaker.Send(ctx, csId, &ocpp16.TriggerMessageJson{
 										RequestedMessage: ocpp16.TriggerMessageJsonRequestedMessage(pendingTriggerMessage.TriggerMessage),
+										ConnectorId:      pendingTriggerMessage.ConnectorId,
 									})
 								} else {
+									var evse *ocpp201.EVSEType
+									if pendingTriggerMessage.ConnectorId != nil {
+										evse = &ocpp201.EVSEType{
+											Id: *pendingTriggerMessage.ConnectorId,
+										}
+									}
 									err = dataTransferCallMaker.Send(ctx, csId, &ocpp201.TriggerMessageRequestJson{
 										RequestedMessage: ocpp201.MessageTriggerEnumType(pendingTriggerMessage.TriggerMessage),
+										Evse:             evse,
 									})
 								}
 							} else {
+								var evse *ocpp201.EVSEType
+								if pendingTriggerMessage.ConnectorId != nil {
+									evse = &ocpp201.EVSEType{
+										Id: *pendingTriggerMessage.ConnectorId,
+									}
+								}
 								err = v201CallMaker.Send(ctx, csId, &ocpp201.TriggerMessageRequestJson{
 									RequestedMessage: ocpp201.MessageTriggerEnumType(pendingTriggerMessage.TriggerMessage),
+									Evse:             evse,
 								})
 							}
 

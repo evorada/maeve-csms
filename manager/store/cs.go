@@ -123,11 +123,15 @@ var (
 	TriggerMessageSignV2GCertificate                TriggerMessage = "SignV2GCertificate"
 	TriggerMessageSignCombinedCertificate           TriggerMessage = "SignCombinedCertificate"
 	TriggerMessagePublishFirmwareStatusNotification TriggerMessage = "PublishFirmwareStatusNotification"
+	TriggerMessageNotifyReport                      TriggerMessage = "NotifyReport"
+	TriggerMessageNotifyMonitoringReport            TriggerMessage = "NotifyMonitoringReport"
+	TriggerMessageLogStatusNotification             TriggerMessage = "LogStatusNotification"
 )
 
 type ChargeStationTriggerMessage struct {
 	ChargeStationId string
 	TriggerMessage  TriggerMessage
+	ConnectorId     *int
 	TriggerStatus   TriggerStatus
 	SendAfter       time.Time
 }

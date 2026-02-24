@@ -84,10 +84,11 @@ SELECT * FROM charge_station_triggers
 WHERE charge_station_id = $1;
 
 -- name: SetChargeStationTrigger :one
-INSERT INTO charge_station_triggers (charge_station_id, message_type, trigger_status, send_after)
-VALUES ($1, $2, $3, $4)
+INSERT INTO charge_station_triggers (charge_station_id, message_type, connector_id, trigger_status, send_after)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (charge_station_id) DO UPDATE
 SET message_type = EXCLUDED.message_type,
+    connector_id = EXCLUDED.connector_id,
     trigger_status = EXCLUDED.trigger_status,
     send_after = EXCLUDED.send_after
 RETURNING *;
