@@ -1,5 +1,11 @@
+[![End-to-End Tests](https://github.com/evorada/maeve-csms/actions/workflows/end-to-end-tests.yml/badge.svg)](https://github.com/evorada/maeve-csms/actions/workflows/end-to-end-tests.yml)
 [![Manager](https://github.com/evorada/maeve-csms/workflows/Manager/badge.svg)](https://github.com/evorada/maeve-csms/actions/workflows/manager.yml)
 [![Gateway](https://github.com/evorada/maeve-csms/workflows/Gateway/badge.svg)](https://github.com/evorada/maeve-csms/actions/workflows/gateway.yml)
+![GitHub Tag](https://img.shields.io/github/v/tag/evorada/maeve-csms)
+![Static Badge](https://img.shields.io/badge/OCPP-1.6J-green)
+![Static Badge](https://img.shields.io/badge/OCPP-2.0.1-green)
+
+
 
 ![](https://github.com/evorada/maeve-csms/raw/refs/heads/main/docs/assets/maeve_logo.svg)
 
