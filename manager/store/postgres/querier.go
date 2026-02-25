@@ -36,7 +36,9 @@ type Querier interface {
 	DeleteLocalAuthListEntry(ctx context.Context, arg DeleteLocalAuthListEntryParams) error
 	DeleteLocation(ctx context.Context, id string) error
 	DeleteOcpiRegistration(ctx context.Context, token string) error
+	DeleteResetRequest(ctx context.Context, chargeStationID string) error
 	DeleteToken(ctx context.Context, uid string) error
+	DeleteUnlockConnectorRequest(ctx context.Context, chargeStationID string) error
 	ExpireReservations(ctx context.Context) (int64, error)
 	FindActiveTransaction(ctx context.Context, chargeStationID string) (Transaction, error)
 	GetActiveReservations(ctx context.Context, chargeStationID string) ([]Reservation, error)
@@ -77,8 +79,10 @@ type Querier interface {
 	GetPublishFirmwareStatus(ctx context.Context, chargeStationID string) (PublishFirmwareStatus, error)
 	GetReservation(ctx context.Context, reservationID int32) (Reservation, error)
 	GetReservationByConnector(ctx context.Context, arg GetReservationByConnectorParams) (Reservation, error)
+	GetResetRequest(ctx context.Context, chargeStationID string) (ResetRequest, error)
 	GetToken(ctx context.Context, uid string) (Token, error)
 	GetTransaction(ctx context.Context, id string) (Transaction, error)
+	GetUnlockConnectorRequest(ctx context.Context, chargeStationID string) (UnlockConnectorRequest, error)
 	ListAllLocations(ctx context.Context, arg ListAllLocationsParams) ([]Location, error)
 	ListCertificates(ctx context.Context) ([]Certificate, error)
 	ListChargeStationCertificates(ctx context.Context, arg ListChargeStationCertificatesParams) ([]ListChargeStationCertificatesRow, error)
@@ -108,6 +112,10 @@ type Querier interface {
 	SetLocation(ctx context.Context, arg SetLocationParams) (Location, error)
 	SetOcpiParty(ctx context.Context, arg SetOcpiPartyParams) (OcpiParty, error)
 	SetOcpiRegistration(ctx context.Context, arg SetOcpiRegistrationParams) (OcpiRegistration, error)
+	// Reset Request
+	SetResetRequest(ctx context.Context, arg SetResetRequestParams) (ResetRequest, error)
+	// Unlock Connector Request
+	SetUnlockConnectorRequest(ctx context.Context, arg SetUnlockConnectorRequestParams) (UnlockConnectorRequest, error)
 	StoreMeterValue(ctx context.Context, arg StoreMeterValueParams) error
 	UpdateChargeStationCertificate(ctx context.Context, arg UpdateChargeStationCertificateParams) (ChargeStationCertificate, error)
 	UpdateReservationStatus(ctx context.Context, arg UpdateReservationStatusParams) error

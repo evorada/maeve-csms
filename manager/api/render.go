@@ -111,3 +111,11 @@ func (u UpdateLocalListRequest) Bind(r *http.Request) error {
 func (s SetDisplayMessageRequest) Bind(r *http.Request) error {
 	return nil
 }
+
+func (r ResetRequest) Bind(_ *http.Request) error {
+	return nil
+}
+
+func (u UnlockConnectorRequest) Bind(_ *http.Request) error {
+	return nil
+}

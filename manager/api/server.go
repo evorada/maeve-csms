@@ -177,6 +177,76 @@ func (s *Server) TriggerChargeStation(w http.ResponseWriter, r *http.Request, cs
 	w.WriteHeader(http.StatusCreated)
 }
 
+func (s *Server) ResetChargeStation(w http.ResponseWriter, r *http.Request, csId string) {
+	req := new(ResetRequest)
+	if err := render.Bind(r, req); err != nil {
+		_ = render.Render(w, r, ErrInvalidRequest(err))
+		return
+	}
+
+	// Check if charge station exists
+	auth, err := s.store.LookupChargeStationAuth(r.Context(), csId)
+	if err != nil {
+		_ = render.Render(w, r, ErrInternalError(err))
+		return
+	}
+	if auth == nil {
+		_ = render.Render(w, r, ErrNotFound)
+		return
+	}
+
+	// Store the reset request
+	resetReq := &store.ResetRequest{
+		ChargeStationId: csId,
+		Type:            store.ResetType(req.Type),
+		Status:          store.ResetRequestStatusPending,
+		CreatedAt:       s.clock.Now(),
+	}
+
+	err = s.store.SetResetRequest(r.Context(), csId, resetReq)
+	if err != nil {
+		_ = render.Render(w, r, ErrInternalError(err))
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (s *Server) UnlockConnector(w http.ResponseWriter, r *http.Request, csId string) {
+	req := new(UnlockConnectorRequest)
+	if err := render.Bind(r, req); err != nil {
+		_ = render.Render(w, r, ErrInvalidRequest(err))
+		return
+	}
+
+	// Check if charge station exists
+	auth, err := s.store.LookupChargeStationAuth(r.Context(), csId)
+	if err != nil {
+		_ = render.Render(w, r, ErrInternalError(err))
+		return
+	}
+	if auth == nil {
+		_ = render.Render(w, r, ErrNotFound)
+		return
+	}
+
+	// Store the unlock request
+	unlockReq := &store.UnlockConnectorRequest{
+		ChargeStationId: csId,
+		ConnectorId:     int(req.ConnectorId),
+		Status:          store.UnlockConnectorRequestStatusPending,
+		CreatedAt:       s.clock.Now(),
+	}
+
+	err = s.store.SetUnlockConnectorRequest(r.Context(), csId, unlockReq)
+	if err != nil {
+		_ = render.Render(w, r, ErrInternalError(err))
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
+}
+
 func (s *Server) SetToken(w http.ResponseWriter, r *http.Request) {
 	req := new(Token)
 	if err := render.Bind(r, req); err != nil {

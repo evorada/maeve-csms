@@ -23,4 +23,6 @@ type Engine interface {
 	ReservationStore
 	MeterValuesStore
 	DisplayMessageStore
+	ResetRequestStore
+	UnlockConnectorRequestStore
 }
