@@ -101,3 +101,78 @@ SELECT * FROM charge_station_triggers
 WHERE charge_station_id > $1
 ORDER BY charge_station_id ASC
 LIMIT $2;
+
+-- Data Transfer
+-- name: GetChargeStationDataTransfer :one
+SELECT * FROM charge_station_data_transfer
+WHERE charge_station_id = $1;
+
+-- name: SetChargeStationDataTransfer :one
+INSERT INTO charge_station_data_transfer (charge_station_id, vendor_id, message_id, data, status, send_after)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (charge_station_id) DO UPDATE
+SET vendor_id = EXCLUDED.vendor_id,
+    message_id = EXCLUDED.message_id,
+    data = EXCLUDED.data,
+    status = EXCLUDED.status,
+    send_after = EXCLUDED.send_after,
+    updated_at = NOW()
+RETURNING *;
+
+-- name: DeleteChargeStationDataTransfer :exec
+DELETE FROM charge_station_data_transfer WHERE charge_station_id = $1;
+
+-- name: ListChargeStationDataTransfers :many
+SELECT * FROM charge_station_data_transfer
+WHERE charge_station_id > $1
+ORDER BY charge_station_id ASC
+LIMIT $2;
+
+-- Clear Cache
+-- name: GetChargeStationClearCache :one
+SELECT * FROM charge_station_clear_cache
+WHERE charge_station_id = $1;
+
+-- name: SetChargeStationClearCache :one
+INSERT INTO charge_station_clear_cache (charge_station_id, status, send_after)
+VALUES ($1, $2, $3)
+ON CONFLICT (charge_station_id) DO UPDATE
+SET status = EXCLUDED.status,
+    send_after = EXCLUDED.send_after,
+    updated_at = NOW()
+RETURNING *;
+
+-- name: DeleteChargeStationClearCache :exec
+DELETE FROM charge_station_clear_cache WHERE charge_station_id = $1;
+
+-- name: ListChargeStationClearCaches :many
+SELECT * FROM charge_station_clear_cache
+WHERE charge_station_id > $1
+ORDER BY charge_station_id ASC
+LIMIT $2;
+
+-- Change Availability
+-- name: GetChargeStationChangeAvailability :one
+SELECT * FROM charge_station_change_availability
+WHERE charge_station_id = $1;
+
+-- name: SetChargeStationChangeAvailability :one
+INSERT INTO charge_station_change_availability (charge_station_id, connector_id, evse_id, availability_type, status, send_after)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (charge_station_id) DO UPDATE
+SET connector_id = EXCLUDED.connector_id,
+    evse_id = EXCLUDED.evse_id,
+    availability_type = EXCLUDED.availability_type,
+    status = EXCLUDED.status,
+    send_after = EXCLUDED.send_after,
+    updated_at = NOW()
+RETURNING *;
+
+-- name: DeleteChargeStationChangeAvailability :exec
+DELETE FROM charge_station_change_availability WHERE charge_station_id = $1;
+
+-- name: ListChargeStationChangeAvailabilities :many
+SELECT * FROM charge_station_change_availability
+WHERE charge_station_id > $1
+ORDER BY charge_station_id ASC
+LIMIT $2;

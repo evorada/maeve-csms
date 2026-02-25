@@ -67,3 +67,60 @@ func (s *Store) GetMeterValues(_ context.Context, chargeStationId string, evseId
 
 	return values, nil
 }
+
+// QueryMeterValues retrieves meter values with advanced filtering and pagination.
+func (s *Store) QueryMeterValues(_ context.Context, filter store.MeterValuesFilter) (*store.MeterValuesResult, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	var allValues []store.StoredMeterValue
+
+	// Collect all meter values for the charge station
+	for key, values := range s.meterValues {
+		if key.chargeStationId != filter.ChargeStationId {
+			continue
+		}
+
+		for _, mv := range values {
+			// Apply filters
+			if filter.ConnectorId != nil && mv.EvseId != *filter.ConnectorId {
+				continue
+			}
+			if filter.TransactionId != nil && mv.TransactionId != *filter.TransactionId {
+				continue
+			}
+			if filter.StartTime != nil && mv.MeterValue.Timestamp < *filter.StartTime {
+				continue
+			}
+			if filter.EndTime != nil && mv.MeterValue.Timestamp > *filter.EndTime {
+				continue
+			}
+
+			allValues = append(allValues, mv)
+		}
+	}
+
+	// Sort by timestamp descending
+	sort.Slice(allValues, func(i, j int) bool {
+		return allValues[i].MeterValue.Timestamp > allValues[j].MeterValue.Timestamp
+	})
+
+	total := len(allValues)
+
+	// Apply pagination
+	start := filter.Offset
+	if start > len(allValues) {
+		start = len(allValues)
+	}
+	end := start + filter.Limit
+	if end > len(allValues) {
+		end = len(allValues)
+	}
+
+	result := &store.MeterValuesResult{
+		MeterValues: allValues[start:end],
+		Total:       total,
+	}
+
+	return result, nil
+}

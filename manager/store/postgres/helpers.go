@@ -76,8 +76,6 @@ func fromPgTimestamp(ts pgtype.Timestamp) time.Time {
 
 // securityProfileFromInt32 safely converts int32 to SecurityProfile with validation
 func securityProfileFromInt32(val int32) (store.SecurityProfile, error) {
-	// SecurityProfile is int8, so valid range is -128 to 127
-	// In practice, valid values are 0-2
 	if val < 0 || val > 127 {
 		return 0, fmt.Errorf("security profile value %d is out of valid range", val)
 	}
@@ -107,4 +105,46 @@ func fromNullInt32(i pgtype.Int4) *int {
 	}
 	val := int(i.Int32)
 	return &val
+}
+
+// toNullableInt32 is an alias for toNullInt32
+func toNullableInt32(i *int) pgtype.Int4 {
+	return toNullInt32(i)
+}
+
+// fromNullableInt32 is an alias for fromNullInt32
+func fromNullableInt32(i pgtype.Int4) *int {
+	return fromNullInt32(i)
+}
+
+// toNullableTextPtr converts *string to pgtype.Text (treats nil or empty as NULL)
+func toNullableTextPtr(s *string) pgtype.Text {
+	if s == nil || *s == "" {
+		return pgtype.Text{Valid: false}
+	}
+	return pgtype.Text{String: *s, Valid: true}
+}
+
+// fromNullableTextPtr converts pgtype.Text to *string (returns nil for NULL)
+func fromNullableTextPtr(t pgtype.Text) *string {
+	if !t.Valid {
+		return nil
+	}
+	return &t.String
+}
+
+// toPgTimestamptz converts time.Time to pgtype.Timestamptz (treats zero time as NULL)
+func toPgTimestamptz(t time.Time) pgtype.Timestamptz {
+	if t.IsZero() {
+		return pgtype.Timestamptz{Valid: false}
+	}
+	return pgtype.Timestamptz{Time: t, Valid: true}
+}
+
+// fromPgTimestamptz converts pgtype.Timestamptz to time.Time
+func fromPgTimestamptz(ts pgtype.Timestamptz) time.Time {
+	if !ts.Valid {
+		return time.Time{}
+	}
+	return ts.Time
 }
