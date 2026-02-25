@@ -54,6 +54,8 @@ type Store struct {
 	displayMessages                  map[string]map[int]*store.DisplayMessage
 	resetRequests                    map[string]*store.ResetRequest
 	unlockConnectorRequests          map[string]*store.UnlockConnectorRequest
+	diagnosticsRequests              map[string]*store.DiagnosticsRequest
+	logRequests                      map[string]*store.LogRequest
 }
 
 func NewStore(clock clock.PassiveClock) *Store {
@@ -86,6 +88,8 @@ func NewStore(clock clock.PassiveClock) *Store {
 		displayMessages:                  make(map[string]map[int]*store.DisplayMessage),
 		resetRequests:                    make(map[string]*store.ResetRequest),
 		unlockConnectorRequests:          make(map[string]*store.UnlockConnectorRequest),
+		diagnosticsRequests:              make(map[string]*store.DiagnosticsRequest),
+		logRequests:                      make(map[string]*store.LogRequest),
 	}
 }
 
@@ -1103,4 +1107,82 @@ func (s *Store) DeleteUnlockConnectorRequest(_ context.Context, chargeStationId 
 	defer s.Unlock()
 	delete(s.unlockConnectorRequests, chargeStationId)
 	return nil
+}
+
+func (s *Store) SetDiagnosticsRequest(_ context.Context, chargeStationId string, request *store.DiagnosticsRequest) error {
+	s.Lock()
+	defer s.Unlock()
+	request.ChargeStationId = chargeStationId
+	s.diagnosticsRequests[chargeStationId] = request
+	return nil
+}
+
+func (s *Store) GetDiagnosticsRequest(_ context.Context, chargeStationId string) (*store.DiagnosticsRequest, error) {
+	s.Lock()
+	defer s.Unlock()
+	return s.diagnosticsRequests[chargeStationId], nil
+}
+
+func (s *Store) DeleteDiagnosticsRequest(_ context.Context, chargeStationId string) error {
+	s.Lock()
+	defer s.Unlock()
+	delete(s.diagnosticsRequests, chargeStationId)
+	return nil
+}
+
+func (s *Store) ListDiagnosticsRequests(_ context.Context, pageSize int, previousChargeStationId string) ([]*store.DiagnosticsRequest, error) {
+	s.Lock()
+	defer s.Unlock()
+	ids := maps.Keys(s.diagnosticsRequests)
+	sort.Strings(ids)
+	var requests []*store.DiagnosticsRequest
+	count := 0
+	startIndex := 0
+	if previousChargeStationId != "" {
+		startIndex = sort.SearchStrings(ids, previousChargeStationId) + 1
+	}
+	for i := startIndex; i < len(ids) && count < pageSize; i++ {
+		requests = append(requests, s.diagnosticsRequests[ids[i]])
+		count++
+	}
+	return requests, nil
+}
+
+func (s *Store) SetLogRequest(_ context.Context, chargeStationId string, request *store.LogRequest) error {
+	s.Lock()
+	defer s.Unlock()
+	request.ChargeStationId = chargeStationId
+	s.logRequests[chargeStationId] = request
+	return nil
+}
+
+func (s *Store) GetLogRequest(_ context.Context, chargeStationId string) (*store.LogRequest, error) {
+	s.Lock()
+	defer s.Unlock()
+	return s.logRequests[chargeStationId], nil
+}
+
+func (s *Store) DeleteLogRequest(_ context.Context, chargeStationId string) error {
+	s.Lock()
+	defer s.Unlock()
+	delete(s.logRequests, chargeStationId)
+	return nil
+}
+
+func (s *Store) ListLogRequests(_ context.Context, pageSize int, previousChargeStationId string) ([]*store.LogRequest, error) {
+	s.Lock()
+	defer s.Unlock()
+	ids := maps.Keys(s.logRequests)
+	sort.Strings(ids)
+	var requests []*store.LogRequest
+	count := 0
+	startIndex := 0
+	if previousChargeStationId != "" {
+		startIndex = sort.SearchStrings(ids, previousChargeStationId) + 1
+	}
+	for i := startIndex; i < len(ids) && count < pageSize; i++ {
+		requests = append(requests, s.logRequests[ids[i]])
+		count++
+	}
+	return requests, nil
 }
