@@ -103,6 +103,17 @@ type ChargeStationSetting struct {
 	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
 }
 
+type ChargeStationStatus struct {
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	Connected       bool               `db:"connected" json:"connected"`
+	LastHeartbeat   pgtype.Timestamptz `db:"last_heartbeat" json:"last_heartbeat"`
+	FirmwareVersion pgtype.Text        `db:"firmware_version" json:"firmware_version"`
+	Model           pgtype.Text        `db:"model" json:"model"`
+	Vendor          pgtype.Text        `db:"vendor" json:"vendor"`
+	SerialNumber    pgtype.Text        `db:"serial_number" json:"serial_number"`
+	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
 type ChargeStationTrigger struct {
 	ID              int64            `db:"id" json:"id"`
 	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
@@ -132,6 +143,19 @@ type ChargingProfile struct {
 	ChargingSchedulePeriods []byte           `db:"charging_schedule_periods" json:"charging_schedule_periods"`
 	CreatedAt               pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt               pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
+type ConnectorStatus struct {
+	ChargeStationID      string             `db:"charge_station_id" json:"charge_station_id"`
+	ConnectorID          int32              `db:"connector_id" json:"connector_id"`
+	Status               string             `db:"status" json:"status"`
+	ErrorCode            string             `db:"error_code" json:"error_code"`
+	Info                 pgtype.Text        `db:"info" json:"info"`
+	Timestamp            pgtype.Timestamptz `db:"timestamp" json:"timestamp"`
+	VendorErrorCode      pgtype.Text        `db:"vendor_error_code" json:"vendor_error_code"`
+	VendorID             pgtype.Text        `db:"vendor_id" json:"vendor_id"`
+	CurrentTransactionID pgtype.Text        `db:"current_transaction_id" json:"current_transaction_id"`
+	UpdatedAt            pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
 
 type DiagnosticsRequest struct {

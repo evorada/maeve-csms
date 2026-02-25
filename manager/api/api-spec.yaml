@@ -691,6 +691,76 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Status'
+  /cs/{csId}/status:
+    get:
+      summary: "Get charge station status"
+      description: |
+        Returns the current status of the specified charge station,
+        including connection state, last heartbeat, firmware version, and hardware details.
+      operationId: "getChargeStationStatus"
+      parameters:
+        - name: "csId"
+          in: "path"
+          description: "The charge station identifier"
+          required: true
+          schema:
+            type: "string"
+            maxLength: 28
+      responses:
+        "200":
+          description: "Charge station status"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChargeStationStatusResponse"
+        "404":
+          description: "Unknown charge station"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        default:
+          description: "Unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+  /cs/{csId}/connectors:
+    get:
+      summary: "Get connector statuses"
+      description: |
+        Returns the current status of all connectors on the specified charge station,
+        including their availability, error codes, and active transactions.
+      operationId: "getConnectorStatuses"
+      parameters:
+        - name: "csId"
+          in: "path"
+          description: "The charge station identifier"
+          required: true
+          schema:
+            type: "string"
+            maxLength: 28
+      responses:
+        "200":
+          description: "Connector statuses"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/ConnectorStatusResponse"
+        "404":
+          description: "Unknown charge station"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        default:
+          description: "Unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
   /token:
     post:
       summary: Create/update an authorization token
@@ -3202,3 +3272,87 @@ components:
           format: date-time
         chargingSchedule:
           $ref: '#/components/schemas/ChargingSchedule'
+    ChargeStationStatusResponse:
+      type: "object"
+      description: "Current status of a charge station"
+      required:
+        - "id"
+        - "connected"
+      properties:
+        id:
+          type: "string"
+          description: "The charge station identifier"
+        connected:
+          type: "boolean"
+          description: "Whether the charge station is currently connected"
+        lastHeartbeat:
+          type: "string"
+          format: "date-time"
+          description: "Timestamp of the last heartbeat received"
+        firmwareVersion:
+          type: "string"
+          description: "Currently installed firmware version"
+        model:
+          type: "string"
+          description: "Charge station model"
+        vendor:
+          type: "string"
+          description: "Charge station vendor/manufacturer"
+        serialNumber:
+          type: "string"
+          description: "Charge station serial number"
+    ConnectorStatusResponse:
+      type: "object"
+      description: "Current status of a connector"
+      required:
+        - "connectorId"
+        - "status"
+        - "errorCode"
+      properties:
+        connectorId:
+          type: "integer"
+          format: "int32"
+          description: "The connector ID"
+        status:
+          type: "string"
+          enum:
+            - "Available"
+            - "Charging"
+            - "Faulted"
+            - "Finishing"
+            - "Preparing"
+            - "Reserved"
+            - "SuspendedEV"
+            - "SuspendedEVSE"
+            - "Unavailable"
+          description: "Current status of the connector"
+        errorCode:
+          type: "string"
+          enum:
+            - "NoError"
+            - "ConnectorLockFailure"
+            - "EVCommunicationError"
+            - "GroundFailure"
+            - "HighTemperature"
+            - "InternalError"
+            - "LocalListConflict"
+            - "OtherError"
+            - "OverCurrentFailure"
+            - "OverVoltage"
+            - "PowerMeterFailure"
+            - "PowerSwitchFailure"
+            - "ReaderFailure"
+            - "ResetFailure"
+            - "UnderVoltage"
+            - "WeakSignal"
+          description: "Error code"
+        info:
+          type: "string"
+          description: "Additional information about the status"
+        timestamp:
+          type: "string"
+          format: "date-time"
+          description: "Timestamp when the status was last updated"
+        currentTransaction:
+          type: "string"
+          description: "ID of the current transaction (if any)"

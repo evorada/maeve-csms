@@ -139,3 +139,11 @@ func (t TransactionDetail) Render(_ http.ResponseWriter, _ *http.Request) error 
 func (s Status) Render(_ http.ResponseWriter, _ *http.Request) error {
 	return nil
 }
+
+func (c ChargeStationStatusResponse) Render(_ http.ResponseWriter, _ *http.Request) error {
+	return nil
+}
+
+func (c ConnectorStatusResponse) Render(w http.ResponseWriter, r *http.Request) error {
+	return nil
+}

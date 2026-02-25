@@ -29,4 +29,5 @@ type Engine interface {
 	UnlockConnectorRequestStore
 	DiagnosticsRequestStore
 	LogRequestStore
+	StatusStore
 }

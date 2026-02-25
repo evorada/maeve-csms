@@ -58,6 +58,8 @@ type Store struct {
 	unlockConnectorRequests          map[string]*store.UnlockConnectorRequest
 	diagnosticsRequests              map[string]*store.DiagnosticsRequest
 	logRequests                      map[string]*store.LogRequest
+	connectorStatuses                map[string]map[int]*store.ConnectorStatus
+	chargeStationStatuses            map[string]*store.ChargeStationStatus
 }
 
 func NewStore(clock clock.PassiveClock) *Store {
@@ -94,6 +96,8 @@ func NewStore(clock clock.PassiveClock) *Store {
 		unlockConnectorRequests:          make(map[string]*store.UnlockConnectorRequest),
 		diagnosticsRequests:              make(map[string]*store.DiagnosticsRequest),
 		logRequests:                      make(map[string]*store.LogRequest),
+		connectorStatuses:                make(map[string]map[int]*store.ConnectorStatus),
+		chargeStationStatuses:            make(map[string]*store.ChargeStationStatus),
 	}
 }
 
@@ -1307,4 +1311,104 @@ func (s *Store) ListLogRequests(_ context.Context, pageSize int, previousChargeS
 		count++
 	}
 	return requests, nil
+}
+func (s *Store) SetConnectorStatus(_ context.Context, chargeStationId string, connectorId int, status *store.ConnectorStatus) error {
+	s.Lock()
+	defer s.Unlock()
+
+	if _, ok := s.connectorStatuses[chargeStationId]; !ok {
+		s.connectorStatuses[chargeStationId] = make(map[int]*store.ConnectorStatus)
+	}
+
+	statusCopy := *status
+	statusCopy.UpdatedAt = time.Now()
+	s.connectorStatuses[chargeStationId][connectorId] = &statusCopy
+
+	return nil
+}
+
+func (s *Store) GetConnectorStatus(_ context.Context, chargeStationId string, connectorId int) (*store.ConnectorStatus, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	connectors, ok := s.connectorStatuses[chargeStationId]
+	if !ok {
+		return nil, fmt.Errorf("charge station %s not found", chargeStationId)
+	}
+
+	status, ok := connectors[connectorId]
+	if !ok {
+		return nil, fmt.Errorf("connector %d on charge station %s not found", connectorId, chargeStationId)
+	}
+
+	statusCopy := *status
+	return &statusCopy, nil
+}
+
+func (s *Store) ListConnectorStatuses(_ context.Context, chargeStationId string) ([]*store.ConnectorStatus, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	connectors, ok := s.connectorStatuses[chargeStationId]
+	if !ok {
+		return []*store.ConnectorStatus{}, nil
+	}
+
+	statuses := make([]*store.ConnectorStatus, 0, len(connectors))
+	for _, status := range connectors {
+		statusCopy := *status
+		statuses = append(statuses, &statusCopy)
+	}
+
+	// Sort by connector ID for consistent ordering
+	sort.Slice(statuses, func(i, j int) bool {
+		return statuses[i].ConnectorId < statuses[j].ConnectorId
+	})
+
+	return statuses, nil
+}
+
+func (s *Store) SetChargeStationStatus(_ context.Context, chargeStationId string, status *store.ChargeStationStatus) error {
+	s.Lock()
+	defer s.Unlock()
+
+	statusCopy := *status
+	statusCopy.UpdatedAt = time.Now()
+	s.chargeStationStatuses[chargeStationId] = &statusCopy
+
+	return nil
+}
+
+func (s *Store) GetChargeStationStatus(_ context.Context, chargeStationId string) (*store.ChargeStationStatus, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	status, ok := s.chargeStationStatuses[chargeStationId]
+	if !ok {
+		return nil, fmt.Errorf("charge station %s not found", chargeStationId)
+	}
+
+	statusCopy := *status
+	return &statusCopy, nil
+}
+
+func (s *Store) UpdateHeartbeat(_ context.Context, chargeStationId string, timestamp time.Time) error {
+	s.Lock()
+	defer s.Unlock()
+
+	status, ok := s.chargeStationStatuses[chargeStationId]
+	if !ok {
+		// Create new status if it doesn't exist
+		status = &store.ChargeStationStatus{
+			ChargeStationId: chargeStationId,
+			Connected:       true,
+		}
+	}
+
+	status.LastHeartbeat = &timestamp
+	status.Connected = true
+	status.UpdatedAt = time.Now()
+	s.chargeStationStatuses[chargeStationId] = status
+
+	return nil
 }

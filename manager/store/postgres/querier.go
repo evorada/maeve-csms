@@ -63,10 +63,12 @@ type Querier interface {
 	GetChargeStationRuntime(ctx context.Context, chargeStationID string) (ChargeStationRuntime, error)
 	// Settings
 	GetChargeStationSettings(ctx context.Context, chargeStationID string) (ChargeStationSetting, error)
+	GetChargeStationStatus(ctx context.Context, chargeStationID string) (ChargeStationStatus, error)
 	// Triggers
 	GetChargeStationTrigger(ctx context.Context, chargeStationID string) (ChargeStationTrigger, error)
 	GetChargingProfilesByStation(ctx context.Context, chargeStationID string) ([]ChargingProfile, error)
 	GetChargingProfilesByStationAndConnector(ctx context.Context, arg GetChargingProfilesByStationAndConnectorParams) ([]ChargingProfile, error)
+	GetConnectorStatus(ctx context.Context, arg GetConnectorStatusParams) (ConnectorStatus, error)
 	GetDiagnosticsRequest(ctx context.Context, chargeStationID string) (DiagnosticsRequest, error)
 	GetDiagnosticsStatus(ctx context.Context, chargeStationID string) (DiagnosticsStatus, error)
 	GetDisplayMessage(ctx context.Context, arg GetDisplayMessageParams) (DisplayMessage, error)
@@ -100,6 +102,7 @@ type Querier interface {
 	ListChargeStationDataTransfers(ctx context.Context, arg ListChargeStationDataTransfersParams) ([]ChargeStationDataTransfer, error)
 	ListChargeStationSettings(ctx context.Context, arg ListChargeStationSettingsParams) ([]ChargeStationSetting, error)
 	ListChargeStationTriggers(ctx context.Context, arg ListChargeStationTriggersParams) ([]ChargeStationTrigger, error)
+	ListConnectorStatuses(ctx context.Context, chargeStationID string) ([]ConnectorStatus, error)
 	ListDiagnosticsRequests(ctx context.Context, arg ListDiagnosticsRequestsParams) ([]DiagnosticsRequest, error)
 	ListDisplayMessages(ctx context.Context, chargeStationID string) ([]DisplayMessage, error)
 	ListDisplayMessagesByPriority(ctx context.Context, arg ListDisplayMessagesByPriorityParams) ([]DisplayMessage, error)
@@ -134,10 +137,13 @@ type Querier interface {
 	SetUnlockConnectorRequest(ctx context.Context, arg SetUnlockConnectorRequestParams) (UnlockConnectorRequest, error)
 	StoreMeterValue(ctx context.Context, arg StoreMeterValueParams) error
 	UpdateChargeStationCertificate(ctx context.Context, arg UpdateChargeStationCertificateParams) (ChargeStationCertificate, error)
+	UpdateHeartbeat(ctx context.Context, arg UpdateHeartbeatParams) error
 	UpdateReservationStatus(ctx context.Context, arg UpdateReservationStatusParams) error
 	UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token, error)
 	UpdateTransaction(ctx context.Context, arg UpdateTransactionParams) (Transaction, error)
+	UpsertChargeStationStatus(ctx context.Context, arg UpsertChargeStationStatusParams) error
 	UpsertChargingProfile(ctx context.Context, arg UpsertChargingProfileParams) error
+	UpsertConnectorStatus(ctx context.Context, arg UpsertConnectorStatusParams) error
 	UpsertDiagnosticsRequest(ctx context.Context, arg UpsertDiagnosticsRequestParams) error
 	UpsertDiagnosticsStatus(ctx context.Context, arg UpsertDiagnosticsStatusParams) error
 	UpsertFirmwareUpdateRequest(ctx context.Context, arg UpsertFirmwareUpdateRequestParams) error
