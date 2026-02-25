@@ -132,9 +132,13 @@ fabric.properties
 k6
 
 # Certificates
-config/certificates/*.pem
 config/certificates/*.key
 config/certificates/*.csr
+# Generated per-run certs (CSMS server cert)
+config/certificates/csms.pem
+# Test CA certs are committed for CI reliability
+# (Hubject QA PKI certs - not secrets)
+# To refresh: cd config/certificates && make clean && make
 
 # End of https://www.toptal.com/developers/gitignore/api/goland+all,visualstudiocode,go
 

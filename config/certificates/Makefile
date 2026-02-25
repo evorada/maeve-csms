@@ -1,7 +1,7 @@
 # Temporary file for process substitution
 temp_file := /tmp/temp.ext
 
-all: csms.pem cpo_sub_ca1.pem cpo_sub_ca2.pem root-V2G-cert.pem trust.pem
+all: csms.pem
 
 csms.key:
 	openssl ecparam -name prime256v1 -genkey -noout -out csms.key
@@ -23,9 +23,11 @@ csms.pem: csms.csr
 		-extfile $(temp_file)
 	rm -f $(temp_file)
 
-cpo_sub_ca1.pem cpo_sub_ca2.pem root-V2G-cert.pem trust.pem:
+# CA certs are committed to the repo for CI reliability.
+# To refresh from Hubject QA PKI:
+.PHONY: refresh-ca-certs clean
+refresh-ca-certs:
 	../../scripts/get-ca-cert.sh
 
-.PHONY: clean
 clean:
-	rm -f *.pem csms.key csms.csr
+	rm -f csms.pem csms.key csms.csr
