@@ -83,6 +83,12 @@ run_tests() {
         echo "Tests failed"
     fi
 
+    echo "=== CSMS Manager Logs ==="
+    cd "$CSMS_DIR" && docker-compose logs manager 2>&1 | tail -100
+    echo "=== CSMS Gateway Logs ==="
+    cd "$CSMS_DIR" && docker-compose logs gateway 2>&1 | tail -50
+    echo "=== End of Logs ==="
+
     stop_docker_compose_for_everest
     stop_docker_compose_for_maeve_csms
 }
