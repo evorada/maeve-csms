@@ -1310,6 +1310,192 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Status'
+  /cs/{csId}/charging-profile:
+    post:
+      summary: "Set charging profile"
+      description: |
+        Sets a charging profile for a specific connector on the charge station.
+        Used for smart charging, load balancing, and dynamic pricing.
+      operationId: "setChargingProfile"
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetChargingProfileRequest'
+      responses:
+        '202':
+          description: Accepted - charging profile request queued
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    get:
+      summary: "Get charging profiles"
+      operationId: "getChargingProfiles"
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: connectorId
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+      - name: chargingProfilePurpose
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - TxProfile
+          - TxDefaultProfile
+          - ChargePointMaxProfile
+      - name: stackLevel
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+      responses:
+        '200':
+          description: List of charging profiles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargingProfileList'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/charging-profile/{profileId}:
+    delete:
+      summary: "Clear charging profile"
+      operationId: "clearChargingProfile"
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: profileId
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+      - name: connectorId
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+      - name: chargingProfilePurpose
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - TxProfile
+          - TxDefaultProfile
+          - ChargePointMaxProfile
+      - name: stackLevel
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+      responses:
+        '202':
+          description: Accepted - clear profile request queued
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/composite-schedule:
+    get:
+      summary: "Get composite schedule"
+      operationId: "getCompositeSchedule"
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: connectorId
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+      - name: duration
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 3600
+      - name: chargingRateUnit
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - W
+          - A
+          default: A
+      responses:
+        '200':
+          description: Composite schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompositeSchedule'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
   /cs/{csId}/reset:
     post:
       operationId: ResetChargeStation
@@ -2546,3 +2732,135 @@ components:
         connectorId:
           type: integer
           description: ID of the connector to unlock
+    SetChargingProfileRequest:
+      type: object
+      required:
+      - connectorId
+      - csChargingProfiles
+      properties:
+        connectorId:
+          type: integer
+          format: int32
+          minimum: 0
+        csChargingProfiles:
+          $ref: '#/components/schemas/ChargingProfile'
+    ChargingProfile:
+      type: object
+      required:
+      - chargingProfileId
+      - stackLevel
+      - chargingProfilePurpose
+      - chargingProfileKind
+      - chargingSchedule
+      properties:
+        chargingProfileId:
+          type: integer
+          format: int32
+        transactionId:
+          type: integer
+          format: int32
+        stackLevel:
+          type: integer
+          format: int32
+          minimum: 0
+        chargingProfilePurpose:
+          type: string
+          enum:
+          - TxProfile
+          - TxDefaultProfile
+          - ChargePointMaxProfile
+        chargingProfileKind:
+          type: string
+          enum:
+          - Absolute
+          - Relative
+          - Recurring
+        recurrencyKind:
+          type: string
+          enum:
+          - Daily
+          - Weekly
+        validFrom:
+          type: string
+          format: date-time
+        validTo:
+          type: string
+          format: date-time
+        chargingSchedule:
+          $ref: '#/components/schemas/ChargingSchedule'
+    ChargingSchedule:
+      type: object
+      required:
+      - chargingRateUnit
+      - chargingSchedulePeriod
+      properties:
+        duration:
+          type: integer
+          format: int32
+        startSchedule:
+          type: string
+          format: date-time
+        chargingRateUnit:
+          type: string
+          enum:
+          - W
+          - A
+        chargingSchedulePeriod:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChargingSchedulePeriod'
+          minItems: 1
+        minChargingRate:
+          type: number
+          format: double
+    ChargingSchedulePeriod:
+      type: object
+      required:
+      - startPeriod
+      - limit
+      properties:
+        startPeriod:
+          type: integer
+          format: int32
+          minimum: 0
+        limit:
+          type: number
+          format: double
+        numberPhases:
+          type: integer
+          format: int32
+          minimum: 1
+    ChargingProfileList:
+      type: object
+      required:
+      - profiles
+      properties:
+        profiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChargingProfileWithConnector'
+    ChargingProfileWithConnector:
+      allOf:
+      - $ref: '#/components/schemas/ChargingProfile'
+      - type: object
+        required:
+        - connectorId
+        properties:
+          connectorId:
+            type: integer
+            format: int32
+    CompositeSchedule:
+      type: object
+      required:
+      - connectorId
+      - scheduleStart
+      - chargingSchedule
+      properties:
+        connectorId:
+          type: integer
+          format: int32
+        scheduleStart:
+          type: string
+          format: date-time
+        chargingSchedule:
+          $ref: '#/components/schemas/ChargingSchedule'
