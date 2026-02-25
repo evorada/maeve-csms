@@ -9,7 +9,7 @@ certs=$(curl --request GET \
   --header 'Accept: application/pkcs10, application/json' \
   --header "Authorization: Bearer ${BEARER_TOKEN}" | openssl enc -base64 -d | openssl pkcs7 -inform DER -print_certs)
 
-echo "${certs}" | awk '/subject.*CN.*=.*CPO Sub1 CA QA G1.2/,/END CERTIFICATE/' > "${script_dir}"/../config/certificates/cpo_sub_ca1.pem
-echo "${certs}" | awk '/subject.*CN.*=.*CPO Sub2 CA QA G1.2.2/,/END CERTIFICATE/' > "${script_dir}"/../config/certificates/cpo_sub_ca2.pem
-echo "${certs}" | awk '/subject.*CN.*=.*V2G Root CA QA G1/,/END CERTIFICATE/' > "${script_dir}"/../config/certificates/root-V2G-cert.pem
+echo "${certs}" | awk '/subject.*CN.*=.*CPO Sub1 CA/,/END CERTIFICATE/' > "${script_dir}"/../config/certificates/cpo_sub_ca1.pem
+echo "${certs}" | awk '/subject.*CN.*=.*CPO Sub2 CA/,/END CERTIFICATE/' > "${script_dir}"/../config/certificates/cpo_sub_ca2.pem
+echo "${certs}" | awk '/subject.*CN.*=.*V2G Root CA/,/END CERTIFICATE/' > "${script_dir}"/../config/certificates/root-V2G-cert.pem
 cat "${script_dir}"/../config/certificates/cpo_sub_ca1.pem "${script_dir}"/../config/certificates/cpo_sub_ca2.pem > "${script_dir}"/../config/certificates/trust.pem
