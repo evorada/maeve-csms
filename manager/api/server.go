@@ -5,6 +5,7 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"sort"
 	"time"
 
 	handlers "github.com/thoughtworks/maeve-csms/manager/handlers/ocpp201"
@@ -731,6 +732,11 @@ func (s *Server) ListReservations(w http.ResponseWriter, r *http.Request, csId s
 		_ = render.Render(w, r, ErrInvalidRequest(fmt.Errorf("invalid status filter: %s", statusFilter)))
 		return
 	}
+
+	// Sort by reservation ID for deterministic ordering
+	sort.Slice(reservations, func(i, j int) bool {
+		return reservations[i].ReservationId < reservations[j].ReservationId
+	})
 
 	// Convert to API response format
 	response := &ReservationList{
