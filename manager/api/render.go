@@ -107,3 +107,7 @@ func (l LocalAuthorizationListResponse) Render(w http.ResponseWriter, r *http.Re
 func (u UpdateLocalListRequest) Bind(r *http.Request) error {
 	return nil
 }
+
+func (s SetDisplayMessageRequest) Bind(r *http.Request) error {
+	return nil
+}
