@@ -51,6 +51,7 @@ type Store struct {
 	localAuthListEntries             map[string]map[string]*store.LocalAuthListEntry
 	reservations                     map[int]*store.Reservation
 	meterValues                      map[meterValueKey][]store.StoredMeterValue
+	displayMessages                  map[string]map[int]*store.DisplayMessage
 }
 
 func NewStore(clock clock.PassiveClock) *Store {
@@ -80,6 +81,7 @@ func NewStore(clock clock.PassiveClock) *Store {
 		localAuthListEntries:             make(map[string]map[string]*store.LocalAuthListEntry),
 		reservations:                     make(map[int]*store.Reservation),
 		meterValues:                      make(map[meterValueKey][]store.StoredMeterValue),
+		displayMessages:                  make(map[string]map[int]*store.DisplayMessage),
 	}
 }
 
@@ -962,5 +964,89 @@ func (s *Store) DeleteChargeStationChangeAvailability(_ context.Context, chargeS
 	s.Lock()
 	defer s.Unlock()
 	delete(s.chargeStationChangeAvailability, chargeStationId)
+	return nil
+}
+
+func (s *Store) SetDisplayMessage(_ context.Context, message *store.DisplayMessage) error {
+	s.Lock()
+	defer s.Unlock()
+
+	if s.displayMessages[message.ChargeStationId] == nil {
+		s.displayMessages[message.ChargeStationId] = make(map[int]*store.DisplayMessage)
+	}
+
+	s.displayMessages[message.ChargeStationId][message.Id] = message
+	return nil
+}
+
+func (s *Store) GetDisplayMessage(_ context.Context, chargeStationId string, messageId int) (*store.DisplayMessage, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	csMessages, ok := s.displayMessages[chargeStationId]
+	if !ok {
+		return nil, nil
+	}
+
+	message, ok := csMessages[messageId]
+	if !ok {
+		return nil, nil
+	}
+
+	return message, nil
+}
+
+func (s *Store) ListDisplayMessages(_ context.Context, chargeStationId string, state *store.MessageState, priority *store.MessagePriority) ([]*store.DisplayMessage, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	csMessages, ok := s.displayMessages[chargeStationId]
+	if !ok {
+		return []*store.DisplayMessage{}, nil
+	}
+
+	result := make([]*store.DisplayMessage, 0)
+	for _, msg := range csMessages {
+		// Apply filters if provided
+		if state != nil && (msg.State == nil || *msg.State != *state) {
+			continue
+		}
+		if priority != nil && msg.Priority != *priority {
+			continue
+		}
+		result = append(result, msg)
+	}
+
+	if result == nil {
+		result = make([]*store.DisplayMessage, 0)
+	}
+
+	return result, nil
+}
+
+func (s *Store) DeleteDisplayMessage(_ context.Context, chargeStationId string, messageId int) error {
+	s.Lock()
+	defer s.Unlock()
+
+	csMessages, ok := s.displayMessages[chargeStationId]
+	if !ok {
+		return nil
+	}
+
+	delete(csMessages, messageId)
+
+	// Clean up empty charge station map
+	if len(csMessages) == 0 {
+		delete(s.displayMessages, chargeStationId)
+	}
+
+	return nil
+}
+
+func (s *Store) DeleteAllDisplayMessages(_ context.Context, chargeStationId string) error {
+	s.Lock()
+	defer s.Unlock()
+
+	delete(s.displayMessages, chargeStationId)
 	return nil
 }

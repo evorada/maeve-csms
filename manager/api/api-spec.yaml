@@ -1189,6 +1189,127 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Status'
+  /cs/{csId}/display-message:
+    post:
+      summary: Set display message on charge station
+      description: 'Sends a message to be displayed on the charge station screen or
+        LED display.
+
+        Supports priority, scheduling, state-based display, and multiple content formats.
+
+        OCPP 2.0.1 only.
+
+        '
+      operationId: setDisplayMessage
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetDisplayMessageRequest'
+      responses:
+        '202':
+          description: Accepted - message request queued
+        '404':
+          description: Unknown charge station or OCPP version not supported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/display-message/{messageId}:
+    delete:
+      summary: Clear display message from charge station
+      description: 'Removes a specific message from the charge station display.
+
+        OCPP 2.0.1 only.
+
+        '
+      operationId: clearDisplayMessage
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      - name: messageId
+        in: path
+        description: The message identifier to clear
+        schema:
+          type: integer
+          minimum: 0
+      responses:
+        '202':
+          description: Accepted - clear request queued
+        '404':
+          description: Unknown charge station or OCPP version not supported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/display-messages:
+    get:
+      summary: Get display messages from charge station
+      description: 'Requests the list of currently configured display messages from
+        the charge station.
+
+        Optionally filter by state or priority.
+
+        OCPP 2.0.1 only.
+
+        '
+      operationId: getDisplayMessages
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      - name: state
+        in: query
+        description: Filter messages by charging state
+        schema:
+          $ref: '#/components/schemas/MessageStateEnum'
+      - name: priority
+        in: query
+        description: Filter messages by priority
+        schema:
+          $ref: '#/components/schemas/MessagePriorityEnum'
+      responses:
+        '202':
+          description: Accepted - get request queued
+        '404':
+          description: Unknown charge station or OCPP version not supported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
 components:
   schemas:
     ChargeStationAuth:
@@ -2259,3 +2380,104 @@ components:
                 - NotSupportedAttributeType
                 - RebootRequired
                 description: Result of the variable change
+    MessagePriorityEnum:
+      type: string
+      enum:
+      - NormalCycle
+      - InFront
+      - AlwaysFront
+      description: 'Display message priority:
+
+        * `NormalCycle` - Rotate with other messages
+
+        * `InFront` - Show before others in rotation
+
+        * `AlwaysFront` - Always visible, highest priority
+
+        '
+    MessageStateEnum:
+      type: string
+      enum:
+      - Charging
+      - Faulted
+      - Idle
+      - Unavailable
+      description: 'Charging state when message should be displayed:
+
+        * `Charging` - During active charging session
+
+        * `Faulted` - When station has an error
+
+        * `Idle` - When available but not in use
+
+        * `Unavailable` - When out of service
+
+        '
+    MessageFormatEnum:
+      type: string
+      enum:
+      - ASCII
+      - HTML
+      - URI
+      description: 'Message content format:
+
+        * `ASCII` - Plain text
+
+        * `HTML` - Rich text formatting
+
+        * `URI` - URL to display (image, webpage)
+
+        '
+    MessageContent:
+      type: object
+      required:
+      - content
+      - format
+      properties:
+        content:
+          type: string
+          maxLength: 512
+          description: The message content or URI
+        language:
+          type: string
+          minLength: 2
+          maxLength: 8
+          description: Language code (e.g., 'en', 'es', 'de')
+        format:
+          $ref: '#/components/schemas/MessageFormatEnum'
+    DisplayMessage:
+      type: object
+      required:
+      - id
+      - priority
+      - message
+      properties:
+        id:
+          type: integer
+          minimum: 0
+          description: Unique message identifier
+        priority:
+          $ref: '#/components/schemas/MessagePriorityEnum'
+        state:
+          $ref: '#/components/schemas/MessageStateEnum'
+        startDateTime:
+          type: string
+          format: date-time
+          description: When the message should start being displayed (optional)
+        endDateTime:
+          type: string
+          format: date-time
+          description: When the message should stop being displayed (optional)
+        transactionId:
+          type: string
+          maxLength: 36
+          description: Only show message during this transaction (optional)
+        message:
+          $ref: '#/components/schemas/MessageContent'
+    SetDisplayMessageRequest:
+      type: object
+      required:
+      - message
+      properties:
+        message:
+          $ref: '#/components/schemas/DisplayMessage'
