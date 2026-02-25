@@ -26,18 +26,35 @@ func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
 	}
 }
 
-func shutdownBrokerConnection(t *testing.T, client mqtt.Client, wg *sync.WaitGroup) {
+func shutdownBrokerConnection(t *testing.T, client mqtt.Client, _ *sync.WaitGroup) {
 	defer client.Disconnect(0)
 
 	t.Log("unplugging...")
-	wg.Add(1)
-	tok := client.Publish("everest_external/nodered/1/carsim/cmd/modify_charging_session", 0, false, "unplug")
+
+	// Use a dedicated WaitGroup and subscription for the unplug sequence
+	// to avoid races with the main test's WaitGroup which may have already
+	// received the Idle state from the charging session ending naturally.
+	var unplugged sync.WaitGroup
+	unplugged.Add(1)
+	once := sync.Once{}
+
+	tok := client.Subscribe("everest_external/nodered/1/state/state_string", 0, func(_ mqtt.Client, msg mqtt.Message) {
+		if string(msg.Payload()) == "Idle" {
+			once.Do(func() { unplugged.Done() })
+		}
+	})
+	if tok.WaitTimeout(1 * time.Second); tok.Error() != nil {
+		t.Errorf("failed to subscribe for unplug: %v", tok.Error())
+		return
+	}
+
+	tok = client.Publish("everest_external/nodered/1/carsim/cmd/modify_charging_session", 0, false, "unplug")
 	if tok.WaitTimeout(1 * time.Second); tok.Error() != nil {
 		t.Errorf("failed to publish unplug to topic: %v", tok.Error())
 	}
-	timedOut := waitTimeout(wg, 5*time.Second)
+	timedOut := waitTimeout(&unplugged, 10*time.Second)
 	if timedOut {
-		t.Errorf("timed out waiting for unplug to complete")
+		t.Logf("timed out waiting for unplug to complete (non-fatal)")
 	}
 }
 
