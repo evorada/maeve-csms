@@ -91,8 +91,7 @@ func (s *Store) DeleteAllDisplayMessages(ctx context.Context, chargeStationId st
 		Documents(ctx)
 	defer iter.Stop()
 
-	batch := s.client.Batch()
-	count := 0
+	bw := s.client.BulkWriter(ctx)
 	for {
 		snap, err := iter.Next()
 		if err == iterator.Done {
@@ -101,21 +100,10 @@ func (s *Store) DeleteAllDisplayMessages(ctx context.Context, chargeStationId st
 		if err != nil {
 			return fmt.Errorf("iterate display messages to delete: %w", err)
 		}
-		batch.Delete(snap.Ref)
-		count++
-		// Firestore batch limit is 500 operations
-		if count >= 500 {
-			if _, err := batch.Commit(ctx); err != nil {
-				return fmt.Errorf("commit batch delete: %w", err)
-			}
-			batch = s.client.Batch()
-			count = 0
+		if _, err := bw.Delete(snap.Ref); err != nil {
+			return fmt.Errorf("queue delete for display message: %w", err)
 		}
 	}
-	if count > 0 {
-		if _, err := batch.Commit(ctx); err != nil {
-			return fmt.Errorf("commit final batch delete: %w", err)
-		}
-	}
+	bw.Flush()
 	return nil
 }
