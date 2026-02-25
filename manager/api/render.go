@@ -79,3 +79,19 @@ func (l LogRequest) Bind(r *http.Request) error {
 func (l LogStatus) Render(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
+
+func (d DataTransferRequest) Bind(r *http.Request) error {
+	return nil
+}
+
+func (d DataTransferResponse) Render(w http.ResponseWriter, r *http.Request) error {
+	return nil
+}
+
+func (c ChangeAvailabilityRequest) Bind(r *http.Request) error {
+	return nil
+}
+
+func (m MeterValuesResponse) Render(w http.ResponseWriter, r *http.Request) error {
+	return nil
+}

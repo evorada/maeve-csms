@@ -346,3 +346,236 @@ func (s *Store) ListChargeStationTriggerMessages(ctx context.Context, pageSize i
 
 	return result, nil
 }
+
+// ChargeStationDataTransferStore implementation
+
+func (s *Store) SetChargeStationDataTransfer(ctx context.Context, chargeStationId string, dataTransfer *store.ChargeStationDataTransfer) error {
+	params := SetChargeStationDataTransferParams{
+		ChargeStationID: chargeStationId,
+		VendorID:        dataTransfer.VendorId,
+		MessageID:       toNullableTextPtr(dataTransfer.MessageId),
+		Data:            toNullableTextPtr(dataTransfer.Data),
+		Status:          string(dataTransfer.Status),
+		SendAfter:       toPgTimestamptz(dataTransfer.SendAfter),
+	}
+
+	_, err := s.q.SetChargeStationDataTransfer(ctx, params)
+	if err != nil {
+		return fmt.Errorf("failed to set charge station data transfer: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) LookupChargeStationDataTransfer(ctx context.Context, chargeStationId string) (*store.ChargeStationDataTransfer, error) {
+	dataTransfer, err := s.q.GetChargeStationDataTransfer(ctx, chargeStationId)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to lookup charge station data transfer: %w", err)
+	}
+
+	return &store.ChargeStationDataTransfer{
+		ChargeStationId: dataTransfer.ChargeStationID,
+		VendorId:        dataTransfer.VendorID,
+		MessageId:       fromNullableTextPtr(dataTransfer.MessageID),
+		Data:            fromNullableTextPtr(dataTransfer.Data),
+		Status:          store.DataTransferStatus(dataTransfer.Status),
+		ResponseData:    fromNullableTextPtr(dataTransfer.ResponseData),
+		SendAfter:       fromPgTimestamptz(dataTransfer.SendAfter),
+	}, nil
+}
+
+func (s *Store) ListChargeStationDataTransfers(ctx context.Context, pageSize int, previousChargeStationId string) ([]*store.ChargeStationDataTransfer, error) {
+	if previousChargeStationId == "" {
+		previousChargeStationId = ""
+	}
+
+	pageSizeInt32, err := safeIntToInt32(pageSize)
+	if err != nil {
+		return nil, fmt.Errorf("invalid page size value: %w", err)
+	}
+
+	dataTransfers, err := s.q.ListChargeStationDataTransfers(ctx, ListChargeStationDataTransfersParams{
+		ChargeStationID: previousChargeStationId,
+		Limit:           pageSizeInt32,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list charge station data transfers: %w", err)
+	}
+
+	result := make([]*store.ChargeStationDataTransfer, 0, len(dataTransfers))
+	for _, dt := range dataTransfers {
+		result = append(result, &store.ChargeStationDataTransfer{
+			ChargeStationId: dt.ChargeStationID,
+			VendorId:        dt.VendorID,
+			MessageId:       fromNullableTextPtr(dt.MessageID),
+			Data:            fromNullableTextPtr(dt.Data),
+			Status:          store.DataTransferStatus(dt.Status),
+			ResponseData:    fromNullableTextPtr(dt.ResponseData),
+			SendAfter:       fromPgTimestamptz(dt.SendAfter),
+		})
+	}
+
+	return result, nil
+}
+
+func (s *Store) DeleteChargeStationDataTransfer(ctx context.Context, chargeStationId string) error {
+	err := s.q.DeleteChargeStationDataTransfer(ctx, chargeStationId)
+	if err != nil {
+		return fmt.Errorf("failed to delete charge station data transfer: %w", err)
+	}
+	return nil
+}
+
+// ChargeStationClearCacheStore implementation
+
+func (s *Store) SetChargeStationClearCache(ctx context.Context, chargeStationId string, clearCache *store.ChargeStationClearCache) error {
+	params := SetChargeStationClearCacheParams{
+		ChargeStationID: chargeStationId,
+		Status:          string(clearCache.Status),
+		SendAfter:       toPgTimestamptz(clearCache.SendAfter),
+	}
+
+	_, err := s.q.SetChargeStationClearCache(ctx, params)
+	if err != nil {
+		return fmt.Errorf("failed to set charge station clear cache: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) LookupChargeStationClearCache(ctx context.Context, chargeStationId string) (*store.ChargeStationClearCache, error) {
+	clearCache, err := s.q.GetChargeStationClearCache(ctx, chargeStationId)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to lookup charge station clear cache: %w", err)
+	}
+
+	return &store.ChargeStationClearCache{
+		ChargeStationId: clearCache.ChargeStationID,
+		Status:          store.ClearCacheStatus(clearCache.Status),
+		SendAfter:       fromPgTimestamptz(clearCache.SendAfter),
+	}, nil
+}
+
+func (s *Store) ListChargeStationClearCaches(ctx context.Context, pageSize int, previousChargeStationId string) ([]*store.ChargeStationClearCache, error) {
+	if previousChargeStationId == "" {
+		previousChargeStationId = ""
+	}
+
+	pageSizeInt32, err := safeIntToInt32(pageSize)
+	if err != nil {
+		return nil, fmt.Errorf("invalid page size value: %w", err)
+	}
+
+	clearCaches, err := s.q.ListChargeStationClearCaches(ctx, ListChargeStationClearCachesParams{
+		ChargeStationID: previousChargeStationId,
+		Limit:           pageSizeInt32,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list charge station clear caches: %w", err)
+	}
+
+	result := make([]*store.ChargeStationClearCache, 0, len(clearCaches))
+	for _, cc := range clearCaches {
+		result = append(result, &store.ChargeStationClearCache{
+			ChargeStationId: cc.ChargeStationID,
+			Status:          store.ClearCacheStatus(cc.Status),
+			SendAfter:       fromPgTimestamptz(cc.SendAfter),
+		})
+	}
+
+	return result, nil
+}
+
+func (s *Store) DeleteChargeStationClearCache(ctx context.Context, chargeStationId string) error {
+	err := s.q.DeleteChargeStationClearCache(ctx, chargeStationId)
+	if err != nil {
+		return fmt.Errorf("failed to delete charge station clear cache: %w", err)
+	}
+	return nil
+}
+
+// ChargeStationChangeAvailabilityStore implementation
+
+func (s *Store) SetChargeStationChangeAvailability(ctx context.Context, chargeStationId string, changeAvailability *store.ChargeStationChangeAvailability) error {
+	params := SetChargeStationChangeAvailabilityParams{
+		ChargeStationID:  chargeStationId,
+		ConnectorID:      toNullableInt32(changeAvailability.ConnectorId),
+		EvseID:           toNullableInt32(changeAvailability.EvseId),
+		AvailabilityType: string(changeAvailability.Type),
+		Status:           string(changeAvailability.Status),
+		SendAfter:        toPgTimestamptz(changeAvailability.SendAfter),
+	}
+
+	_, err := s.q.SetChargeStationChangeAvailability(ctx, params)
+	if err != nil {
+		return fmt.Errorf("failed to set charge station change availability: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) LookupChargeStationChangeAvailability(ctx context.Context, chargeStationId string) (*store.ChargeStationChangeAvailability, error) {
+	changeAvailability, err := s.q.GetChargeStationChangeAvailability(ctx, chargeStationId)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to lookup charge station change availability: %w", err)
+	}
+
+	return &store.ChargeStationChangeAvailability{
+		ChargeStationId: changeAvailability.ChargeStationID,
+		ConnectorId:     fromNullableInt32(changeAvailability.ConnectorID),
+		EvseId:          fromNullableInt32(changeAvailability.EvseID),
+		Type:            store.AvailabilityType(changeAvailability.AvailabilityType),
+		Status:          store.AvailabilityStatus(changeAvailability.Status),
+		SendAfter:       fromPgTimestamptz(changeAvailability.SendAfter),
+	}, nil
+}
+
+func (s *Store) ListChargeStationChangeAvailabilities(ctx context.Context, pageSize int, previousChargeStationId string) ([]*store.ChargeStationChangeAvailability, error) {
+	if previousChargeStationId == "" {
+		previousChargeStationId = ""
+	}
+
+	pageSizeInt32, err := safeIntToInt32(pageSize)
+	if err != nil {
+		return nil, fmt.Errorf("invalid page size value: %w", err)
+	}
+
+	changeAvailabilities, err := s.q.ListChargeStationChangeAvailabilities(ctx, ListChargeStationChangeAvailabilitiesParams{
+		ChargeStationID: previousChargeStationId,
+		Limit:           pageSizeInt32,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list charge station change availabilities: %w", err)
+	}
+
+	result := make([]*store.ChargeStationChangeAvailability, 0, len(changeAvailabilities))
+	for _, ca := range changeAvailabilities {
+		result = append(result, &store.ChargeStationChangeAvailability{
+			ChargeStationId: ca.ChargeStationID,
+			ConnectorId:     fromNullableInt32(ca.ConnectorID),
+			EvseId:          fromNullableInt32(ca.EvseID),
+			Type:            store.AvailabilityType(ca.AvailabilityType),
+			Status:          store.AvailabilityStatus(ca.Status),
+			SendAfter:       fromPgTimestamptz(ca.SendAfter),
+		})
+	}
+
+	return result, nil
+}
+
+func (s *Store) DeleteChargeStationChangeAvailability(ctx context.Context, chargeStationId string) error {
+	err := s.q.DeleteChargeStationChangeAvailability(ctx, chargeStationId)
+	if err != nil {
+		return fmt.Errorf("failed to delete charge station change availability: %w", err)
+	}
+	return nil
+}

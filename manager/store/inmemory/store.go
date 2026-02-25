@@ -32,6 +32,9 @@ type Store struct {
 	chargeStationInstallCertificates map[string]*store.ChargeStationInstallCertificates
 	chargeStationRuntimeDetails      map[string]*store.ChargeStationRuntimeDetails
 	chargeStationTriggerMessage      map[string]*store.ChargeStationTriggerMessage
+	chargeStationDataTransfer        map[string]*store.ChargeStationDataTransfer
+	chargeStationClearCache          map[string]*store.ChargeStationClearCache
+	chargeStationChangeAvailability  map[string]*store.ChargeStationChangeAvailability
 	tokens                           map[string]*store.Token
 	transactions                     map[string]*store.Transaction
 	certificates                     map[string]string
@@ -58,6 +61,9 @@ func NewStore(clock clock.PassiveClock) *Store {
 		chargeStationInstallCertificates: make(map[string]*store.ChargeStationInstallCertificates),
 		chargeStationRuntimeDetails:      make(map[string]*store.ChargeStationRuntimeDetails),
 		chargeStationTriggerMessage:      make(map[string]*store.ChargeStationTriggerMessage),
+		chargeStationDataTransfer:        make(map[string]*store.ChargeStationDataTransfer),
+		chargeStationClearCache:          make(map[string]*store.ChargeStationClearCache),
+		chargeStationChangeAvailability:  make(map[string]*store.ChargeStationChangeAvailability),
 		tokens:                           make(map[string]*store.Token),
 		transactions:                     make(map[string]*store.Transaction),
 		certificates:                     make(map[string]string),
@@ -795,4 +801,166 @@ func (s *Store) ExpireReservations(_ context.Context) (int, error) {
 		}
 	}
 	return count, nil
+}
+
+// ChargeStationDataTransferStore implementation
+
+func (s *Store) SetChargeStationDataTransfer(_ context.Context, chargeStationId string, dataTransfer *store.ChargeStationDataTransfer) error {
+	s.Lock()
+	defer s.Unlock()
+	if s.chargeStationDataTransfer == nil {
+		s.chargeStationDataTransfer = make(map[string]*store.ChargeStationDataTransfer)
+	}
+	dt := *dataTransfer
+	dt.ChargeStationId = chargeStationId
+	s.chargeStationDataTransfer[chargeStationId] = &dt
+	return nil
+}
+
+func (s *Store) LookupChargeStationDataTransfer(_ context.Context, chargeStationId string) (*store.ChargeStationDataTransfer, error) {
+	s.Lock()
+	defer s.Unlock()
+	dt, ok := s.chargeStationDataTransfer[chargeStationId]
+	if !ok {
+		return nil, nil
+	}
+	copy := *dt
+	return &copy, nil
+}
+
+func (s *Store) ListChargeStationDataTransfers(_ context.Context, pageSize int, previousChargeStationId string) ([]*store.ChargeStationDataTransfer, error) {
+	s.Lock()
+	defer s.Unlock()
+	var result []*store.ChargeStationDataTransfer
+	for _, dt := range s.chargeStationDataTransfer {
+		if previousChargeStationId == "" || dt.ChargeStationId > previousChargeStationId {
+			copy := *dt
+			result = append(result, &copy)
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].ChargeStationId < result[j].ChargeStationId
+	})
+	if len(result) > pageSize {
+		result = result[:pageSize]
+	}
+	if result == nil {
+		result = make([]*store.ChargeStationDataTransfer, 0)
+	}
+	return result, nil
+}
+
+func (s *Store) DeleteChargeStationDataTransfer(_ context.Context, chargeStationId string) error {
+	s.Lock()
+	defer s.Unlock()
+	delete(s.chargeStationDataTransfer, chargeStationId)
+	return nil
+}
+
+// ChargeStationClearCacheStore implementation
+
+func (s *Store) SetChargeStationClearCache(_ context.Context, chargeStationId string, clearCache *store.ChargeStationClearCache) error {
+	s.Lock()
+	defer s.Unlock()
+	if s.chargeStationClearCache == nil {
+		s.chargeStationClearCache = make(map[string]*store.ChargeStationClearCache)
+	}
+	cc := *clearCache
+	cc.ChargeStationId = chargeStationId
+	s.chargeStationClearCache[chargeStationId] = &cc
+	return nil
+}
+
+func (s *Store) LookupChargeStationClearCache(_ context.Context, chargeStationId string) (*store.ChargeStationClearCache, error) {
+	s.Lock()
+	defer s.Unlock()
+	cc, ok := s.chargeStationClearCache[chargeStationId]
+	if !ok {
+		return nil, nil
+	}
+	copy := *cc
+	return &copy, nil
+}
+
+func (s *Store) ListChargeStationClearCaches(_ context.Context, pageSize int, previousChargeStationId string) ([]*store.ChargeStationClearCache, error) {
+	s.Lock()
+	defer s.Unlock()
+	var result []*store.ChargeStationClearCache
+	for _, cc := range s.chargeStationClearCache {
+		if previousChargeStationId == "" || cc.ChargeStationId > previousChargeStationId {
+			copy := *cc
+			result = append(result, &copy)
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].ChargeStationId < result[j].ChargeStationId
+	})
+	if len(result) > pageSize {
+		result = result[:pageSize]
+	}
+	if result == nil {
+		result = make([]*store.ChargeStationClearCache, 0)
+	}
+	return result, nil
+}
+
+func (s *Store) DeleteChargeStationClearCache(_ context.Context, chargeStationId string) error {
+	s.Lock()
+	defer s.Unlock()
+	delete(s.chargeStationClearCache, chargeStationId)
+	return nil
+}
+
+// ChargeStationChangeAvailabilityStore implementation
+
+func (s *Store) SetChargeStationChangeAvailability(_ context.Context, chargeStationId string, changeAvailability *store.ChargeStationChangeAvailability) error {
+	s.Lock()
+	defer s.Unlock()
+	if s.chargeStationChangeAvailability == nil {
+		s.chargeStationChangeAvailability = make(map[string]*store.ChargeStationChangeAvailability)
+	}
+	ca := *changeAvailability
+	ca.ChargeStationId = chargeStationId
+	s.chargeStationChangeAvailability[chargeStationId] = &ca
+	return nil
+}
+
+func (s *Store) LookupChargeStationChangeAvailability(_ context.Context, chargeStationId string) (*store.ChargeStationChangeAvailability, error) {
+	s.Lock()
+	defer s.Unlock()
+	ca, ok := s.chargeStationChangeAvailability[chargeStationId]
+	if !ok {
+		return nil, nil
+	}
+	copy := *ca
+	return &copy, nil
+}
+
+func (s *Store) ListChargeStationChangeAvailabilities(_ context.Context, pageSize int, previousChargeStationId string) ([]*store.ChargeStationChangeAvailability, error) {
+	s.Lock()
+	defer s.Unlock()
+	var result []*store.ChargeStationChangeAvailability
+	for _, ca := range s.chargeStationChangeAvailability {
+		if previousChargeStationId == "" || ca.ChargeStationId > previousChargeStationId {
+			copy := *ca
+			result = append(result, &copy)
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].ChargeStationId < result[j].ChargeStationId
+	})
+	if len(result) > pageSize {
+		result = result[:pageSize]
+	}
+	if result == nil {
+		result = make([]*store.ChargeStationChangeAvailability, 0)
+	}
+	return result, nil
+}
+
+func (s *Store) DeleteChargeStationChangeAvailability(_ context.Context, chargeStationId string) error {
+	s.Lock()
+	defer s.Unlock()
+	delete(s.chargeStationChangeAvailability, chargeStationId)
+	return nil
 }
