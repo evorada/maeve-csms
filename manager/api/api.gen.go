@@ -1428,8 +1428,8 @@ func (siw *ServerInterfaceWrapper) UploadCertificate(w http.ResponseWriter, r *h
 		siw.Handler.UploadCertificate(w, r)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -1453,8 +1453,8 @@ func (siw *ServerInterfaceWrapper) DeleteCertificate(w http.ResponseWriter, r *h
 		siw.Handler.DeleteCertificate(w, r, certificateHash)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -1478,8 +1478,8 @@ func (siw *ServerInterfaceWrapper) LookupCertificate(w http.ResponseWriter, r *h
 		siw.Handler.LookupCertificate(w, r, certificateHash)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -1503,8 +1503,8 @@ func (siw *ServerInterfaceWrapper) RegisterChargeStation(w http.ResponseWriter, 
 		siw.Handler.RegisterChargeStation(w, r, csId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -1528,8 +1528,8 @@ func (siw *ServerInterfaceWrapper) LookupChargeStationAuth(w http.ResponseWriter
 		siw.Handler.LookupChargeStationAuth(w, r, csId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -1553,8 +1553,8 @@ func (siw *ServerInterfaceWrapper) ChangeAvailability(w http.ResponseWriter, r *
 		siw.Handler.ChangeAvailability(w, r, csId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -1578,8 +1578,8 @@ func (siw *ServerInterfaceWrapper) ClearAuthorizationCache(w http.ResponseWriter
 		siw.Handler.ClearAuthorizationCache(w, r, csId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -1603,8 +1603,8 @@ func (siw *ServerInterfaceWrapper) InstallChargeStationCertificates(w http.Respo
 		siw.Handler.InstallChargeStationCertificates(w, r, csId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -1639,8 +1639,8 @@ func (siw *ServerInterfaceWrapper) GetChargeStationConfiguration(w http.Response
 		siw.Handler.GetChargeStationConfiguration(w, r, csId, params)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -1664,8 +1664,8 @@ func (siw *ServerInterfaceWrapper) ChangeChargeStationConfiguration(w http.Respo
 		siw.Handler.ChangeChargeStationConfiguration(w, r, csId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -1689,8 +1689,8 @@ func (siw *ServerInterfaceWrapper) SendDataTransfer(w http.ResponseWriter, r *ht
 		siw.Handler.SendDataTransfer(w, r, csId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -1714,8 +1714,8 @@ func (siw *ServerInterfaceWrapper) RequestChargeStationDiagnostics(w http.Respon
 		siw.Handler.RequestChargeStationDiagnostics(w, r, csId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -1739,8 +1739,8 @@ func (siw *ServerInterfaceWrapper) GetChargeStationDiagnosticsStatus(w http.Resp
 		siw.Handler.GetChargeStationDiagnosticsStatus(w, r, csId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -1764,8 +1764,8 @@ func (siw *ServerInterfaceWrapper) SetDisplayMessage(w http.ResponseWriter, r *h
 		siw.Handler.SetDisplayMessage(w, r, csId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -1798,8 +1798,8 @@ func (siw *ServerInterfaceWrapper) ClearDisplayMessage(w http.ResponseWriter, r 
 		siw.Handler.ClearDisplayMessage(w, r, csId, messageId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -1842,8 +1842,8 @@ func (siw *ServerInterfaceWrapper) GetDisplayMessages(w http.ResponseWriter, r *
 		siw.Handler.GetDisplayMessages(w, r, csId, params)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -1867,8 +1867,8 @@ func (siw *ServerInterfaceWrapper) GetChargeStationFirmwareStatus(w http.Respons
 		siw.Handler.GetChargeStationFirmwareStatus(w, r, csId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -1892,8 +1892,8 @@ func (siw *ServerInterfaceWrapper) UpdateChargeStationFirmware(w http.ResponseWr
 		siw.Handler.UpdateChargeStationFirmware(w, r, csId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -1917,8 +1917,8 @@ func (siw *ServerInterfaceWrapper) GetLocalAuthorizationList(w http.ResponseWrit
 		siw.Handler.GetLocalAuthorizationList(w, r, csId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -1942,8 +1942,8 @@ func (siw *ServerInterfaceWrapper) UpdateLocalAuthorizationList(w http.ResponseW
 		siw.Handler.UpdateLocalAuthorizationList(w, r, csId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -1967,8 +1967,8 @@ func (siw *ServerInterfaceWrapper) GetLocalListVersion(w http.ResponseWriter, r 
 		siw.Handler.GetLocalListVersion(w, r, csId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -1992,8 +1992,8 @@ func (siw *ServerInterfaceWrapper) RequestChargeStationLogs(w http.ResponseWrite
 		siw.Handler.RequestChargeStationLogs(w, r, csId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -2028,8 +2028,8 @@ func (siw *ServerInterfaceWrapper) GetChargeStationLogStatus(w http.ResponseWrit
 		siw.Handler.GetChargeStationLogStatus(w, r, csId, params)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -2104,8 +2104,8 @@ func (siw *ServerInterfaceWrapper) GetMeterValues(w http.ResponseWriter, r *http
 		siw.Handler.GetMeterValues(w, r, csId, params)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -2129,8 +2129,8 @@ func (siw *ServerInterfaceWrapper) ReconfigureChargeStation(w http.ResponseWrite
 		siw.Handler.ReconfigureChargeStation(w, r, csId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -2154,8 +2154,8 @@ func (siw *ServerInterfaceWrapper) CreateReservation(w http.ResponseWriter, r *h
 		siw.Handler.CreateReservation(w, r, csId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -2188,8 +2188,8 @@ func (siw *ServerInterfaceWrapper) CancelReservation(w http.ResponseWriter, r *h
 		siw.Handler.CancelReservation(w, r, csId, reservationId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -2224,8 +2224,8 @@ func (siw *ServerInterfaceWrapper) ListReservations(w http.ResponseWriter, r *ht
 		siw.Handler.ListReservations(w, r, csId, params)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -2249,8 +2249,8 @@ func (siw *ServerInterfaceWrapper) TriggerChargeStation(w http.ResponseWriter, r
 		siw.Handler.TriggerChargeStation(w, r, csId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -2293,8 +2293,8 @@ func (siw *ServerInterfaceWrapper) GetChargeStationVariables(w http.ResponseWrit
 		siw.Handler.GetChargeStationVariables(w, r, csId, params)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -2318,8 +2318,8 @@ func (siw *ServerInterfaceWrapper) SetChargeStationVariables(w http.ResponseWrit
 		siw.Handler.SetChargeStationVariables(w, r, csId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -2343,8 +2343,8 @@ func (siw *ServerInterfaceWrapper) RegisterLocation(w http.ResponseWriter, r *ht
 		siw.Handler.RegisterLocation(w, r, locationId)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -2357,8 +2357,8 @@ func (siw *ServerInterfaceWrapper) RegisterParty(w http.ResponseWriter, r *http.
 		siw.Handler.RegisterParty(w, r)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -2392,8 +2392,8 @@ func (siw *ServerInterfaceWrapper) ListTokens(w http.ResponseWriter, r *http.Req
 		siw.Handler.ListTokens(w, r, params)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -2406,8 +2406,8 @@ func (siw *ServerInterfaceWrapper) SetToken(w http.ResponseWriter, r *http.Reque
 		siw.Handler.SetToken(w, r)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
@@ -2431,8 +2431,8 @@ func (siw *ServerInterfaceWrapper) LookupToken(w http.ResponseWriter, r *http.Re
 		siw.Handler.LookupToken(w, r, tokenUid)
 	}))
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+	for i := len(siw.HandlerMiddlewares) - 1; i >= 0; i-- {
+		handler = siw.HandlerMiddlewares[i](handler)
 	}
 
 	handler.ServeHTTP(w, r)
