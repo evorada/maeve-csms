@@ -276,6 +276,7 @@ func (s *Store) SetChargeStationTriggerMessage(ctx context.Context, chargeStatio
 	params := SetChargeStationTriggerParams{
 		ChargeStationID: chargeStationId,
 		MessageType:     string(triggerMessage.TriggerMessage),
+		ConnectorID:     toNullInt32(triggerMessage.ConnectorId),
 		TriggerStatus:   string(triggerMessage.TriggerStatus),
 		SendAfter:       toPgTimestamp(triggerMessage.SendAfter),
 	}
@@ -308,6 +309,7 @@ func (s *Store) LookupChargeStationTriggerMessage(ctx context.Context, chargeSta
 	return &store.ChargeStationTriggerMessage{
 		ChargeStationId: chargeStationId,
 		TriggerMessage:  store.TriggerMessage(trigger.MessageType),
+		ConnectorId:     fromNullInt32(trigger.ConnectorID),
 		TriggerStatus:   store.TriggerStatus(trigger.TriggerStatus),
 		SendAfter:       fromPgTimestamp(trigger.SendAfter),
 	}, nil
@@ -336,6 +338,7 @@ func (s *Store) ListChargeStationTriggerMessages(ctx context.Context, pageSize i
 		result = append(result, &store.ChargeStationTriggerMessage{
 			ChargeStationId: trigger.ChargeStationID,
 			TriggerMessage:  store.TriggerMessage(trigger.MessageType),
+			ConnectorId:     fromNullInt32(trigger.ConnectorID),
 			TriggerStatus:   store.TriggerStatus(trigger.TriggerStatus),
 			SendAfter:       fromPgTimestamp(trigger.SendAfter),
 		})

@@ -270,17 +270,19 @@ func (s *Store) LookupChargeStationRuntimeDetails(ctx context.Context, chargeSta
 }
 
 type chargeStationTriggerMessage struct {
-	Type      string    `firestore:"t"`
-	Status    string    `firestore:"s"`
-	SendAfter time.Time `firestore:"u"`
+	Type        string    `firestore:"t"`
+	ConnectorId *int      `firestore:"c,omitempty"`
+	Status      string    `firestore:"s"`
+	SendAfter   time.Time `firestore:"u"`
 }
 
 func (s *Store) SetChargeStationTriggerMessage(ctx context.Context, chargeStationId string, triggerMessage *store.ChargeStationTriggerMessage) error {
 	csRef := s.client.Doc(fmt.Sprintf("ChargeStationTriggerMessage/%s", chargeStationId))
 	_, err := csRef.Set(ctx, &chargeStationTriggerMessage{
-		Type:      string(triggerMessage.TriggerMessage),
-		Status:    string(triggerMessage.TriggerStatus),
-		SendAfter: triggerMessage.SendAfter,
+		Type:        string(triggerMessage.TriggerMessage),
+		ConnectorId: triggerMessage.ConnectorId,
+		Status:      string(triggerMessage.TriggerStatus),
+		SendAfter:   triggerMessage.SendAfter,
 	})
 	if err != nil {
 		return err
@@ -313,6 +315,7 @@ func (s *Store) LookupChargeStationTriggerMessage(ctx context.Context, chargeSta
 	return &store.ChargeStationTriggerMessage{
 		ChargeStationId: chargeStationId,
 		TriggerMessage:  store.TriggerMessage(csData.Type),
+		ConnectorId:     csData.ConnectorId,
 		TriggerStatus:   store.TriggerStatus(csData.Status),
 		SendAfter:       csData.SendAfter,
 	}, nil
@@ -340,6 +343,7 @@ func (s *Store) ListChargeStationTriggerMessages(ctx context.Context, pageSize i
 		triggerMessages = append(triggerMessages, &store.ChargeStationTriggerMessage{
 			ChargeStationId: snap.Ref.ID,
 			TriggerMessage:  store.TriggerMessage(triggerMessage.Type),
+			ConnectorId:     triggerMessage.ConnectorId,
 			TriggerStatus:   store.TriggerStatus(triggerMessage.Status),
 			SendAfter:       triggerMessage.SendAfter,
 		})

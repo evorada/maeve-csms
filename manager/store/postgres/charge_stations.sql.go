@@ -170,7 +170,7 @@ func (q *Queries) GetChargeStationSettings(ctx context.Context, chargeStationID 
 }
 
 const GetChargeStationTrigger = `-- name: GetChargeStationTrigger :one
-SELECT id, charge_station_id, message_type, created_at, trigger_status, send_after FROM charge_station_triggers
+SELECT id, charge_station_id, message_type, created_at, trigger_status, send_after, connector_id FROM charge_station_triggers
 WHERE charge_station_id = $1
 `
 
@@ -185,6 +185,7 @@ func (q *Queries) GetChargeStationTrigger(ctx context.Context, chargeStationID s
 		&i.CreatedAt,
 		&i.TriggerStatus,
 		&i.SendAfter,
+		&i.ConnectorID,
 	)
 	return i, err
 }
@@ -278,7 +279,7 @@ func (q *Queries) ListChargeStationSettings(ctx context.Context, arg ListChargeS
 }
 
 const ListChargeStationTriggers = `-- name: ListChargeStationTriggers :many
-SELECT id, charge_station_id, message_type, created_at, trigger_status, send_after FROM charge_station_triggers
+SELECT id, charge_station_id, message_type, created_at, trigger_status, send_after, connector_id FROM charge_station_triggers
 WHERE charge_station_id > $1
 ORDER BY charge_station_id ASC
 LIMIT $2
@@ -305,6 +306,7 @@ func (q *Queries) ListChargeStationTriggers(ctx context.Context, arg ListChargeS
 			&i.CreatedAt,
 			&i.TriggerStatus,
 			&i.SendAfter,
+			&i.ConnectorID,
 		); err != nil {
 			return nil, err
 		}
@@ -425,18 +427,20 @@ func (q *Queries) SetChargeStationSettings(ctx context.Context, arg SetChargeSta
 }
 
 const SetChargeStationTrigger = `-- name: SetChargeStationTrigger :one
-INSERT INTO charge_station_triggers (charge_station_id, message_type, trigger_status, send_after)
-VALUES ($1, $2, $3, $4)
+INSERT INTO charge_station_triggers (charge_station_id, message_type, connector_id, trigger_status, send_after)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (charge_station_id) DO UPDATE
 SET message_type = EXCLUDED.message_type,
+    connector_id = EXCLUDED.connector_id,
     trigger_status = EXCLUDED.trigger_status,
     send_after = EXCLUDED.send_after
-RETURNING id, charge_station_id, message_type, created_at, trigger_status, send_after
+RETURNING id, charge_station_id, message_type, created_at, trigger_status, send_after, connector_id
 `
 
 type SetChargeStationTriggerParams struct {
 	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
 	MessageType     string           `db:"message_type" json:"message_type"`
+	ConnectorID     pgtype.Int4      `db:"connector_id" json:"connector_id"`
 	TriggerStatus   string           `db:"trigger_status" json:"trigger_status"`
 	SendAfter       pgtype.Timestamp `db:"send_after" json:"send_after"`
 }
@@ -445,6 +449,7 @@ func (q *Queries) SetChargeStationTrigger(ctx context.Context, arg SetChargeStat
 	row := q.db.QueryRow(ctx, SetChargeStationTrigger,
 		arg.ChargeStationID,
 		arg.MessageType,
+		arg.ConnectorID,
 		arg.TriggerStatus,
 		arg.SendAfter,
 	)
@@ -456,6 +461,7 @@ func (q *Queries) SetChargeStationTrigger(ctx context.Context, arg SetChargeStat
 		&i.CreatedAt,
 		&i.TriggerStatus,
 		&i.SendAfter,
+		&i.ConnectorID,
 	)
 	return i, err
 }

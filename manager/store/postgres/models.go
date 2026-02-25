@@ -60,6 +60,7 @@ type ChargeStationTrigger struct {
 	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
 	TriggerStatus   string           `db:"trigger_status" json:"trigger_status"`
 	SendAfter       pgtype.Timestamp `db:"send_after" json:"send_after"`
+	ConnectorID     pgtype.Int4      `db:"connector_id" json:"connector_id"`
 }
 
 type ChargingProfile struct {

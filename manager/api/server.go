@@ -165,6 +165,7 @@ func (s *Server) TriggerChargeStation(w http.ResponseWriter, r *http.Request, cs
 
 	err := s.store.SetChargeStationTriggerMessage(r.Context(), csId, &store.ChargeStationTriggerMessage{
 		TriggerMessage: store.TriggerMessage(req.Trigger),
+		ConnectorId:    req.ConnectorId,
 		TriggerStatus:  store.TriggerStatusPending,
 	})
 	if err != nil {

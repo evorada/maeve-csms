@@ -766,6 +766,18 @@ components:
             - "SignV2GCertificate"
             - "SignChargingStationCertificate"
             - "SignCombinedCertificate"
+            - "MeterValues"
+            - "DiagnosticsStatusNotification"
+            - "FirmwareStatusNotification"
+            - "Heartbeat"
+            - "NotifyReport"
+            - "NotifyMonitoringReport"
+            - "PublishFirmwareStatusNotification"
+            - "LogStatusNotification"
+        connectorId:
+          type: "integer"
+          description: "Optional connector ID. Required for some message types (StatusNotification, MeterValues)"
+          minimum: 0
     FirmwareUpdateRequest:
       type: "object"
       description: "Request to update charge station firmware"
