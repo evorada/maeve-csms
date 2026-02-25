@@ -74,23 +74,24 @@ check_health_endpoint() {
 run_tests() {
     echo "Running test command..."
     cd "$TEST_DIR"
+    set +e
     go test --tags=e2e -v ./... -count=1
     TEST_RESULT=$?
+    set -e
     cd "$CSMS_DIR"
-    if [ $TEST_RESULT -eq 0 ]; then
-        echo "Tests completed successfully"
-    else
-        echo "Tests failed"
-    fi
 
     echo "=== CSMS Manager Logs ==="
-    cd "$CSMS_DIR" && docker-compose logs manager 2>&1 | tail -100
+    docker-compose logs --no-color manager 2>&1 | tail -200
     echo "=== CSMS Gateway Logs ==="
-    cd "$CSMS_DIR" && docker-compose logs gateway 2>&1 | tail -50
+    docker-compose logs --no-color gateway 2>&1 | tail -100
+    echo "=== EVerest Manager Logs ==="
+    cd "$EVEREST_DIR" && docker-compose logs --no-color manager 2>&1 | tail -100
     echo "=== End of Logs ==="
 
-    stop_docker_compose_for_everest
-    stop_docker_compose_for_maeve_csms
+    cd "$EVEREST_DIR" && stop_docker_compose_for_everest
+    cd "$CSMS_DIR" && stop_docker_compose_for_maeve_csms
+
+    exit $TEST_RESULT
 }
 
 # Main script execution
