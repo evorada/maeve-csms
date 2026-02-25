@@ -1310,6 +1310,52 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Status'
+  /cs/{csId}/reset:
+    post:
+      operationId: ResetChargeStation
+      summary: Request a charge station reset
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetRequest'
+      responses:
+        '202':
+          description: Reset request accepted
+        '400':
+          description: Invalid request
+        '500':
+          description: Internal server error
+  /cs/{csId}/unlock-connector:
+    post:
+      operationId: UnlockConnector
+      summary: Request to unlock a connector on a charge station
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnlockConnectorRequest'
+      responses:
+        '202':
+          description: Unlock request accepted
+        '400':
+          description: Invalid request
+        '500':
+          description: Internal server error
 components:
   schemas:
     ChargeStationAuth:
@@ -2481,3 +2527,22 @@ components:
       properties:
         message:
           $ref: '#/components/schemas/DisplayMessage'
+    ResetRequest:
+      type: object
+      required:
+      - type
+      properties:
+        type:
+          type: string
+          enum:
+          - Soft
+          - Hard
+          description: Type of reset to perform
+    UnlockConnectorRequest:
+      type: object
+      required:
+      - connectorId
+      properties:
+        connectorId:
+          type: integer
+          description: ID of the connector to unlock
