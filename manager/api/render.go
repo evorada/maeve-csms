@@ -95,3 +95,15 @@ func (c ChangeAvailabilityRequest) Bind(r *http.Request) error {
 func (m MeterValuesResponse) Render(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
+
+func (l LocalListVersionResponse) Render(w http.ResponseWriter, r *http.Request) error {
+	return nil
+}
+
+func (l LocalAuthorizationListResponse) Render(w http.ResponseWriter, r *http.Request) error {
+	return nil
+}
+
+func (u UpdateLocalListRequest) Bind(r *http.Request) error {
+	return nil
+}
