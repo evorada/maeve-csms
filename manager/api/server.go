@@ -1836,3 +1836,33 @@ func (s *Server) RemoteStopTransaction(w http.ResponseWriter, r *http.Request, c
 
 	w.WriteHeader(http.StatusAccepted)
 }
+
+// Variable Monitoring, Events & Reports - WIP stubs
+
+func (s *Server) SetVariableMonitoring(w http.ResponseWriter, r *http.Request, csId string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+func (s *Server) ClearVariableMonitoring(w http.ResponseWriter, r *http.Request, csId string, monitorId int) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+func (s *Server) SetMonitoringBase(w http.ResponseWriter, r *http.Request, csId string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+func (s *Server) SetMonitoringLevel(w http.ResponseWriter, r *http.Request, csId string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+func (s *Server) GetMonitoringReport(w http.ResponseWriter, r *http.Request, csId string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+func (s *Server) GetChargeStationEvents(w http.ResponseWriter, r *http.Request, csId string, params GetChargeStationEventsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+func (s *Server) GetDeviceReports(w http.ResponseWriter, r *http.Request, csId string, params GetDeviceReportsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
