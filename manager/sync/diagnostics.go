@@ -248,4 +248,3 @@ func syncLogRequests(ctx context.Context,
 
 	return previousChargeStationId
 }
-
