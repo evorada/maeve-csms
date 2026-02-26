@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS device_report (
     report_data JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT fk_device_report_cs FOREIGN KEY (charge_station_id)
-        REFERENCES charge_station(id) ON DELETE CASCADE
+        REFERENCES charge_stations(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_device_report_cs ON device_report(charge_station_id);
