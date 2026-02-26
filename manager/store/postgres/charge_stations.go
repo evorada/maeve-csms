@@ -5,6 +5,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -578,4 +579,129 @@ func (s *Store) DeleteChargeStationChangeAvailability(ctx context.Context, charg
 		return fmt.Errorf("failed to delete charge station change availability: %w", err)
 	}
 	return nil
+}
+
+func (s *Store) SetChargeStationCertificateQuery(ctx context.Context, chargeStationId string, query *store.ChargeStationCertificateQuery) error {
+	_, err := s.q.SetChargeStationCertificateQuery(ctx, SetChargeStationCertificateQueryParams{
+		ChargeStationID: chargeStationId,
+		CertificateType: textFromString(query.CertificateType),
+		QueryStatus:     string(query.QueryStatus),
+		SendAfter:       toPgTimestamp(query.SendAfter),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to set certificate query: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) DeleteChargeStationCertificateQuery(ctx context.Context, chargeStationId string) error {
+	err := s.q.DeleteChargeStationCertificateQuery(ctx, chargeStationId)
+	if err != nil {
+		return fmt.Errorf("failed to delete certificate query: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) LookupChargeStationCertificateQuery(ctx context.Context, chargeStationId string) (*store.ChargeStationCertificateQuery, error) {
+	row, err := s.q.LookupChargeStationCertificateQuery(ctx, chargeStationId)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to lookup certificate query: %w", err)
+	}
+	return &store.ChargeStationCertificateQuery{
+		ChargeStationId: row.ChargeStationID,
+		CertificateType: stringFromText(row.CertificateType),
+		QueryStatus:     store.CertificateQueryStatus(row.QueryStatus),
+		SendAfter:       fromPgTimestamp(row.SendAfter),
+	}, nil
+}
+
+func (s *Store) ListChargeStationCertificateQueries(ctx context.Context, pageSize int, previousChargeStationId string) ([]*store.ChargeStationCertificateQuery, error) {
+	rows, err := s.q.ListChargeStationCertificateQueries(ctx, ListChargeStationCertificateQueriesParams{
+		ChargeStationID: previousChargeStationId,
+		Limit:           int32(pageSize),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list certificate queries: %w", err)
+	}
+
+	var result []*store.ChargeStationCertificateQuery
+	for _, row := range rows {
+		result = append(result, &store.ChargeStationCertificateQuery{
+			ChargeStationId: row.ChargeStationID,
+			CertificateType: stringFromText(row.CertificateType),
+			QueryStatus:     store.CertificateQueryStatus(row.QueryStatus),
+			SendAfter:       fromPgTimestamp(row.SendAfter),
+		})
+	}
+	return result, nil
+}
+
+func (s *Store) SetChargeStationCertificateDeletion(ctx context.Context, chargeStationId string, deletion *store.ChargeStationCertificateDeletion) error {
+	_, err := s.q.SetChargeStationCertificateDeletion(ctx, SetChargeStationCertificateDeletionParams{
+		ChargeStationID: chargeStationId,
+		HashAlgorithm:   deletion.HashAlgorithm,
+		IssuerNameHash:  deletion.IssuerNameHash,
+		IssuerKeyHash:   deletion.IssuerKeyHash,
+		SerialNumber:    deletion.SerialNumber,
+		DeletionStatus:  string(deletion.DeletionStatus),
+		SendAfter:       toPgTimestamp(deletion.SendAfter),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to set certificate deletion: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) DeleteChargeStationCertificateDeletion(ctx context.Context, chargeStationId string) error {
+	err := s.q.DeleteChargeStationCertificateDeletion(ctx, chargeStationId)
+	if err != nil {
+		return fmt.Errorf("failed to delete certificate deletion: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) LookupChargeStationCertificateDeletion(ctx context.Context, chargeStationId string) (*store.ChargeStationCertificateDeletion, error) {
+	row, err := s.q.LookupChargeStationCertificateDeletion(ctx, chargeStationId)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to lookup certificate deletion: %w", err)
+	}
+	return &store.ChargeStationCertificateDeletion{
+		ChargeStationId: row.ChargeStationID,
+		HashAlgorithm:   row.HashAlgorithm,
+		IssuerNameHash:  row.IssuerNameHash,
+		IssuerKeyHash:   row.IssuerKeyHash,
+		SerialNumber:    row.SerialNumber,
+		DeletionStatus:  store.CertificateDeletionStatus(row.DeletionStatus),
+		SendAfter:       fromPgTimestamp(row.SendAfter),
+	}, nil
+}
+
+func (s *Store) ListChargeStationCertificateDeletions(ctx context.Context, pageSize int, previousChargeStationId string) ([]*store.ChargeStationCertificateDeletion, error) {
+	rows, err := s.q.ListChargeStationCertificateDeletions(ctx, ListChargeStationCertificateDeletionsParams{
+		ChargeStationID: previousChargeStationId,
+		Limit:           int32(pageSize),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list certificate deletions: %w", err)
+	}
+
+	var result []*store.ChargeStationCertificateDeletion
+	for _, row := range rows {
+		result = append(result, &store.ChargeStationCertificateDeletion{
+			ChargeStationId: row.ChargeStationID,
+			HashAlgorithm:   row.HashAlgorithm,
+			IssuerNameHash:  row.IssuerNameHash,
+			IssuerKeyHash:   row.IssuerKeyHash,
+			SerialNumber:    row.SerialNumber,
+			DeletionStatus:  store.CertificateDeletionStatus(row.DeletionStatus),
+			SendAfter:       fromPgTimestamp(row.SendAfter),
+		})
+	}
+	return result, nil
 }

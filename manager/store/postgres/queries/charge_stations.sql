@@ -176,3 +176,48 @@ SELECT * FROM charge_station_change_availability
 WHERE charge_station_id > $1
 ORDER BY charge_station_id ASC
 LIMIT $2;
+
+-- name: SetChargeStationCertificateQuery :one
+INSERT INTO charge_station_certificate_queries (charge_station_id, certificate_type, query_status, send_after)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (charge_station_id) DO UPDATE SET
+    certificate_type = EXCLUDED.certificate_type,
+    query_status = EXCLUDED.query_status,
+    send_after = EXCLUDED.send_after
+RETURNING *;
+
+-- name: DeleteChargeStationCertificateQuery :exec
+DELETE FROM charge_station_certificate_queries WHERE charge_station_id = $1;
+
+-- name: LookupChargeStationCertificateQuery :one
+SELECT * FROM charge_station_certificate_queries WHERE charge_station_id = $1;
+
+-- name: ListChargeStationCertificateQueries :many
+SELECT * FROM charge_station_certificate_queries
+WHERE charge_station_id > $1
+ORDER BY charge_station_id ASC
+LIMIT $2;
+
+-- name: SetChargeStationCertificateDeletion :one
+INSERT INTO charge_station_certificate_deletions (charge_station_id, hash_algorithm, issuer_name_hash, issuer_key_hash, serial_number, deletion_status, send_after)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (charge_station_id) DO UPDATE SET
+    hash_algorithm = EXCLUDED.hash_algorithm,
+    issuer_name_hash = EXCLUDED.issuer_name_hash,
+    issuer_key_hash = EXCLUDED.issuer_key_hash,
+    serial_number = EXCLUDED.serial_number,
+    deletion_status = EXCLUDED.deletion_status,
+    send_after = EXCLUDED.send_after
+RETURNING *;
+
+-- name: DeleteChargeStationCertificateDeletion :exec
+DELETE FROM charge_station_certificate_deletions WHERE charge_station_id = $1;
+
+-- name: LookupChargeStationCertificateDeletion :one
+SELECT * FROM charge_station_certificate_deletions WHERE charge_station_id = $1;
+
+-- name: ListChargeStationCertificateDeletions :many
+SELECT * FROM charge_station_certificate_deletions
+WHERE charge_station_id > $1
+ORDER BY charge_station_id ASC
+LIMIT $2;

@@ -9,6 +9,7 @@ import (
 
 	"cloud.google.com/go/firestore"
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"google.golang.org/api/iterator"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -441,4 +442,172 @@ func (s *Store) DeleteUnlockConnectorRequest(ctx context.Context, chargeStationI
 	ref := s.client.Doc(fmt.Sprintf("UnlockConnectorRequest/%s", chargeStationId))
 	_, err := ref.Delete(ctx)
 	return err
+}
+
+type certificateQuery struct {
+	ChargeStationId string    `firestore:"chargeStationId"`
+	CertificateType *string   `firestore:"certificateType,omitempty"`
+	QueryStatus     string    `firestore:"queryStatus"`
+	SendAfter       time.Time `firestore:"sendAfter"`
+}
+
+func (s *Store) SetChargeStationCertificateQuery(ctx context.Context, chargeStationId string, query *store.ChargeStationCertificateQuery) error {
+	ref := s.client.Doc(fmt.Sprintf("CertificateQuery/%s", chargeStationId))
+	_, err := ref.Set(ctx, &certificateQuery{
+		ChargeStationId: chargeStationId,
+		CertificateType: query.CertificateType,
+		QueryStatus:     string(query.QueryStatus),
+		SendAfter:       query.SendAfter,
+	})
+	return err
+}
+
+func (s *Store) DeleteChargeStationCertificateQuery(ctx context.Context, chargeStationId string) error {
+	ref := s.client.Doc(fmt.Sprintf("CertificateQuery/%s", chargeStationId))
+	_, err := ref.Delete(ctx)
+	return err
+}
+
+func (s *Store) LookupChargeStationCertificateQuery(ctx context.Context, chargeStationId string) (*store.ChargeStationCertificateQuery, error) {
+	ref := s.client.Doc(fmt.Sprintf("CertificateQuery/%s", chargeStationId))
+	snap, err := ref.Get(ctx)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get certificate query %s: %w", chargeStationId, err)
+	}
+	var data certificateQuery
+	if err = snap.DataTo(&data); err != nil {
+		return nil, fmt.Errorf("map certificate query %s: %w", chargeStationId, err)
+	}
+	return &store.ChargeStationCertificateQuery{
+		ChargeStationId: chargeStationId,
+		CertificateType: data.CertificateType,
+		QueryStatus:     store.CertificateQueryStatus(data.QueryStatus),
+		SendAfter:       data.SendAfter,
+	}, nil
+}
+
+func (s *Store) ListChargeStationCertificateQueries(ctx context.Context, pageSize int, previousChargeStationId string) ([]*store.ChargeStationCertificateQuery, error) {
+	query := s.client.Collection("CertificateQuery").
+		OrderBy("chargeStationId", firestore.Asc).
+		Limit(pageSize)
+	if previousChargeStationId != "" {
+		query = query.StartAfter(previousChargeStationId)
+	}
+	iter := query.Documents(ctx)
+	defer iter.Stop()
+
+	var queries []*store.ChargeStationCertificateQuery
+	for {
+		snap, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("list certificate queries: %w", err)
+		}
+		var data certificateQuery
+		if err = snap.DataTo(&data); err != nil {
+			return nil, fmt.Errorf("map certificate query: %w", err)
+		}
+		queries = append(queries, &store.ChargeStationCertificateQuery{
+			ChargeStationId: data.ChargeStationId,
+			CertificateType: data.CertificateType,
+			QueryStatus:     store.CertificateQueryStatus(data.QueryStatus),
+			SendAfter:       data.SendAfter,
+		})
+	}
+	return queries, nil
+}
+
+type certificateDeletion struct {
+	ChargeStationId string    `firestore:"chargeStationId"`
+	HashAlgorithm   string    `firestore:"hashAlgorithm"`
+	IssuerNameHash  string    `firestore:"issuerNameHash"`
+	IssuerKeyHash   string    `firestore:"issuerKeyHash"`
+	SerialNumber    string    `firestore:"serialNumber"`
+	DeletionStatus  string    `firestore:"deletionStatus"`
+	SendAfter       time.Time `firestore:"sendAfter"`
+}
+
+func (s *Store) SetChargeStationCertificateDeletion(ctx context.Context, chargeStationId string, deletion *store.ChargeStationCertificateDeletion) error {
+	ref := s.client.Doc(fmt.Sprintf("CertificateDeletion/%s", chargeStationId))
+	_, err := ref.Set(ctx, &certificateDeletion{
+		ChargeStationId: chargeStationId,
+		HashAlgorithm:   deletion.HashAlgorithm,
+		IssuerNameHash:  deletion.IssuerNameHash,
+		IssuerKeyHash:   deletion.IssuerKeyHash,
+		SerialNumber:    deletion.SerialNumber,
+		DeletionStatus:  string(deletion.DeletionStatus),
+		SendAfter:       deletion.SendAfter,
+	})
+	return err
+}
+
+func (s *Store) DeleteChargeStationCertificateDeletion(ctx context.Context, chargeStationId string) error {
+	ref := s.client.Doc(fmt.Sprintf("CertificateDeletion/%s", chargeStationId))
+	_, err := ref.Delete(ctx)
+	return err
+}
+
+func (s *Store) LookupChargeStationCertificateDeletion(ctx context.Context, chargeStationId string) (*store.ChargeStationCertificateDeletion, error) {
+	ref := s.client.Doc(fmt.Sprintf("CertificateDeletion/%s", chargeStationId))
+	snap, err := ref.Get(ctx)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get certificate deletion %s: %w", chargeStationId, err)
+	}
+	var data certificateDeletion
+	if err = snap.DataTo(&data); err != nil {
+		return nil, fmt.Errorf("map certificate deletion %s: %w", chargeStationId, err)
+	}
+	return &store.ChargeStationCertificateDeletion{
+		ChargeStationId: chargeStationId,
+		HashAlgorithm:   data.HashAlgorithm,
+		IssuerNameHash:  data.IssuerNameHash,
+		IssuerKeyHash:   data.IssuerKeyHash,
+		SerialNumber:    data.SerialNumber,
+		DeletionStatus:  store.CertificateDeletionStatus(data.DeletionStatus),
+		SendAfter:       data.SendAfter,
+	}, nil
+}
+
+func (s *Store) ListChargeStationCertificateDeletions(ctx context.Context, pageSize int, previousChargeStationId string) ([]*store.ChargeStationCertificateDeletion, error) {
+	query := s.client.Collection("CertificateDeletion").
+		OrderBy("chargeStationId", firestore.Asc).
+		Limit(pageSize)
+	if previousChargeStationId != "" {
+		query = query.StartAfter(previousChargeStationId)
+	}
+	iter := query.Documents(ctx)
+	defer iter.Stop()
+
+	var deletions []*store.ChargeStationCertificateDeletion
+	for {
+		snap, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("list certificate deletions: %w", err)
+		}
+		var data certificateDeletion
+		if err = snap.DataTo(&data); err != nil {
+			return nil, fmt.Errorf("map certificate deletion: %w", err)
+		}
+		deletions = append(deletions, &store.ChargeStationCertificateDeletion{
+			ChargeStationId: data.ChargeStationId,
+			HashAlgorithm:   data.HashAlgorithm,
+			IssuerNameHash:  data.IssuerNameHash,
+			IssuerKeyHash:   data.IssuerKeyHash,
+			SerialNumber:    data.SerialNumber,
+			DeletionStatus:  store.CertificateDeletionStatus(data.DeletionStatus),
+			SendAfter:       data.SendAfter,
+		})
+	}
+	return deletions, nil
 }

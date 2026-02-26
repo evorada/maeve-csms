@@ -49,6 +49,24 @@ func (q *Queries) AddChargeStationCertificate(ctx context.Context, arg AddCharge
 	return i, err
 }
 
+const DeleteChargeStationCertificateDeletion = `-- name: DeleteChargeStationCertificateDeletion :exec
+DELETE FROM charge_station_certificate_deletions WHERE charge_station_id = $1
+`
+
+func (q *Queries) DeleteChargeStationCertificateDeletion(ctx context.Context, chargeStationID string) error {
+	_, err := q.db.Exec(ctx, DeleteChargeStationCertificateDeletion, chargeStationID)
+	return err
+}
+
+const DeleteChargeStationCertificateQuery = `-- name: DeleteChargeStationCertificateQuery :exec
+DELETE FROM charge_station_certificate_queries WHERE charge_station_id = $1
+`
+
+func (q *Queries) DeleteChargeStationCertificateQuery(ctx context.Context, chargeStationID string) error {
+	_, err := q.db.Exec(ctx, DeleteChargeStationCertificateQuery, chargeStationID)
+	return err
+}
+
 const DeleteChargeStationCertificates = `-- name: DeleteChargeStationCertificates :exec
 DELETE FROM charge_station_certificates WHERE charge_station_id = $1
 `
@@ -279,6 +297,85 @@ func (q *Queries) GetChargeStationTrigger(ctx context.Context, chargeStationID s
 		&i.ConnectorID,
 	)
 	return i, err
+}
+
+const ListChargeStationCertificateDeletions = `-- name: ListChargeStationCertificateDeletions :many
+SELECT charge_station_id, hash_algorithm, issuer_name_hash, issuer_key_hash, serial_number, deletion_status, send_after, created_at FROM charge_station_certificate_deletions
+WHERE charge_station_id > $1
+ORDER BY charge_station_id ASC
+LIMIT $2
+`
+
+type ListChargeStationCertificateDeletionsParams struct {
+	ChargeStationID string `db:"charge_station_id" json:"charge_station_id"`
+	Limit           int32  `db:"limit" json:"limit"`
+}
+
+func (q *Queries) ListChargeStationCertificateDeletions(ctx context.Context, arg ListChargeStationCertificateDeletionsParams) ([]ChargeStationCertificateDeletion, error) {
+	rows, err := q.db.Query(ctx, ListChargeStationCertificateDeletions, arg.ChargeStationID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChargeStationCertificateDeletion{}
+	for rows.Next() {
+		var i ChargeStationCertificateDeletion
+		if err := rows.Scan(
+			&i.ChargeStationID,
+			&i.HashAlgorithm,
+			&i.IssuerNameHash,
+			&i.IssuerKeyHash,
+			&i.SerialNumber,
+			&i.DeletionStatus,
+			&i.SendAfter,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const ListChargeStationCertificateQueries = `-- name: ListChargeStationCertificateQueries :many
+SELECT charge_station_id, certificate_type, query_status, send_after, created_at FROM charge_station_certificate_queries
+WHERE charge_station_id > $1
+ORDER BY charge_station_id ASC
+LIMIT $2
+`
+
+type ListChargeStationCertificateQueriesParams struct {
+	ChargeStationID string `db:"charge_station_id" json:"charge_station_id"`
+	Limit           int32  `db:"limit" json:"limit"`
+}
+
+func (q *Queries) ListChargeStationCertificateQueries(ctx context.Context, arg ListChargeStationCertificateQueriesParams) ([]ChargeStationCertificateQuery, error) {
+	rows, err := q.db.Query(ctx, ListChargeStationCertificateQueries, arg.ChargeStationID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChargeStationCertificateQuery{}
+	for rows.Next() {
+		var i ChargeStationCertificateQuery
+		if err := rows.Scan(
+			&i.ChargeStationID,
+			&i.CertificateType,
+			&i.QueryStatus,
+			&i.SendAfter,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const ListChargeStationCertificates = `-- name: ListChargeStationCertificates :many
@@ -530,6 +627,43 @@ func (q *Queries) ListChargeStationTriggers(ctx context.Context, arg ListChargeS
 	return items, nil
 }
 
+const LookupChargeStationCertificateDeletion = `-- name: LookupChargeStationCertificateDeletion :one
+SELECT charge_station_id, hash_algorithm, issuer_name_hash, issuer_key_hash, serial_number, deletion_status, send_after, created_at FROM charge_station_certificate_deletions WHERE charge_station_id = $1
+`
+
+func (q *Queries) LookupChargeStationCertificateDeletion(ctx context.Context, chargeStationID string) (ChargeStationCertificateDeletion, error) {
+	row := q.db.QueryRow(ctx, LookupChargeStationCertificateDeletion, chargeStationID)
+	var i ChargeStationCertificateDeletion
+	err := row.Scan(
+		&i.ChargeStationID,
+		&i.HashAlgorithm,
+		&i.IssuerNameHash,
+		&i.IssuerKeyHash,
+		&i.SerialNumber,
+		&i.DeletionStatus,
+		&i.SendAfter,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const LookupChargeStationCertificateQuery = `-- name: LookupChargeStationCertificateQuery :one
+SELECT charge_station_id, certificate_type, query_status, send_after, created_at FROM charge_station_certificate_queries WHERE charge_station_id = $1
+`
+
+func (q *Queries) LookupChargeStationCertificateQuery(ctx context.Context, chargeStationID string) (ChargeStationCertificateQuery, error) {
+	row := q.db.QueryRow(ctx, LookupChargeStationCertificateQuery, chargeStationID)
+	var i ChargeStationCertificateQuery
+	err := row.Scan(
+		&i.ChargeStationID,
+		&i.CertificateType,
+		&i.QueryStatus,
+		&i.SendAfter,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const SetChargeStationAuth = `-- name: SetChargeStationAuth :one
 INSERT INTO charge_stations (
     charge_station_id, security_profile, base64_sha256_password, invalid_username_allowed
@@ -564,6 +698,88 @@ func (q *Queries) SetChargeStationAuth(ctx context.Context, arg SetChargeStation
 		&i.InvalidUsernameAllowed,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const SetChargeStationCertificateDeletion = `-- name: SetChargeStationCertificateDeletion :one
+INSERT INTO charge_station_certificate_deletions (charge_station_id, hash_algorithm, issuer_name_hash, issuer_key_hash, serial_number, deletion_status, send_after)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (charge_station_id) DO UPDATE SET
+    hash_algorithm = EXCLUDED.hash_algorithm,
+    issuer_name_hash = EXCLUDED.issuer_name_hash,
+    issuer_key_hash = EXCLUDED.issuer_key_hash,
+    serial_number = EXCLUDED.serial_number,
+    deletion_status = EXCLUDED.deletion_status,
+    send_after = EXCLUDED.send_after
+RETURNING charge_station_id, hash_algorithm, issuer_name_hash, issuer_key_hash, serial_number, deletion_status, send_after, created_at
+`
+
+type SetChargeStationCertificateDeletionParams struct {
+	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
+	HashAlgorithm   string           `db:"hash_algorithm" json:"hash_algorithm"`
+	IssuerNameHash  string           `db:"issuer_name_hash" json:"issuer_name_hash"`
+	IssuerKeyHash   string           `db:"issuer_key_hash" json:"issuer_key_hash"`
+	SerialNumber    string           `db:"serial_number" json:"serial_number"`
+	DeletionStatus  string           `db:"deletion_status" json:"deletion_status"`
+	SendAfter       pgtype.Timestamp `db:"send_after" json:"send_after"`
+}
+
+func (q *Queries) SetChargeStationCertificateDeletion(ctx context.Context, arg SetChargeStationCertificateDeletionParams) (ChargeStationCertificateDeletion, error) {
+	row := q.db.QueryRow(ctx, SetChargeStationCertificateDeletion,
+		arg.ChargeStationID,
+		arg.HashAlgorithm,
+		arg.IssuerNameHash,
+		arg.IssuerKeyHash,
+		arg.SerialNumber,
+		arg.DeletionStatus,
+		arg.SendAfter,
+	)
+	var i ChargeStationCertificateDeletion
+	err := row.Scan(
+		&i.ChargeStationID,
+		&i.HashAlgorithm,
+		&i.IssuerNameHash,
+		&i.IssuerKeyHash,
+		&i.SerialNumber,
+		&i.DeletionStatus,
+		&i.SendAfter,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const SetChargeStationCertificateQuery = `-- name: SetChargeStationCertificateQuery :one
+INSERT INTO charge_station_certificate_queries (charge_station_id, certificate_type, query_status, send_after)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (charge_station_id) DO UPDATE SET
+    certificate_type = EXCLUDED.certificate_type,
+    query_status = EXCLUDED.query_status,
+    send_after = EXCLUDED.send_after
+RETURNING charge_station_id, certificate_type, query_status, send_after, created_at
+`
+
+type SetChargeStationCertificateQueryParams struct {
+	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
+	CertificateType pgtype.Text      `db:"certificate_type" json:"certificate_type"`
+	QueryStatus     string           `db:"query_status" json:"query_status"`
+	SendAfter       pgtype.Timestamp `db:"send_after" json:"send_after"`
+}
+
+func (q *Queries) SetChargeStationCertificateQuery(ctx context.Context, arg SetChargeStationCertificateQueryParams) (ChargeStationCertificateQuery, error) {
+	row := q.db.QueryRow(ctx, SetChargeStationCertificateQuery,
+		arg.ChargeStationID,
+		arg.CertificateType,
+		arg.QueryStatus,
+		arg.SendAfter,
+	)
+	var i ChargeStationCertificateQuery
+	err := row.Scan(
+		&i.ChargeStationID,
+		&i.CertificateType,
+		&i.QueryStatus,
+		&i.SendAfter,
+		&i.CreatedAt,
 	)
 	return i, err
 }

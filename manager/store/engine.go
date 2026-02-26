@@ -11,6 +11,8 @@ type Engine interface {
 	ChargeStationDataTransferStore
 	ChargeStationClearCacheStore
 	ChargeStationChangeAvailabilityStore
+	ChargeStationCertificateQueryStore
+	ChargeStationCertificateDeletionStore
 	TokenStore
 	TransactionStore
 	CertificateStore

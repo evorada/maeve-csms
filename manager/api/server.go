@@ -97,6 +97,33 @@ func (s *Server) ReconfigureChargeStation(w http.ResponseWriter, r *http.Request
 	}
 }
 
+func (s *Server) GetInstalledCertificates(w http.ResponseWriter, r *http.Request, csId string, params GetInstalledCertificatesParams) {
+	var certType *string
+	if params.CertificateType != nil {
+		ct := string(*params.CertificateType)
+		certType = &ct
+	}
+
+	err := s.store.SetChargeStationCertificateQuery(r.Context(), csId, &store.ChargeStationCertificateQuery{
+		ChargeStationId: csId,
+		CertificateType: certType,
+		QueryStatus:     store.CertificateQueryStatusPending,
+		SendAfter:       s.clock.Now(),
+	})
+	if err != nil {
+		_ = render.Render(w, r, ErrInternalError(err))
+		return
+	}
+
+	status := OperationResponseStatusPending
+	resp := &OperationResponse{
+		OperationId: &csId,
+		Status:      &status,
+	}
+	w.WriteHeader(http.StatusAccepted)
+	_ = render.Render(w, r, resp)
+}
+
 func (s *Server) InstallChargeStationCertificates(w http.ResponseWriter, r *http.Request, csId string) {
 	req := new(ChargeStationInstallCertificates)
 	if err := render.Bind(r, req); err != nil {
@@ -133,6 +160,36 @@ func (s *Server) InstallChargeStationCertificates(w http.ResponseWriter, r *http
 		_ = render.Render(w, r, ErrInternalError(err))
 		return
 	}
+}
+
+func (s *Server) DeleteChargeStationCertificate(w http.ResponseWriter, r *http.Request, csId string) {
+	req := new(CertificateHashDataRequest)
+	if err := render.Bind(r, req); err != nil {
+		_ = render.Render(w, r, ErrInvalidRequest(err))
+		return
+	}
+
+	err := s.store.SetChargeStationCertificateDeletion(r.Context(), csId, &store.ChargeStationCertificateDeletion{
+		ChargeStationId: csId,
+		HashAlgorithm:   string(req.CertificateHashData.HashAlgorithm),
+		IssuerNameHash:  req.CertificateHashData.IssuerNameHash,
+		IssuerKeyHash:   req.CertificateHashData.IssuerKeyHash,
+		SerialNumber:    req.CertificateHashData.SerialNumber,
+		DeletionStatus:  store.CertificateDeletionStatusPending,
+		SendAfter:       s.clock.Now(),
+	})
+	if err != nil {
+		_ = render.Render(w, r, ErrInternalError(err))
+		return
+	}
+
+	status := OperationResponseStatusPending
+	resp := &OperationResponse{
+		OperationId: &csId,
+		Status:      &status,
+	}
+	w.WriteHeader(http.StatusAccepted)
+	_ = render.Render(w, r, resp)
 }
 
 func (s *Server) LookupChargeStationAuth(w http.ResponseWriter, r *http.Request, csId string) {

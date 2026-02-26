@@ -87,6 +87,44 @@ paths:
               schema:
                 $ref: '#/components/schemas/Status'
   /cs/{csId}/certificates:
+    get:
+      summary: Get installed certificates from the charge station
+      description: |
+        Queries the charge station for installed certificates. Uses OCPP GetInstalledCertificateIds
+        to retrieve certificate hash data for certificates currently installed on the charge station.
+      operationId: getInstalledCertificates
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      - name: certificateType
+        in: query
+        description: Optional filter by certificate type
+        required: false
+        schema:
+          type: string
+          enum:
+          - V2GRootCertificate
+          - MORootCertificate
+          - CSMSRootCertificate
+          - V2GCertificateChain
+          - ManufacturerRootCertificate
+      responses:
+        '202':
+          description: Request accepted, will query charge station asynchronously
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
     post:
       summary: Install certificates on the charge station
       operationId: installChargeStationCertificates
@@ -106,6 +144,39 @@ paths:
       responses:
         '200':
           description: OK
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/certificate:
+    delete:
+      summary: Delete a certificate from the charge station
+      description: |
+        Requests the charge station to delete a specific certificate identified by its hash data.
+        Uses OCPP DeleteCertificate to remove the certificate from the charge station.
+      operationId: deleteChargeStationCertificate
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CertificateHashDataRequest'
+      responses:
+        '202':
+          description: Request accepted, will delete certificate asynchronously
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
         default:
           description: Unexpected error
           content:
@@ -1621,6 +1692,52 @@ components:
                 - Accepted
                 - Rejected
                 - Pending
+    CertificateHashDataRequest:
+      type: object
+      description: Certificate hash data for identifying a specific certificate
+      required:
+      - certificateHashData
+      properties:
+        certificateHashData:
+          type: object
+          required:
+          - hashAlgorithm
+          - issuerNameHash
+          - issuerKeyHash
+          - serialNumber
+          properties:
+            hashAlgorithm:
+              type: string
+              enum:
+              - SHA256
+              - SHA384
+              - SHA512
+              description: Algorithm used to generate the hash
+            issuerNameHash:
+              type: string
+              description: Hash of the issuer's distinguished name
+              maxLength: 128
+            issuerKeyHash:
+              type: string
+              description: Hash of the issuer's public key
+              maxLength: 128
+            serialNumber:
+              type: string
+              description: Certificate serial number
+              maxLength: 40
+    OperationResponse:
+      type: object
+      description: Response for asynchronous operations
+      properties:
+        operationId:
+          type: string
+          description: Unique identifier for tracking the operation status
+        status:
+          type: string
+          description: Initial operation status
+          enum:
+          - Pending
+          - Accepted
     ChargeStationTrigger:
       type: object
       description: Trigger a charge station action
