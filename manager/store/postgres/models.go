@@ -115,6 +115,17 @@ type ChargingProfile struct {
 	UpdatedAt               pgtype.Timestamp `db:"updated_at" json:"updated_at"`
 }
 
+type DiagnosticsRequest struct {
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	Location        string             `db:"location" json:"location"`
+	StartTime       pgtype.Timestamptz `db:"start_time" json:"start_time"`
+	StopTime        pgtype.Timestamptz `db:"stop_time" json:"stop_time"`
+	Retries         pgtype.Int4        `db:"retries" json:"retries"`
+	RetryInterval   pgtype.Int4        `db:"retry_interval" json:"retry_interval"`
+	Status          string             `db:"status" json:"status"`
+	SendAfter       pgtype.Timestamptz `db:"send_after" json:"send_after"`
+}
+
 type DiagnosticsStatus struct {
 	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
 	Status          string             `db:"status" json:"status"`
@@ -181,6 +192,19 @@ type Location struct {
 	LocationData []byte           `db:"location_data" json:"location_data"`
 	CreatedAt    pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt    pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
+type LogRequest struct {
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	LogType         string             `db:"log_type" json:"log_type"`
+	RequestID       int32              `db:"request_id" json:"request_id"`
+	RemoteLocation  string             `db:"remote_location" json:"remote_location"`
+	OldestTimestamp pgtype.Timestamptz `db:"oldest_timestamp" json:"oldest_timestamp"`
+	LatestTimestamp pgtype.Timestamptz `db:"latest_timestamp" json:"latest_timestamp"`
+	Retries         pgtype.Int4        `db:"retries" json:"retries"`
+	RetryInterval   pgtype.Int4        `db:"retry_interval" json:"retry_interval"`
+	Status          string             `db:"status" json:"status"`
+	SendAfter       pgtype.Timestamptz `db:"send_after" json:"send_after"`
 }
 
 type LogStatus struct {

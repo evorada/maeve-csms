@@ -31,10 +31,12 @@ type Querier interface {
 	DeleteChargingProfilesByStationAndConnector(ctx context.Context, arg DeleteChargingProfilesByStationAndConnectorParams) (int64, error)
 	DeleteChargingProfilesByStationAndPurpose(ctx context.Context, arg DeleteChargingProfilesByStationAndPurposeParams) (int64, error)
 	DeleteChargingProfilesByStationConnectorPurposeStack(ctx context.Context, arg DeleteChargingProfilesByStationConnectorPurposeStackParams) (int64, error)
+	DeleteDiagnosticsRequest(ctx context.Context, chargeStationID string) error
 	DeleteDisplayMessage(ctx context.Context, arg DeleteDisplayMessageParams) error
 	DeleteFirmwareUpdateRequest(ctx context.Context, chargeStationID string) error
 	DeleteLocalAuthListEntry(ctx context.Context, arg DeleteLocalAuthListEntryParams) error
 	DeleteLocation(ctx context.Context, id string) error
+	DeleteLogRequest(ctx context.Context, chargeStationID string) error
 	DeleteOcpiRegistration(ctx context.Context, token string) error
 	DeleteResetRequest(ctx context.Context, chargeStationID string) error
 	DeleteToken(ctx context.Context, uid string) error
@@ -62,6 +64,7 @@ type Querier interface {
 	GetChargeStationTrigger(ctx context.Context, chargeStationID string) (ChargeStationTrigger, error)
 	GetChargingProfilesByStation(ctx context.Context, chargeStationID string) ([]ChargingProfile, error)
 	GetChargingProfilesByStationAndConnector(ctx context.Context, arg GetChargingProfilesByStationAndConnectorParams) ([]ChargingProfile, error)
+	GetDiagnosticsRequest(ctx context.Context, chargeStationID string) (DiagnosticsRequest, error)
 	GetDiagnosticsStatus(ctx context.Context, chargeStationID string) (DiagnosticsStatus, error)
 	GetDisplayMessage(ctx context.Context, arg GetDisplayMessageParams) (DisplayMessage, error)
 	GetFirmwareUpdateRequest(ctx context.Context, chargeStationID string) (FirmwareUpdateRequest, error)
@@ -69,6 +72,7 @@ type Querier interface {
 	GetLocalAuthListEntries(ctx context.Context, chargeStationID string) ([]LocalAuthListEntry, error)
 	GetLocalListVersion(ctx context.Context, chargeStationID string) (int32, error)
 	GetLocation(ctx context.Context, id string) (Location, error)
+	GetLogRequest(ctx context.Context, chargeStationID string) (LogRequest, error)
 	GetLogStatus(ctx context.Context, chargeStationID string) (LogStatus, error)
 	GetMeterValues(ctx context.Context, transactionID string) ([]TransactionMeterValue, error)
 	GetMeterValuesByStationAndEvse(ctx context.Context, arg GetMeterValuesByStationAndEvseParams) ([]MeterValue, error)
@@ -91,12 +95,14 @@ type Querier interface {
 	ListChargeStationDataTransfers(ctx context.Context, arg ListChargeStationDataTransfersParams) ([]ChargeStationDataTransfer, error)
 	ListChargeStationSettings(ctx context.Context, arg ListChargeStationSettingsParams) ([]ChargeStationSetting, error)
 	ListChargeStationTriggers(ctx context.Context, arg ListChargeStationTriggersParams) ([]ChargeStationTrigger, error)
+	ListDiagnosticsRequests(ctx context.Context, arg ListDiagnosticsRequestsParams) ([]DiagnosticsRequest, error)
 	ListDisplayMessages(ctx context.Context, chargeStationID string) ([]DisplayMessage, error)
 	ListDisplayMessagesByPriority(ctx context.Context, arg ListDisplayMessagesByPriorityParams) ([]DisplayMessage, error)
 	ListDisplayMessagesByState(ctx context.Context, arg ListDisplayMessagesByStateParams) ([]DisplayMessage, error)
 	ListDisplayMessagesByStateAndPriority(ctx context.Context, arg ListDisplayMessagesByStateAndPriorityParams) ([]DisplayMessage, error)
 	ListFirmwareUpdateRequests(ctx context.Context, arg ListFirmwareUpdateRequestsParams) ([]FirmwareUpdateRequest, error)
 	ListLocations(ctx context.Context, arg ListLocationsParams) ([]Location, error)
+	ListLogRequests(ctx context.Context, arg ListLogRequestsParams) ([]LogRequest, error)
 	ListOcpiPartiesForRole(ctx context.Context, role string) ([]OcpiParty, error)
 	ListTokens(ctx context.Context, arg ListTokensParams) ([]Token, error)
 	ListTransactions(ctx context.Context) ([]Transaction, error)
@@ -122,11 +128,13 @@ type Querier interface {
 	UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token, error)
 	UpdateTransaction(ctx context.Context, arg UpdateTransactionParams) (Transaction, error)
 	UpsertChargingProfile(ctx context.Context, arg UpsertChargingProfileParams) error
+	UpsertDiagnosticsRequest(ctx context.Context, arg UpsertDiagnosticsRequestParams) error
 	UpsertDiagnosticsStatus(ctx context.Context, arg UpsertDiagnosticsStatusParams) error
 	UpsertFirmwareUpdateRequest(ctx context.Context, arg UpsertFirmwareUpdateRequestParams) error
 	UpsertFirmwareUpdateStatus(ctx context.Context, arg UpsertFirmwareUpdateStatusParams) error
 	UpsertLocalAuthListEntry(ctx context.Context, arg UpsertLocalAuthListEntryParams) error
 	UpsertLocalListVersion(ctx context.Context, arg UpsertLocalListVersionParams) error
+	UpsertLogRequest(ctx context.Context, arg UpsertLogRequestParams) error
 	UpsertLogStatus(ctx context.Context, arg UpsertLogStatusParams) error
 	UpsertPublishFirmwareStatus(ctx context.Context, arg UpsertPublishFirmwareStatusParams) error
 }
