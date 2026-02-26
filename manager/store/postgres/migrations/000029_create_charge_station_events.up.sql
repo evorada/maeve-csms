@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS charge_station_event (
     id SERIAL PRIMARY KEY,
-    charge_station_id TEXT NOT NULL,
+    charge_station_id VARCHAR(48) NOT NULL,
     timestamp TIMESTAMPTZ NOT NULL,
     event_type TEXT NOT NULL,
     tech_code TEXT,
@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS charge_station_event (
     cleared BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT fk_cs_event_cs FOREIGN KEY (charge_station_id)
-        REFERENCES charge_stations(id) ON DELETE CASCADE
+        REFERENCES charge_stations(charge_station_id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_cs_event_cs ON charge_station_event(charge_station_id);

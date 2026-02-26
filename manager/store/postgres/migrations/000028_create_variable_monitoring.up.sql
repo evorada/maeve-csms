@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS variable_monitoring (
     id SERIAL PRIMARY KEY,
-    charge_station_id TEXT NOT NULL,
+    charge_station_id VARCHAR(48) NOT NULL,
     component_name TEXT NOT NULL,
     component_instance TEXT,
     variable_name TEXT NOT NULL,
@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS variable_monitoring (
     transaction BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT fk_variable_monitoring_cs FOREIGN KEY (charge_station_id)
-        REFERENCES charge_stations(id) ON DELETE CASCADE
+        REFERENCES charge_stations(charge_station_id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_variable_monitoring_cs ON variable_monitoring(charge_station_id);
