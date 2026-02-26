@@ -119,3 +119,11 @@ func (r ResetRequest) Bind(_ *http.Request) error {
 func (u UnlockConnectorRequest) Bind(_ *http.Request) error {
 	return nil
 }
+
+func (c CertificateHashDataRequest) Bind(_ *http.Request) error {
+	return nil
+}
+
+func (o OperationResponse) Render(_ http.ResponseWriter, _ *http.Request) error {
+	return nil
+}

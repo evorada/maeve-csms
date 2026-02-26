@@ -35,6 +35,8 @@ type Store struct {
 	chargeStationDataTransfer        map[string]*store.ChargeStationDataTransfer
 	chargeStationClearCache          map[string]*store.ChargeStationClearCache
 	chargeStationChangeAvailability  map[string]*store.ChargeStationChangeAvailability
+	chargeStationCertificateQuery    map[string]*store.ChargeStationCertificateQuery
+	chargeStationCertificateDeletion map[string]*store.ChargeStationCertificateDeletion
 	tokens                           map[string]*store.Token
 	transactions                     map[string]*store.Transaction
 	certificates                     map[string]string
@@ -69,6 +71,8 @@ func NewStore(clock clock.PassiveClock) *Store {
 		chargeStationDataTransfer:        make(map[string]*store.ChargeStationDataTransfer),
 		chargeStationClearCache:          make(map[string]*store.ChargeStationClearCache),
 		chargeStationChangeAvailability:  make(map[string]*store.ChargeStationChangeAvailability),
+		chargeStationCertificateQuery:    make(map[string]*store.ChargeStationCertificateQuery),
+		chargeStationCertificateDeletion: make(map[string]*store.ChargeStationCertificateDeletion),
 		tokens:                           make(map[string]*store.Token),
 		transactions:                     make(map[string]*store.Transaction),
 		certificates:                     make(map[string]string),
@@ -1107,6 +1111,90 @@ func (s *Store) DeleteUnlockConnectorRequest(_ context.Context, chargeStationId 
 	defer s.Unlock()
 	delete(s.unlockConnectorRequests, chargeStationId)
 	return nil
+}
+
+func (s *Store) SetChargeStationCertificateQuery(_ context.Context, chargeStationId string, query *store.ChargeStationCertificateQuery) error {
+	s.Lock()
+	defer s.Unlock()
+	s.chargeStationCertificateQuery[chargeStationId] = query
+	return nil
+}
+
+func (s *Store) DeleteChargeStationCertificateQuery(_ context.Context, chargeStationId string) error {
+	s.Lock()
+	defer s.Unlock()
+	delete(s.chargeStationCertificateQuery, chargeStationId)
+	return nil
+}
+
+func (s *Store) LookupChargeStationCertificateQuery(_ context.Context, chargeStationId string) (*store.ChargeStationCertificateQuery, error) {
+	s.Lock()
+	defer s.Unlock()
+	return s.chargeStationCertificateQuery[chargeStationId], nil
+}
+
+func (s *Store) ListChargeStationCertificateQueries(_ context.Context, pageSize int, previousChargeStationId string) ([]*store.ChargeStationCertificateQuery, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	keys := maps.Keys(s.chargeStationCertificateQuery)
+	sort.Strings(keys)
+
+	i, found := slices.BinarySearch(keys, previousChargeStationId)
+	if !found {
+		i = 0
+	} else {
+		i++
+	}
+
+	var queries []*store.ChargeStationCertificateQuery
+	max := int(math.Min(float64(i+pageSize), float64(len(keys))))
+	for _, k := range keys[i:max] {
+		queries = append(queries, s.chargeStationCertificateQuery[k])
+	}
+	return queries, nil
+}
+
+func (s *Store) SetChargeStationCertificateDeletion(_ context.Context, chargeStationId string, deletion *store.ChargeStationCertificateDeletion) error {
+	s.Lock()
+	defer s.Unlock()
+	s.chargeStationCertificateDeletion[chargeStationId] = deletion
+	return nil
+}
+
+func (s *Store) DeleteChargeStationCertificateDeletion(_ context.Context, chargeStationId string) error {
+	s.Lock()
+	defer s.Unlock()
+	delete(s.chargeStationCertificateDeletion, chargeStationId)
+	return nil
+}
+
+func (s *Store) LookupChargeStationCertificateDeletion(_ context.Context, chargeStationId string) (*store.ChargeStationCertificateDeletion, error) {
+	s.Lock()
+	defer s.Unlock()
+	return s.chargeStationCertificateDeletion[chargeStationId], nil
+}
+
+func (s *Store) ListChargeStationCertificateDeletions(_ context.Context, pageSize int, previousChargeStationId string) ([]*store.ChargeStationCertificateDeletion, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	keys := maps.Keys(s.chargeStationCertificateDeletion)
+	sort.Strings(keys)
+
+	i, found := slices.BinarySearch(keys, previousChargeStationId)
+	if !found {
+		i = 0
+	} else {
+		i++
+	}
+
+	var deletions []*store.ChargeStationCertificateDeletion
+	max := int(math.Min(float64(i+pageSize), float64(len(keys))))
+	for _, k := range keys[i:max] {
+		deletions = append(deletions, s.chargeStationCertificateDeletion[k])
+	}
+	return deletions, nil
 }
 
 func (s *Store) SetDiagnosticsRequest(_ context.Context, chargeStationId string, request *store.DiagnosticsRequest) error {

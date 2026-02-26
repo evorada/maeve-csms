@@ -35,6 +35,25 @@ type ChargeStationCertificate struct {
 	SendAfter                     pgtype.Timestamp `db:"send_after" json:"send_after"`
 }
 
+type ChargeStationCertificateDeletion struct {
+	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
+	HashAlgorithm   string           `db:"hash_algorithm" json:"hash_algorithm"`
+	IssuerNameHash  string           `db:"issuer_name_hash" json:"issuer_name_hash"`
+	IssuerKeyHash   string           `db:"issuer_key_hash" json:"issuer_key_hash"`
+	SerialNumber    string           `db:"serial_number" json:"serial_number"`
+	DeletionStatus  string           `db:"deletion_status" json:"deletion_status"`
+	SendAfter       pgtype.Timestamp `db:"send_after" json:"send_after"`
+	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
+}
+
+type ChargeStationCertificateQuery struct {
+	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
+	CertificateType pgtype.Text      `db:"certificate_type" json:"certificate_type"`
+	QueryStatus     string           `db:"query_status" json:"query_status"`
+	SendAfter       pgtype.Timestamp `db:"send_after" json:"send_after"`
+	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
+}
+
 type ChargeStationChangeAvailability struct {
 	ChargeStationID  string             `db:"charge_station_id" json:"charge_station_id"`
 	ConnectorID      pgtype.Int4        `db:"connector_id" json:"connector_id"`

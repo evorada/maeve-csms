@@ -281,3 +281,51 @@ type UnlockConnectorRequestStore interface {
 	GetUnlockConnectorRequest(ctx context.Context, chargeStationId string) (*UnlockConnectorRequest, error)
 	DeleteUnlockConnectorRequest(ctx context.Context, chargeStationId string) error
 }
+
+type CertificateQueryStatus string
+
+var (
+	CertificateQueryStatusPending  CertificateQueryStatus = "Pending"
+	CertificateQueryStatusAccepted CertificateQueryStatus = "Accepted"
+	CertificateQueryStatusRejected CertificateQueryStatus = "Rejected"
+)
+
+type ChargeStationCertificateQuery struct {
+	ChargeStationId string
+	CertificateType *string
+	QueryStatus     CertificateQueryStatus
+	SendAfter       time.Time
+}
+
+type ChargeStationCertificateQueryStore interface {
+	SetChargeStationCertificateQuery(ctx context.Context, chargeStationId string, query *ChargeStationCertificateQuery) error
+	DeleteChargeStationCertificateQuery(ctx context.Context, chargeStationId string) error
+	LookupChargeStationCertificateQuery(ctx context.Context, chargeStationId string) (*ChargeStationCertificateQuery, error)
+	ListChargeStationCertificateQueries(ctx context.Context, pageSize int, previousChargeStationId string) ([]*ChargeStationCertificateQuery, error)
+}
+
+type CertificateDeletionStatus string
+
+var (
+	CertificateDeletionStatusPending  CertificateDeletionStatus = "Pending"
+	CertificateDeletionStatusAccepted CertificateDeletionStatus = "Accepted"
+	CertificateDeletionStatusRejected CertificateDeletionStatus = "Rejected"
+	CertificateDeletionStatusNotFound CertificateDeletionStatus = "NotFound"
+)
+
+type ChargeStationCertificateDeletion struct {
+	ChargeStationId string
+	HashAlgorithm   string
+	IssuerNameHash  string
+	IssuerKeyHash   string
+	SerialNumber    string
+	DeletionStatus  CertificateDeletionStatus
+	SendAfter       time.Time
+}
+
+type ChargeStationCertificateDeletionStore interface {
+	SetChargeStationCertificateDeletion(ctx context.Context, chargeStationId string, deletion *ChargeStationCertificateDeletion) error
+	DeleteChargeStationCertificateDeletion(ctx context.Context, chargeStationId string) error
+	LookupChargeStationCertificateDeletion(ctx context.Context, chargeStationId string) (*ChargeStationCertificateDeletion, error)
+	ListChargeStationCertificateDeletions(ctx context.Context, pageSize int, previousChargeStationId string) ([]*ChargeStationCertificateDeletion, error)
+}
