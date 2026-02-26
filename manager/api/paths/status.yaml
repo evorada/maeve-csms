@@ -1,0 +1,77 @@
+paths:
+  /cs/{csId}/status:
+    get:
+      summary: Get charge station status
+      description: 'Returns the current status of the specified charge station,
+
+        including connection state, last heartbeat, firmware version, and hardware
+        details.
+
+        '
+      operationId: getChargeStationStatus
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        required: true
+        schema:
+          type: string
+          maxLength: 28
+      responses:
+        '200':
+          description: Charge station status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeStationStatusResponse'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/connectors:
+    get:
+      summary: Get connector statuses
+      description: 'Returns the current status of all connectors on the specified
+        charge station,
+
+        including their availability, error codes, and active transactions.
+
+        '
+      operationId: getConnectorStatuses
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        required: true
+        schema:
+          type: string
+          maxLength: 28
+      responses:
+        '200':
+          description: Connector statuses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ConnectorStatusResponse'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'

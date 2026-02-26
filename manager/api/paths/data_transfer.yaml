@@ -1,0 +1,37 @@
+paths:
+  /cs/{csId}/data-transfer:
+    post:
+      summary: Send data transfer to charge station
+      description: 'Sends vendor-specific data to a charge station. The data format
+        and semantics
+
+        are defined by the vendor. Supports both OCPP 1.6 and OCPP 2.0.1.
+
+        '
+      operationId: sendDataTransfer
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DataTransferRequest'
+      responses:
+        '202':
+          description: Accepted - data transfer request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataTransferResponse'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'

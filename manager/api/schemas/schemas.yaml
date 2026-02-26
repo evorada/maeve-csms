@@ -1,0 +1,1859 @@
+components:
+  schemas:
+    ChargeStationAuth:
+      type: object
+      description: Connection details for a charge station
+      required:
+      - securityProfile
+      properties:
+        securityProfile:
+          type: integer
+          description: 'The security profile to use for the charge station: * `0`
+            - unsecured transport with basic auth * `1` - TLS with basic auth * `2`
+            - TLS with client certificate
+
+            '
+        base64SHA256Password:
+          type: string
+          maxLength: 64
+          description: The base64 encoded, SHA-256 hash of the charge station password
+        invalidUsernameAllowed:
+          type: boolean
+          description: If set to true then an invalid username will not prevent the
+            charge station connecting
+    ChargeStationSettings:
+      type: object
+      description: Settings for a charge station
+      additionalProperties:
+        type: string
+        description: 'The key is the name of the setting. For OCPP 2.0.1 the name
+          should have the following pattern:
+
+          <component>/<variable>. The component name can include an optional component
+          instance name and evse id
+
+          separated by semi-colons. The variable name can include an optional variable
+          instance name and attribute
+
+          type separated by semi-colons. The maximum length for OCPP 1.6 is 500 characters.
+
+          '
+        maxLength: 1000
+    ChargeStationInstallCertificates:
+      type: object
+      description: 'The set of certificates to install on the charge station. The
+        certificates will be sent
+
+        to the charge station asynchronously.
+
+        '
+      required:
+      - certificates
+      properties:
+        certificates:
+          type: array
+          items:
+            type: object
+            description: The set of certificates to install
+            required:
+            - type
+            - certificate
+            properties:
+              type:
+                type: string
+                enum:
+                - V2G
+                - MO
+                - MF
+                - CSMS
+              certificate:
+                type: string
+                description: The PEM encoded certificate with newlines replaced by
+                  `\n`
+              status:
+                type: string
+                description: The status, defaults to Pending
+                enum:
+                - Accepted
+                - Rejected
+                - Pending
+    CertificateHashDataRequest:
+      type: object
+      description: Certificate hash data for identifying a specific certificate
+      required:
+      - certificateHashData
+      properties:
+        certificateHashData:
+          type: object
+          required:
+          - hashAlgorithm
+          - issuerNameHash
+          - issuerKeyHash
+          - serialNumber
+          properties:
+            hashAlgorithm:
+              type: string
+              enum:
+              - SHA256
+              - SHA384
+              - SHA512
+              description: Algorithm used to generate the hash
+            issuerNameHash:
+              type: string
+              description: Hash of the issuer's distinguished name
+              maxLength: 128
+            issuerKeyHash:
+              type: string
+              description: Hash of the issuer's public key
+              maxLength: 128
+            serialNumber:
+              type: string
+              description: Certificate serial number
+              maxLength: 40
+    OperationResponse:
+      type: object
+      description: Response for asynchronous operations
+      properties:
+        operationId:
+          type: string
+          description: Unique identifier for tracking the operation status
+        status:
+          type: string
+          description: Initial operation status
+          enum:
+          - Pending
+          - Accepted
+    ChargeStationTrigger:
+      type: object
+      description: Trigger a charge station action
+      required:
+      - trigger
+      properties:
+        trigger:
+          type: string
+          enum:
+          - BootNotification
+          - StatusNotification
+          - SignV2GCertificate
+          - SignChargingStationCertificate
+          - SignCombinedCertificate
+          - MeterValues
+          - DiagnosticsStatusNotification
+          - FirmwareStatusNotification
+          - Heartbeat
+          - NotifyReport
+          - NotifyMonitoringReport
+          - PublishFirmwareStatusNotification
+          - LogStatusNotification
+        connectorId:
+          type: integer
+          description: Optional connector ID. Required for some message types (StatusNotification,
+            MeterValues)
+          minimum: 0
+    FirmwareUpdateRequest:
+      type: object
+      description: Request to update charge station firmware
+      required:
+      - location
+      properties:
+        location:
+          type: string
+          format: uri
+          description: URI where the firmware can be downloaded (HTTP/HTTPS/FTP)
+          maxLength: 512
+        retrieveDate:
+          type: string
+          format: date-time
+          description: Optional scheduled time to start the firmware download. If
+            not provided, download starts immediately
+        retries:
+          type: integer
+          minimum: 0
+          maximum: 10
+          description: 'Number of retries if download fails (default: 0)'
+        retryInterval:
+          type: integer
+          minimum: 0
+          description: 'Interval in seconds between retry attempts (default: 0)'
+        signature:
+          type: string
+          description: Base64 encoded signature of the firmware for signed updates
+        signingCertificate:
+          type: string
+          description: PEM encoded certificate used to sign the firmware
+    FirmwareStatus:
+      type: object
+      description: Current firmware status of a charge station
+      required:
+      - status
+      properties:
+        status:
+          type: string
+          enum:
+          - Idle
+          - Downloaded
+          - DownloadFailed
+          - Downloading
+          - InstallationFailed
+          - Installing
+          - Installed
+          description: Current firmware update status
+        lastUpdate:
+          type: string
+          format: date-time
+          description: Timestamp of the last status update
+        currentVersion:
+          type: string
+          description: Currently installed firmware version
+        pendingVersion:
+          type: string
+          description: Version being downloaded/installed (if update in progress)
+    DiagnosticsRequest:
+      type: object
+      description: Request to upload diagnostics from charge station
+      required:
+      - location
+      properties:
+        location:
+          type: string
+          format: uri
+          description: URI where diagnostics should be uploaded
+          maxLength: 512
+        startTime:
+          type: string
+          format: date-time
+          description: Optional start time for diagnostics collection period
+        stopTime:
+          type: string
+          format: date-time
+          description: Optional end time for diagnostics collection period
+        retries:
+          type: integer
+          minimum: 0
+          maximum: 10
+          description: Number of retries if upload fails
+        retryInterval:
+          type: integer
+          minimum: 0
+          description: Interval in seconds between retry attempts
+    DiagnosticsStatus:
+      type: object
+      description: Current diagnostics upload status
+      required:
+      - status
+      properties:
+        status:
+          type: string
+          enum:
+          - Idle
+          - Uploaded
+          - UploadFailed
+          - Uploading
+          description: Current diagnostics upload status
+        lastUpdate:
+          type: string
+          format: date-time
+          description: Timestamp of the last status update
+        fileName:
+          type: string
+          description: Name of the diagnostics file being uploaded
+    LogRequest:
+      type: object
+      description: Request to upload logs from charge station (OCPP 2.0.1)
+      required:
+      - logType
+      - requestId
+      - log
+      properties:
+        logType:
+          type: string
+          enum:
+          - DiagnosticsLog
+          - SecurityLog
+          description: Type of log to retrieve
+        requestId:
+          type: integer
+          description: Unique request ID to track this log request
+        log:
+          type: object
+          required:
+          - remoteLocation
+          properties:
+            remoteLocation:
+              type: string
+              format: uri
+              description: URI where logs should be uploaded
+              maxLength: 512
+            oldestTimestamp:
+              type: string
+              format: date-time
+              description: Optional oldest timestamp for log entries
+            latestTimestamp:
+              type: string
+              format: date-time
+              description: Optional latest timestamp for log entries
+        retries:
+          type: integer
+          minimum: 0
+          maximum: 10
+          description: Number of retries if upload fails
+        retryInterval:
+          type: integer
+          minimum: 0
+          description: Interval in seconds between retry attempts
+    LogStatus:
+      type: object
+      description: Current log upload status
+      required:
+      - status
+      properties:
+        status:
+          type: string
+          enum:
+          - Idle
+          - Uploading
+          - Uploaded
+          - UploadFailure
+          - BadMessage
+          - NotSupportedOperation
+          - PermissionDenied
+          description: Current log upload status
+        requestId:
+          type: integer
+          description: Request ID associated with this status
+        lastUpdate:
+          type: string
+          format: date-time
+          description: Timestamp of the last status update
+    Token:
+      type: object
+      description: An authorization token
+      required:
+      - countryCode
+      - partyId
+      - type
+      - uid
+      - contractId
+      - issuer
+      - valid
+      - cacheMode
+      properties:
+        countryCode:
+          type: string
+          minLength: 2
+          maxLength: 2
+          description: The country code of the issuing eMSP
+        partyId:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: The party id of the issuing eMSP
+        type:
+          type: string
+          enum:
+          - AD_HOC_USER
+          - APP_USER
+          - OTHER
+          - RFID
+          description: The type of token
+        uid:
+          type: string
+          description: The unique token id
+          maxLength: 36
+        contractId:
+          type: string
+          pattern: ([A-Za-z]{2})(-?)([A-Za-z]{3})(-?)([A-Za-z0-9]{9})(-?)([A-Za-z0-9])?
+          description: The contract ID (eMAID) associated with the token (with optional
+            component separators)
+        visualNumber:
+          type: string
+          description: The visual/readable number/identification printed on an RFID
+            card
+        issuer:
+          type: string
+          description: Issuing company, most of the times the name of the company
+            printed on the RFID card, not necessarily the eMSP
+        groupId:
+          type: string
+          maxLength: 36
+          description: This id groups a couple of tokens to make two or more tokens
+            work as one
+        valid:
+          type: boolean
+          description: Is this token valid
+        languageCode:
+          type: string
+          minLength: 2
+          maxLength: 2
+          description: The preferred language to use encoded as ISO 639-1 language
+            code
+        cacheMode:
+          type: string
+          enum:
+          - ALWAYS
+          - ALLOWED
+          - ALLOWED_OFFLINE
+          - NEVER
+          description: Indicates what type of token caching is allowed
+        lastUpdated:
+          type: string
+          format: date-time
+          description: The date the record was last updated (ignored on create/update)
+    RemoteStartTransactionRequest:
+      type: object
+      description: Request to remotely start a charging transaction
+      required:
+      - idTag
+      properties:
+        idTag:
+          type: string
+          maxLength: 20
+          description: The identifier that should be used to authorize the transaction
+        connectorId:
+          type: integer
+          minimum: 1
+          description: Optional connector ID to start charging on
+        chargingProfile:
+          $ref: '#/components/schemas/ChargingProfile'
+    RemoteStopTransactionRequest:
+      type: object
+      description: Request to remotely stop a charging transaction
+      required:
+      - transactionId
+      properties:
+        transactionId:
+          type: string
+          description: The identifier of the transaction to stop
+    Status:
+      type: object
+      description: HTTP status
+      required:
+      - status
+      properties:
+        status:
+          type: string
+          description: The status description
+        error:
+          type: string
+          description: The error details
+    Certificate:
+      type: object
+      description: A client certificate
+      required:
+      - certificate
+      properties:
+        certificate:
+          type: string
+          description: The PEM encoded certificate with newlines replaced by `\n`
+    Registration:
+      type: object
+      description: Defines the initial connection details for the OCPI registration
+        process
+      properties:
+        token:
+          type: string
+          maxLength: 64
+          description: The token to use for communicating with the eMSP (CREDENTIALS_TOKEN_A).
+        url:
+          type: string
+          format: uri
+          description: The URL of the eMSP versions endpoint. If provided the CSMS
+            will act as the sender of the versions request.
+        status:
+          type: string
+          enum:
+          - PENDING
+          - REGISTERED
+          description: "The status of the registration request. If the request is\
+            \ marked as `REGISTERED` then the token will be allowed to\nbe used to\
+            \ access all endpoints avoiding the need for the OCPI registration process.\
+            \ If the request is marked as \n`PENDING` then the token will only be\
+            \ allowed to access the `/ocpi/versions`, `/ocpi/2.2` and `/ocpi/2.2/credentials`\n\
+            endpoints.\n"
+      required:
+      - token
+    Location:
+      type: object
+      description: A charge station location
+      required:
+      - address
+      - city
+      - country
+      - country_code
+      - coordinates
+      - party_id
+      properties:
+        country_code:
+          type: string
+        party_id:
+          type: string
+        name:
+          type: string
+          nullable: true
+        address:
+          type: string
+        city:
+          type: string
+        postal_code:
+          type: string
+          nullable: true
+        country:
+          type: string
+        coordinates:
+          $ref: '#/components/schemas/GeoLocation'
+        parking_type:
+          type: string
+          enum:
+          - ALONG_MOTORWAY
+          - PARKING_GARAGE
+          - PARKING_LOT
+          - ON_DRIVEWAY
+          - ON_STREET
+          - UNDERGROUND_GARAGE
+          nullable: true
+        evses:
+          type: array
+          items:
+            $ref: '#/components/schemas/Evse'
+          nullable: true
+    GeoLocation:
+      required:
+      - latitude
+      - longitude
+      type: object
+      properties:
+        latitude:
+          type: string
+        longitude:
+          type: string
+    Evse:
+      type: object
+      properties:
+        uid:
+          type: string
+          description: 'Uniquely identifies the EVSE within the CPOs platform (and
+
+            suboperator platforms).'
+        evse_id:
+          type: string
+          nullable: true
+        connectors:
+          type: array
+          items:
+            $ref: '#/components/schemas/Connector'
+      required:
+      - uid
+      - status
+      - connectors
+    Connector:
+      required:
+      - format
+      - id
+      - max_amperage
+      - max_voltage
+      - power_type
+      - standard
+      type: object
+      properties:
+        id:
+          type: string
+        standard:
+          type: string
+          enum:
+          - CHADEMO
+          - CHAOJI
+          - DOMESTIC_A
+          - DOMESTIC_B
+          - DOMESTIC_C
+          - DOMESTIC_D
+          - DOMESTIC_E
+          - DOMESTIC_F
+          - DOMESTIC_G
+          - DOMESTIC_H
+          - DOMESTIC_I
+          - DOMESTIC_J
+          - DOMESTIC_K
+          - DOMESTIC_L
+          - GBT_AC
+          - GBT_DC
+          - IEC_60309_2_single_16
+          - IEC_60309_2_three_16
+          - IEC_60309_2_three_32
+          - IEC_60309_2_three_64
+          - IEC_62196_T1
+          - IEC_62196_T1_COMBO
+          - IEC_62196_T2
+          - IEC_62196_T2_COMBO
+          - IEC_62196_T3A
+          - IEC_62196_T3C
+          - NEMA_5_20
+          - NEMA_6_30
+          - NEMA_6_50
+          - NEMA_10_30
+          - NEMA_10_50
+          - NEMA_14_30
+          - NEMA_14_50
+          - PANTOGRAPH_BOTTOM_UP
+          - PANTOGRAPH_TOP_DOWN
+          - TESLA_R
+          - TESLA_S
+          - UNKNOWN
+        format:
+          type: string
+          enum:
+          - SOCKET
+          - CABLE
+        power_type:
+          type: string
+          enum:
+          - AC_1_PHASE
+          - AC_3_PHASE
+          - DC
+        max_voltage:
+          type: integer
+          format: int32
+        max_amperage:
+          type: integer
+          format: int32
+    ReservationRequest:
+      type: object
+      description: Request to create a connector reservation
+      required:
+      - connectorId
+      - expiryDate
+      - idTag
+      - reservationId
+      properties:
+        connectorId:
+          type: integer
+          format: int32
+          description: The connector ID to reserve
+        expiryDate:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the reservation expires
+        idTag:
+          type: string
+          maxLength: 20
+          description: The identifier for which the charge station has to reserve
+            a connector
+        reservationId:
+          type: integer
+          format: int32
+          description: Unique identifier for this reservation
+        parentIdTag:
+          type: string
+          maxLength: 20
+          description: Optional parent idTag
+    ReservationList:
+      type: object
+      description: List of reservations
+      required:
+      - reservations
+      properties:
+        reservations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReservationResponse'
+    TransactionList:
+      type: object
+      description: List of transactions with pagination
+      required:
+      - transactions
+      - total
+      - limit
+      - offset
+      properties:
+        transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransactionSummary'
+        total:
+          type: integer
+          format: int64
+          description: Total number of transactions matching the filter
+        limit:
+          type: integer
+          description: Maximum number of results returned
+        offset:
+          type: integer
+          description: Number of results skipped
+    TransactionSummary:
+      type: object
+      description: Summary of a transaction
+      required:
+      - transactionId
+      - idTag
+      - startTime
+      - meterStart
+      - status
+      properties:
+        transactionId:
+          type: string
+          description: The transaction identifier
+        idTag:
+          type: string
+          description: The identifier used to start the transaction
+        startTime:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the transaction started
+        stopTime:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the transaction stopped (null if active)
+        meterStart:
+          type: integer
+          description: Meter value in Wh at start of transaction
+        meterStop:
+          type: integer
+          description: Meter value in Wh at end of transaction (null if active)
+        status:
+          type: string
+          enum:
+          - active
+          - completed
+          description: Status of the transaction
+    TransactionDetail:
+      type: object
+      description: Detailed transaction information including meter values
+      required:
+      - transactionId
+      - idTag
+      - startTime
+      - meterStart
+      - status
+      - meterValues
+      properties:
+        transactionId:
+          type: string
+          description: The transaction identifier
+        idTag:
+          type: string
+          description: The identifier used to start the transaction
+        tokenType:
+          type: string
+          description: The type of token used
+        startTime:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the transaction started
+        stopTime:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the transaction stopped (null if active)
+        meterStart:
+          type: integer
+          description: Meter value in Wh at start of transaction
+        meterStop:
+          type: integer
+          description: Meter value in Wh at end of transaction (null if active)
+        status:
+          type: string
+          enum:
+          - active
+          - completed
+          description: Status of the transaction
+        meterValues:
+          type: array
+          items:
+            $ref: '#/components/schemas/MeterValue'
+          description: All meter values recorded during the transaction
+    ReservationResponse:
+      type: object
+      description: Reservation details
+      required:
+      - reservationId
+      - connectorId
+      - expiryDate
+      - idTag
+      - status
+      properties:
+        reservationId:
+          type: integer
+          format: int32
+          description: Unique identifier for this reservation
+        connectorId:
+          type: integer
+          format: int32
+          description: The connector ID
+        expiryDate:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the reservation expires
+        idTag:
+          type: string
+          description: The identifier for which the connector is reserved
+        parentIdTag:
+          type: string
+          description: Optional parent idTag
+        status:
+          type: string
+          enum:
+          - Accepted
+          - Faulted
+          - Occupied
+          - Rejected
+          - Unavailable
+          - Cancelled
+          - Expired
+          description: Current status of the reservation
+        createdAt:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the reservation was created
+    DataTransferRequest:
+      type: object
+      description: Request to send vendor-specific data to charge station
+      required:
+      - vendorId
+      properties:
+        vendorId:
+          type: string
+          maxLength: 255
+          description: Vendor identifier (vendor-specific)
+        messageId:
+          type: string
+          maxLength: 50
+          description: Optional message identifier for the data transfer
+        data:
+          type: string
+          description: Arbitrary string data (format defined by vendor)
+    DataTransferResponse:
+      type: object
+      description: Response from data transfer request
+      properties:
+        status:
+          type: string
+          enum:
+          - Accepted
+          - Rejected
+          - UnknownMessageId
+          - UnknownVendorId
+          description: Status of the data transfer
+        data:
+          type: string
+          description: Response data from the charge station (vendor-specific)
+    ChangeAvailabilityRequest:
+      type: object
+      description: Request to change charge station or connector availability
+      required:
+      - type
+      properties:
+        connectorId:
+          type: integer
+          minimum: 0
+          description: Connector ID (0 = entire station, >0 = specific connector)
+          default: 0
+        evseId:
+          type: integer
+          minimum: 0
+          description: EVSE ID for OCPP 2.0.1 (optional)
+        type:
+          type: string
+          enum:
+          - Operative
+          - Inoperative
+          description: Target availability state
+    MeterValuesSampledValue:
+      type: object
+      description: A single sampled value in a meter reading
+      required:
+      - value
+      properties:
+        value:
+          type: string
+          description: Measured value (numeric as string)
+        context:
+          type: string
+          description: Reading context (e.g., Sample.Periodic, Transaction.Begin)
+        format:
+          type: string
+          description: Value format (Raw or SignedData)
+        measurand:
+          type: string
+          description: Type of measurement (e.g., Energy.Active.Import.Register, Power.Active.Import)
+        phase:
+          type: string
+          description: Phase measured (L1, L2, L3, N, L1-N, L2-N, L3-N, L1-L2, L2-L3,
+            L3-L1)
+        location:
+          type: string
+          description: Location of measurement (Cable, EV, Inlet, Outlet, Body)
+        unit:
+          type: string
+          description: Unit of measurement (Wh, kWh, varh, kvarh, W, kW, VA, kVA,
+            var, kvar, A, V, K, Celsius, Fahrenheit, Percent)
+    MeterValue:
+      type: object
+      description: A set of meter values at a specific timestamp
+      required:
+      - timestamp
+      - sampledValue
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp of the meter reading
+        connectorId:
+          type: integer
+          description: Connector ID for the reading
+        evseId:
+          type: integer
+          description: EVSE ID for OCPP 2.0.1
+        transactionId:
+          type: string
+          description: Transaction ID (if part of a transaction)
+        sampledValue:
+          type: array
+          items:
+            $ref: '#/components/schemas/MeterValuesSampledValue'
+          description: Array of sampled values
+    MeterValuesResponse:
+      type: object
+      description: Paginated list of meter values
+      required:
+      - meterValues
+      - total
+      - limit
+      - offset
+      properties:
+        meterValues:
+          type: array
+          items:
+            $ref: '#/components/schemas/MeterValue'
+          description: Array of meter value records
+        total:
+          type: integer
+          description: Total number of matching records
+        limit:
+          type: integer
+          description: Maximum number of results returned
+        offset:
+          type: integer
+          description: Number of results skipped
+    LocalListVersionResponse:
+      type: object
+      description: Response containing the local list version
+      required:
+      - listVersion
+      properties:
+        listVersion:
+          type: integer
+          format: int32
+          description: The current version number of the local authorization list
+    IdTagInfo:
+      type: object
+      description: Authorization information for an ID tag
+      required:
+      - status
+      properties:
+        status:
+          type: string
+          enum:
+          - Accepted
+          - Blocked
+          - Expired
+          - Invalid
+          - ConcurrentTx
+          description: Authorization status
+        expiryDate:
+          type: string
+          format: date-time
+          description: Date when the ID tag expires
+          nullable: true
+        parentIdTag:
+          type: string
+          maxLength: 20
+          description: Parent ID tag for group authorization
+          nullable: true
+    LocalAuthorizationEntry:
+      type: object
+      description: Single entry in the local authorization list
+      required:
+      - idTag
+      - idTagInfo
+      properties:
+        idTag:
+          type: string
+          maxLength: 20
+          description: The identifier
+        idTagInfo:
+          $ref: '#/components/schemas/IdTagInfo'
+    LocalAuthorizationListResponse:
+      type: object
+      description: Response containing the complete local authorization list
+      required:
+      - listVersion
+      - localAuthorizationList
+      properties:
+        listVersion:
+          type: integer
+          format: int32
+          description: The current version number of the local authorization list
+        localAuthorizationList:
+          type: array
+          items:
+            $ref: '#/components/schemas/LocalAuthorizationEntry'
+          description: Array of authorization entries
+    UpdateLocalListRequest:
+      type: object
+      description: Request to update the local authorization list
+      required:
+      - listVersion
+      - updateType
+      properties:
+        listVersion:
+          type: integer
+          format: int32
+          description: The new version number (must be greater than current)
+        updateType:
+          type: string
+          enum:
+          - Full
+          - Differential
+          description: Type of update (Full=replace entire list, Differential=update
+            specific entries)
+        localAuthorizationList:
+          type: array
+          items:
+            $ref: '#/components/schemas/LocalAuthorizationEntry'
+          description: Authorization entries to add/update
+          nullable: true
+    ConfigurationResponse:
+      type: object
+      description: Configuration response from GetConfiguration (OCPP 1.6)
+      required:
+      - configurationKey
+      properties:
+        configurationKey:
+          type: array
+          description: List of configuration key-value pairs
+          items:
+            type: object
+            required:
+            - key
+            - readonly
+            properties:
+              key:
+                type: string
+                description: Configuration key name
+              readonly:
+                type: boolean
+                description: Whether the key is read-only
+              value:
+                type: string
+                description: Current value of the configuration key
+        unknownKey:
+          type: array
+          description: List of requested keys that are unknown
+          items:
+            type: string
+    ConfigurationChangeRequest:
+      type: object
+      description: Request to change configuration values (OCPP 1.6)
+      additionalProperties:
+        type: string
+        description: Configuration key-value pairs to change
+      example:
+        HeartbeatInterval: '600'
+        MeterValueSampleInterval: '120'
+    ConfigurationChangeResponse:
+      type: object
+      description: Response from ChangeConfiguration (OCPP 1.6)
+      required:
+      - results
+      properties:
+        results:
+          type: array
+          description: Per-key change results
+          items:
+            type: object
+            required:
+            - key
+            - status
+            properties:
+              key:
+                type: string
+                description: Configuration key name
+              status:
+                type: string
+                enum:
+                - Accepted
+                - Rejected
+                - RebootRequired
+                - NotSupported
+                description: Result of the configuration change
+    VariablesResponse:
+      type: object
+      description: Variables response from GetVariables (OCPP 2.0.1)
+      required:
+      - variables
+      properties:
+        variables:
+          type: array
+          description: List of variables with their values
+          items:
+            type: object
+            required:
+            - component
+            - variable
+            - variableAttribute
+            properties:
+              component:
+                type: object
+                required:
+                - name
+                properties:
+                  name:
+                    type: string
+                    description: Component name
+                  instance:
+                    type: string
+                    description: Component instance
+                  evse:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        description: EVSE identifier
+                      connectorId:
+                        type: integer
+                        description: Connector identifier
+              variable:
+                type: object
+                required:
+                - name
+                properties:
+                  name:
+                    type: string
+                    description: Variable name
+                  instance:
+                    type: string
+                    description: Variable instance
+              variableAttribute:
+                type: array
+                description: Variable attributes
+                items:
+                  type: object
+                  properties:
+                    value:
+                      type: string
+                      description: Variable value
+                    mutability:
+                      type: string
+                      enum:
+                      - ReadOnly
+                      - WriteOnly
+                      - ReadWrite
+                      description: Whether the variable can be changed
+                    persistent:
+                      type: boolean
+                      description: Whether the variable persists across reboots
+                    constant:
+                      type: boolean
+                      description: Whether the variable is constant
+    VariablesChangeRequest:
+      type: object
+      description: Request to set variable values (OCPP 2.0.1)
+      required:
+      - variables
+      properties:
+        variables:
+          type: array
+          description: Variables to set
+          items:
+            type: object
+            required:
+            - component
+            - variable
+            - attributeValue
+            properties:
+              component:
+                type: object
+                required:
+                - name
+                properties:
+                  name:
+                    type: string
+                    description: Component name
+                  instance:
+                    type: string
+                    description: Component instance
+                  evse:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        description: EVSE identifier
+                      connectorId:
+                        type: integer
+                        description: Connector identifier
+              variable:
+                type: object
+                required:
+                - name
+                properties:
+                  name:
+                    type: string
+                    description: Variable name
+                  instance:
+                    type: string
+                    description: Variable instance
+              attributeValue:
+                type: string
+                description: Value to set
+    VariablesChangeResponse:
+      type: object
+      description: Response from SetVariables (OCPP 2.0.1)
+      required:
+      - results
+      properties:
+        results:
+          type: array
+          description: Per-variable change results
+          items:
+            type: object
+            required:
+            - component
+            - variable
+            - attributeStatus
+            properties:
+              component:
+                type: object
+                required:
+                - name
+                properties:
+                  name:
+                    type: string
+              variable:
+                type: object
+                required:
+                - name
+                properties:
+                  name:
+                    type: string
+              attributeStatus:
+                type: string
+                enum:
+                - Accepted
+                - Rejected
+                - UnknownComponent
+                - UnknownVariable
+                - NotSupportedAttributeType
+                - RebootRequired
+                description: Result of the variable change
+    MessagePriorityEnum:
+      type: string
+      enum:
+      - NormalCycle
+      - InFront
+      - AlwaysFront
+      description: 'Display message priority:
+
+        * `NormalCycle` - Rotate with other messages
+
+        * `InFront` - Show before others in rotation
+
+        * `AlwaysFront` - Always visible, highest priority
+
+        '
+    MessageStateEnum:
+      type: string
+      enum:
+      - Charging
+      - Faulted
+      - Idle
+      - Unavailable
+      description: 'Charging state when message should be displayed:
+
+        * `Charging` - During active charging session
+
+        * `Faulted` - When station has an error
+
+        * `Idle` - When available but not in use
+
+        * `Unavailable` - When out of service
+
+        '
+    MessageFormatEnum:
+      type: string
+      enum:
+      - ASCII
+      - HTML
+      - URI
+      description: 'Message content format:
+
+        * `ASCII` - Plain text
+
+        * `HTML` - Rich text formatting
+
+        * `URI` - URL to display (image, webpage)
+
+        '
+    MessageContent:
+      type: object
+      required:
+      - content
+      - format
+      properties:
+        content:
+          type: string
+          maxLength: 512
+          description: The message content or URI
+        language:
+          type: string
+          minLength: 2
+          maxLength: 8
+          description: Language code (e.g., 'en', 'es', 'de')
+        format:
+          $ref: '#/components/schemas/MessageFormatEnum'
+    DisplayMessage:
+      type: object
+      required:
+      - id
+      - priority
+      - message
+      properties:
+        id:
+          type: integer
+          minimum: 0
+          description: Unique message identifier
+        priority:
+          $ref: '#/components/schemas/MessagePriorityEnum'
+        state:
+          $ref: '#/components/schemas/MessageStateEnum'
+        startDateTime:
+          type: string
+          format: date-time
+          description: When the message should start being displayed (optional)
+        endDateTime:
+          type: string
+          format: date-time
+          description: When the message should stop being displayed (optional)
+        transactionId:
+          type: string
+          maxLength: 36
+          description: Only show message during this transaction (optional)
+        message:
+          $ref: '#/components/schemas/MessageContent'
+    SetDisplayMessageRequest:
+      type: object
+      required:
+      - message
+      properties:
+        message:
+          $ref: '#/components/schemas/DisplayMessage'
+    ResetRequest:
+      type: object
+      required:
+      - type
+      properties:
+        type:
+          type: string
+          enum:
+          - Soft
+          - Hard
+          description: Type of reset to perform
+    UnlockConnectorRequest:
+      type: object
+      required:
+      - connectorId
+      properties:
+        connectorId:
+          type: integer
+          description: ID of the connector to unlock
+    SetChargingProfileRequest:
+      type: object
+      required:
+      - connectorId
+      - csChargingProfiles
+      properties:
+        connectorId:
+          type: integer
+          format: int32
+          minimum: 0
+        csChargingProfiles:
+          $ref: '#/components/schemas/ChargingProfile'
+    ChargingProfile:
+      type: object
+      required:
+      - chargingProfileId
+      - stackLevel
+      - chargingProfilePurpose
+      - chargingProfileKind
+      - chargingSchedule
+      properties:
+        chargingProfileId:
+          type: integer
+          format: int32
+        transactionId:
+          type: integer
+          format: int32
+        stackLevel:
+          type: integer
+          format: int32
+          minimum: 0
+        chargingProfilePurpose:
+          type: string
+          enum:
+          - TxProfile
+          - TxDefaultProfile
+          - ChargePointMaxProfile
+        chargingProfileKind:
+          type: string
+          enum:
+          - Absolute
+          - Relative
+          - Recurring
+        recurrencyKind:
+          type: string
+          enum:
+          - Daily
+          - Weekly
+        validFrom:
+          type: string
+          format: date-time
+        validTo:
+          type: string
+          format: date-time
+        chargingSchedule:
+          $ref: '#/components/schemas/ChargingSchedule'
+    ChargingSchedule:
+      type: object
+      required:
+      - chargingRateUnit
+      - chargingSchedulePeriod
+      properties:
+        duration:
+          type: integer
+          format: int32
+        startSchedule:
+          type: string
+          format: date-time
+        chargingRateUnit:
+          type: string
+          enum:
+          - W
+          - A
+        chargingSchedulePeriod:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChargingSchedulePeriod'
+          minItems: 1
+        minChargingRate:
+          type: number
+          format: double
+    ChargingSchedulePeriod:
+      type: object
+      required:
+      - startPeriod
+      - limit
+      properties:
+        startPeriod:
+          type: integer
+          format: int32
+          minimum: 0
+        limit:
+          type: number
+          format: double
+        numberPhases:
+          type: integer
+          format: int32
+          minimum: 1
+    ChargingProfileList:
+      type: object
+      required:
+      - profiles
+      properties:
+        profiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChargingProfileWithConnector'
+    ChargingProfileWithConnector:
+      allOf:
+      - $ref: '#/components/schemas/ChargingProfile'
+      - type: object
+        required:
+        - connectorId
+        properties:
+          connectorId:
+            type: integer
+            format: int32
+    CompositeSchedule:
+      type: object
+      required:
+      - connectorId
+      - scheduleStart
+      - chargingSchedule
+      properties:
+        connectorId:
+          type: integer
+          format: int32
+        scheduleStart:
+          type: string
+          format: date-time
+        chargingSchedule:
+          $ref: '#/components/schemas/ChargingSchedule'
+    ChargeStationStatusResponse:
+      type: object
+      description: Current status of a charge station
+      required:
+      - id
+      - connected
+      properties:
+        id:
+          type: string
+          description: The charge station identifier
+        connected:
+          type: boolean
+          description: Whether the charge station is currently connected
+        lastHeartbeat:
+          type: string
+          format: date-time
+          description: Timestamp of the last heartbeat received
+        firmwareVersion:
+          type: string
+          description: Currently installed firmware version
+        model:
+          type: string
+          description: Charge station model
+        vendor:
+          type: string
+          description: Charge station vendor/manufacturer
+        serialNumber:
+          type: string
+          description: Charge station serial number
+    ConnectorStatusResponse:
+      type: object
+      description: Current status of a connector
+      required:
+      - connectorId
+      - status
+      - errorCode
+      properties:
+        connectorId:
+          type: integer
+          format: int32
+          description: The connector ID
+        status:
+          type: string
+          enum:
+          - Available
+          - Charging
+          - Faulted
+          - Finishing
+          - Preparing
+          - Reserved
+          - SuspendedEV
+          - SuspendedEVSE
+          - Unavailable
+          description: Current status of the connector
+        errorCode:
+          type: string
+          enum:
+          - NoError
+          - ConnectorLockFailure
+          - EVCommunicationError
+          - GroundFailure
+          - HighTemperature
+          - InternalError
+          - LocalListConflict
+          - OtherError
+          - OverCurrentFailure
+          - OverVoltage
+          - PowerMeterFailure
+          - PowerSwitchFailure
+          - ReaderFailure
+          - ResetFailure
+          - UnderVoltage
+          - WeakSignal
+          description: Error code
+        info:
+          type: string
+          description: Additional information about the status
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp when the status was last updated
+        currentTransaction:
+          type: string
+          description: ID of the current transaction (if any)
+    SetVariableMonitoringRequest:
+      type: object
+      description: Request to set variable monitoring on a charge station
+      required:
+      - monitoringData
+      properties:
+        monitoringData:
+          type: array
+          items:
+            $ref: '#/components/schemas/MonitoringData'
+    MonitoringData:
+      type: object
+      required:
+      - component
+      - variable
+      - variableMonitoring
+      properties:
+        component:
+          $ref: '#/components/schemas/Component'
+        variable:
+          $ref: '#/components/schemas/Variable'
+        variableMonitoring:
+          type: array
+          items:
+            $ref: '#/components/schemas/VariableMonitoring'
+    Component:
+      type: object
+      required:
+      - name
+      properties:
+        name:
+          type: string
+          maxLength: 50
+        instance:
+          type: string
+          maxLength: 50
+        evse:
+          type: object
+          properties:
+            id:
+              type: integer
+            connectorId:
+              type: integer
+    Variable:
+      type: object
+      required:
+      - name
+      properties:
+        name:
+          type: string
+          maxLength: 50
+        instance:
+          type: string
+          maxLength: 50
+    VariableMonitoring:
+      type: object
+      required:
+      - value
+      - type
+      - severity
+      properties:
+        id:
+          type: integer
+          description: Monitor ID (optional for new monitors, required for updates)
+        transaction:
+          type: boolean
+          description: Whether monitoring is transaction-specific
+        value:
+          type: number
+          format: float
+          description: Threshold value or monitoring parameter
+        type:
+          type: string
+          enum:
+          - UpperThreshold
+          - LowerThreshold
+          - Delta
+          - Periodic
+          - PeriodicClockAligned
+          description: Type of monitoring
+        severity:
+          type: integer
+          minimum: 0
+          maximum: 9
+          description: Severity level (0 = most critical, 9 = least critical)
+    SetVariableMonitoringResponse:
+      type: object
+      required:
+      - results
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            required:
+            - status
+            properties:
+              id:
+                type: integer
+                description: Monitor ID assigned by the charge station
+              status:
+                type: string
+                enum:
+                - Accepted
+                - UnknownComponent
+                - UnknownVariable
+                - UnsupportedMonitorType
+                - Rejected
+                - Duplicate
+                description: Status of the monitoring request
+              statusInfo:
+                type: string
+                description: Additional status information
+    SetMonitoringBaseRequest:
+      type: object
+      required:
+      - monitoringBase
+      properties:
+        monitoringBase:
+          type: string
+          enum:
+          - All
+          - FactoryDefault
+          - HardWiredOnly
+          description: Base level of monitoring to configure
+    SetMonitoringLevelRequest:
+      type: object
+      required:
+      - severity
+      properties:
+        severity:
+          type: integer
+          minimum: 0
+          maximum: 9
+          description: Severity level threshold (0 = most critical, 9 = least critical)
+    GetMonitoringReportRequest:
+      type: object
+      required:
+      - requestId
+      properties:
+        requestId:
+          type: integer
+          description: Unique request identifier for tracking the report
+        componentVariable:
+          type: array
+          description: Optional list of specific components/variables to report on
+          items:
+            type: object
+            required:
+            - component
+            - variable
+            properties:
+              component:
+                $ref: '#/components/schemas/Component'
+              variable:
+                $ref: '#/components/schemas/Variable'
+    EventsResponse:
+      type: object
+      required:
+      - events
+      - total
+      - limit
+      - offset
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChargeStationEvent'
+        total:
+          type: integer
+          description: Total number of events matching the filter
+        limit:
+          type: integer
+          description: Maximum number of events returned
+        offset:
+          type: integer
+          description: Number of events skipped
+    ChargeStationEvent:
+      type: object
+      required:
+      - timestamp
+      - eventType
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: When the event occurred (ISO8601)
+        eventType:
+          type: string
+          description: Type of event (e.g., FirmwareUpdated, Rebooted, SecurityLogWasCleared)
+        techCode:
+          type: string
+          description: Technical error/info code
+        techInfo:
+          type: string
+          description: Additional technical information
+        eventData:
+          type: string
+          description: Additional event details
+        componentId:
+          type: string
+          description: Component that generated the event
+        variableId:
+          type: string
+          description: Variable associated with the event
+        severity:
+          type: integer
+          minimum: 0
+          maximum: 9
+          description: Event severity (0 = critical, 9 = informational)
+    ReportsResponse:
+      type: object
+      required:
+      - reports
+      - total
+      - limit
+      - offset
+      properties:
+        reports:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceReport'
+        total:
+          type: integer
+          description: Total number of reports matching the filter
+        limit:
+          type: integer
+          description: Maximum number of reports returned
+        offset:
+          type: integer
+          description: Number of reports skipped
+    DeviceReport:
+      type: object
+      required:
+      - requestId
+      - generatedAt
+      properties:
+        requestId:
+          type: integer
+          description: Request ID that triggered this report
+        generatedAt:
+          type: string
+          format: date-time
+          description: When the report was generated (ISO8601)
+        reportType:
+          type: string
+          description: Type of report (e.g., ConfigurationInventory, MonitoringReport)
+        reportData:
+          type: array
+          description: Report data entries
+          items:
+            type: object
+            properties:
+              component:
+                $ref: '#/components/schemas/Component'
+              variable:
+                $ref: '#/components/schemas/Variable'
+              variableAttribute:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                      description: Attribute type (Actual, Target, MinSet, MaxSet)
+                    value:
+                      type: string
+                      description: Current attribute value
+                    mutability:
+                      type: string
+                      enum:
+                      - ReadOnly
+                      - WriteOnly
+                      - ReadWrite
+                    persistent:
+                      type: boolean
+                    constant:
+                      type: boolean

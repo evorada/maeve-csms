@@ -1,0 +1,24 @@
+paths:
+  /register:
+    post:
+      summary: Registers an OCPI party with the CSMS
+      description: "Registers an OCPI party with the CSMS. Depending on the configuration\
+        \ provided the CSMS will\neither initiate a registration with the party or\
+        \ the party will wait for the party to initiate \na registration with the\
+        \ CSMS.\n"
+      operationId: registerParty
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Registration'
+      responses:
+        '201':
+          description: Created
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'

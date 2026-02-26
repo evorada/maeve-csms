@@ -1,0 +1,27 @@
+paths:
+  /cs/{csId}/trigger:
+    post:
+      summary: Trigger a message from the charge station
+      operationId: triggerChargeStation
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/schemas.yaml#/components/schemas/ChargeStationTrigger'
+      responses:
+        '201':
+          description: Created
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'

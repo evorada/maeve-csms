@@ -1,0 +1,82 @@
+paths:
+  /cs/{csId}/availability:
+    post:
+      summary: Change charge station availability
+      description: 'Changes the operational status of a charge station or specific
+        connector.
+
+        Used to take equipment out of service for maintenance or make it available
+        again.
+
+        Supports both OCPP 1.6 and OCPP 2.0.1.
+
+        '
+      operationId: changeAvailability
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeAvailabilityRequest'
+      responses:
+        '202':
+          description: Accepted - availability change request submitted
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/reset:
+    post:
+      operationId: ResetChargeStation
+      summary: Request a charge station reset
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetRequest'
+      responses:
+        '202':
+          description: Reset request accepted
+        '400':
+          description: Invalid request
+        '500':
+          description: Internal server error
+  /cs/{csId}/unlock-connector:
+    post:
+      operationId: UnlockConnector
+      summary: Request to unlock a connector on a charge station
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnlockConnectorRequest'
+      responses:
+        '202':
+          description: Unlock request accepted
+        '400':
+          description: Invalid request
+        '500':
+          description: Internal server error

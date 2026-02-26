@@ -1,0 +1,30 @@
+paths:
+  /location/{locationId}:
+    post:
+      summary: Registers a location with the CSMS
+      description: 'Registers a location with the CSMS.
+
+        '
+      operationId: registerLocation
+      parameters:
+      - name: locationId
+        in: path
+        description: The location identifier
+        schema:
+          type: string
+          maxLength: 64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Location'
+      responses:
+        '201':
+          description: Created
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'

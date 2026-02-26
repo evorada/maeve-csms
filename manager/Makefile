@@ -1,3 +1,11 @@
+.PHONY: api-bundle
+api-bundle:
+	cd api && ./bundle-spec.sh
+
+.PHONY: api-generate
+api-generate: api-bundle
+	~/go/bin/oapi-codegen -generate chi-server,models,spec -package api api/api-spec.bundled.yaml > api/api.gen.go
+
 .PHONY: postgres-generate
 postgres-generate:
 	cd store/postgres && sqlc generate

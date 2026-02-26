@@ -1,0 +1,56 @@
+paths:
+  /token:
+    post:
+      summary: Create/update an authorization token
+      description: 'Creates or updates a token that can be used to authorize a charge
+
+        '
+      operationId: setToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Token'
+      responses:
+        '201':
+          description: Created
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /token/{tokenUid}:
+    get:
+      summary: Lookup an authorization token
+      description: 'Lookup a token that can be used to authorize a charge
+
+        '
+      operationId: lookupToken
+      parameters:
+      - required: true
+        in: path
+        name: tokenUid
+        schema:
+          type: string
+          maxLength: 36
+      responses:
+        '200':
+          description: Authorization token details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Token'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'

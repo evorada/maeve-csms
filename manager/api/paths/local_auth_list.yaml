@@ -1,0 +1,37 @@
+paths:
+  /cs/{csId}/local-list/version:
+    get:
+      summary: Get local authorization list version
+      description: 'Returns the current version number of the local authorization
+        list
+
+        stored on the charge station.
+
+        '
+      operationId: getLocalListVersion
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      responses:
+        '200':
+          description: Local list version response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocalListVersionResponse'
+        '404':
+          description: Unknown charge station or no local list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
