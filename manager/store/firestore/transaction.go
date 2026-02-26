@@ -5,6 +5,7 @@ package firestore
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"google.golang.org/grpc/codes"
@@ -160,6 +161,48 @@ func (s *Store) updateTransaction(ctx context.Context, chargeStationId, transact
 		return fmt.Errorf("setting transaction %s/%s: %w", chargeStationId, transactionId, err)
 	}
 	return nil
+}
+
+func (s *Store) ListTransactionsForChargeStation(ctx context.Context, chargeStationId, status string, startDate, endDate *time.Time, limit, offset int) ([]*store.Transaction, int64, error) {
+	query := s.client.Collection("Transaction").Where("chargeStationId", "==", chargeStationId)
+
+	docs, err := query.Documents(ctx).GetAll()
+	if err != nil {
+		return nil, 0, fmt.Errorf("querying transactions for %s: %w", chargeStationId, err)
+	}
+
+	var allTransactions []*store.Transaction
+	for _, doc := range docs {
+		var transaction store.Transaction
+		if err := doc.DataTo(&transaction); err != nil {
+			return nil, 0, fmt.Errorf("parsing transaction %s: %w", doc.Ref.ID, err)
+		}
+
+		isActive := transaction.EndedSeqNo == 0
+		if status == "active" && !isActive {
+			continue
+		}
+		if status == "completed" && isActive {
+			continue
+		}
+
+		allTransactions = append(allTransactions, &transaction)
+	}
+
+	total := int64(len(allTransactions))
+
+	start := offset
+	if start > len(allTransactions) {
+		start = len(allTransactions)
+	}
+
+	end := start + limit
+	if end > len(allTransactions) {
+		end = len(allTransactions)
+	}
+
+	result := allTransactions[start:end]
+	return result, total, nil
 }
 
 func getPath(chargeStationId, transactionId string) string {

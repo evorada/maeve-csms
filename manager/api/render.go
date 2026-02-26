@@ -127,3 +127,15 @@ func (c CertificateHashDataRequest) Bind(_ *http.Request) error {
 func (o OperationResponse) Render(_ http.ResponseWriter, _ *http.Request) error {
 	return nil
 }
+
+func (t TransactionList) Render(_ http.ResponseWriter, _ *http.Request) error {
+	return nil
+}
+
+func (t TransactionDetail) Render(_ http.ResponseWriter, _ *http.Request) error {
+	return nil
+}
+
+func (s Status) Render(_ http.ResponseWriter, _ *http.Request) error {
+	return nil
+}

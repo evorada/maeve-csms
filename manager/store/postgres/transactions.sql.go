@@ -27,6 +27,36 @@ func (q *Queries) AddMeterValues(ctx context.Context, arg AddMeterValuesParams) 
 	return err
 }
 
+const CountTransactionsFiltered = `-- name: CountTransactionsFiltered :one
+SELECT COUNT(*) FROM transactions
+WHERE charge_station_id = $1
+    AND ($2::text IS NULL 
+        OR ($2::text = 'active' AND stop_timestamp IS NULL)
+        OR ($2::text = 'completed' AND stop_timestamp IS NOT NULL)
+        OR $2::text = 'all')
+    AND ($3::timestamp IS NULL OR start_timestamp >= $3::timestamp)
+    AND ($4::timestamp IS NULL OR start_timestamp <= $4::timestamp)
+`
+
+type CountTransactionsFilteredParams struct {
+	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
+	Status          pgtype.Text      `db:"status" json:"status"`
+	StartDate       pgtype.Timestamp `db:"start_date" json:"start_date"`
+	EndDate         pgtype.Timestamp `db:"end_date" json:"end_date"`
+}
+
+func (q *Queries) CountTransactionsFiltered(ctx context.Context, arg CountTransactionsFilteredParams) (int64, error) {
+	row := q.db.QueryRow(ctx, CountTransactionsFiltered,
+		arg.ChargeStationID,
+		arg.Status,
+		arg.StartDate,
+		arg.EndDate,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const CreateTransaction = `-- name: CreateTransaction :one
 INSERT INTO transactions (
     id, charge_station_id, token_uid, token_type,
@@ -169,6 +199,70 @@ ORDER BY start_timestamp DESC
 
 func (q *Queries) ListTransactions(ctx context.Context) ([]Transaction, error) {
 	rows, err := q.db.Query(ctx, ListTransactions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Transaction{}
+	for rows.Next() {
+		var i Transaction
+		if err := rows.Scan(
+			&i.ID,
+			&i.ChargeStationID,
+			&i.TokenUid,
+			&i.TokenType,
+			&i.MeterStart,
+			&i.MeterStop,
+			&i.StartTimestamp,
+			&i.StopTimestamp,
+			&i.StoppedReason,
+			&i.UpdatedSeqNo,
+			&i.Offline,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.LastCost,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const ListTransactionsFiltered = `-- name: ListTransactionsFiltered :many
+SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost FROM transactions
+WHERE charge_station_id = $1
+    AND ($4::text IS NULL 
+        OR ($4::text = 'active' AND stop_timestamp IS NULL)
+        OR ($4::text = 'completed' AND stop_timestamp IS NOT NULL)
+        OR $4::text = 'all')
+    AND ($5::timestamp IS NULL OR start_timestamp >= $5::timestamp)
+    AND ($6::timestamp IS NULL OR start_timestamp <= $6::timestamp)
+ORDER BY start_timestamp DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListTransactionsFilteredParams struct {
+	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
+	Limit           int32            `db:"limit" json:"limit"`
+	Offset          int32            `db:"offset" json:"offset"`
+	Status          pgtype.Text      `db:"status" json:"status"`
+	StartDate       pgtype.Timestamp `db:"start_date" json:"start_date"`
+	EndDate         pgtype.Timestamp `db:"end_date" json:"end_date"`
+}
+
+func (q *Queries) ListTransactionsFiltered(ctx context.Context, arg ListTransactionsFilteredParams) ([]Transaction, error) {
+	rows, err := q.db.Query(ctx, ListTransactionsFiltered,
+		arg.ChargeStationID,
+		arg.Limit,
+		arg.Offset,
+		arg.Status,
+		arg.StartDate,
+		arg.EndDate,
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -2,7 +2,10 @@
 
 package store
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type Transaction struct {
 	ChargeStationId   string       `firestore:"chargeStationId"`
@@ -46,4 +49,6 @@ type TransactionStore interface {
 	// UpdateTransactionCost stores the most recent running cost for a transaction as
 	// communicated by the CSMS via the CostUpdated message.
 	UpdateTransactionCost(ctx context.Context, chargeStationId, transactionId string, totalCost float64) error
+	// ListTransactionsForChargeStation retrieves transactions for a specific charge station with filtering and pagination
+	ListTransactionsForChargeStation(ctx context.Context, chargeStationId, status string, startDate, endDate *time.Time, limit, offset int) ([]*Transaction, int64, error)
 }
