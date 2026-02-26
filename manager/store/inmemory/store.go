@@ -62,6 +62,12 @@ type Store struct {
 	logRequests                      map[string]*store.LogRequest
 	connectorStatuses                map[string]map[int]*store.ConnectorStatus
 	chargeStationStatuses            map[string]*store.ChargeStationStatus
+	variableMonitoring               map[string]map[int]*store.VariableMonitoringConfig
+	variableMonitoringNextId         int
+	chargeStationEvents              map[string][]*store.ChargeStationEvent
+	chargeStationEventNextId         int
+	deviceReports                    map[string][]*store.DeviceReport
+	deviceReportNextId               int
 }
 
 func NewStore(clock clock.PassiveClock) *Store {
@@ -102,6 +108,12 @@ func NewStore(clock clock.PassiveClock) *Store {
 		logRequests:                      make(map[string]*store.LogRequest),
 		connectorStatuses:                make(map[string]map[int]*store.ConnectorStatus),
 		chargeStationStatuses:            make(map[string]*store.ChargeStationStatus),
+		variableMonitoring:               make(map[string]map[int]*store.VariableMonitoringConfig),
+		variableMonitoringNextId:         1,
+		chargeStationEvents:              make(map[string][]*store.ChargeStationEvent),
+		chargeStationEventNextId:         1,
+		deviceReports:                    make(map[string][]*store.DeviceReport),
+		deviceReportNextId:               1,
 	}
 }
 
@@ -1493,4 +1505,147 @@ func (s *Store) UpdateHeartbeat(_ context.Context, chargeStationId string, times
 	s.chargeStationStatuses[chargeStationId] = status
 
 	return nil
+}
+
+// VariableMonitoringStore implementation
+
+func (s *Store) SetVariableMonitoring(_ context.Context, chargeStationId string, config *store.VariableMonitoringConfig) error {
+	s.Lock()
+	defer s.Unlock()
+
+	if s.variableMonitoring[chargeStationId] == nil {
+		s.variableMonitoring[chargeStationId] = make(map[int]*store.VariableMonitoringConfig)
+	}
+
+	if config.Id == 0 {
+		config.Id = s.variableMonitoringNextId
+		s.variableMonitoringNextId++
+	}
+	config.ChargeStationId = chargeStationId
+	config.CreatedAt = s.clock.Now()
+
+	configCopy := *config
+	s.variableMonitoring[chargeStationId][config.Id] = &configCopy
+	return nil
+}
+
+func (s *Store) GetVariableMonitoring(_ context.Context, chargeStationId string, monitorId int) (*store.VariableMonitoringConfig, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	monitors := s.variableMonitoring[chargeStationId]
+	if monitors == nil {
+		return nil, nil
+	}
+	return monitors[monitorId], nil
+}
+
+func (s *Store) DeleteVariableMonitoring(_ context.Context, chargeStationId string, monitorId int) error {
+	s.Lock()
+	defer s.Unlock()
+
+	monitors := s.variableMonitoring[chargeStationId]
+	if monitors != nil {
+		delete(monitors, monitorId)
+	}
+	return nil
+}
+
+func (s *Store) ListVariableMonitoring(_ context.Context, chargeStationId string, offset int, limit int) ([]*store.VariableMonitoringConfig, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	monitors := s.variableMonitoring[chargeStationId]
+	if monitors == nil {
+		return []*store.VariableMonitoringConfig{}, nil
+	}
+
+	ids := maps.Keys(monitors)
+	sort.Ints(ids)
+
+	var result []*store.VariableMonitoringConfig
+	for i, id := range ids {
+		if i < offset {
+			continue
+		}
+		if len(result) >= limit {
+			break
+		}
+		result = append(result, monitors[id])
+	}
+
+	if result == nil {
+		return []*store.VariableMonitoringConfig{}, nil
+	}
+	return result, nil
+}
+
+// ChargeStationEventStore implementation
+
+func (s *Store) AddChargeStationEvent(_ context.Context, chargeStationId string, event *store.ChargeStationEvent) error {
+	s.Lock()
+	defer s.Unlock()
+
+	event.Id = s.chargeStationEventNextId
+	s.chargeStationEventNextId++
+	event.ChargeStationId = chargeStationId
+	event.CreatedAt = s.clock.Now()
+
+	eventCopy := *event
+	s.chargeStationEvents[chargeStationId] = append(s.chargeStationEvents[chargeStationId], &eventCopy)
+	return nil
+}
+
+func (s *Store) ListChargeStationEvents(_ context.Context, chargeStationId string, offset int, limit int) ([]*store.ChargeStationEvent, int, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	events := s.chargeStationEvents[chargeStationId]
+	total := len(events)
+
+	if offset >= total {
+		return []*store.ChargeStationEvent{}, total, nil
+	}
+
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+
+	return events[offset:end], total, nil
+}
+
+// DeviceReportStore implementation
+
+func (s *Store) AddDeviceReport(_ context.Context, chargeStationId string, report *store.DeviceReport) error {
+	s.Lock()
+	defer s.Unlock()
+
+	report.Id = s.deviceReportNextId
+	s.deviceReportNextId++
+	report.ChargeStationId = chargeStationId
+	report.CreatedAt = s.clock.Now()
+
+	reportCopy := *report
+	s.deviceReports[chargeStationId] = append(s.deviceReports[chargeStationId], &reportCopy)
+	return nil
+}
+
+func (s *Store) ListDeviceReports(_ context.Context, chargeStationId string, offset int, limit int) ([]*store.DeviceReport, int, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	reports := s.deviceReports[chargeStationId]
+	total := len(reports)
+
+	if offset >= total {
+		return []*store.DeviceReport{}, total, nil
+	}
+
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+
+	return reports[offset:end], total, nil
 }

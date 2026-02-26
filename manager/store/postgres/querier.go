@@ -12,6 +12,8 @@ type Querier interface {
 	AddChargeStationCertificate(ctx context.Context, arg AddChargeStationCertificateParams) (ChargeStationCertificate, error)
 	AddMeterValues(ctx context.Context, arg AddMeterValuesParams) error
 	CancelReservation(ctx context.Context, reservationID int32) error
+	CountChargeStationEvents(ctx context.Context, chargeStationID string) (int64, error)
+	CountDeviceReports(ctx context.Context, chargeStationID string) (int64, error)
 	CountMeterValues(ctx context.Context, arg CountMeterValuesParams) (int64, error)
 	CountTransactionsFiltered(ctx context.Context, arg CountTransactionsFilteredParams) (int64, error)
 	CreateOrUpdateDisplayMessage(ctx context.Context, arg CreateOrUpdateDisplayMessageParams) error
@@ -46,6 +48,7 @@ type Querier interface {
 	DeleteResetRequest(ctx context.Context, chargeStationID string) error
 	DeleteToken(ctx context.Context, uid string) error
 	DeleteUnlockConnectorRequest(ctx context.Context, chargeStationID string) error
+	DeleteVariableMonitoring(ctx context.Context, arg DeleteVariableMonitoringParams) error
 	ExpireReservations(ctx context.Context) (int64, error)
 	FindActiveTransaction(ctx context.Context, chargeStationID string) (Transaction, error)
 	GetActiveReservations(ctx context.Context, chargeStationID string) ([]Reservation, error)
@@ -96,6 +99,9 @@ type Querier interface {
 	GetToken(ctx context.Context, uid string) (Token, error)
 	GetTransaction(ctx context.Context, id string) (Transaction, error)
 	GetUnlockConnectorRequest(ctx context.Context, chargeStationID string) (UnlockConnectorRequest, error)
+	GetVariableMonitoring(ctx context.Context, arg GetVariableMonitoringParams) (VariableMonitoring, error)
+	InsertChargeStationEvent(ctx context.Context, arg InsertChargeStationEventParams) (int32, error)
+	InsertDeviceReport(ctx context.Context, arg InsertDeviceReportParams) (int32, error)
 	ListAllLocations(ctx context.Context, arg ListAllLocationsParams) ([]Location, error)
 	ListCertificates(ctx context.Context) ([]Certificate, error)
 	ListChargeStationCertificateDeletions(ctx context.Context, arg ListChargeStationCertificateDeletionsParams) ([]ChargeStationCertificateDeletion, error)
@@ -104,9 +110,11 @@ type Querier interface {
 	ListChargeStationChangeAvailabilities(ctx context.Context, arg ListChargeStationChangeAvailabilitiesParams) ([]ChargeStationChangeAvailability, error)
 	ListChargeStationClearCaches(ctx context.Context, arg ListChargeStationClearCachesParams) ([]ChargeStationClearCache, error)
 	ListChargeStationDataTransfers(ctx context.Context, arg ListChargeStationDataTransfersParams) ([]ChargeStationDataTransfer, error)
+	ListChargeStationEvents(ctx context.Context, arg ListChargeStationEventsParams) ([]ChargeStationEvent, error)
 	ListChargeStationSettings(ctx context.Context, arg ListChargeStationSettingsParams) ([]ChargeStationSetting, error)
 	ListChargeStationTriggers(ctx context.Context, arg ListChargeStationTriggersParams) ([]ChargeStationTrigger, error)
 	ListConnectorStatuses(ctx context.Context, chargeStationID string) ([]ConnectorStatus, error)
+	ListDeviceReports(ctx context.Context, arg ListDeviceReportsParams) ([]DeviceReport, error)
 	ListDiagnosticsRequests(ctx context.Context, arg ListDiagnosticsRequestsParams) ([]DiagnosticsRequest, error)
 	ListDisplayMessages(ctx context.Context, chargeStationID string) ([]DisplayMessage, error)
 	ListDisplayMessagesByPriority(ctx context.Context, arg ListDisplayMessagesByPriorityParams) ([]DisplayMessage, error)
@@ -121,6 +129,7 @@ type Querier interface {
 	ListTokens(ctx context.Context, arg ListTokensParams) ([]Token, error)
 	ListTransactions(ctx context.Context) ([]Transaction, error)
 	ListTransactionsFiltered(ctx context.Context, arg ListTransactionsFilteredParams) ([]Transaction, error)
+	ListVariableMonitoring(ctx context.Context, arg ListVariableMonitoringParams) ([]VariableMonitoring, error)
 	LookupChargeStationCertificateDeletion(ctx context.Context, chargeStationID string) (ChargeStationCertificateDeletion, error)
 	LookupChargeStationCertificateQuery(ctx context.Context, chargeStationID string) (ChargeStationCertificateQuery, error)
 	QueryMeterValues(ctx context.Context, arg QueryMeterValuesParams) ([]MeterValue, error)
@@ -161,6 +170,8 @@ type Querier interface {
 	UpsertLogRequest(ctx context.Context, arg UpsertLogRequestParams) error
 	UpsertLogStatus(ctx context.Context, arg UpsertLogStatusParams) error
 	UpsertPublishFirmwareStatus(ctx context.Context, arg UpsertPublishFirmwareStatusParams) error
+	UpsertVariableMonitoring(ctx context.Context, arg UpsertVariableMonitoringParams) (int32, error)
+	UpsertVariableMonitoringWithId(ctx context.Context, arg UpsertVariableMonitoringWithIdParams) error
 }
 
 var _ Querier = (*Queries)(nil)

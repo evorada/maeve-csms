@@ -85,6 +85,20 @@ type ChargeStationDataTransfer struct {
 	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
 
+type ChargeStationEvent struct {
+	ID              int32              `db:"id" json:"id"`
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	Timestamp       pgtype.Timestamptz `db:"timestamp" json:"timestamp"`
+	EventType       string             `db:"event_type" json:"event_type"`
+	TechCode        pgtype.Text        `db:"tech_code" json:"tech_code"`
+	TechInfo        pgtype.Text        `db:"tech_info" json:"tech_info"`
+	EventData       pgtype.Text        `db:"event_data" json:"event_data"`
+	ComponentID     pgtype.Text        `db:"component_id" json:"component_id"`
+	VariableID      pgtype.Text        `db:"variable_id" json:"variable_id"`
+	Cleared         bool               `db:"cleared" json:"cleared"`
+	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
+}
+
 type ChargeStationRuntime struct {
 	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
 	OcppVersion     string           `db:"ocpp_version" json:"ocpp_version"`
@@ -156,6 +170,16 @@ type ConnectorStatus struct {
 	VendorID             pgtype.Text        `db:"vendor_id" json:"vendor_id"`
 	CurrentTransactionID pgtype.Text        `db:"current_transaction_id" json:"current_transaction_id"`
 	UpdatedAt            pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
+type DeviceReport struct {
+	ID              int32              `db:"id" json:"id"`
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	RequestID       int32              `db:"request_id" json:"request_id"`
+	GeneratedAt     pgtype.Timestamptz `db:"generated_at" json:"generated_at"`
+	ReportType      pgtype.Text        `db:"report_type" json:"report_type"`
+	ReportData      []byte             `db:"report_data" json:"report_data"`
+	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
 type DiagnosticsRequest struct {
@@ -382,4 +406,18 @@ type UnlockConnectorRequest struct {
 	Status          string             `db:"status" json:"status"`
 	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
+type VariableMonitoring struct {
+	ID                int32              `db:"id" json:"id"`
+	ChargeStationID   string             `db:"charge_station_id" json:"charge_station_id"`
+	ComponentName     string             `db:"component_name" json:"component_name"`
+	ComponentInstance pgtype.Text        `db:"component_instance" json:"component_instance"`
+	VariableName      string             `db:"variable_name" json:"variable_name"`
+	VariableInstance  pgtype.Text        `db:"variable_instance" json:"variable_instance"`
+	MonitorType       string             `db:"monitor_type" json:"monitor_type"`
+	Value             float64            `db:"value" json:"value"`
+	Severity          int32              `db:"severity" json:"severity"`
+	Transaction       bool               `db:"transaction" json:"transaction"`
+	CreatedAt         pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
