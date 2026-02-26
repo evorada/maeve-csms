@@ -36,9 +36,10 @@ jobs:
     - name: Check OpenAPI bundle is up to date
       run: |
         cd api && ./bundle-spec.sh
-        if ! git diff --quiet api/api-spec.bundled.yaml; then
+        cd "$GITHUB_WORKSPACE"
+        if ! git diff --quiet -- manager/api/api-spec.bundled.yaml; then
           echo "::error::api-spec.bundled.yaml is out of date. Run 'make api-bundle' and commit the result."
-          git diff api/api-spec.bundled.yaml | head -50
+          git diff -- manager/api/api-spec.bundled.yaml | head -50
           exit 1
         fi
     - name: Run Gosec Security Scanner
