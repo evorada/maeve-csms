@@ -1,0 +1,3895 @@
+openapi: 3.0.0
+info:
+  version: 0.0.0
+  title: MaEVe CSMS
+  description: Internal API to interact with the MaEVe CSMS, external clients should use OCPI.
+  contact:
+    name: MaEVe team
+    email: maeve-team@thoughtworks.com
+  license:
+    name: Apache 2.0
+servers:
+  - url: http://localhost:9410/api/v0
+    description: The local development server
+paths:
+  /cs/{csId}:
+    post:
+      summary: Register a new charge station
+      description: |
+        Registers a new charge station. The system will assume that the charge station
+        has not yet been provisioned and will place the charge station into a pending state
+        so it can been configured when it sends a boot notification.
+      operationId: registerChargeStation
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeStationAuth'
+      responses:
+        '201':
+          description: Created
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/reconfigure:
+    post:
+      summary: Reconfigure the charge station
+      description: |
+        Supplies new configuration that should be applied to the charge station. This is not
+        intended to be used as a general charge station provisioning mechanism, it is intended
+        for one time changes required during testing. After reconfiguration, the charge station
+        will be rebooted so the new configuration can take effect if instructed to.
+      operationId: reconfigureChargeStation
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeStationSettings'
+      responses:
+        '200':
+          description: OK
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/certificates:
+    get:
+      summary: Get installed certificates from the charge station
+      description: |
+        Queries the charge station for installed certificates. Uses OCPP GetInstalledCertificateIds
+        to retrieve certificate hash data for certificates currently installed on the charge station.
+      operationId: getInstalledCertificates
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+        - name: certificateType
+          in: query
+          description: Optional filter by certificate type
+          required: false
+          schema:
+            type: string
+            enum:
+              - V2GRootCertificate
+              - MORootCertificate
+              - CSMSRootCertificate
+              - V2GCertificateChain
+              - ManufacturerRootCertificate
+      responses:
+        '202':
+          description: Request accepted, will query charge station asynchronously
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    post:
+      summary: Install certificates on the charge station
+      operationId: installChargeStationCertificates
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeStationInstallCertificates'
+      responses:
+        '200':
+          description: OK
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/certificate:
+    delete:
+      summary: Delete a certificate from the charge station
+      description: |
+        Requests the charge station to delete a specific certificate identified by its hash data.
+        Uses OCPP DeleteCertificate to remove the certificate from the charge station.
+      operationId: deleteChargeStationCertificate
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CertificateHashDataRequest'
+      responses:
+        '202':
+          description: Request accepted, will delete certificate asynchronously
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/auth:
+    get:
+      summary: Returns the authentication details
+      description: |
+        Returns the details required by the CSMS gateway to determine how to authenticate
+        the charge station
+      operationId: lookupChargeStationAuth
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      responses:
+        '200':
+          description: Charge station auth response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeStationAuth'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/trigger:
+    post:
+      operationId: triggerChargeStation
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeStationTrigger'
+      responses:
+        '200':
+          description: OK
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/firmware/update:
+    post:
+      summary: Trigger firmware update on charge station
+      description: |
+        Initiates a firmware update on the specified charge station. Supports both regular
+        and signed firmware updates. The charge station will download and install the firmware
+        from the provided location.
+      operationId: updateChargeStationFirmware
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FirmwareUpdateRequest'
+      responses:
+        '202':
+          description: Accepted - firmware update initiated
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/firmware/status:
+    get:
+      summary: Get firmware update status
+      description: |
+        Returns the current firmware update status for the specified charge station,
+        including current version, pending version (if any), and update progress.
+      operationId: getChargeStationFirmwareStatus
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      responses:
+        '200':
+          description: Firmware status response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FirmwareStatus'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/diagnostics:
+    post:
+      summary: Request diagnostics from charge station
+      description: |
+        Initiates a diagnostics upload from the specified charge station (OCPP 1.6).
+        The charge station will collect diagnostics and upload them to the provided location.
+      operationId: requestChargeStationDiagnostics
+      parameters:
+        - name: csId
+          in: path
+          required: true
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiagnosticsRequest'
+      responses:
+        '202':
+          description: Accepted - diagnostics request initiated
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/diagnostics/status:
+    get:
+      summary: Get diagnostics upload status
+      description: |
+        Returns the current diagnostics upload status for the specified charge station.
+      operationId: getChargeStationDiagnosticsStatus
+      parameters:
+        - name: csId
+          in: path
+          required: true
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      responses:
+        '200':
+          description: Diagnostics status response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiagnosticsStatus'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/logs:
+    post:
+      summary: Request log upload from charge station
+      description: |
+        Initiates a log upload from the specified charge station (OCPP 2.0.1 GetLog).
+      operationId: requestChargeStationLogs
+      parameters:
+        - name: csId
+          in: path
+          required: true
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogRequest'
+      responses:
+        '202':
+          description: Accepted - log request initiated
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/logs/status:
+    get:
+      summary: Get log upload status
+      description: |
+        Returns the current log upload status for the specified charge station.
+      operationId: getChargeStationLogStatus
+      parameters:
+        - name: csId
+          in: path
+          required: true
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+        - name: requestId
+          in: query
+          required: false
+          description: Filter by specific request ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Log status response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogStatus'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/reservation:
+    post:
+      summary: Create a connector reservation
+      description: |
+        Creates a reservation for a specific connector on the charge station.
+        The charge station will be instructed to reserve the connector via OCPP ReserveNow.
+      operationId: createReservation
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          required: true
+          schema:
+            type: string
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservationRequest'
+      responses:
+        '202':
+          description: Accepted - reservation request initiated
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/reservation/{reservationId}:
+    delete:
+      summary: Cancel a reservation
+      description: |
+        Cancels an active reservation on the charge station.
+        The charge station will be instructed to cancel the reservation via OCPP CancelReservation.
+      operationId: cancelReservation
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          required: true
+          schema:
+            type: string
+            maxLength: 28
+        - name: reservationId
+          in: path
+          description: The reservation identifier
+          required: true
+          schema:
+            type: integer
+            format: int32
+      responses:
+        '202':
+          description: Accepted - cancellation request initiated
+        '404':
+          description: Unknown charge station or reservation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/reservations:
+    get:
+      summary: List reservations
+      description: |
+        Lists reservations for the specified charge station.
+        By default returns active reservations only.
+      operationId: listReservations
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          required: true
+          schema:
+            type: string
+            maxLength: 28
+        - name: status
+          in: query
+          description: 'Filter by reservation status (default: active)'
+          required: false
+          schema:
+            type: string
+            enum:
+              - active
+              - expired
+              - all
+            default: active
+      responses:
+        '200':
+          description: List of reservations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationList'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/transactions:
+    get:
+      summary: List transactions for a charge station
+      description: |
+        Lists transactions for the specified charge station with optional filtering
+        by status, date range, and pagination.
+      operationId: listTransactions
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          required: true
+          schema:
+            type: string
+            maxLength: 28
+        - name: status
+          in: query
+          description: 'Filter by transaction status (default: all)'
+          required: false
+          schema:
+            type: string
+            enum:
+              - active
+              - completed
+              - all
+            default: all
+        - name: limit
+          in: query
+          description: 'Maximum number of transactions to return (default: 50, max: 100)'
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          description: 'Number of transactions to skip for pagination (default: 0)'
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: startDate
+          in: query
+          description: Filter transactions starting on or after this date (ISO8601)
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          description: Filter transactions starting on or before this date (ISO8601)
+          required: false
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: List of transactions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionList'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/transaction/{transactionId}:
+    get:
+      summary: Get transaction details
+      description: |
+        Retrieves detailed information about a specific transaction including
+        all meter values.
+      operationId: getTransactionDetails
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          required: true
+          schema:
+            type: string
+            maxLength: 28
+        - name: transactionId
+          in: path
+          description: The transaction identifier
+          required: true
+          schema:
+            type: string
+            maxLength: 36
+      responses:
+        '200':
+          description: Transaction details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionDetail'
+        '404':
+          description: Transaction not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/status:
+    get:
+      summary: Get charge station status
+      description: |
+        Returns the current status of the specified charge station,
+        including connection state, last heartbeat, firmware version, and hardware details.
+      operationId: getChargeStationStatus
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          required: true
+          schema:
+            type: string
+            maxLength: 28
+      responses:
+        '200':
+          description: Charge station status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeStationStatusResponse'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/connectors:
+    get:
+      summary: Get connector statuses
+      description: |
+        Returns the current status of all connectors on the specified charge station,
+        including their availability, error codes, and active transactions.
+      operationId: getConnectorStatuses
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          required: true
+          schema:
+            type: string
+            maxLength: 28
+      responses:
+        '200':
+          description: Connector statuses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ConnectorStatusResponse'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/start-transaction:
+    post:
+      summary: Remote start transaction
+      description: |
+        Remotely starts a charging transaction on the specified charge station.
+        This is an async operation that returns immediately with 202 Accepted.
+      operationId: remoteStartTransaction
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemoteStartTransactionRequest'
+      responses:
+        '202':
+          description: Accepted - remote start initiated
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/stop-transaction:
+    post:
+      summary: Remote stop transaction
+      description: |
+        Remotely stops an active charging transaction on the specified charge station.
+        This is an async operation that returns immediately with 202 Accepted.
+      operationId: remoteStopTransaction
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemoteStopTransactionRequest'
+      responses:
+        '202':
+          description: Accepted - remote stop initiated
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /token:
+    post:
+      summary: Create/update an authorization token
+      description: |
+        Creates or updates a token that can be used to authorize a charge
+      operationId: setToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Token'
+      responses:
+        '201':
+          description: Created
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    get:
+      summary: List authorization tokens
+      description: |
+        Lists all tokens that can be used to authorize a charge
+      operationId: listTokens
+      parameters:
+        - required: false
+          in: query
+          name: offset
+          schema:
+            type: integer
+            minimum: 0
+        - required: false
+          in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: List of tokens
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Token'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /token/{tokenUid}:
+    get:
+      summary: Lookup an authorization token
+      description: |
+        Lookup a token that can be used to authorize a charge
+      operationId: lookupToken
+      parameters:
+        - required: true
+          in: path
+          name: tokenUid
+          schema:
+            type: string
+            maxLength: 36
+      responses:
+        '200':
+          description: Authorization token details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Token'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /certificate:
+    post:
+      summary: Upload a certificate
+      description: |
+        Uploads a client certificate to the CSMS. The CSMS can use the certificate to authenticate
+        the charge station using mutual TLS when the TLS operations are being offloaded to a load-balancer.
+      operationId: uploadCertificate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Certificate'
+      responses:
+        '201':
+          description: Created
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /certificate/{certificateHash}:
+    get:
+      summary: Lookup a certificate
+      description: |
+        Lookup a client certificate that has been uploaded to the CSMS using a base64 encoded SHA-256 hash
+        of the DER bytes.
+      operationId: lookupCertificate
+      parameters:
+        - required: true
+          in: path
+          name: certificateHash
+          schema:
+            type: string
+            maxLength: 64
+      responses:
+        '200':
+          description: Certificate details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Certificate'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    delete:
+      summary: Delete a certificate
+      description: |
+        Deletes a client certificate that has been uploaded to the CSMS using a base64 encoded SHA-256 hash
+        of the DER bytes.
+      operationId: deleteCertificate
+      parameters:
+        - required: true
+          in: path
+          name: certificateHash
+          schema:
+            type: string
+            maxLength: 64
+      responses:
+        '204':
+          description: No content
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /register:
+    post:
+      summary: Registers an OCPI party with the CSMS
+      description: |
+        Registers an OCPI party with the CSMS. Depending on the configuration provided the CSMS will
+        either initiate a registration with the party or the party will wait for the party to initiate 
+        a registration with the CSMS.
+      operationId: registerParty
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Registration'
+      responses:
+        '201':
+          description: Created
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /location/{locationId}:
+    post:
+      summary: Registers a location with the CSMS
+      description: |
+        Registers a location with the CSMS.
+      operationId: registerLocation
+      parameters:
+        - name: locationId
+          in: path
+          description: The location identifier
+          schema:
+            type: string
+            maxLength: 64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Location'
+      responses:
+        '201':
+          description: Created
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/data-transfer:
+    post:
+      summary: Send data transfer to charge station
+      description: |
+        Sends vendor-specific data to a charge station. The data format and semantics
+        are defined by the vendor. Supports both OCPP 1.6 and OCPP 2.0.1.
+      operationId: sendDataTransfer
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DataTransferRequest'
+      responses:
+        '202':
+          description: Accepted - data transfer request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataTransferResponse'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/cache/clear:
+    post:
+      summary: Clear authorization cache on charge station
+      description: |
+        Requests the charge station to clear its local authorization cache. 
+        The next authorization request will query the CSMS. Supports both OCPP 1.6 and OCPP 2.0.1.
+      operationId: clearAuthorizationCache
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      responses:
+        '202':
+          description: Accepted - cache clear request submitted
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/availability:
+    post:
+      summary: Change charge station availability
+      description: |
+        Changes the operational status of a charge station or specific connector.
+        Used to take equipment out of service for maintenance or make it available again.
+        Supports both OCPP 1.6 and OCPP 2.0.1.
+      operationId: changeAvailability
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeAvailabilityRequest'
+      responses:
+        '202':
+          description: Accepted - availability change request submitted
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/meter-values:
+    get:
+      summary: Get meter values from charge station
+      description: |
+        Retrieves historical meter values (energy consumption, power, voltage, etc.) 
+        reported by the charge station. Supports filtering and pagination.
+      operationId: getMeterValues
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+        - name: connectorId
+          in: query
+          description: Filter by connector ID
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+        - name: transactionId
+          in: query
+          description: Filter by transaction ID
+          required: false
+          schema:
+            type: string
+        - name: startTime
+          in: query
+          description: Filter by start time (ISO 8601)
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: endTime
+          in: query
+          description: Filter by end time (ISO 8601)
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          description: Maximum number of results to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - name: offset
+          in: query
+          description: Number of results to skip (pagination)
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Meter values retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeterValuesResponse'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/local-list/version:
+    get:
+      summary: Get local authorization list version
+      description: |
+        Returns the current version number of the local authorization list
+        stored on the charge station.
+      operationId: getLocalListVersion
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      responses:
+        '200':
+          description: Local list version response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocalListVersionResponse'
+        '404':
+          description: Unknown charge station or no local list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/local-list:
+    get:
+      summary: Get local authorization list
+      description: |
+        Returns the complete local authorization list for the specified charge station.
+      operationId: getLocalAuthorizationList
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      responses:
+        '200':
+          description: Local authorization list response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocalAuthorizationListResponse'
+        '404':
+          description: Unknown charge station or no local list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    post:
+      summary: Update local authorization list
+      description: |
+        Updates the local authorization list on the specified charge station.
+        Supports both full replacement and differential updates.
+      operationId: updateLocalAuthorizationList
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLocalListRequest'
+      responses:
+        '202':
+          description: Accepted - operation queued
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/configuration:
+    get:
+      summary: Get charge station configuration (OCPP 1.6)
+      description: |
+        Retrieves the current configuration of a charge station using OCPP 1.6 GetConfiguration.
+        Optionally filter by specific configuration keys.
+      operationId: getChargeStationConfiguration
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          required: true
+          schema:
+            type: string
+            maxLength: 28
+        - name: key
+          in: query
+          description: Comma-separated list of configuration keys to retrieve
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Configuration response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigurationResponse'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    patch:
+      summary: Change charge station configuration (OCPP 1.6)
+      description: |
+        Changes configuration values on a charge station using OCPP 1.6 ChangeConfiguration.
+        Returns 202 Accepted with per-key results. Some changes may require a reboot.
+      operationId: changeChargeStationConfiguration
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          required: true
+          schema:
+            type: string
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigurationChangeRequest'
+      responses:
+        '202':
+          description: Accepted - configuration change initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigurationChangeResponse'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/variables:
+    get:
+      summary: Get charge station variables (OCPP 2.0.1)
+      description: |
+        Retrieves variables from a charge station using OCPP 2.0.1 GetVariables.
+        Optionally filter by component and/or variable name.
+      operationId: getChargeStationVariables
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          required: true
+          schema:
+            type: string
+            maxLength: 28
+        - name: component
+          in: query
+          description: Filter by component name
+          required: false
+          schema:
+            type: string
+        - name: variable
+          in: query
+          description: Filter by variable name
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Variables response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VariablesResponse'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    patch:
+      summary: Set charge station variables (OCPP 2.0.1)
+      description: |
+        Sets variable values on a charge station using OCPP 2.0.1 SetVariables.
+        Returns 202 Accepted with per-variable results.
+      operationId: setChargeStationVariables
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          required: true
+          schema:
+            type: string
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VariablesChangeRequest'
+      responses:
+        '202':
+          description: Accepted - variable change initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VariablesChangeResponse'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/display-message:
+    post:
+      summary: Set display message on charge station
+      description: |
+        Sends a message to be displayed on the charge station screen or LED display.
+        Supports priority, scheduling, state-based display, and multiple content formats.
+        OCPP 2.0.1 only.
+      operationId: setDisplayMessage
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetDisplayMessageRequest'
+      responses:
+        '202':
+          description: Accepted - message request queued
+        '404':
+          description: Unknown charge station or OCPP version not supported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/display-message/{messageId}:
+    delete:
+      summary: Clear display message from charge station
+      description: |
+        Removes a specific message from the charge station display.
+        OCPP 2.0.1 only.
+      operationId: clearDisplayMessage
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+        - name: messageId
+          in: path
+          description: The message identifier to clear
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        '202':
+          description: Accepted - clear request queued
+        '404':
+          description: Unknown charge station or OCPP version not supported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/display-messages:
+    get:
+      summary: Get display messages from charge station
+      description: |
+        Requests the list of currently configured display messages from the charge station.
+        Optionally filter by state or priority.
+        OCPP 2.0.1 only.
+      operationId: getDisplayMessages
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+        - name: state
+          in: query
+          description: Filter messages by charging state
+          schema:
+            $ref: '#/components/schemas/MessageStateEnum'
+        - name: priority
+          in: query
+          description: Filter messages by priority
+          schema:
+            $ref: '#/components/schemas/MessagePriorityEnum'
+      responses:
+        '202':
+          description: Accepted - get request queued
+        '404':
+          description: Unknown charge station or OCPP version not supported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/charging-profile:
+    post:
+      summary: Set charging profile
+      description: |
+        Sets a charging profile for a specific connector on the charge station.
+        Used for smart charging, load balancing, and dynamic pricing.
+      operationId: setChargingProfile
+      parameters:
+        - name: csId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetChargingProfileRequest'
+      responses:
+        '202':
+          description: Accepted - charging profile request queued
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    get:
+      summary: Get charging profiles
+      operationId: getChargingProfiles
+      parameters:
+        - name: csId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: connectorId
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+        - name: chargingProfilePurpose
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - TxProfile
+              - TxDefaultProfile
+              - ChargePointMaxProfile
+        - name: stackLevel
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        '200':
+          description: List of charging profiles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargingProfileList'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/charging-profile/{profileId}:
+    delete:
+      summary: Clear charging profile
+      operationId: clearChargingProfile
+      parameters:
+        - name: csId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: profileId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+        - name: connectorId
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+        - name: chargingProfilePurpose
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - TxProfile
+              - TxDefaultProfile
+              - ChargePointMaxProfile
+        - name: stackLevel
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        '202':
+          description: Accepted - clear profile request queued
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/composite-schedule:
+    get:
+      summary: Get composite schedule
+      operationId: getCompositeSchedule
+      parameters:
+        - name: csId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: connectorId
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+        - name: duration
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 3600
+        - name: chargingRateUnit
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - W
+              - A
+            default: A
+      responses:
+        '200':
+          description: Composite schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompositeSchedule'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/reset:
+    post:
+      operationId: ResetChargeStation
+      summary: Request a charge station reset
+      parameters:
+        - name: csId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetRequest'
+      responses:
+        '202':
+          description: Reset request accepted
+        '400':
+          description: Invalid request
+        '500':
+          description: Internal server error
+  /cs/{csId}/unlock-connector:
+    post:
+      operationId: UnlockConnector
+      summary: Request to unlock a connector on a charge station
+      parameters:
+        - name: csId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnlockConnectorRequest'
+      responses:
+        '202':
+          description: Unlock request accepted
+        '400':
+          description: Invalid request
+        '500':
+          description: Internal server error
+  /cs/{csId}/monitoring:
+    post:
+      summary: Set variable monitoring
+      description: |
+        Configure variable monitoring on a charge station (OCPP 2.0.1 only).
+        The charge station will monitor specified variables and send alerts based on the configured thresholds.
+      operationId: setVariableMonitoring
+      parameters:
+        - name: csId
+          in: path
+          required: true
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetVariableMonitoringRequest'
+      responses:
+        '202':
+          description: Accepted - monitoring configuration initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetVariableMonitoringResponse'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/monitoring/{monitorId}:
+    delete:
+      summary: Clear variable monitoring
+      description: |
+        Remove a specific variable monitor from a charge station (OCPP 2.0.1 only).
+      operationId: clearVariableMonitoring
+      parameters:
+        - name: csId
+          in: path
+          required: true
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+        - name: monitorId
+          in: path
+          required: true
+          description: The monitor identifier to clear
+          schema:
+            type: integer
+      responses:
+        '202':
+          description: Accepted - monitoring clear initiated
+        '404':
+          description: Unknown charge station or monitor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/monitoring/base:
+    post:
+      summary: Set monitoring base
+      description: |
+        Configure the base level of monitoring on a charge station (OCPP 2.0.1 only).
+      operationId: setMonitoringBase
+      parameters:
+        - name: csId
+          in: path
+          required: true
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetMonitoringBaseRequest'
+      responses:
+        '202':
+          description: Accepted - monitoring base configuration initiated
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/monitoring/level:
+    post:
+      summary: Set monitoring level
+      description: |
+        Configure the monitoring severity level on a charge station (OCPP 2.0.1 only).
+        Only events with severity at or below this level will be reported.
+      operationId: setMonitoringLevel
+      parameters:
+        - name: csId
+          in: path
+          required: true
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetMonitoringLevelRequest'
+      responses:
+        '202':
+          description: Accepted - monitoring level configuration initiated
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/monitoring/report:
+    post:
+      summary: Get monitoring report
+      description: |
+        Request a monitoring report from a charge station (OCPP 2.0.1 only).
+        The report will be sent asynchronously via NotifyMonitoringReport notifications.
+      operationId: getMonitoringReport
+      parameters:
+        - name: csId
+          in: path
+          required: true
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GetMonitoringReportRequest'
+      responses:
+        '202':
+          description: Accepted - monitoring report request initiated
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/events:
+    get:
+      summary: Get charge station events
+      description: |
+        Retrieve events from a charge station, filtered by type and time range.
+        Events are collected from NotifyEvent notifications.
+      operationId: getChargeStationEvents
+      parameters:
+        - name: csId
+          in: path
+          required: true
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+        - name: eventType
+          in: query
+          description: Filter by event type
+          schema:
+            type: string
+        - name: startTime
+          in: query
+          description: Filter events after this time (ISO8601)
+          schema:
+            type: string
+            format: date-time
+        - name: endTime
+          in: query
+          description: Filter events before this time (ISO8601)
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          description: Maximum number of events to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - name: offset
+          in: query
+          description: Number of events to skip
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Events response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventsResponse'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/reports:
+    get:
+      summary: Get device reports
+      description: |
+        Retrieve device reports from a charge station, such as configuration inventory
+        or monitoring reports. Reports are collected from NotifyReport and NotifyMonitoringReport notifications.
+      operationId: getDeviceReports
+      parameters:
+        - name: csId
+          in: path
+          required: true
+          description: The charge station identifier
+          schema:
+            type: string
+            maxLength: 28
+        - name: reportType
+          in: query
+          description: Filter by report type
+          schema:
+            type: string
+        - name: requestId
+          in: query
+          description: Filter by request ID
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          description: Maximum number of reports to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - name: offset
+          in: query
+          description: Number of reports to skip
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Reports response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportsResponse'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+components:
+  schemas:
+    ChargeStationAuth:
+      type: object
+      description: Connection details for a charge station
+      required:
+        - securityProfile
+      properties:
+        securityProfile:
+          type: integer
+          description: |
+            The security profile to use for the charge station: * `0` - unsecured transport with basic auth * `1` - TLS with basic auth * `2` - TLS with client certificate
+        base64SHA256Password:
+          type: string
+          maxLength: 64
+          description: The base64 encoded, SHA-256 hash of the charge station password
+        invalidUsernameAllowed:
+          type: boolean
+          description: If set to true then an invalid username will not prevent the charge station connecting
+    ChargeStationSettings:
+      type: object
+      description: Settings for a charge station
+      additionalProperties:
+        type: string
+        description: |
+          The key is the name of the setting. For OCPP 2.0.1 the name should have the following pattern:
+          <component>/<variable>. The component name can include an optional component instance name and evse id
+          separated by semi-colons. The variable name can include an optional variable instance name and attribute
+          type separated by semi-colons. The maximum length for OCPP 1.6 is 500 characters.
+        maxLength: 1000
+    ChargeStationInstallCertificates:
+      type: object
+      description: |
+        The set of certificates to install on the charge station. The certificates will be sent
+        to the charge station asynchronously.
+      required:
+        - certificates
+      properties:
+        certificates:
+          type: array
+          items:
+            type: object
+            description: The set of certificates to install
+            required:
+              - type
+              - certificate
+            properties:
+              type:
+                type: string
+                enum:
+                  - V2G
+                  - MO
+                  - MF
+                  - CSMS
+              certificate:
+                type: string
+                description: The PEM encoded certificate with newlines replaced by `\n`
+              status:
+                type: string
+                description: The status, defaults to Pending
+                enum:
+                  - Accepted
+                  - Rejected
+                  - Pending
+    CertificateHashDataRequest:
+      type: object
+      description: Certificate hash data for identifying a specific certificate
+      required:
+        - certificateHashData
+      properties:
+        certificateHashData:
+          type: object
+          required:
+            - hashAlgorithm
+            - issuerNameHash
+            - issuerKeyHash
+            - serialNumber
+          properties:
+            hashAlgorithm:
+              type: string
+              enum:
+                - SHA256
+                - SHA384
+                - SHA512
+              description: Algorithm used to generate the hash
+            issuerNameHash:
+              type: string
+              description: Hash of the issuer's distinguished name
+              maxLength: 128
+            issuerKeyHash:
+              type: string
+              description: Hash of the issuer's public key
+              maxLength: 128
+            serialNumber:
+              type: string
+              description: Certificate serial number
+              maxLength: 40
+    OperationResponse:
+      type: object
+      description: Response for asynchronous operations
+      properties:
+        operationId:
+          type: string
+          description: Unique identifier for tracking the operation status
+        status:
+          type: string
+          description: Initial operation status
+          enum:
+            - Pending
+            - Accepted
+    ChargeStationTrigger:
+      type: object
+      description: Trigger a charge station action
+      required:
+        - trigger
+      properties:
+        trigger:
+          type: string
+          enum:
+            - BootNotification
+            - StatusNotification
+            - SignV2GCertificate
+            - SignChargingStationCertificate
+            - SignCombinedCertificate
+            - MeterValues
+            - DiagnosticsStatusNotification
+            - FirmwareStatusNotification
+            - Heartbeat
+            - NotifyReport
+            - NotifyMonitoringReport
+            - PublishFirmwareStatusNotification
+            - LogStatusNotification
+        connectorId:
+          type: integer
+          description: Optional connector ID. Required for some message types (StatusNotification, MeterValues)
+          minimum: 0
+    FirmwareUpdateRequest:
+      type: object
+      description: Request to update charge station firmware
+      required:
+        - location
+      properties:
+        location:
+          type: string
+          format: uri
+          description: URI where the firmware can be downloaded (HTTP/HTTPS/FTP)
+          maxLength: 512
+        retrieveDate:
+          type: string
+          format: date-time
+          description: Optional scheduled time to start the firmware download. If not provided, download starts immediately
+        retries:
+          type: integer
+          minimum: 0
+          maximum: 10
+          description: 'Number of retries if download fails (default: 0)'
+        retryInterval:
+          type: integer
+          minimum: 0
+          description: 'Interval in seconds between retry attempts (default: 0)'
+        signature:
+          type: string
+          description: Base64 encoded signature of the firmware for signed updates
+        signingCertificate:
+          type: string
+          description: PEM encoded certificate used to sign the firmware
+    FirmwareStatus:
+      type: object
+      description: Current firmware status of a charge station
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - Idle
+            - Downloaded
+            - DownloadFailed
+            - Downloading
+            - InstallationFailed
+            - Installing
+            - Installed
+          description: Current firmware update status
+        lastUpdate:
+          type: string
+          format: date-time
+          description: Timestamp of the last status update
+        currentVersion:
+          type: string
+          description: Currently installed firmware version
+        pendingVersion:
+          type: string
+          description: Version being downloaded/installed (if update in progress)
+    DiagnosticsRequest:
+      type: object
+      description: Request to upload diagnostics from charge station
+      required:
+        - location
+      properties:
+        location:
+          type: string
+          format: uri
+          description: URI where diagnostics should be uploaded
+          maxLength: 512
+        startTime:
+          type: string
+          format: date-time
+          description: Optional start time for diagnostics collection period
+        stopTime:
+          type: string
+          format: date-time
+          description: Optional end time for diagnostics collection period
+        retries:
+          type: integer
+          minimum: 0
+          maximum: 10
+          description: Number of retries if upload fails
+        retryInterval:
+          type: integer
+          minimum: 0
+          description: Interval in seconds between retry attempts
+    DiagnosticsStatus:
+      type: object
+      description: Current diagnostics upload status
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - Idle
+            - Uploaded
+            - UploadFailed
+            - Uploading
+          description: Current diagnostics upload status
+        lastUpdate:
+          type: string
+          format: date-time
+          description: Timestamp of the last status update
+        fileName:
+          type: string
+          description: Name of the diagnostics file being uploaded
+    LogRequest:
+      type: object
+      description: Request to upload logs from charge station (OCPP 2.0.1)
+      required:
+        - logType
+        - requestId
+        - log
+      properties:
+        logType:
+          type: string
+          enum:
+            - DiagnosticsLog
+            - SecurityLog
+          description: Type of log to retrieve
+        requestId:
+          type: integer
+          description: Unique request ID to track this log request
+        log:
+          type: object
+          required:
+            - remoteLocation
+          properties:
+            remoteLocation:
+              type: string
+              format: uri
+              description: URI where logs should be uploaded
+              maxLength: 512
+            oldestTimestamp:
+              type: string
+              format: date-time
+              description: Optional oldest timestamp for log entries
+            latestTimestamp:
+              type: string
+              format: date-time
+              description: Optional latest timestamp for log entries
+        retries:
+          type: integer
+          minimum: 0
+          maximum: 10
+          description: Number of retries if upload fails
+        retryInterval:
+          type: integer
+          minimum: 0
+          description: Interval in seconds between retry attempts
+    LogStatus:
+      type: object
+      description: Current log upload status
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - Idle
+            - Uploading
+            - Uploaded
+            - UploadFailure
+            - BadMessage
+            - NotSupportedOperation
+            - PermissionDenied
+          description: Current log upload status
+        requestId:
+          type: integer
+          description: Request ID associated with this status
+        lastUpdate:
+          type: string
+          format: date-time
+          description: Timestamp of the last status update
+    Token:
+      type: object
+      description: An authorization token
+      required:
+        - countryCode
+        - partyId
+        - type
+        - uid
+        - contractId
+        - issuer
+        - valid
+        - cacheMode
+      properties:
+        countryCode:
+          type: string
+          minLength: 2
+          maxLength: 2
+          description: The country code of the issuing eMSP
+        partyId:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: The party id of the issuing eMSP
+        type:
+          type: string
+          enum:
+            - AD_HOC_USER
+            - APP_USER
+            - OTHER
+            - RFID
+          description: The type of token
+        uid:
+          type: string
+          description: The unique token id
+          maxLength: 36
+        contractId:
+          type: string
+          pattern: ([A-Za-z]{2})(-?)([A-Za-z]{3})(-?)([A-Za-z0-9]{9})(-?)([A-Za-z0-9])?
+          description: The contract ID (eMAID) associated with the token (with optional component separators)
+        visualNumber:
+          type: string
+          description: The visual/readable number/identification printed on an RFID card
+        issuer:
+          type: string
+          description: Issuing company, most of the times the name of the company printed on the RFID card, not necessarily the eMSP
+        groupId:
+          type: string
+          maxLength: 36
+          description: This id groups a couple of tokens to make two or more tokens work as one
+        valid:
+          type: boolean
+          description: Is this token valid
+        languageCode:
+          type: string
+          minLength: 2
+          maxLength: 2
+          description: The preferred language to use encoded as ISO 639-1 language code
+        cacheMode:
+          type: string
+          enum:
+            - ALWAYS
+            - ALLOWED
+            - ALLOWED_OFFLINE
+            - NEVER
+          description: Indicates what type of token caching is allowed
+        lastUpdated:
+          type: string
+          format: date-time
+          description: The date the record was last updated (ignored on create/update)
+    RemoteStartTransactionRequest:
+      type: object
+      description: Request to remotely start a charging transaction
+      required:
+        - idTag
+      properties:
+        idTag:
+          type: string
+          maxLength: 20
+          description: The identifier that should be used to authorize the transaction
+        connectorId:
+          type: integer
+          minimum: 1
+          description: Optional connector ID to start charging on
+        chargingProfile:
+          $ref: '#/components/schemas/ChargingProfile'
+    RemoteStopTransactionRequest:
+      type: object
+      description: Request to remotely stop a charging transaction
+      required:
+        - transactionId
+      properties:
+        transactionId:
+          type: string
+          description: The identifier of the transaction to stop
+    Status:
+      type: object
+      description: HTTP status
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          description: The status description
+        error:
+          type: string
+          description: The error details
+    Certificate:
+      type: object
+      description: A client certificate
+      required:
+        - certificate
+      properties:
+        certificate:
+          type: string
+          description: The PEM encoded certificate with newlines replaced by `\n`
+    Registration:
+      type: object
+      description: Defines the initial connection details for the OCPI registration process
+      properties:
+        token:
+          type: string
+          maxLength: 64
+          description: The token to use for communicating with the eMSP (CREDENTIALS_TOKEN_A).
+        url:
+          type: string
+          format: uri
+          description: The URL of the eMSP versions endpoint. If provided the CSMS will act as the sender of the versions request.
+        status:
+          type: string
+          enum:
+            - PENDING
+            - REGISTERED
+          description: |
+            The status of the registration request. If the request is marked as `REGISTERED` then the token will be allowed to
+            be used to access all endpoints avoiding the need for the OCPI registration process. If the request is marked as 
+            `PENDING` then the token will only be allowed to access the `/ocpi/versions`, `/ocpi/2.2` and `/ocpi/2.2/credentials`
+            endpoints.
+      required:
+        - token
+    Location:
+      type: object
+      description: A charge station location
+      required:
+        - address
+        - city
+        - country
+        - country_code
+        - coordinates
+        - party_id
+      properties:
+        country_code:
+          type: string
+        party_id:
+          type: string
+        name:
+          type: string
+          nullable: true
+        address:
+          type: string
+        city:
+          type: string
+        postal_code:
+          type: string
+          nullable: true
+        country:
+          type: string
+        coordinates:
+          $ref: '#/components/schemas/GeoLocation'
+        parking_type:
+          type: string
+          enum:
+            - ALONG_MOTORWAY
+            - PARKING_GARAGE
+            - PARKING_LOT
+            - ON_DRIVEWAY
+            - ON_STREET
+            - UNDERGROUND_GARAGE
+          nullable: true
+        evses:
+          type: array
+          items:
+            $ref: '#/components/schemas/Evse'
+          nullable: true
+    GeoLocation:
+      required:
+        - latitude
+        - longitude
+      type: object
+      properties:
+        latitude:
+          type: string
+        longitude:
+          type: string
+    Evse:
+      type: object
+      properties:
+        uid:
+          type: string
+          description: |-
+            Uniquely identifies the EVSE within the CPOs platform (and
+            suboperator platforms).
+        evse_id:
+          type: string
+          nullable: true
+        connectors:
+          type: array
+          items:
+            $ref: '#/components/schemas/Connector'
+      required:
+        - uid
+        - status
+        - connectors
+    Connector:
+      required:
+        - format
+        - id
+        - max_amperage
+        - max_voltage
+        - power_type
+        - standard
+      type: object
+      properties:
+        id:
+          type: string
+        standard:
+          type: string
+          enum:
+            - CHADEMO
+            - CHAOJI
+            - DOMESTIC_A
+            - DOMESTIC_B
+            - DOMESTIC_C
+            - DOMESTIC_D
+            - DOMESTIC_E
+            - DOMESTIC_F
+            - DOMESTIC_G
+            - DOMESTIC_H
+            - DOMESTIC_I
+            - DOMESTIC_J
+            - DOMESTIC_K
+            - DOMESTIC_L
+            - GBT_AC
+            - GBT_DC
+            - IEC_60309_2_single_16
+            - IEC_60309_2_three_16
+            - IEC_60309_2_three_32
+            - IEC_60309_2_three_64
+            - IEC_62196_T1
+            - IEC_62196_T1_COMBO
+            - IEC_62196_T2
+            - IEC_62196_T2_COMBO
+            - IEC_62196_T3A
+            - IEC_62196_T3C
+            - NEMA_5_20
+            - NEMA_6_30
+            - NEMA_6_50
+            - NEMA_10_30
+            - NEMA_10_50
+            - NEMA_14_30
+            - NEMA_14_50
+            - PANTOGRAPH_BOTTOM_UP
+            - PANTOGRAPH_TOP_DOWN
+            - TESLA_R
+            - TESLA_S
+            - UNKNOWN
+        format:
+          type: string
+          enum:
+            - SOCKET
+            - CABLE
+        power_type:
+          type: string
+          enum:
+            - AC_1_PHASE
+            - AC_3_PHASE
+            - DC
+        max_voltage:
+          type: integer
+          format: int32
+        max_amperage:
+          type: integer
+          format: int32
+    ReservationRequest:
+      type: object
+      description: Request to create a connector reservation
+      required:
+        - connectorId
+        - expiryDate
+        - idTag
+        - reservationId
+      properties:
+        connectorId:
+          type: integer
+          format: int32
+          description: The connector ID to reserve
+        expiryDate:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the reservation expires
+        idTag:
+          type: string
+          maxLength: 20
+          description: The identifier for which the charge station has to reserve a connector
+        reservationId:
+          type: integer
+          format: int32
+          description: Unique identifier for this reservation
+        parentIdTag:
+          type: string
+          maxLength: 20
+          description: Optional parent idTag
+    ReservationList:
+      type: object
+      description: List of reservations
+      required:
+        - reservations
+      properties:
+        reservations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReservationResponse'
+    TransactionList:
+      type: object
+      description: List of transactions with pagination
+      required:
+        - transactions
+        - total
+        - limit
+        - offset
+      properties:
+        transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransactionSummary'
+        total:
+          type: integer
+          format: int64
+          description: Total number of transactions matching the filter
+        limit:
+          type: integer
+          description: Maximum number of results returned
+        offset:
+          type: integer
+          description: Number of results skipped
+    TransactionSummary:
+      type: object
+      description: Summary of a transaction
+      required:
+        - transactionId
+        - idTag
+        - startTime
+        - meterStart
+        - status
+      properties:
+        transactionId:
+          type: string
+          description: The transaction identifier
+        idTag:
+          type: string
+          description: The identifier used to start the transaction
+        startTime:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the transaction started
+        stopTime:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the transaction stopped (null if active)
+        meterStart:
+          type: integer
+          description: Meter value in Wh at start of transaction
+        meterStop:
+          type: integer
+          description: Meter value in Wh at end of transaction (null if active)
+        status:
+          type: string
+          enum:
+            - active
+            - completed
+          description: Status of the transaction
+    TransactionDetail:
+      type: object
+      description: Detailed transaction information including meter values
+      required:
+        - transactionId
+        - idTag
+        - startTime
+        - meterStart
+        - status
+        - meterValues
+      properties:
+        transactionId:
+          type: string
+          description: The transaction identifier
+        idTag:
+          type: string
+          description: The identifier used to start the transaction
+        tokenType:
+          type: string
+          description: The type of token used
+        startTime:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the transaction started
+        stopTime:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the transaction stopped (null if active)
+        meterStart:
+          type: integer
+          description: Meter value in Wh at start of transaction
+        meterStop:
+          type: integer
+          description: Meter value in Wh at end of transaction (null if active)
+        status:
+          type: string
+          enum:
+            - active
+            - completed
+          description: Status of the transaction
+        meterValues:
+          type: array
+          items:
+            $ref: '#/components/schemas/MeterValue'
+          description: All meter values recorded during the transaction
+    ReservationResponse:
+      type: object
+      description: Reservation details
+      required:
+        - reservationId
+        - connectorId
+        - expiryDate
+        - idTag
+        - status
+      properties:
+        reservationId:
+          type: integer
+          format: int32
+          description: Unique identifier for this reservation
+        connectorId:
+          type: integer
+          format: int32
+          description: The connector ID
+        expiryDate:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the reservation expires
+        idTag:
+          type: string
+          description: The identifier for which the connector is reserved
+        parentIdTag:
+          type: string
+          description: Optional parent idTag
+        status:
+          type: string
+          enum:
+            - Accepted
+            - Faulted
+            - Occupied
+            - Rejected
+            - Unavailable
+            - Cancelled
+            - Expired
+          description: Current status of the reservation
+        createdAt:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the reservation was created
+    DataTransferRequest:
+      type: object
+      description: Request to send vendor-specific data to charge station
+      required:
+        - vendorId
+      properties:
+        vendorId:
+          type: string
+          maxLength: 255
+          description: Vendor identifier (vendor-specific)
+        messageId:
+          type: string
+          maxLength: 50
+          description: Optional message identifier for the data transfer
+        data:
+          type: string
+          description: Arbitrary string data (format defined by vendor)
+    DataTransferResponse:
+      type: object
+      description: Response from data transfer request
+      properties:
+        status:
+          type: string
+          enum:
+            - Accepted
+            - Rejected
+            - UnknownMessageId
+            - UnknownVendorId
+          description: Status of the data transfer
+        data:
+          type: string
+          description: Response data from the charge station (vendor-specific)
+    ChangeAvailabilityRequest:
+      type: object
+      description: Request to change charge station or connector availability
+      required:
+        - type
+      properties:
+        connectorId:
+          type: integer
+          minimum: 0
+          description: Connector ID (0 = entire station, >0 = specific connector)
+          default: 0
+        evseId:
+          type: integer
+          minimum: 0
+          description: EVSE ID for OCPP 2.0.1 (optional)
+        type:
+          type: string
+          enum:
+            - Operative
+            - Inoperative
+          description: Target availability state
+    MeterValuesSampledValue:
+      type: object
+      description: A single sampled value in a meter reading
+      required:
+        - value
+      properties:
+        value:
+          type: string
+          description: Measured value (numeric as string)
+        context:
+          type: string
+          description: Reading context (e.g., Sample.Periodic, Transaction.Begin)
+        format:
+          type: string
+          description: Value format (Raw or SignedData)
+        measurand:
+          type: string
+          description: Type of measurement (e.g., Energy.Active.Import.Register, Power.Active.Import)
+        phase:
+          type: string
+          description: Phase measured (L1, L2, L3, N, L1-N, L2-N, L3-N, L1-L2, L2-L3, L3-L1)
+        location:
+          type: string
+          description: Location of measurement (Cable, EV, Inlet, Outlet, Body)
+        unit:
+          type: string
+          description: Unit of measurement (Wh, kWh, varh, kvarh, W, kW, VA, kVA, var, kvar, A, V, K, Celsius, Fahrenheit, Percent)
+    MeterValue:
+      type: object
+      description: A set of meter values at a specific timestamp
+      required:
+        - timestamp
+        - sampledValue
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp of the meter reading
+        connectorId:
+          type: integer
+          description: Connector ID for the reading
+        evseId:
+          type: integer
+          description: EVSE ID for OCPP 2.0.1
+        transactionId:
+          type: string
+          description: Transaction ID (if part of a transaction)
+        sampledValue:
+          type: array
+          items:
+            $ref: '#/components/schemas/MeterValuesSampledValue'
+          description: Array of sampled values
+    MeterValuesResponse:
+      type: object
+      description: Paginated list of meter values
+      required:
+        - meterValues
+        - total
+        - limit
+        - offset
+      properties:
+        meterValues:
+          type: array
+          items:
+            $ref: '#/components/schemas/MeterValue'
+          description: Array of meter value records
+        total:
+          type: integer
+          description: Total number of matching records
+        limit:
+          type: integer
+          description: Maximum number of results returned
+        offset:
+          type: integer
+          description: Number of results skipped
+    LocalListVersionResponse:
+      type: object
+      description: Response containing the local list version
+      required:
+        - listVersion
+      properties:
+        listVersion:
+          type: integer
+          format: int32
+          description: The current version number of the local authorization list
+    IdTagInfo:
+      type: object
+      description: Authorization information for an ID tag
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - Accepted
+            - Blocked
+            - Expired
+            - Invalid
+            - ConcurrentTx
+          description: Authorization status
+        expiryDate:
+          type: string
+          format: date-time
+          description: Date when the ID tag expires
+          nullable: true
+        parentIdTag:
+          type: string
+          maxLength: 20
+          description: Parent ID tag for group authorization
+          nullable: true
+    LocalAuthorizationEntry:
+      type: object
+      description: Single entry in the local authorization list
+      required:
+        - idTag
+        - idTagInfo
+      properties:
+        idTag:
+          type: string
+          maxLength: 20
+          description: The identifier
+        idTagInfo:
+          $ref: '#/components/schemas/IdTagInfo'
+    LocalAuthorizationListResponse:
+      type: object
+      description: Response containing the complete local authorization list
+      required:
+        - listVersion
+        - localAuthorizationList
+      properties:
+        listVersion:
+          type: integer
+          format: int32
+          description: The current version number of the local authorization list
+        localAuthorizationList:
+          type: array
+          items:
+            $ref: '#/components/schemas/LocalAuthorizationEntry'
+          description: Array of authorization entries
+    UpdateLocalListRequest:
+      type: object
+      description: Request to update the local authorization list
+      required:
+        - listVersion
+        - updateType
+      properties:
+        listVersion:
+          type: integer
+          format: int32
+          description: The new version number (must be greater than current)
+        updateType:
+          type: string
+          enum:
+            - Full
+            - Differential
+          description: Type of update (Full=replace entire list, Differential=update specific entries)
+        localAuthorizationList:
+          type: array
+          items:
+            $ref: '#/components/schemas/LocalAuthorizationEntry'
+          description: Authorization entries to add/update
+          nullable: true
+    ConfigurationResponse:
+      type: object
+      description: Configuration response from GetConfiguration (OCPP 1.6)
+      required:
+        - configurationKey
+      properties:
+        configurationKey:
+          type: array
+          description: List of configuration key-value pairs
+          items:
+            type: object
+            required:
+              - key
+              - readonly
+            properties:
+              key:
+                type: string
+                description: Configuration key name
+              readonly:
+                type: boolean
+                description: Whether the key is read-only
+              value:
+                type: string
+                description: Current value of the configuration key
+        unknownKey:
+          type: array
+          description: List of requested keys that are unknown
+          items:
+            type: string
+    ConfigurationChangeRequest:
+      type: object
+      description: Request to change configuration values (OCPP 1.6)
+      additionalProperties:
+        type: string
+        description: Configuration key-value pairs to change
+      example:
+        HeartbeatInterval: '600'
+        MeterValueSampleInterval: '120'
+    ConfigurationChangeResponse:
+      type: object
+      description: Response from ChangeConfiguration (OCPP 1.6)
+      required:
+        - results
+      properties:
+        results:
+          type: array
+          description: Per-key change results
+          items:
+            type: object
+            required:
+              - key
+              - status
+            properties:
+              key:
+                type: string
+                description: Configuration key name
+              status:
+                type: string
+                enum:
+                  - Accepted
+                  - Rejected
+                  - RebootRequired
+                  - NotSupported
+                description: Result of the configuration change
+    VariablesResponse:
+      type: object
+      description: Variables response from GetVariables (OCPP 2.0.1)
+      required:
+        - variables
+      properties:
+        variables:
+          type: array
+          description: List of variables with their values
+          items:
+            type: object
+            required:
+              - component
+              - variable
+              - variableAttribute
+            properties:
+              component:
+                type: object
+                required:
+                  - name
+                properties:
+                  name:
+                    type: string
+                    description: Component name
+                  instance:
+                    type: string
+                    description: Component instance
+                  evse:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        description: EVSE identifier
+                      connectorId:
+                        type: integer
+                        description: Connector identifier
+              variable:
+                type: object
+                required:
+                  - name
+                properties:
+                  name:
+                    type: string
+                    description: Variable name
+                  instance:
+                    type: string
+                    description: Variable instance
+              variableAttribute:
+                type: array
+                description: Variable attributes
+                items:
+                  type: object
+                  properties:
+                    value:
+                      type: string
+                      description: Variable value
+                    mutability:
+                      type: string
+                      enum:
+                        - ReadOnly
+                        - WriteOnly
+                        - ReadWrite
+                      description: Whether the variable can be changed
+                    persistent:
+                      type: boolean
+                      description: Whether the variable persists across reboots
+                    constant:
+                      type: boolean
+                      description: Whether the variable is constant
+    VariablesChangeRequest:
+      type: object
+      description: Request to set variable values (OCPP 2.0.1)
+      required:
+        - variables
+      properties:
+        variables:
+          type: array
+          description: Variables to set
+          items:
+            type: object
+            required:
+              - component
+              - variable
+              - attributeValue
+            properties:
+              component:
+                type: object
+                required:
+                  - name
+                properties:
+                  name:
+                    type: string
+                    description: Component name
+                  instance:
+                    type: string
+                    description: Component instance
+                  evse:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        description: EVSE identifier
+                      connectorId:
+                        type: integer
+                        description: Connector identifier
+              variable:
+                type: object
+                required:
+                  - name
+                properties:
+                  name:
+                    type: string
+                    description: Variable name
+                  instance:
+                    type: string
+                    description: Variable instance
+              attributeValue:
+                type: string
+                description: Value to set
+    VariablesChangeResponse:
+      type: object
+      description: Response from SetVariables (OCPP 2.0.1)
+      required:
+        - results
+      properties:
+        results:
+          type: array
+          description: Per-variable change results
+          items:
+            type: object
+            required:
+              - component
+              - variable
+              - attributeStatus
+            properties:
+              component:
+                type: object
+                required:
+                  - name
+                properties:
+                  name:
+                    type: string
+              variable:
+                type: object
+                required:
+                  - name
+                properties:
+                  name:
+                    type: string
+              attributeStatus:
+                type: string
+                enum:
+                  - Accepted
+                  - Rejected
+                  - UnknownComponent
+                  - UnknownVariable
+                  - NotSupportedAttributeType
+                  - RebootRequired
+                description: Result of the variable change
+    MessagePriorityEnum:
+      type: string
+      enum:
+        - NormalCycle
+        - InFront
+        - AlwaysFront
+      description: |
+        Display message priority:
+        * `NormalCycle` - Rotate with other messages
+        * `InFront` - Show before others in rotation
+        * `AlwaysFront` - Always visible, highest priority
+    MessageStateEnum:
+      type: string
+      enum:
+        - Charging
+        - Faulted
+        - Idle
+        - Unavailable
+      description: |
+        Charging state when message should be displayed:
+        * `Charging` - During active charging session
+        * `Faulted` - When station has an error
+        * `Idle` - When available but not in use
+        * `Unavailable` - When out of service
+    MessageFormatEnum:
+      type: string
+      enum:
+        - ASCII
+        - HTML
+        - URI
+      description: |
+        Message content format:
+        * `ASCII` - Plain text
+        * `HTML` - Rich text formatting
+        * `URI` - URL to display (image, webpage)
+    MessageContent:
+      type: object
+      required:
+        - content
+        - format
+      properties:
+        content:
+          type: string
+          maxLength: 512
+          description: The message content or URI
+        language:
+          type: string
+          minLength: 2
+          maxLength: 8
+          description: Language code (e.g., 'en', 'es', 'de')
+        format:
+          $ref: '#/components/schemas/MessageFormatEnum'
+    DisplayMessage:
+      type: object
+      required:
+        - id
+        - priority
+        - message
+      properties:
+        id:
+          type: integer
+          minimum: 0
+          description: Unique message identifier
+        priority:
+          $ref: '#/components/schemas/MessagePriorityEnum'
+        state:
+          $ref: '#/components/schemas/MessageStateEnum'
+        startDateTime:
+          type: string
+          format: date-time
+          description: When the message should start being displayed (optional)
+        endDateTime:
+          type: string
+          format: date-time
+          description: When the message should stop being displayed (optional)
+        transactionId:
+          type: string
+          maxLength: 36
+          description: Only show message during this transaction (optional)
+        message:
+          $ref: '#/components/schemas/MessageContent'
+    SetDisplayMessageRequest:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          $ref: '#/components/schemas/DisplayMessage'
+    ResetRequest:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - Soft
+            - Hard
+          description: Type of reset to perform
+    UnlockConnectorRequest:
+      type: object
+      required:
+        - connectorId
+      properties:
+        connectorId:
+          type: integer
+          description: ID of the connector to unlock
+    SetChargingProfileRequest:
+      type: object
+      required:
+        - connectorId
+        - csChargingProfiles
+      properties:
+        connectorId:
+          type: integer
+          format: int32
+          minimum: 0
+        csChargingProfiles:
+          $ref: '#/components/schemas/ChargingProfile'
+    ChargingProfile:
+      type: object
+      required:
+        - chargingProfileId
+        - stackLevel
+        - chargingProfilePurpose
+        - chargingProfileKind
+        - chargingSchedule
+      properties:
+        chargingProfileId:
+          type: integer
+          format: int32
+        transactionId:
+          type: integer
+          format: int32
+        stackLevel:
+          type: integer
+          format: int32
+          minimum: 0
+        chargingProfilePurpose:
+          type: string
+          enum:
+            - TxProfile
+            - TxDefaultProfile
+            - ChargePointMaxProfile
+        chargingProfileKind:
+          type: string
+          enum:
+            - Absolute
+            - Relative
+            - Recurring
+        recurrencyKind:
+          type: string
+          enum:
+            - Daily
+            - Weekly
+        validFrom:
+          type: string
+          format: date-time
+        validTo:
+          type: string
+          format: date-time
+        chargingSchedule:
+          $ref: '#/components/schemas/ChargingSchedule'
+    ChargingSchedule:
+      type: object
+      required:
+        - chargingRateUnit
+        - chargingSchedulePeriod
+      properties:
+        duration:
+          type: integer
+          format: int32
+        startSchedule:
+          type: string
+          format: date-time
+        chargingRateUnit:
+          type: string
+          enum:
+            - W
+            - A
+        chargingSchedulePeriod:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChargingSchedulePeriod'
+          minItems: 1
+        minChargingRate:
+          type: number
+          format: double
+    ChargingSchedulePeriod:
+      type: object
+      required:
+        - startPeriod
+        - limit
+      properties:
+        startPeriod:
+          type: integer
+          format: int32
+          minimum: 0
+        limit:
+          type: number
+          format: double
+        numberPhases:
+          type: integer
+          format: int32
+          minimum: 1
+    ChargingProfileList:
+      type: object
+      required:
+        - profiles
+      properties:
+        profiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChargingProfileWithConnector'
+    ChargingProfileWithConnector:
+      allOf:
+        - $ref: '#/components/schemas/ChargingProfile'
+        - type: object
+          required:
+            - connectorId
+          properties:
+            connectorId:
+              type: integer
+              format: int32
+    CompositeSchedule:
+      type: object
+      required:
+        - connectorId
+        - scheduleStart
+        - chargingSchedule
+      properties:
+        connectorId:
+          type: integer
+          format: int32
+        scheduleStart:
+          type: string
+          format: date-time
+        chargingSchedule:
+          $ref: '#/components/schemas/ChargingSchedule'
+    ChargeStationStatusResponse:
+      type: object
+      description: Current status of a charge station
+      required:
+        - id
+        - connected
+      properties:
+        id:
+          type: string
+          description: The charge station identifier
+        connected:
+          type: boolean
+          description: Whether the charge station is currently connected
+        lastHeartbeat:
+          type: string
+          format: date-time
+          description: Timestamp of the last heartbeat received
+        firmwareVersion:
+          type: string
+          description: Currently installed firmware version
+        model:
+          type: string
+          description: Charge station model
+        vendor:
+          type: string
+          description: Charge station vendor/manufacturer
+        serialNumber:
+          type: string
+          description: Charge station serial number
+    ConnectorStatusResponse:
+      type: object
+      description: Current status of a connector
+      required:
+        - connectorId
+        - status
+        - errorCode
+      properties:
+        connectorId:
+          type: integer
+          format: int32
+          description: The connector ID
+        status:
+          type: string
+          enum:
+            - Available
+            - Charging
+            - Faulted
+            - Finishing
+            - Preparing
+            - Reserved
+            - SuspendedEV
+            - SuspendedEVSE
+            - Unavailable
+          description: Current status of the connector
+        errorCode:
+          type: string
+          enum:
+            - NoError
+            - ConnectorLockFailure
+            - EVCommunicationError
+            - GroundFailure
+            - HighTemperature
+            - InternalError
+            - LocalListConflict
+            - OtherError
+            - OverCurrentFailure
+            - OverVoltage
+            - PowerMeterFailure
+            - PowerSwitchFailure
+            - ReaderFailure
+            - ResetFailure
+            - UnderVoltage
+            - WeakSignal
+          description: Error code
+        info:
+          type: string
+          description: Additional information about the status
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp when the status was last updated
+        currentTransaction:
+          type: string
+          description: ID of the current transaction (if any)
+    SetVariableMonitoringRequest:
+      type: object
+      description: Request to set variable monitoring on a charge station
+      required:
+        - monitoringData
+      properties:
+        monitoringData:
+          type: array
+          items:
+            $ref: '#/components/schemas/MonitoringData'
+    MonitoringData:
+      type: object
+      required:
+        - component
+        - variable
+        - variableMonitoring
+      properties:
+        component:
+          $ref: '#/components/schemas/Component'
+        variable:
+          $ref: '#/components/schemas/Variable'
+        variableMonitoring:
+          type: array
+          items:
+            $ref: '#/components/schemas/VariableMonitoring'
+    Component:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          maxLength: 50
+        instance:
+          type: string
+          maxLength: 50
+        evse:
+          type: object
+          properties:
+            id:
+              type: integer
+            connectorId:
+              type: integer
+    Variable:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          maxLength: 50
+        instance:
+          type: string
+          maxLength: 50
+    VariableMonitoring:
+      type: object
+      required:
+        - value
+        - type
+        - severity
+      properties:
+        id:
+          type: integer
+          description: Monitor ID (optional for new monitors, required for updates)
+        transaction:
+          type: boolean
+          description: Whether monitoring is transaction-specific
+        value:
+          type: number
+          format: float
+          description: Threshold value or monitoring parameter
+        type:
+          type: string
+          enum:
+            - UpperThreshold
+            - LowerThreshold
+            - Delta
+            - Periodic
+            - PeriodicClockAligned
+          description: Type of monitoring
+        severity:
+          type: integer
+          minimum: 0
+          maximum: 9
+          description: Severity level (0 = most critical, 9 = least critical)
+    SetVariableMonitoringResponse:
+      type: object
+      required:
+        - results
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            required:
+              - status
+            properties:
+              id:
+                type: integer
+                description: Monitor ID assigned by the charge station
+              status:
+                type: string
+                enum:
+                  - Accepted
+                  - UnknownComponent
+                  - UnknownVariable
+                  - UnsupportedMonitorType
+                  - Rejected
+                  - Duplicate
+                description: Status of the monitoring request
+              statusInfo:
+                type: string
+                description: Additional status information
+    SetMonitoringBaseRequest:
+      type: object
+      required:
+        - monitoringBase
+      properties:
+        monitoringBase:
+          type: string
+          enum:
+            - All
+            - FactoryDefault
+            - HardWiredOnly
+          description: Base level of monitoring to configure
+    SetMonitoringLevelRequest:
+      type: object
+      required:
+        - severity
+      properties:
+        severity:
+          type: integer
+          minimum: 0
+          maximum: 9
+          description: Severity level threshold (0 = most critical, 9 = least critical)
+    GetMonitoringReportRequest:
+      type: object
+      required:
+        - requestId
+      properties:
+        requestId:
+          type: integer
+          description: Unique request identifier for tracking the report
+        componentVariable:
+          type: array
+          description: Optional list of specific components/variables to report on
+          items:
+            type: object
+            required:
+              - component
+              - variable
+            properties:
+              component:
+                $ref: '#/components/schemas/Component'
+              variable:
+                $ref: '#/components/schemas/Variable'
+    EventsResponse:
+      type: object
+      required:
+        - events
+        - total
+        - limit
+        - offset
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChargeStationEvent'
+        total:
+          type: integer
+          description: Total number of events matching the filter
+        limit:
+          type: integer
+          description: Maximum number of events returned
+        offset:
+          type: integer
+          description: Number of events skipped
+    ChargeStationEvent:
+      type: object
+      required:
+        - timestamp
+        - eventType
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: When the event occurred (ISO8601)
+        eventType:
+          type: string
+          description: Type of event (e.g., FirmwareUpdated, Rebooted, SecurityLogWasCleared)
+        techCode:
+          type: string
+          description: Technical error/info code
+        techInfo:
+          type: string
+          description: Additional technical information
+        eventData:
+          type: string
+          description: Additional event details
+        componentId:
+          type: string
+          description: Component that generated the event
+        variableId:
+          type: string
+          description: Variable associated with the event
+        severity:
+          type: integer
+          minimum: 0
+          maximum: 9
+          description: Event severity (0 = critical, 9 = informational)
+    ReportsResponse:
+      type: object
+      required:
+        - reports
+        - total
+        - limit
+        - offset
+      properties:
+        reports:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceReport'
+        total:
+          type: integer
+          description: Total number of reports matching the filter
+        limit:
+          type: integer
+          description: Maximum number of reports returned
+        offset:
+          type: integer
+          description: Number of reports skipped
+    DeviceReport:
+      type: object
+      required:
+        - requestId
+        - generatedAt
+      properties:
+        requestId:
+          type: integer
+          description: Request ID that triggered this report
+        generatedAt:
+          type: string
+          format: date-time
+          description: When the report was generated (ISO8601)
+        reportType:
+          type: string
+          description: Type of report (e.g., ConfigurationInventory, MonitoringReport)
+        reportData:
+          type: array
+          description: Report data entries
+          items:
+            type: object
+            properties:
+              component:
+                $ref: '#/components/schemas/Component'
+              variable:
+                $ref: '#/components/schemas/Variable'
+              variableAttribute:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                      description: Attribute type (Actual, Target, MinSet, MaxSet)
+                    value:
+                      type: string
+                      description: Current attribute value
+                    mutability:
+                      type: string
+                      enum:
+                        - ReadOnly
+                        - WriteOnly
+                        - ReadWrite
+                    persistent:
+                      type: boolean
+                    constant:
+                      type: boolean

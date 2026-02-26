@@ -1,0 +1,129 @@
+paths:
+  /cs/{csId}:
+    post:
+      summary: Register a new charge station
+      description: 'Registers a new charge station. The system will assume that the
+        charge station
+
+        has not yet been provisioned and will place the charge station into a pending
+        state
+
+        so it can been configured when it sends a boot notification.
+
+        '
+      operationId: registerChargeStation
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeStationAuth'
+      responses:
+        '201':
+          description: Created
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/auth:
+    get:
+      summary: Returns the authentication details
+      description: 'Returns the details required by the CSMS gateway to determine
+        how to authenticate
+
+        the charge station
+
+        '
+      operationId: lookupChargeStationAuth
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      responses:
+        '200':
+          description: Charge station auth response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeStationAuth'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/cache/clear:
+    post:
+      summary: Clear authorization cache on charge station
+      description: "Requests the charge station to clear its local authorization cache.\
+        \ \nThe next authorization request will query the CSMS. Supports both OCPP\
+        \ 1.6 and OCPP 2.0.1.\n"
+      operationId: clearAuthorizationCache
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      responses:
+        '202':
+          description: Accepted - cache clear request submitted
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/local-list:
+    get:
+      summary: Get local authorization list
+      description: 'Returns the complete local authorization list for the specified
+        charge station.
+
+        '
+      operationId: getLocalAuthorizationList
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      responses:
+        '200':
+          description: Local authorization list response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocalAuthorizationListResponse'
+        '404':
+          description: Unknown charge station or no local list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'

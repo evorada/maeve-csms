@@ -1,0 +1,142 @@
+paths:
+  /cs/{csId}/certificates:
+    get:
+      summary: Get installed certificates from the charge station
+      description: 'Queries the charge station for installed certificates. Uses OCPP
+        GetInstalledCertificateIds
+
+        to retrieve certificate hash data for certificates currently installed on
+        the charge station.
+
+        '
+      operationId: getInstalledCertificates
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      - name: certificateType
+        in: query
+        description: Optional filter by certificate type
+        required: false
+        schema:
+          type: string
+          enum:
+          - V2GRootCertificate
+          - MORootCertificate
+          - CSMSRootCertificate
+          - V2GCertificateChain
+          - ManufacturerRootCertificate
+      responses:
+        '202':
+          description: Request accepted, will query charge station asynchronously
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/certificate:
+    delete:
+      summary: Delete a certificate from the charge station
+      description: 'Requests the charge station to delete a specific certificate identified
+        by its hash data.
+
+        Uses OCPP DeleteCertificate to remove the certificate from the charge station.
+
+        '
+      operationId: deleteChargeStationCertificate
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CertificateHashDataRequest'
+      responses:
+        '202':
+          description: Request accepted, will delete certificate asynchronously
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /certificate:
+    post:
+      summary: Upload a certificate
+      description: 'Uploads a client certificate to the CSMS. The CSMS can use the
+        certificate to authenticate
+
+        the charge station using mutual TLS when the TLS operations are being offloaded
+        to a load-balancer.
+
+        '
+      operationId: uploadCertificate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Certificate'
+      responses:
+        '201':
+          description: Created
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /certificate/{certificateHash}:
+    get:
+      summary: Lookup a certificate
+      description: 'Lookup a client certificate that has been uploaded to the CSMS
+        using a base64 encoded SHA-256 hash
+
+        of the DER bytes.
+
+        '
+      operationId: lookupCertificate
+      parameters:
+      - required: true
+        in: path
+        name: certificateHash
+        schema:
+          type: string
+          maxLength: 64
+      responses:
+        '200':
+          description: Certificate details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Certificate'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'

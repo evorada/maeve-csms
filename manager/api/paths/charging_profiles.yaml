@@ -1,0 +1,141 @@
+paths:
+  /cs/{csId}/charging-profile:
+    post:
+      summary: Set charging profile
+      description: 'Sets a charging profile for a specific connector on the charge
+        station.
+
+        Used for smart charging, load balancing, and dynamic pricing.
+
+        '
+      operationId: setChargingProfile
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetChargingProfileRequest'
+      responses:
+        '202':
+          description: Accepted - charging profile request queued
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/charging-profile/{profileId}:
+    delete:
+      summary: Clear charging profile
+      operationId: clearChargingProfile
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: profileId
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+      - name: connectorId
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+      - name: chargingProfilePurpose
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - TxProfile
+          - TxDefaultProfile
+          - ChargePointMaxProfile
+      - name: stackLevel
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+      responses:
+        '202':
+          description: Accepted - clear profile request queued
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/composite-schedule:
+    get:
+      summary: Get composite schedule
+      operationId: getCompositeSchedule
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: connectorId
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+      - name: duration
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 3600
+      - name: chargingRateUnit
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - W
+          - A
+          default: A
+      responses:
+        '200':
+          description: Composite schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompositeSchedule'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'

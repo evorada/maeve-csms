@@ -1,0 +1,130 @@
+paths:
+  /cs/{csId}/diagnostics:
+    post:
+      summary: Request diagnostics from charge station
+      description: 'Initiates a diagnostics upload from the specified charge station
+        (OCPP 1.6).
+
+        The charge station will collect diagnostics and upload them to the provided
+        location.
+
+        '
+      operationId: requestChargeStationDiagnostics
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiagnosticsRequest'
+      responses:
+        '202':
+          description: Accepted - diagnostics request initiated
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/diagnostics/status:
+    get:
+      summary: Get diagnostics upload status
+      description: 'Returns the current diagnostics upload status for the specified
+        charge station.
+
+        '
+      operationId: getChargeStationDiagnosticsStatus
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      responses:
+        '200':
+          description: Diagnostics status response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiagnosticsStatus'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/logs:
+    post:
+      summary: Request log upload from charge station
+      description: 'Initiates a log upload from the specified charge station (OCPP
+        2.0.1 GetLog).
+
+        '
+      operationId: requestChargeStationLogs
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogRequest'
+      responses:
+        '202':
+          description: Accepted - log request initiated
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/logs/status:
+    get:
+      summary: Get log upload status
+      description: 'Returns the current log upload status for the specified charge
+        station.
+
+        '
+      operationId: getChargeStationLogStatus
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      - name: requestId
+        in: query
+        required: false
+        description: Filter by specific request ID
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Log status response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogStatus'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'

@@ -1,0 +1,130 @@
+paths:
+  /cs/{csId}/reconfigure:
+    post:
+      summary: Reconfigure the charge station
+      description: 'Supplies new configuration that should be applied to the charge
+        station. This is not
+
+        intended to be used as a general charge station provisioning mechanism, it
+        is intended
+
+        for one time changes required during testing. After reconfiguration, the charge
+        station
+
+        will be rebooted so the new configuration can take effect if instructed to.
+
+        '
+      operationId: reconfigureChargeStation
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeStationSettings'
+      responses:
+        '200':
+          description: OK
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/configuration:
+    get:
+      summary: Get charge station configuration (OCPP 1.6)
+      description: 'Retrieves the current configuration of a charge station using
+        OCPP 1.6 GetConfiguration.
+
+        Optionally filter by specific configuration keys.
+
+        '
+      operationId: getChargeStationConfiguration
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        required: true
+        schema:
+          type: string
+          maxLength: 28
+      - name: key
+        in: query
+        description: Comma-separated list of configuration keys to retrieve
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Configuration response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigurationResponse'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/variables:
+    get:
+      summary: Get charge station variables (OCPP 2.0.1)
+      description: 'Retrieves variables from a charge station using OCPP 2.0.1 GetVariables.
+
+        Optionally filter by component and/or variable name.
+
+        '
+      operationId: getChargeStationVariables
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        required: true
+        schema:
+          type: string
+          maxLength: 28
+      - name: component
+        in: query
+        description: Filter by component name
+        required: false
+        schema:
+          type: string
+      - name: variable
+        in: query
+        description: Filter by variable name
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Variables response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VariablesResponse'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'

@@ -1,0 +1,329 @@
+paths:
+  /cs/{csId}/monitoring:
+    post:
+      summary: Set variable monitoring
+      description: 'Configure variable monitoring on a charge station (OCPP 2.0.1
+        only).
+
+        The charge station will monitor specified variables and send alerts based
+        on the configured thresholds.
+
+        '
+      operationId: setVariableMonitoring
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetVariableMonitoringRequest'
+      responses:
+        '202':
+          description: Accepted - monitoring configuration initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetVariableMonitoringResponse'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/monitoring/{monitorId}:
+    delete:
+      summary: Clear variable monitoring
+      description: 'Remove a specific variable monitor from a charge station (OCPP
+        2.0.1 only).
+
+        '
+      operationId: clearVariableMonitoring
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      - name: monitorId
+        in: path
+        required: true
+        description: The monitor identifier to clear
+        schema:
+          type: integer
+      responses:
+        '202':
+          description: Accepted - monitoring clear initiated
+        '404':
+          description: Unknown charge station or monitor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/monitoring/base:
+    post:
+      summary: Set monitoring base
+      description: 'Configure the base level of monitoring on a charge station (OCPP
+        2.0.1 only).
+
+        '
+      operationId: setMonitoringBase
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetMonitoringBaseRequest'
+      responses:
+        '202':
+          description: Accepted - monitoring base configuration initiated
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/monitoring/level:
+    post:
+      summary: Set monitoring level
+      description: 'Configure the monitoring severity level on a charge station (OCPP
+        2.0.1 only).
+
+        Only events with severity at or below this level will be reported.
+
+        '
+      operationId: setMonitoringLevel
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetMonitoringLevelRequest'
+      responses:
+        '202':
+          description: Accepted - monitoring level configuration initiated
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/monitoring/report:
+    post:
+      summary: Get monitoring report
+      description: 'Request a monitoring report from a charge station (OCPP 2.0.1
+        only).
+
+        The report will be sent asynchronously via NotifyMonitoringReport notifications.
+
+        '
+      operationId: getMonitoringReport
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GetMonitoringReportRequest'
+      responses:
+        '202':
+          description: Accepted - monitoring report request initiated
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/events:
+    get:
+      summary: Get charge station events
+      description: 'Retrieve events from a charge station, filtered by type and time
+        range.
+
+        Events are collected from NotifyEvent notifications.
+
+        '
+      operationId: getChargeStationEvents
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      - name: eventType
+        in: query
+        description: Filter by event type
+        schema:
+          type: string
+      - name: startTime
+        in: query
+        description: Filter events after this time (ISO8601)
+        schema:
+          type: string
+          format: date-time
+      - name: endTime
+        in: query
+        description: Filter events before this time (ISO8601)
+        schema:
+          type: string
+          format: date-time
+      - name: limit
+        in: query
+        description: Maximum number of events to return
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 100
+      - name: offset
+        in: query
+        description: Number of events to skip
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      responses:
+        '200':
+          description: Events response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventsResponse'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/reports:
+    get:
+      summary: Get device reports
+      description: 'Retrieve device reports from a charge station, such as configuration
+        inventory
+
+        or monitoring reports. Reports are collected from NotifyReport and NotifyMonitoringReport
+        notifications.
+
+        '
+      operationId: getDeviceReports
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      - name: reportType
+        in: query
+        description: Filter by report type
+        schema:
+          type: string
+      - name: requestId
+        in: query
+        description: Filter by request ID
+        schema:
+          type: integer
+      - name: limit
+        in: query
+        description: Maximum number of reports to return
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 100
+      - name: offset
+        in: query
+        description: Number of reports to skip
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      responses:
+        '200':
+          description: Reports response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportsResponse'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'

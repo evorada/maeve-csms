@@ -1,0 +1,72 @@
+paths:
+  /cs/{csId}/firmware/update:
+    post:
+      summary: Trigger firmware update on charge station
+      description: 'Initiates a firmware update on the specified charge station. Supports
+        both regular
+
+        and signed firmware updates. The charge station will download and install
+        the firmware
+
+        from the provided location.
+
+        '
+      operationId: updateChargeStationFirmware
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FirmwareUpdateRequest'
+      responses:
+        '202':
+          description: Accepted - firmware update initiated
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/firmware/status:
+    get:
+      summary: Get firmware update status
+      description: 'Returns the current firmware update status for the specified charge
+        station,
+
+        including current version, pending version (if any), and update progress.
+
+        '
+      operationId: getChargeStationFirmwareStatus
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      responses:
+        '200':
+          description: Firmware status response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FirmwareStatus'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
