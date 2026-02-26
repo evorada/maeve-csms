@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 	handlers "github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
+	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	realClock "k8s.io/utils/clock"
 	clockTest "k8s.io/utils/clock/testing"
 )
 
@@ -19,8 +21,11 @@ func TestHeartbeatHandler(t *testing.T) {
 	require.NoError(t, err)
 	clock := clockTest.NewFakePassiveClock(now)
 
+	engine := inmemory.NewStore(realClock.RealClock{})
+
 	handler := handlers.HeartbeatHandler{
-		Clock: clock,
+		Clock:       clock,
+		StatusStore: engine,
 	}
 
 	req := &types.HeartbeatJson{}

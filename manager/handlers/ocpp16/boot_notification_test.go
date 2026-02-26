@@ -35,6 +35,7 @@ func TestBootNotificationHandler(t *testing.T) {
 		Clock:               clockTest.NewFakePassiveClock(now),
 		RuntimeDetailsStore: engine,
 		SettingsStore:       engine,
+		StatusStore:         engine,
 		HeartbeatInterval:   10,
 	}
 
@@ -56,9 +57,11 @@ func TestBootNotificationHandler(t *testing.T) {
 
 	details, err := engine.LookupChargeStationRuntimeDetails(context.Background(), "cs001")
 	require.NoError(t, err)
-	assert.Equal(t, store.ChargeStationRuntimeDetails{
-		OcppVersion: "1.6",
-	}, *details)
+	emptyStr := ""
+	assert.Equal(t, "1.6", details.OcppVersion)
+	assert.Equal(t, &emptyStr, details.Model)
+	assert.Equal(t, &emptyStr, details.Vendor)
+	assert.Equal(t, &serialNumber, details.SerialNumber)
 
 	settings, err := engine.LookupChargeStationSettings(context.Background(), "cs001")
 	require.NoError(t, err)
