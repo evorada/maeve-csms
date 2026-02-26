@@ -155,3 +155,19 @@ func (r RemoteStartTransactionRequest) Bind(_ *http.Request) error {
 func (r RemoteStopTransactionRequest) Bind(_ *http.Request) error {
 	return nil
 }
+
+func (r SetVariableMonitoringRequest) Bind(_ *http.Request) error {
+	return nil
+}
+
+func (r SetMonitoringBaseRequest) Bind(_ *http.Request) error {
+	return nil
+}
+
+func (r SetMonitoringLevelRequest) Bind(_ *http.Request) error {
+	return nil
+}
+
+func (r GetMonitoringReportRequest) Bind(_ *http.Request) error {
+	return nil
+}
