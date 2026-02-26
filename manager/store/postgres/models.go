@@ -294,6 +294,26 @@ type PublishFirmwareStatus struct {
 	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
 
+type RemoteStartTransactionRequest struct {
+	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
+	IDTag           string           `db:"id_tag" json:"id_tag"`
+	ConnectorID     pgtype.Int4      `db:"connector_id" json:"connector_id"`
+	ChargingProfile pgtype.Text      `db:"charging_profile" json:"charging_profile"`
+	Status          string           `db:"status" json:"status"`
+	SendAfter       pgtype.Timestamp `db:"send_after" json:"send_after"`
+	RequestType     string           `db:"request_type" json:"request_type"`
+	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
+}
+
+type RemoteStopTransactionRequest struct {
+	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
+	TransactionID   string           `db:"transaction_id" json:"transaction_id"`
+	Status          string           `db:"status" json:"status"`
+	SendAfter       pgtype.Timestamp `db:"send_after" json:"send_after"`
+	RequestType     string           `db:"request_type" json:"request_type"`
+	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
+}
+
 type Reservation struct {
 	ReservationID   int32              `db:"reservation_id" json:"reservation_id"`
 	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`

@@ -3,6 +3,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sort"
@@ -1753,4 +1754,85 @@ func toRendererList(response []ConnectorStatusResponse) []render.Renderer {
 		list[i] = response[i]
 	}
 	return list
+}
+
+func (s *Server) RemoteStartTransaction(w http.ResponseWriter, r *http.Request, csId string) {
+	req := new(RemoteStartTransactionRequest)
+	if err := render.Bind(r, req); err != nil {
+		_ = render.Render(w, r, ErrInvalidRequest(err))
+		return
+	}
+
+	runtime, err := s.store.LookupChargeStationRuntimeDetails(r.Context(), csId)
+	if err != nil {
+		_ = render.Render(w, r, ErrInternalError(err))
+		return
+	}
+	if runtime == nil {
+		_ = render.Render(w, r, ErrNotFound)
+		return
+	}
+
+	var chargingProfileJSON *string
+	if req.ChargingProfile != nil {
+		profileBytes, err := json.Marshal(req.ChargingProfile)
+		if err != nil {
+			_ = render.Render(w, r, ErrInvalidRequest(fmt.Errorf("invalid charging profile: %w", err)))
+			return
+		}
+		profileStr := string(profileBytes)
+		chargingProfileJSON = &profileStr
+	}
+
+	transactionReq := &store.RemoteStartTransactionRequest{
+		ChargeStationId: csId,
+		IdTag:           req.IdTag,
+		ConnectorId:     req.ConnectorId,
+		ChargingProfile: chargingProfileJSON,
+		Status:          store.RemoteTransactionRequestStatusPending,
+		SendAfter:       s.clock.Now(),
+		RequestType:     store.RemoteTransactionRequestTypeStart,
+	}
+
+	err = s.store.SetRemoteStartTransactionRequest(r.Context(), csId, transactionReq)
+	if err != nil {
+		_ = render.Render(w, r, ErrInternalError(err))
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (s *Server) RemoteStopTransaction(w http.ResponseWriter, r *http.Request, csId string) {
+	req := new(RemoteStopTransactionRequest)
+	if err := render.Bind(r, req); err != nil {
+		_ = render.Render(w, r, ErrInvalidRequest(err))
+		return
+	}
+
+	runtime, err := s.store.LookupChargeStationRuntimeDetails(r.Context(), csId)
+	if err != nil {
+		_ = render.Render(w, r, ErrInternalError(err))
+		return
+	}
+	if runtime == nil {
+		_ = render.Render(w, r, ErrNotFound)
+		return
+	}
+
+	transactionReq := &store.RemoteStopTransactionRequest{
+		ChargeStationId: csId,
+		TransactionId:   req.TransactionId,
+		Status:          store.RemoteTransactionRequestStatusPending,
+		SendAfter:       s.clock.Now(),
+		RequestType:     store.RemoteTransactionRequestTypeStop,
+	}
+
+	err = s.store.SetRemoteStopTransactionRequest(r.Context(), csId, transactionReq)
+	if err != nil {
+		_ = render.Render(w, r, ErrInternalError(err))
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
 }

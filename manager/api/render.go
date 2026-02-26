@@ -147,3 +147,11 @@ func (c ChargeStationStatusResponse) Render(_ http.ResponseWriter, _ *http.Reque
 func (c ConnectorStatusResponse) Render(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
+
+func (r RemoteStartTransactionRequest) Bind(_ *http.Request) error {
+	return nil
+}
+
+func (r RemoteStopTransactionRequest) Bind(_ *http.Request) error {
+	return nil
+}

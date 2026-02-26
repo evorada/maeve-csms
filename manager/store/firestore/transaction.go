@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"cloud.google.com/go/firestore"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -207,4 +208,160 @@ func (s *Store) ListTransactionsForChargeStation(ctx context.Context, chargeStat
 
 func getPath(chargeStationId, transactionId string) string {
 	return fmt.Sprintf("Transaction/%s-%s", chargeStationId, transactionId)
+}
+
+type remoteStartTransactionRequest struct {
+	ChargeStationId string    `firestore:"chargeStationId"`
+	IdTag           string    `firestore:"idTag"`
+	ConnectorId     *int      `firestore:"connectorId,omitempty"`
+	ChargingProfile *string   `firestore:"chargingProfile,omitempty"`
+	Status          string    `firestore:"status"`
+	SendAfter       time.Time `firestore:"sendAfter"`
+	RequestType     string    `firestore:"requestType"`
+}
+
+func (s *Store) SetRemoteStartTransactionRequest(ctx context.Context, chargeStationId string, request *store.RemoteStartTransactionRequest) error {
+	ref := s.client.Doc(fmt.Sprintf("RemoteStartTransactionRequest/%s", chargeStationId))
+	_, err := ref.Set(ctx, &remoteStartTransactionRequest{
+		ChargeStationId: chargeStationId,
+		IdTag:           request.IdTag,
+		ConnectorId:     request.ConnectorId,
+		ChargingProfile: request.ChargingProfile,
+		Status:          string(request.Status),
+		SendAfter:       request.SendAfter,
+		RequestType:     string(request.RequestType),
+	})
+	return err
+}
+
+func (s *Store) GetRemoteStartTransactionRequest(ctx context.Context, chargeStationId string) (*store.RemoteStartTransactionRequest, error) {
+	ref := s.client.Doc(fmt.Sprintf("RemoteStartTransactionRequest/%s", chargeStationId))
+	snap, err := ref.Get(ctx)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get remote start request %s: %w", chargeStationId, err)
+	}
+	var data remoteStartTransactionRequest
+	if err = snap.DataTo(&data); err != nil {
+		return nil, fmt.Errorf("map remote start request %s: %w", chargeStationId, err)
+	}
+	return &store.RemoteStartTransactionRequest{
+		ChargeStationId: chargeStationId,
+		IdTag:           data.IdTag,
+		ConnectorId:     data.ConnectorId,
+		ChargingProfile: data.ChargingProfile,
+		Status:          store.RemoteTransactionRequestStatus(data.Status),
+		SendAfter:       data.SendAfter,
+		RequestType:     store.RemoteTransactionRequestType(data.RequestType),
+	}, nil
+}
+
+func (s *Store) DeleteRemoteStartTransactionRequest(ctx context.Context, chargeStationId string) error {
+	ref := s.client.Doc(fmt.Sprintf("RemoteStartTransactionRequest/%s", chargeStationId))
+	_, err := ref.Delete(ctx)
+	return err
+}
+
+func (s *Store) ListRemoteStartTransactionRequests(ctx context.Context, pageSize int, previousChargeStationId string) ([]*store.RemoteStartTransactionRequest, error) {
+	query := s.client.Collection("RemoteStartTransactionRequest").OrderBy("chargeStationId", firestore.Asc).Limit(pageSize)
+	if previousChargeStationId != "" {
+		query = query.StartAfter(previousChargeStationId)
+	}
+	docs, err := query.Documents(ctx).GetAll()
+	if err != nil {
+		return nil, fmt.Errorf("list remote start requests: %w", err)
+	}
+	var result []*store.RemoteStartTransactionRequest
+	for _, doc := range docs {
+		var data remoteStartTransactionRequest
+		if err = doc.DataTo(&data); err != nil {
+			return nil, fmt.Errorf("map remote start request: %w", err)
+		}
+		result = append(result, &store.RemoteStartTransactionRequest{
+			ChargeStationId: data.ChargeStationId,
+			IdTag:           data.IdTag,
+			ConnectorId:     data.ConnectorId,
+			ChargingProfile: data.ChargingProfile,
+			Status:          store.RemoteTransactionRequestStatus(data.Status),
+			SendAfter:       data.SendAfter,
+			RequestType:     store.RemoteTransactionRequestType(data.RequestType),
+		})
+	}
+	return result, nil
+}
+
+type remoteStopTransactionRequest struct {
+	ChargeStationId string    `firestore:"chargeStationId"`
+	TransactionId   string    `firestore:"transactionId"`
+	Status          string    `firestore:"status"`
+	SendAfter       time.Time `firestore:"sendAfter"`
+	RequestType     string    `firestore:"requestType"`
+}
+
+func (s *Store) SetRemoteStopTransactionRequest(ctx context.Context, chargeStationId string, request *store.RemoteStopTransactionRequest) error {
+	ref := s.client.Doc(fmt.Sprintf("RemoteStopTransactionRequest/%s", chargeStationId))
+	_, err := ref.Set(ctx, &remoteStopTransactionRequest{
+		ChargeStationId: chargeStationId,
+		TransactionId:   request.TransactionId,
+		Status:          string(request.Status),
+		SendAfter:       request.SendAfter,
+		RequestType:     string(request.RequestType),
+	})
+	return err
+}
+
+func (s *Store) GetRemoteStopTransactionRequest(ctx context.Context, chargeStationId string) (*store.RemoteStopTransactionRequest, error) {
+	ref := s.client.Doc(fmt.Sprintf("RemoteStopTransactionRequest/%s", chargeStationId))
+	snap, err := ref.Get(ctx)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get remote stop request %s: %w", chargeStationId, err)
+	}
+	var data remoteStopTransactionRequest
+	if err = snap.DataTo(&data); err != nil {
+		return nil, fmt.Errorf("map remote stop request %s: %w", chargeStationId, err)
+	}
+	return &store.RemoteStopTransactionRequest{
+		ChargeStationId: chargeStationId,
+		TransactionId:   data.TransactionId,
+		Status:          store.RemoteTransactionRequestStatus(data.Status),
+		SendAfter:       data.SendAfter,
+		RequestType:     store.RemoteTransactionRequestType(data.RequestType),
+	}, nil
+}
+
+func (s *Store) DeleteRemoteStopTransactionRequest(ctx context.Context, chargeStationId string) error {
+	ref := s.client.Doc(fmt.Sprintf("RemoteStopTransactionRequest/%s", chargeStationId))
+	_, err := ref.Delete(ctx)
+	return err
+}
+
+func (s *Store) ListRemoteStopTransactionRequests(ctx context.Context, pageSize int, previousChargeStationId string) ([]*store.RemoteStopTransactionRequest, error) {
+	query := s.client.Collection("RemoteStopTransactionRequest").OrderBy("chargeStationId", firestore.Asc).Limit(pageSize)
+	if previousChargeStationId != "" {
+		query = query.StartAfter(previousChargeStationId)
+	}
+	docs, err := query.Documents(ctx).GetAll()
+	if err != nil {
+		return nil, fmt.Errorf("list remote stop requests: %w", err)
+	}
+	var result []*store.RemoteStopTransactionRequest
+	for _, doc := range docs {
+		var data remoteStopTransactionRequest
+		if err = doc.DataTo(&data); err != nil {
+			return nil, fmt.Errorf("map remote stop request: %w", err)
+		}
+		result = append(result, &store.RemoteStopTransactionRequest{
+			ChargeStationId: data.ChargeStationId,
+			TransactionId:   data.TransactionId,
+			Status:          store.RemoteTransactionRequestStatus(data.Status),
+			SendAfter:       data.SendAfter,
+			RequestType:     store.RemoteTransactionRequestType(data.RequestType),
+		})
+	}
+	return result, nil
 }

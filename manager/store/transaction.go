@@ -52,3 +52,47 @@ type TransactionStore interface {
 	// ListTransactionsForChargeStation retrieves transactions for a specific charge station with filtering and pagination
 	ListTransactionsForChargeStation(ctx context.Context, chargeStationId, status string, startDate, endDate *time.Time, limit, offset int) ([]*Transaction, int64, error)
 }
+
+type RemoteTransactionRequestStatus string
+
+var (
+	RemoteTransactionRequestStatusPending  RemoteTransactionRequestStatus = "Pending"
+	RemoteTransactionRequestStatusAccepted RemoteTransactionRequestStatus = "Accepted"
+	RemoteTransactionRequestStatusRejected RemoteTransactionRequestStatus = "Rejected"
+)
+
+type RemoteTransactionRequestType string
+
+var (
+	RemoteTransactionRequestTypeStart RemoteTransactionRequestType = "Start"
+	RemoteTransactionRequestTypeStop  RemoteTransactionRequestType = "Stop"
+)
+
+type RemoteStartTransactionRequest struct {
+	ChargeStationId string
+	IdTag           string
+	ConnectorId     *int
+	ChargingProfile *string
+	Status          RemoteTransactionRequestStatus
+	SendAfter       time.Time
+	RequestType     RemoteTransactionRequestType
+}
+
+type RemoteStopTransactionRequest struct {
+	ChargeStationId string
+	TransactionId   string
+	Status          RemoteTransactionRequestStatus
+	SendAfter       time.Time
+	RequestType     RemoteTransactionRequestType
+}
+
+type RemoteTransactionRequestStore interface {
+	SetRemoteStartTransactionRequest(ctx context.Context, chargeStationId string, request *RemoteStartTransactionRequest) error
+	GetRemoteStartTransactionRequest(ctx context.Context, chargeStationId string) (*RemoteStartTransactionRequest, error)
+	DeleteRemoteStartTransactionRequest(ctx context.Context, chargeStationId string) error
+	ListRemoteStartTransactionRequests(ctx context.Context, pageSize int, previousChargeStationId string) ([]*RemoteStartTransactionRequest, error)
+	SetRemoteStopTransactionRequest(ctx context.Context, chargeStationId string, request *RemoteStopTransactionRequest) error
+	GetRemoteStopTransactionRequest(ctx context.Context, chargeStationId string) (*RemoteStopTransactionRequest, error)
+	DeleteRemoteStopTransactionRequest(ctx context.Context, chargeStationId string) error
+	ListRemoteStopTransactionRequests(ctx context.Context, pageSize int, previousChargeStationId string) ([]*RemoteStopTransactionRequest, error)
+}
