@@ -574,6 +574,123 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Status'
+  /cs/{csId}/transactions:
+    get:
+      summary: List transactions for a charge station
+      description: |
+        Lists transactions for the specified charge station with optional filtering
+        by status, date range, and pagination.
+      operationId: listTransactions
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        required: true
+        schema:
+          type: string
+          maxLength: 28
+      - name: status
+        in: query
+        description: 'Filter by transaction status (default: all)'
+        required: false
+        schema:
+          type: string
+          enum:
+          - active
+          - completed
+          - all
+          default: all
+      - name: limit
+        in: query
+        description: 'Maximum number of transactions to return (default: 50, max: 100)'
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+      - name: offset
+        in: query
+        description: 'Number of transactions to skip for pagination (default: 0)'
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      - name: startDate
+        in: query
+        description: Filter transactions starting on or after this date (ISO8601)
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: endDate
+        in: query
+        description: Filter transactions starting on or before this date (ISO8601)
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: List of transactions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionList'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/transaction/{transactionId}:
+    get:
+      summary: Get transaction details
+      description: |
+        Retrieves detailed information about a specific transaction including
+        all meter values.
+      operationId: getTransactionDetails
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        required: true
+        schema:
+          type: string
+          maxLength: 28
+      - name: transactionId
+        in: path
+        description: The transaction identifier
+        required: true
+        schema:
+          type: string
+          maxLength: 36
+      responses:
+        '200':
+          description: Transaction details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionDetail'
+        '404':
+          description: Transaction not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
   /token:
     post:
       summary: Create/update an authorization token
@@ -2245,6 +2362,110 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ReservationResponse'
+    TransactionList:
+      type: object
+      description: List of transactions with pagination
+      required:
+      - transactions
+      - total
+      - limit
+      - offset
+      properties:
+        transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransactionSummary'
+        total:
+          type: integer
+          format: int64
+          description: Total number of transactions matching the filter
+        limit:
+          type: integer
+          description: Maximum number of results returned
+        offset:
+          type: integer
+          description: Number of results skipped
+    TransactionSummary:
+      type: object
+      description: Summary of a transaction
+      required:
+      - transactionId
+      - idTag
+      - startTime
+      - meterStart
+      - status
+      properties:
+        transactionId:
+          type: string
+          description: The transaction identifier
+        idTag:
+          type: string
+          description: The identifier used to start the transaction
+        startTime:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the transaction started
+        stopTime:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the transaction stopped (null if active)
+        meterStart:
+          type: integer
+          description: Meter value in Wh at start of transaction
+        meterStop:
+          type: integer
+          description: Meter value in Wh at end of transaction (null if active)
+        status:
+          type: string
+          enum:
+          - active
+          - completed
+          description: Status of the transaction
+    TransactionDetail:
+      type: object
+      description: Detailed transaction information including meter values
+      required:
+      - transactionId
+      - idTag
+      - startTime
+      - meterStart
+      - status
+      - meterValues
+      properties:
+        transactionId:
+          type: string
+          description: The transaction identifier
+        idTag:
+          type: string
+          description: The identifier used to start the transaction
+        tokenType:
+          type: string
+          description: The type of token used
+        startTime:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the transaction started
+        stopTime:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the transaction stopped (null if active)
+        meterStart:
+          type: integer
+          description: Meter value in Wh at start of transaction
+        meterStop:
+          type: integer
+          description: Meter value in Wh at end of transaction (null if active)
+        status:
+          type: string
+          enum:
+          - active
+          - completed
+          description: Status of the transaction
+        meterValues:
+          type: array
+          items:
+            $ref: '#/components/schemas/MeterValue'
+          description: All meter values recorded during the transaction
     ReservationResponse:
       type: object
       description: Reservation details

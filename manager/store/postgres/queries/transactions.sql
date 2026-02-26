@@ -36,3 +36,25 @@ VALUES ($1, $2, $3);
 SELECT * FROM transaction_meter_values
 WHERE transaction_id = $1
 ORDER BY timestamp ASC;
+
+-- name: ListTransactionsFiltered :many
+SELECT * FROM transactions
+WHERE charge_station_id = $1
+    AND (sqlc.narg('status')::text IS NULL 
+        OR (sqlc.narg('status')::text = 'active' AND stop_timestamp IS NULL)
+        OR (sqlc.narg('status')::text = 'completed' AND stop_timestamp IS NOT NULL)
+        OR sqlc.narg('status')::text = 'all')
+    AND (sqlc.narg('start_date')::timestamp IS NULL OR start_timestamp >= sqlc.narg('start_date')::timestamp)
+    AND (sqlc.narg('end_date')::timestamp IS NULL OR start_timestamp <= sqlc.narg('end_date')::timestamp)
+ORDER BY start_timestamp DESC
+LIMIT $2 OFFSET $3;
+
+-- name: CountTransactionsFiltered :one
+SELECT COUNT(*) FROM transactions
+WHERE charge_station_id = $1
+    AND (sqlc.narg('status')::text IS NULL 
+        OR (sqlc.narg('status')::text = 'active' AND stop_timestamp IS NULL)
+        OR (sqlc.narg('status')::text = 'completed' AND stop_timestamp IS NOT NULL)
+        OR sqlc.narg('status')::text = 'all')
+    AND (sqlc.narg('start_date')::timestamp IS NULL OR start_timestamp >= sqlc.narg('start_date')::timestamp)
+    AND (sqlc.narg('end_date')::timestamp IS NULL OR start_timestamp <= sqlc.narg('end_date')::timestamp);

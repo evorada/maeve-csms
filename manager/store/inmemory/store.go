@@ -542,6 +542,40 @@ func (s *Store) EndTransaction(_ context.Context, chargeStationId, transactionId
 	return nil
 }
 
+func (s *Store) ListTransactionsForChargeStation(_ context.Context, chargeStationId, status string, startDate, endDate *time.Time, limit, offset int) ([]*store.Transaction, int64, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	var allTransactions []*store.Transaction
+	for _, txn := range s.transactions {
+		if txn.ChargeStationId == chargeStationId {
+			isActive := txn.EndedSeqNo == 0
+			if status == "active" && !isActive {
+				continue
+			}
+			if status == "completed" && isActive {
+				continue
+			}
+			allTransactions = append(allTransactions, txn)
+		}
+	}
+
+	total := int64(len(allTransactions))
+
+	start := offset
+	if start > len(allTransactions) {
+		start = len(allTransactions)
+	}
+
+	end := start + limit
+	if end > len(allTransactions) {
+		end = len(allTransactions)
+	}
+
+	result := allTransactions[start:end]
+	return result, total, nil
+}
+
 func (s *Store) SetCertificate(_ context.Context, pemCertificate string) error {
 	s.Lock()
 	defer s.Unlock()

@@ -247,6 +247,58 @@ func (s *Store) UpdateTransactionCost(ctx context.Context, chargeStationId, tran
 	return nil
 }
 
+func (s *Store) ListTransactionsForChargeStation(ctx context.Context, chargeStationId, status string, startDate, endDate *time.Time, limit, offset int) ([]*store.Transaction, int64, error) {
+	params := ListTransactionsFilteredParams{
+		ChargeStationID: chargeStationId,
+		Limit:           int32(limit),
+		Offset:          int32(offset),
+	}
+
+	if status != "" {
+		params.Status = pgtype.Text{String: status, Valid: true}
+	}
+	if startDate != nil {
+		params.StartDate = pgtype.Timestamp{Time: *startDate, Valid: true}
+	}
+	if endDate != nil {
+		params.EndDate = pgtype.Timestamp{Time: *endDate, Valid: true}
+	}
+
+	txns, err := s.q.ListTransactionsFiltered(ctx, params)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to list transactions: %w", err)
+	}
+
+	countParams := CountTransactionsFilteredParams{
+		ChargeStationID: chargeStationId,
+	}
+	if status != "" {
+		countParams.Status = pgtype.Text{String: status, Valid: true}
+	}
+	if startDate != nil {
+		countParams.StartDate = pgtype.Timestamp{Time: *startDate, Valid: true}
+	}
+	if endDate != nil {
+		countParams.EndDate = pgtype.Timestamp{Time: *endDate, Valid: true}
+	}
+
+	total, err := s.q.CountTransactionsFiltered(ctx, countParams)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count transactions: %w", err)
+	}
+
+	result := make([]*store.Transaction, len(txns))
+	for i, txn := range txns {
+		storeTransaction, err := s.toStoreTransaction(ctx, &txn)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to convert transaction %s: %w", txn.ID, err)
+		}
+		result[i] = storeTransaction
+	}
+
+	return result, total, nil
+}
+
 // Helper function to convert PostgreSQL Transaction to store.Transaction
 func (s *Store) toStoreTransaction(ctx context.Context, txn *Transaction) (*store.Transaction, error) {
 	// Retrieve meter values for this transaction
