@@ -29,6 +29,18 @@ jobs:
         cache: true
         # Used to specify the path to a dependency file - go.sum
         cache-dependency-path: ${{env.SERVICE}}/go.sum
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    - name: Check OpenAPI bundle is up to date
+      run: |
+        cd api && ./bundle-spec.sh
+        if ! git diff --quiet api/api-spec.bundled.yaml; then
+          echo "::error::api-spec.bundled.yaml is out of date. Run 'make api-bundle' and commit the result."
+          git diff api/api-spec.bundled.yaml | head -50
+          exit 1
+        fi
     - name: Run Gosec Security Scanner
       run: |
         go install github.com/securego/gosec/v2/cmd/gosec@latest
