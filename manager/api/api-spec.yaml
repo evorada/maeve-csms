@@ -761,6 +761,64 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Status"
+  /cs/{csId}/start-transaction:
+    post:
+      summary: Remote start transaction
+      description: |
+        Remotely starts a charging transaction on the specified charge station.
+        This is an async operation that returns immediately with 202 Accepted.
+      operationId: remoteStartTransaction
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemoteStartTransactionRequest'
+      responses:
+        '202':
+          description: Accepted - remote start initiated
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/stop-transaction:
+    post:
+      summary: Remote stop transaction
+      description: |
+        Remotely stops an active charging transaction on the specified charge station.
+        This is an async operation that returns immediately with 202 Accepted.
+      operationId: remoteStopTransaction
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemoteStopTransactionRequest'
+      responses:
+        '202':
+          description: Accepted - remote stop initiated
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
   /token:
     post:
       summary: Create/update an authorization token
@@ -2201,6 +2259,31 @@ components:
           type: string
           format: date-time
           description: The date the record was last updated (ignored on create/update)
+    RemoteStartTransactionRequest:
+      type: object
+      description: Request to remotely start a charging transaction
+      required:
+      - idTag
+      properties:
+        idTag:
+          type: string
+          maxLength: 20
+          description: The identifier that should be used to authorize the transaction
+        connectorId:
+          type: integer
+          minimum: 1
+          description: Optional connector ID to start charging on
+        chargingProfile:
+          $ref: '#/components/schemas/ChargingProfile'
+    RemoteStopTransactionRequest:
+      type: object
+      description: Request to remotely stop a charging transaction
+      required:
+      - transactionId
+      properties:
+        transactionId:
+          type: string
+          description: The identifier of the transaction to stop
     Status:
       type: object
       description: HTTP status

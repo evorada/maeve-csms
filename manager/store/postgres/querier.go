@@ -41,6 +41,8 @@ type Querier interface {
 	DeleteLocation(ctx context.Context, id string) error
 	DeleteLogRequest(ctx context.Context, chargeStationID string) error
 	DeleteOcpiRegistration(ctx context.Context, token string) error
+	DeleteRemoteStartTransactionRequest(ctx context.Context, chargeStationID string) error
+	DeleteRemoteStopTransactionRequest(ctx context.Context, chargeStationID string) error
 	DeleteResetRequest(ctx context.Context, chargeStationID string) error
 	DeleteToken(ctx context.Context, uid string) error
 	DeleteUnlockConnectorRequest(ctx context.Context, chargeStationID string) error
@@ -86,6 +88,8 @@ type Querier interface {
 	// Registrations (by token)
 	GetOcpiRegistration(ctx context.Context, token string) (OcpiRegistration, error)
 	GetPublishFirmwareStatus(ctx context.Context, chargeStationID string) (PublishFirmwareStatus, error)
+	GetRemoteStartTransactionRequest(ctx context.Context, chargeStationID string) (RemoteStartTransactionRequest, error)
+	GetRemoteStopTransactionRequest(ctx context.Context, chargeStationID string) (RemoteStopTransactionRequest, error)
 	GetReservation(ctx context.Context, reservationID int32) (Reservation, error)
 	GetReservationByConnector(ctx context.Context, arg GetReservationByConnectorParams) (Reservation, error)
 	GetResetRequest(ctx context.Context, chargeStationID string) (ResetRequest, error)
@@ -112,6 +116,8 @@ type Querier interface {
 	ListLocations(ctx context.Context, arg ListLocationsParams) ([]Location, error)
 	ListLogRequests(ctx context.Context, arg ListLogRequestsParams) ([]LogRequest, error)
 	ListOcpiPartiesForRole(ctx context.Context, role string) ([]OcpiParty, error)
+	ListRemoteStartTransactionRequests(ctx context.Context, arg ListRemoteStartTransactionRequestsParams) ([]RemoteStartTransactionRequest, error)
+	ListRemoteStopTransactionRequests(ctx context.Context, arg ListRemoteStopTransactionRequestsParams) ([]RemoteStopTransactionRequest, error)
 	ListTokens(ctx context.Context, arg ListTokensParams) ([]Token, error)
 	ListTransactions(ctx context.Context) ([]Transaction, error)
 	ListTransactionsFiltered(ctx context.Context, arg ListTransactionsFilteredParams) ([]Transaction, error)
@@ -131,6 +137,8 @@ type Querier interface {
 	SetLocation(ctx context.Context, arg SetLocationParams) (Location, error)
 	SetOcpiParty(ctx context.Context, arg SetOcpiPartyParams) (OcpiParty, error)
 	SetOcpiRegistration(ctx context.Context, arg SetOcpiRegistrationParams) (OcpiRegistration, error)
+	SetRemoteStartTransactionRequest(ctx context.Context, arg SetRemoteStartTransactionRequestParams) (RemoteStartTransactionRequest, error)
+	SetRemoteStopTransactionRequest(ctx context.Context, arg SetRemoteStopTransactionRequestParams) (RemoteStopTransactionRequest, error)
 	// Reset Request
 	SetResetRequest(ctx context.Context, arg SetResetRequestParams) (ResetRequest, error)
 	// Unlock Connector Request

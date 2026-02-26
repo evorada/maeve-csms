@@ -37,6 +37,8 @@ type Store struct {
 	chargeStationChangeAvailability  map[string]*store.ChargeStationChangeAvailability
 	chargeStationCertificateQuery    map[string]*store.ChargeStationCertificateQuery
 	chargeStationCertificateDeletion map[string]*store.ChargeStationCertificateDeletion
+	remoteStartTransactionRequests   map[string]*store.RemoteStartTransactionRequest
+	remoteStopTransactionRequests    map[string]*store.RemoteStopTransactionRequest
 	tokens                           map[string]*store.Token
 	transactions                     map[string]*store.Transaction
 	certificates                     map[string]string
@@ -75,6 +77,8 @@ func NewStore(clock clock.PassiveClock) *Store {
 		chargeStationChangeAvailability:  make(map[string]*store.ChargeStationChangeAvailability),
 		chargeStationCertificateQuery:    make(map[string]*store.ChargeStationCertificateQuery),
 		chargeStationCertificateDeletion: make(map[string]*store.ChargeStationCertificateDeletion),
+		remoteStartTransactionRequests:   make(map[string]*store.RemoteStartTransactionRequest),
+		remoteStopTransactionRequests:    make(map[string]*store.RemoteStopTransactionRequest),
 		tokens:                           make(map[string]*store.Token),
 		transactions:                     make(map[string]*store.Transaction),
 		certificates:                     make(map[string]string),
@@ -578,6 +582,84 @@ func (s *Store) ListTransactionsForChargeStation(_ context.Context, chargeStatio
 
 	result := allTransactions[start:end]
 	return result, total, nil
+}
+
+func (s *Store) SetRemoteStartTransactionRequest(_ context.Context, chargeStationId string, request *store.RemoteStartTransactionRequest) error {
+	s.Lock()
+	defer s.Unlock()
+	s.remoteStartTransactionRequests[chargeStationId] = request
+	return nil
+}
+
+func (s *Store) GetRemoteStartTransactionRequest(_ context.Context, chargeStationId string) (*store.RemoteStartTransactionRequest, error) {
+	s.Lock()
+	defer s.Unlock()
+	return s.remoteStartTransactionRequests[chargeStationId], nil
+}
+
+func (s *Store) DeleteRemoteStartTransactionRequest(_ context.Context, chargeStationId string) error {
+	s.Lock()
+	defer s.Unlock()
+	delete(s.remoteStartTransactionRequests, chargeStationId)
+	return nil
+}
+
+func (s *Store) ListRemoteStartTransactionRequests(_ context.Context, pageSize int, previousChargeStationId string) ([]*store.RemoteStartTransactionRequest, error) {
+	s.Lock()
+	defer s.Unlock()
+	keys := maps.Keys(s.remoteStartTransactionRequests)
+	sort.Strings(keys)
+	i, found := slices.BinarySearch(keys, previousChargeStationId)
+	if !found {
+		i = 0
+	} else {
+		i++
+	}
+	var result []*store.RemoteStartTransactionRequest
+	max := int(math.Min(float64(i+pageSize), float64(len(keys))))
+	for _, k := range keys[i:max] {
+		result = append(result, s.remoteStartTransactionRequests[k])
+	}
+	return result, nil
+}
+
+func (s *Store) SetRemoteStopTransactionRequest(_ context.Context, chargeStationId string, request *store.RemoteStopTransactionRequest) error {
+	s.Lock()
+	defer s.Unlock()
+	s.remoteStopTransactionRequests[chargeStationId] = request
+	return nil
+}
+
+func (s *Store) GetRemoteStopTransactionRequest(_ context.Context, chargeStationId string) (*store.RemoteStopTransactionRequest, error) {
+	s.Lock()
+	defer s.Unlock()
+	return s.remoteStopTransactionRequests[chargeStationId], nil
+}
+
+func (s *Store) DeleteRemoteStopTransactionRequest(_ context.Context, chargeStationId string) error {
+	s.Lock()
+	defer s.Unlock()
+	delete(s.remoteStopTransactionRequests, chargeStationId)
+	return nil
+}
+
+func (s *Store) ListRemoteStopTransactionRequests(_ context.Context, pageSize int, previousChargeStationId string) ([]*store.RemoteStopTransactionRequest, error) {
+	s.Lock()
+	defer s.Unlock()
+	keys := maps.Keys(s.remoteStopTransactionRequests)
+	sort.Strings(keys)
+	i, found := slices.BinarySearch(keys, previousChargeStationId)
+	if !found {
+		i = 0
+	} else {
+		i++
+	}
+	var result []*store.RemoteStopTransactionRequest
+	max := int(math.Min(float64(i+pageSize), float64(len(keys))))
+	for _, k := range keys[i:max] {
+		result = append(result, s.remoteStopTransactionRequests[k])
+	}
+	return result, nil
 }
 
 func (s *Store) SetCertificate(_ context.Context, pemCertificate string) error {

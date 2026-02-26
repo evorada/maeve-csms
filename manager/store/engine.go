@@ -15,6 +15,7 @@ type Engine interface {
 	ChargeStationCertificateDeletionStore
 	TokenStore
 	TransactionStore
+	RemoteTransactionRequestStore
 	CertificateStore
 	OcpiStore
 	LocationStore
