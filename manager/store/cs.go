@@ -55,7 +55,11 @@ type ChargeStationSettingsStore interface {
 }
 
 type ChargeStationRuntimeDetails struct {
-	OcppVersion string
+	OcppVersion     string
+	FirmwareVersion *string
+	Model           *string
+	Vendor          *string
+	SerialNumber    *string
 }
 
 type ChargeStationRuntimeDetailsStore interface {

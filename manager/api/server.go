@@ -745,7 +745,7 @@ func (s *Server) GetChargeStationLogStatus(w http.ResponseWriter, r *http.Reques
 
 	if logStatus == nil {
 		resp := LogStatus{
-			Status: LogStatusStatusIdle,
+			Status: Idle,
 		}
 		_ = render.Render(w, r, &resp)
 		return
@@ -1673,4 +1673,84 @@ func (s *Server) GetTransactionDetails(w http.ResponseWriter, r *http.Request, c
 	}
 
 	_ = render.Render(w, r, response)
+}
+
+func (s *Server) GetChargeStationStatus(w http.ResponseWriter, r *http.Request, csId string) {
+	status, err := s.store.GetChargeStationStatus(r.Context(), csId)
+	if err != nil {
+		_ = render.Render(w, r, ErrNotFound)
+		return
+	}
+
+	response := &ChargeStationStatusResponse{
+		Id:        csId,
+		Connected: status.Connected,
+	}
+
+	if status.LastHeartbeat != nil {
+		response.LastHeartbeat = status.LastHeartbeat
+	}
+
+	if status.FirmwareVersion != nil {
+		response.FirmwareVersion = status.FirmwareVersion
+	}
+
+	if status.Model != nil {
+		response.Model = status.Model
+	}
+
+	if status.Vendor != nil {
+		response.Vendor = status.Vendor
+	}
+
+	if status.SerialNumber != nil {
+		response.SerialNumber = status.SerialNumber
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = render.Render(w, r, response)
+}
+
+func (s *Server) GetConnectorStatuses(w http.ResponseWriter, r *http.Request, csId string) {
+	connectorStatuses, err := s.store.ListConnectorStatuses(r.Context(), csId)
+	if err != nil {
+		_ = render.Render(w, r, ErrNotFound)
+		return
+	}
+
+	response := make([]ConnectorStatusResponse, 0, len(connectorStatuses))
+	for _, cs := range connectorStatuses {
+		connectorResponse := ConnectorStatusResponse{
+			ConnectorId: int32(cs.ConnectorId),
+			Status:      ConnectorStatusResponseStatus(cs.Status),
+			ErrorCode:   ConnectorStatusResponseErrorCode(cs.ErrorCode),
+		}
+
+		if cs.Info != nil {
+			connectorResponse.Info = cs.Info
+		}
+
+		if cs.Timestamp != nil {
+			connectorResponse.Timestamp = cs.Timestamp
+		}
+
+		if cs.CurrentTransactionId != nil {
+			connectorResponse.CurrentTransaction = cs.CurrentTransactionId
+		}
+
+		response = append(response, connectorResponse)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = render.RenderList(w, r, toRendererList(response))
+}
+
+func toRendererList(response []ConnectorStatusResponse) []render.Renderer {
+	list := make([]render.Renderer, len(response))
+	for i := range response {
+		list[i] = response[i]
+	}
+	return list
 }

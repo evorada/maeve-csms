@@ -19,6 +19,7 @@ type BootNotificationHandler struct {
 	Clock               clock.PassiveClock
 	RuntimeDetailsStore store.ChargeStationRuntimeDetailsStore
 	SettingsStore       store.ChargeStationSettingsStore
+	StatusStore         store.StatusStore
 	HeartbeatInterval   int
 }
 
@@ -40,7 +41,27 @@ func (b BootNotificationHandler) HandleCall(ctx context.Context, chargeStationId
 	}
 
 	err := b.RuntimeDetailsStore.SetChargeStationRuntimeDetails(ctx, chargeStationId, &store.ChargeStationRuntimeDetails{
-		OcppVersion: "1.6",
+		OcppVersion:     "1.6",
+		FirmwareVersion: req.FirmwareVersion,
+		Model:           &req.ChargePointModel,
+		Vendor:          &req.ChargePointVendor,
+		SerialNumber:    req.ChargePointSerialNumber,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Update charge station status
+	now := b.Clock.Now()
+	err = b.StatusStore.SetChargeStationStatus(ctx, chargeStationId, &store.ChargeStationStatus{
+		ChargeStationId: chargeStationId,
+		Connected:       true,
+		LastHeartbeat:   &now,
+		FirmwareVersion: req.FirmwareVersion,
+		Model:           &req.ChargePointModel,
+		Vendor:          &req.ChargePointVendor,
+		SerialNumber:    req.ChargePointSerialNumber,
+		UpdatedAt:       now,
 	})
 	if err != nil {
 		return nil, err
