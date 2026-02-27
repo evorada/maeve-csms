@@ -241,7 +241,33 @@ func getStorage(ctx context.Context, cfg *StorageConfig) (engine store.Engine, e
 			slog.Info("database migrations completed successfully")
 		}
 
-		engine, err = postgres.NewStore(ctx, connStr)
+		// Build read-only connection string if configured
+		if cfg.PostgresReadOnlyStorage != nil && cfg.PostgresReadOnlyStorage.Host != "" {
+			readHost := cfg.PostgresReadOnlyStorage.Host
+			readPort := cfg.PostgresReadOnlyStorage.Port
+			if readPort == 0 {
+				readPort = cfg.PostgresStorage.Port // Default to primary port
+			}
+
+			readConnStr := fmt.Sprintf(
+				"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+				readHost,
+				readPort,
+				cfg.PostgresStorage.User,
+				cfg.PostgresStorage.Password,
+				cfg.PostgresStorage.Database,
+				cfg.PostgresStorage.SSLMode,
+			)
+
+			slog.Info("read replica configured",
+				"read_host", readHost,
+				"read_port", readPort)
+
+			engine, err = postgres.NewStore(ctx, connStr, readConnStr)
+		} else {
+			engine, err = postgres.NewStore(ctx, connStr)
+		}
+
 		if err != nil {
 			return nil, fmt.Errorf("create postgres storage: %w", err)
 		}
