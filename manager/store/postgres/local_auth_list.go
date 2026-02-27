@@ -12,7 +12,7 @@ import (
 )
 
 func (s *Store) GetLocalListVersion(ctx context.Context, chargeStationId string) (int, error) {
-	version, err := s.q.GetLocalListVersion(ctx, chargeStationId)
+	version, err := s.readQueries().GetLocalListVersion(ctx, chargeStationId)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return 0, nil
@@ -23,13 +23,13 @@ func (s *Store) GetLocalListVersion(ctx context.Context, chargeStationId string)
 }
 
 func (s *Store) UpdateLocalAuthList(ctx context.Context, chargeStationId string, version int, updateType string, entries []*store.LocalAuthListEntry) error {
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.writePool().Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	qtx := s.q.WithTx(tx)
+	qtx := s.writeQueries().WithTx(tx)
 
 	if updateType == store.LocalAuthListUpdateTypeFull {
 		if err := qtx.DeleteAllLocalAuthListEntries(ctx, chargeStationId); err != nil {
@@ -84,7 +84,7 @@ func (s *Store) UpdateLocalAuthList(ctx context.Context, chargeStationId string,
 }
 
 func (s *Store) GetLocalAuthList(ctx context.Context, chargeStationId string) ([]*store.LocalAuthListEntry, error) {
-	rows, err := s.q.GetLocalAuthListEntries(ctx, chargeStationId)
+	rows, err := s.readQueries().GetLocalAuthListEntries(ctx, chargeStationId)
 	if err != nil {
 		return nil, fmt.Errorf("get local auth list for %s: %w", chargeStationId, err)
 	}

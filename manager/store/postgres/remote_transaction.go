@@ -12,7 +12,7 @@ import (
 )
 
 func (s *Store) SetRemoteStartTransactionRequest(ctx context.Context, chargeStationId string, request *store.RemoteStartTransactionRequest) error {
-	_, err := s.q.SetRemoteStartTransactionRequest(ctx, SetRemoteStartTransactionRequestParams{
+	_, err := s.writeQueries().SetRemoteStartTransactionRequest(ctx, SetRemoteStartTransactionRequestParams{
 		ChargeStationID: chargeStationId,
 		IDTag:           request.IdTag,
 		ConnectorID:     toNullInt32(request.ConnectorId),
@@ -28,7 +28,7 @@ func (s *Store) SetRemoteStartTransactionRequest(ctx context.Context, chargeStat
 }
 
 func (s *Store) GetRemoteStartTransactionRequest(ctx context.Context, chargeStationId string) (*store.RemoteStartTransactionRequest, error) {
-	row, err := s.q.GetRemoteStartTransactionRequest(ctx, chargeStationId)
+	row, err := s.readQueries().GetRemoteStartTransactionRequest(ctx, chargeStationId)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -47,11 +47,11 @@ func (s *Store) GetRemoteStartTransactionRequest(ctx context.Context, chargeStat
 }
 
 func (s *Store) DeleteRemoteStartTransactionRequest(ctx context.Context, chargeStationId string) error {
-	return s.q.DeleteRemoteStartTransactionRequest(ctx, chargeStationId)
+	return s.writeQueries().DeleteRemoteStartTransactionRequest(ctx, chargeStationId)
 }
 
 func (s *Store) ListRemoteStartTransactionRequests(ctx context.Context, pageSize int, previousChargeStationId string) ([]*store.RemoteStartTransactionRequest, error) {
-	rows, err := s.q.ListRemoteStartTransactionRequests(ctx, ListRemoteStartTransactionRequestsParams{
+	rows, err := s.readQueries().ListRemoteStartTransactionRequests(ctx, ListRemoteStartTransactionRequestsParams{
 		ChargeStationID: previousChargeStationId,
 		Limit:           int32(pageSize),
 	})
@@ -74,7 +74,7 @@ func (s *Store) ListRemoteStartTransactionRequests(ctx context.Context, pageSize
 }
 
 func (s *Store) SetRemoteStopTransactionRequest(ctx context.Context, chargeStationId string, request *store.RemoteStopTransactionRequest) error {
-	_, err := s.q.SetRemoteStopTransactionRequest(ctx, SetRemoteStopTransactionRequestParams{
+	_, err := s.writeQueries().SetRemoteStopTransactionRequest(ctx, SetRemoteStopTransactionRequestParams{
 		ChargeStationID: chargeStationId,
 		TransactionID:   request.TransactionId,
 		Status:          string(request.Status),
@@ -88,7 +88,7 @@ func (s *Store) SetRemoteStopTransactionRequest(ctx context.Context, chargeStati
 }
 
 func (s *Store) GetRemoteStopTransactionRequest(ctx context.Context, chargeStationId string) (*store.RemoteStopTransactionRequest, error) {
-	row, err := s.q.GetRemoteStopTransactionRequest(ctx, chargeStationId)
+	row, err := s.readQueries().GetRemoteStopTransactionRequest(ctx, chargeStationId)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -105,11 +105,11 @@ func (s *Store) GetRemoteStopTransactionRequest(ctx context.Context, chargeStati
 }
 
 func (s *Store) DeleteRemoteStopTransactionRequest(ctx context.Context, chargeStationId string) error {
-	return s.q.DeleteRemoteStopTransactionRequest(ctx, chargeStationId)
+	return s.writeQueries().DeleteRemoteStopTransactionRequest(ctx, chargeStationId)
 }
 
 func (s *Store) ListRemoteStopTransactionRequests(ctx context.Context, pageSize int, previousChargeStationId string) ([]*store.RemoteStopTransactionRequest, error) {
-	rows, err := s.q.ListRemoteStopTransactionRequests(ctx, ListRemoteStopTransactionRequestsParams{
+	rows, err := s.readQueries().ListRemoteStopTransactionRequests(ctx, ListRemoteStopTransactionRequestsParams{
 		ChargeStationID: previousChargeStationId,
 		Limit:           int32(pageSize),
 	})

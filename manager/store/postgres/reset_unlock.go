@@ -22,7 +22,7 @@ func (s *Store) SetResetRequest(ctx context.Context, chargeStationId string, req
 		UpdatedAt:       pgtype.Timestamptz{Time: request.UpdatedAt, Valid: !request.UpdatedAt.IsZero()},
 	}
 
-	_, err := s.q.SetResetRequest(ctx, params)
+	_, err := s.writeQueries().SetResetRequest(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to set reset request: %w", err)
 	}
@@ -31,7 +31,7 @@ func (s *Store) SetResetRequest(ctx context.Context, chargeStationId string, req
 }
 
 func (s *Store) GetResetRequest(ctx context.Context, chargeStationId string) (*store.ResetRequest, error) {
-	req, err := s.q.GetResetRequest(ctx, chargeStationId)
+	req, err := s.readQueries().GetResetRequest(ctx, chargeStationId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -49,7 +49,7 @@ func (s *Store) GetResetRequest(ctx context.Context, chargeStationId string) (*s
 }
 
 func (s *Store) DeleteResetRequest(ctx context.Context, chargeStationId string) error {
-	err := s.q.DeleteResetRequest(ctx, chargeStationId)
+	err := s.writeQueries().DeleteResetRequest(ctx, chargeStationId)
 	if err != nil {
 		return fmt.Errorf("failed to delete reset request: %w", err)
 	}
@@ -67,7 +67,7 @@ func (s *Store) SetUnlockConnectorRequest(ctx context.Context, chargeStationId s
 		UpdatedAt:       pgtype.Timestamptz{Time: request.UpdatedAt, Valid: !request.UpdatedAt.IsZero()},
 	}
 
-	_, err := s.q.SetUnlockConnectorRequest(ctx, params)
+	_, err := s.writeQueries().SetUnlockConnectorRequest(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to set unlock connector request: %w", err)
 	}
@@ -76,7 +76,7 @@ func (s *Store) SetUnlockConnectorRequest(ctx context.Context, chargeStationId s
 }
 
 func (s *Store) GetUnlockConnectorRequest(ctx context.Context, chargeStationId string) (*store.UnlockConnectorRequest, error) {
-	req, err := s.q.GetUnlockConnectorRequest(ctx, chargeStationId)
+	req, err := s.readQueries().GetUnlockConnectorRequest(ctx, chargeStationId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -94,7 +94,7 @@ func (s *Store) GetUnlockConnectorRequest(ctx context.Context, chargeStationId s
 }
 
 func (s *Store) DeleteUnlockConnectorRequest(ctx context.Context, chargeStationId string) error {
-	err := s.q.DeleteUnlockConnectorRequest(ctx, chargeStationId)
+	err := s.writeQueries().DeleteUnlockConnectorRequest(ctx, chargeStationId)
 	if err != nil {
 		return fmt.Errorf("failed to delete unlock connector request: %w", err)
 	}

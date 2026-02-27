@@ -15,7 +15,7 @@ import (
 
 // Transactions retrieves all transactions from the database
 func (s *Store) Transactions(ctx context.Context) ([]*store.Transaction, error) {
-	txns, err := s.q.ListTransactions(ctx)
+	txns, err := s.readQueries().ListTransactions(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list transactions: %w", err)
 	}
@@ -34,7 +34,7 @@ func (s *Store) Transactions(ctx context.Context) ([]*store.Transaction, error) 
 
 // FindTransaction retrieves a transaction by charge station ID and transaction ID
 func (s *Store) FindTransaction(ctx context.Context, chargeStationId, transactionId string) (*store.Transaction, error) {
-	txn, err := s.q.GetTransaction(ctx, transactionId)
+	txn, err := s.readQueries().GetTransaction(ctx, transactionId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -51,7 +51,7 @@ func (s *Store) FindTransaction(ctx context.Context, chargeStationId, transactio
 }
 
 func (s *Store) FindActiveTransaction(ctx context.Context, chargeStationId string) (*store.Transaction, error) {
-	txn, err := s.q.FindActiveTransaction(ctx, chargeStationId)
+	txn, err := s.readQueries().FindActiveTransaction(ctx, chargeStationId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -96,7 +96,7 @@ func (s *Store) CreateTransaction(ctx context.Context, chargeStationId, transact
 		Offline:         offline,
 	}
 
-	_, err := s.q.CreateTransaction(ctx, params)
+	_, err := s.writeQueries().CreateTransaction(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to create transaction: %w", err)
 	}
@@ -114,7 +114,7 @@ func (s *Store) CreateTransaction(ctx context.Context, chargeStationId, transact
 // UpdateTransaction updates a transaction with additional meter values
 func (s *Store) UpdateTransaction(ctx context.Context, chargeStationId, transactionId string, meterValues []store.MeterValue) error {
 	// Verify transaction exists and belongs to charge station
-	txn, err := s.q.GetTransaction(ctx, transactionId)
+	txn, err := s.readQueries().GetTransaction(ctx, transactionId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return fmt.Errorf("transaction not found")
@@ -142,7 +142,7 @@ func (s *Store) UpdateTransaction(ctx context.Context, chargeStationId, transact
 		UpdatedSeqNo:  txn.UpdatedSeqNo + 1,
 	}
 
-	_, err = s.q.UpdateTransaction(ctx, updateParams)
+	_, err = s.writeQueries().UpdateTransaction(ctx, updateParams)
 	if err != nil {
 		return fmt.Errorf("failed to update transaction sequence: %w", err)
 	}
@@ -153,7 +153,7 @@ func (s *Store) UpdateTransaction(ctx context.Context, chargeStationId, transact
 // EndTransaction ends a transaction with final meter values
 func (s *Store) EndTransaction(ctx context.Context, chargeStationId, transactionId, idToken, tokenType string, meterValues []store.MeterValue, seqNo int) error {
 	// Verify transaction exists and belongs to charge station
-	txn, err := s.q.GetTransaction(ctx, transactionId)
+	txn, err := s.readQueries().GetTransaction(ctx, transactionId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return fmt.Errorf("transaction not found")
@@ -204,7 +204,7 @@ func (s *Store) EndTransaction(ctx context.Context, chargeStationId, transaction
 		UpdatedSeqNo:  txn.UpdatedSeqNo + 1,
 	}
 
-	_, err = s.q.UpdateTransaction(ctx, updateParams)
+	_, err = s.writeQueries().UpdateTransaction(ctx, updateParams)
 	if err != nil {
 		return fmt.Errorf("failed to end transaction: %w", err)
 	}
@@ -232,13 +232,13 @@ func (s *Store) addMeterValue(ctx context.Context, transactionId string, mv *sto
 		SampledValues: sampledValuesJSON,
 	}
 
-	return s.q.AddMeterValues(ctx, params)
+	return s.writeQueries().AddMeterValues(ctx, params)
 }
 
 // UpdateTransactionCost stores the most recent running cost communicated via CostUpdated.
 // Uses a direct query rather than sqlc-generated code since last_cost was added via migration.
 func (s *Store) UpdateTransactionCost(ctx context.Context, chargeStationId, transactionId string, totalCost float64) error {
-	_, err := s.pool.Exec(ctx,
+	_, err := s.writePool().Exec(ctx,
 		`UPDATE transactions SET last_cost = $1, updated_at = NOW() WHERE id = $2 AND charge_station_id = $3`,
 		totalCost, transactionId, chargeStationId)
 	if err != nil {
@@ -264,7 +264,7 @@ func (s *Store) ListTransactionsForChargeStation(ctx context.Context, chargeStat
 		params.EndDate = pgtype.Timestamp{Time: *endDate, Valid: true}
 	}
 
-	txns, err := s.q.ListTransactionsFiltered(ctx, params)
+	txns, err := s.readQueries().ListTransactionsFiltered(ctx, params)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list transactions: %w", err)
 	}
@@ -282,7 +282,7 @@ func (s *Store) ListTransactionsForChargeStation(ctx context.Context, chargeStat
 		countParams.EndDate = pgtype.Timestamp{Time: *endDate, Valid: true}
 	}
 
-	total, err := s.q.CountTransactionsFiltered(ctx, countParams)
+	total, err := s.readQueries().CountTransactionsFiltered(ctx, countParams)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count transactions: %w", err)
 	}
@@ -302,7 +302,7 @@ func (s *Store) ListTransactionsForChargeStation(ctx context.Context, chargeStat
 // Helper function to convert PostgreSQL Transaction to store.Transaction
 func (s *Store) toStoreTransaction(ctx context.Context, txn *Transaction) (*store.Transaction, error) {
 	// Retrieve meter values for this transaction
-	meterValueRecords, err := s.q.GetMeterValues(ctx, txn.ID)
+	meterValueRecords, err := s.readQueries().GetMeterValues(ctx, txn.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get meter values: %w", err)
 	}

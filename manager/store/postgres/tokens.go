@@ -38,7 +38,7 @@ func (s *Store) SetToken(ctx context.Context, token *store.Token) error {
 		LastUpdated:  timestampFromTime(lastUpdated),
 	}
 
-	_, err = s.q.UpdateToken(ctx, updateParams)
+	_, err = s.writeQueries().UpdateToken(ctx, updateParams)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			// Token doesn't exist, create it
@@ -57,7 +57,7 @@ func (s *Store) SetToken(ctx context.Context, token *store.Token) error {
 				LastUpdated:  timestampFromTime(lastUpdated),
 			}
 
-			_, err = s.q.CreateToken(ctx, createParams)
+			_, err = s.writeQueries().CreateToken(ctx, createParams)
 			if err != nil {
 				slog.Error("failed to create token", "uid", token.Uid, "error", err)
 				return fmt.Errorf("failed to create token: %w", err)
@@ -76,7 +76,7 @@ func (s *Store) SetToken(ctx context.Context, token *store.Token) error {
 func (s *Store) LookupToken(ctx context.Context, tokenUid string) (*store.Token, error) {
 	slog.Debug("looking up token", "uid", tokenUid)
 
-	token, err := s.q.GetToken(ctx, tokenUid)
+	token, err := s.readQueries().GetToken(ctx, tokenUid)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			slog.Debug("token not found", "uid", tokenUid)
@@ -101,7 +101,7 @@ func (s *Store) ListTokens(ctx context.Context, offset int, limit int) ([]*store
 		return nil, fmt.Errorf("invalid offset value: %w", err)
 	}
 
-	tokens, err := s.q.ListTokens(ctx, ListTokensParams{
+	tokens, err := s.readQueries().ListTokens(ctx, ListTokensParams{
 		Limit:  limitInt32,
 		Offset: offsetInt32,
 	})

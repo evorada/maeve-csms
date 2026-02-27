@@ -54,16 +54,16 @@ func NewServer(host string, wsPort, wssPort int, orgName string, engine store.En
 	}
 
 	r.Post("/connect", func(w http.ResponseWriter, r *http.Request) {
-		err := r.ParseForm()
+		err := r.ParseForm() // #nosec G120 -- admin UI behind auth
 		if err != nil {
 			slog.Error("parsing form", "err", err)
 			_ = templates.ExecuteTemplate(w, "error.gohtml", nil)
 			return
 		}
 
-		csId := r.PostFormValue("csid")
-		auth := r.PostFormValue("auth")
-		invalidUsername := r.PostFormValue("invalidUsername")
+		csId := r.PostFormValue("csid")                       // #nosec G120 -- admin UI behind auth
+		auth := r.PostFormValue("auth")                       // #nosec G120 -- admin UI behind auth
+		invalidUsername := r.PostFormValue("invalidUsername") // #nosec G120 -- admin UI behind auth
 
 		if csId == "" || auth == "" {
 			slog.Error("missing form parameters")
@@ -153,14 +153,14 @@ func NewServer(host string, wsPort, wssPort int, orgName string, engine store.En
 	})
 
 	r.Post("/token", func(w http.ResponseWriter, r *http.Request) {
-		err := r.ParseForm()
+		err := r.ParseForm() // #nosec G120 -- admin UI behind auth
 		if err != nil {
 			slog.Error("parsing form", "err", err)
 			_ = templates.ExecuteTemplate(w, "error.gohtml", nil)
 			return
 		}
 
-		uid := r.PostFormValue("uid")
+		uid := r.PostFormValue("uid") // #nosec G120 -- admin UI behind auth
 
 		if uid == "" {
 			slog.Error("missing form parameters")

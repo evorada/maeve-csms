@@ -25,7 +25,7 @@ func (s *Store) SetVariableMonitoring(ctx context.Context, chargeStationId strin
 	}
 
 	if config.Id != 0 {
-		err := s.q.UpsertVariableMonitoringWithId(ctx, UpsertVariableMonitoringWithIdParams{
+		err := s.writeQueries().UpsertVariableMonitoringWithId(ctx, UpsertVariableMonitoringWithIdParams{
 			ID:                int32(config.Id),
 			ChargeStationID:   chargeStationId,
 			ComponentName:     config.ComponentName,
@@ -43,7 +43,7 @@ func (s *Store) SetVariableMonitoring(ctx context.Context, chargeStationId strin
 		return nil
 	}
 
-	id, err := s.q.UpsertVariableMonitoring(ctx, UpsertVariableMonitoringParams{
+	id, err := s.writeQueries().UpsertVariableMonitoring(ctx, UpsertVariableMonitoringParams{
 		ChargeStationID:   chargeStationId,
 		ComponentName:     config.ComponentName,
 		ComponentInstance: componentInstance,
@@ -62,7 +62,7 @@ func (s *Store) SetVariableMonitoring(ctx context.Context, chargeStationId strin
 }
 
 func (s *Store) GetVariableMonitoring(ctx context.Context, chargeStationId string, monitorId int) (*store.VariableMonitoringConfig, error) {
-	row, err := s.q.GetVariableMonitoring(ctx, GetVariableMonitoringParams{
+	row, err := s.readQueries().GetVariableMonitoring(ctx, GetVariableMonitoringParams{
 		ChargeStationID: chargeStationId,
 		ID:              int32(monitorId),
 	})
@@ -98,7 +98,7 @@ func (s *Store) GetVariableMonitoring(ctx context.Context, chargeStationId strin
 }
 
 func (s *Store) DeleteVariableMonitoring(ctx context.Context, chargeStationId string, monitorId int) error {
-	err := s.q.DeleteVariableMonitoring(ctx, DeleteVariableMonitoringParams{
+	err := s.writeQueries().DeleteVariableMonitoring(ctx, DeleteVariableMonitoringParams{
 		ChargeStationID: chargeStationId,
 		ID:              int32(monitorId),
 	})
@@ -109,7 +109,7 @@ func (s *Store) DeleteVariableMonitoring(ctx context.Context, chargeStationId st
 }
 
 func (s *Store) ListVariableMonitoring(ctx context.Context, chargeStationId string, offset int, limit int) ([]*store.VariableMonitoringConfig, error) {
-	rows, err := s.q.ListVariableMonitoring(ctx, ListVariableMonitoringParams{
+	rows, err := s.readQueries().ListVariableMonitoring(ctx, ListVariableMonitoringParams{
 		ChargeStationID: chargeStationId,
 		Limit:           int32(limit),
 		Offset:          int32(offset),
@@ -168,7 +168,7 @@ func (s *Store) AddChargeStationEvent(ctx context.Context, chargeStationId strin
 		variableId = pgtype.Text{String: *event.VariableId, Valid: true}
 	}
 
-	id, err := s.q.InsertChargeStationEvent(ctx, InsertChargeStationEventParams{
+	id, err := s.writeQueries().InsertChargeStationEvent(ctx, InsertChargeStationEventParams{
 		ChargeStationID: chargeStationId,
 		Timestamp:       pgtype.Timestamptz{Time: event.Timestamp, Valid: true},
 		EventType:       event.EventType,
@@ -187,12 +187,12 @@ func (s *Store) AddChargeStationEvent(ctx context.Context, chargeStationId strin
 }
 
 func (s *Store) ListChargeStationEvents(ctx context.Context, chargeStationId string, offset int, limit int) ([]*store.ChargeStationEvent, int, error) {
-	count, err := s.q.CountChargeStationEvents(ctx, chargeStationId)
+	count, err := s.readQueries().CountChargeStationEvents(ctx, chargeStationId)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count events: %w", err)
 	}
 
-	rows, err := s.q.ListChargeStationEvents(ctx, ListChargeStationEventsParams{
+	rows, err := s.readQueries().ListChargeStationEvents(ctx, ListChargeStationEventsParams{
 		ChargeStationID: chargeStationId,
 		Limit:           int32(limit),
 		Offset:          int32(offset),
@@ -252,7 +252,7 @@ func (s *Store) AddDeviceReport(ctx context.Context, chargeStationId string, rep
 		reportData = []byte(*report.ReportData)
 	}
 
-	id, err := s.q.InsertDeviceReport(ctx, InsertDeviceReportParams{
+	id, err := s.writeQueries().InsertDeviceReport(ctx, InsertDeviceReportParams{
 		ChargeStationID: chargeStationId,
 		RequestID:       int32(report.RequestId),
 		GeneratedAt:     pgtype.Timestamptz{Time: report.GeneratedAt, Valid: true},
@@ -267,12 +267,12 @@ func (s *Store) AddDeviceReport(ctx context.Context, chargeStationId string, rep
 }
 
 func (s *Store) ListDeviceReports(ctx context.Context, chargeStationId string, offset int, limit int) ([]*store.DeviceReport, int, error) {
-	count, err := s.q.CountDeviceReports(ctx, chargeStationId)
+	count, err := s.readQueries().CountDeviceReports(ctx, chargeStationId)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count device reports: %w", err)
 	}
 
-	rows, err := s.q.ListDeviceReports(ctx, ListDeviceReportsParams{
+	rows, err := s.readQueries().ListDeviceReports(ctx, ListDeviceReportsParams{
 		ChargeStationID: chargeStationId,
 		Limit:           int32(limit),
 		Offset:          int32(offset),

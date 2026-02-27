@@ -38,7 +38,7 @@ func (s *Store) SetDisplayMessage(ctx context.Context, message *store.DisplayMes
 		params.Language = pgtype.Text{String: *message.Message.Language, Valid: true}
 	}
 
-	err := s.q.CreateOrUpdateDisplayMessage(ctx, params)
+	err := s.writeQueries().CreateOrUpdateDisplayMessage(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to set display message: %w", err)
 	}
@@ -46,7 +46,7 @@ func (s *Store) SetDisplayMessage(ctx context.Context, message *store.DisplayMes
 }
 
 func (s *Store) GetDisplayMessage(ctx context.Context, chargeStationId string, messageId int) (*store.DisplayMessage, error) {
-	m, err := s.q.GetDisplayMessage(ctx, GetDisplayMessageParams{
+	m, err := s.readQueries().GetDisplayMessage(ctx, GetDisplayMessageParams{
 		ChargeStationID: chargeStationId,
 		MessageID:       int32(messageId),
 	})
@@ -65,23 +65,23 @@ func (s *Store) ListDisplayMessages(ctx context.Context, chargeStationId string,
 
 	// Choose the appropriate query based on filters
 	if state != nil && priority != nil {
-		rows, err = s.q.ListDisplayMessagesByStateAndPriority(ctx, ListDisplayMessagesByStateAndPriorityParams{
+		rows, err = s.readQueries().ListDisplayMessagesByStateAndPriority(ctx, ListDisplayMessagesByStateAndPriorityParams{
 			ChargeStationID: chargeStationId,
 			State:           pgtype.Text{String: string(*state), Valid: true},
 			Priority:        string(*priority),
 		})
 	} else if state != nil {
-		rows, err = s.q.ListDisplayMessagesByState(ctx, ListDisplayMessagesByStateParams{
+		rows, err = s.readQueries().ListDisplayMessagesByState(ctx, ListDisplayMessagesByStateParams{
 			ChargeStationID: chargeStationId,
 			State:           pgtype.Text{String: string(*state), Valid: true},
 		})
 	} else if priority != nil {
-		rows, err = s.q.ListDisplayMessagesByPriority(ctx, ListDisplayMessagesByPriorityParams{
+		rows, err = s.readQueries().ListDisplayMessagesByPriority(ctx, ListDisplayMessagesByPriorityParams{
 			ChargeStationID: chargeStationId,
 			Priority:        string(*priority),
 		})
 	} else {
-		rows, err = s.q.ListDisplayMessages(ctx, chargeStationId)
+		rows, err = s.readQueries().ListDisplayMessages(ctx, chargeStationId)
 	}
 
 	if err != nil {
@@ -96,7 +96,7 @@ func (s *Store) ListDisplayMessages(ctx context.Context, chargeStationId string,
 }
 
 func (s *Store) DeleteDisplayMessage(ctx context.Context, chargeStationId string, messageId int) error {
-	err := s.q.DeleteDisplayMessage(ctx, DeleteDisplayMessageParams{
+	err := s.writeQueries().DeleteDisplayMessage(ctx, DeleteDisplayMessageParams{
 		ChargeStationID: chargeStationId,
 		MessageID:       int32(messageId),
 	})
@@ -107,7 +107,7 @@ func (s *Store) DeleteDisplayMessage(ctx context.Context, chargeStationId string
 }
 
 func (s *Store) DeleteAllDisplayMessages(ctx context.Context, chargeStationId string) error {
-	err := s.q.DeleteAllDisplayMessages(ctx, chargeStationId)
+	err := s.writeQueries().DeleteAllDisplayMessages(ctx, chargeStationId)
 	if err != nil {
 		return fmt.Errorf("failed to delete all display messages: %w", err)
 	}

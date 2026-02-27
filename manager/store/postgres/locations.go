@@ -40,7 +40,7 @@ func (s *Store) SetLocation(ctx context.Context, location *store.Location) error
 		LocationData: locationData,
 	}
 
-	_, err = s.q.SetLocation(ctx, params)
+	_, err = s.writeQueries().SetLocation(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to set location: %w", err)
 	}
@@ -50,7 +50,7 @@ func (s *Store) SetLocation(ctx context.Context, location *store.Location) error
 
 // LookupLocation retrieves a location by its ID
 func (s *Store) LookupLocation(ctx context.Context, locationId string) (*store.Location, error) {
-	loc, err := s.q.GetLocation(ctx, locationId)
+	loc, err := s.readQueries().GetLocation(ctx, locationId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -83,7 +83,7 @@ func (s *Store) ListLocations(ctx context.Context, offset int, limit int) ([]*st
 		Offset: offsetInt32,
 	}
 
-	locations, err := s.q.ListAllLocations(ctx, params)
+	locations, err := s.readQueries().ListAllLocations(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list locations: %w", err)
 	}

@@ -70,11 +70,11 @@ func (s *Store) SetChargingProfile(ctx context.Context, profile *store.ChargingP
 		ChargingSchedulePeriods: periodsJSON,
 	}
 
-	return s.q.UpsertChargingProfile(ctx, params)
+	return s.writeQueries().UpsertChargingProfile(ctx, params)
 }
 
 func (s *Store) GetChargingProfiles(ctx context.Context, chargeStationId string, connectorId *int, purpose *store.ChargingProfilePurpose, stackLevel *int) ([]*store.ChargingProfile, error) {
-	rows, err := s.q.GetChargingProfilesByStation(ctx, chargeStationId)
+	rows, err := s.readQueries().GetChargingProfilesByStation(ctx, chargeStationId)
 	if err != nil {
 		return nil, fmt.Errorf("getting charging profiles: %w", err)
 	}
@@ -106,7 +106,7 @@ func (s *Store) GetChargingProfiles(ctx context.Context, chargeStationId string,
 
 func (s *Store) ClearChargingProfile(ctx context.Context, chargeStationId string, profileId *int, connectorId *int, purpose *store.ChargingProfilePurpose, stackLevel *int) (int, error) {
 	if profileId != nil {
-		count, err := s.q.DeleteChargingProfileById(ctx, DeleteChargingProfileByIdParams{
+		count, err := s.writeQueries().DeleteChargingProfileById(ctx, DeleteChargingProfileByIdParams{
 			ChargeStationID:   chargeStationId,
 			ChargingProfileID: int32(*profileId),
 		})
@@ -124,7 +124,7 @@ func (s *Store) ClearChargingProfile(ctx context.Context, chargeStationId string
 		}
 		count := 0
 		for _, p := range profiles {
-			n, err := s.q.DeleteChargingProfileById(ctx, DeleteChargingProfileByIdParams{
+			n, err := s.writeQueries().DeleteChargingProfileById(ctx, DeleteChargingProfileByIdParams{
 				ChargeStationID:   chargeStationId,
 				ChargingProfileID: int32(p.ChargingProfileId),
 			})
@@ -137,7 +137,7 @@ func (s *Store) ClearChargingProfile(ctx context.Context, chargeStationId string
 	}
 
 	// No filters, delete all for station
-	count, err := s.q.DeleteChargingProfilesByStation(ctx, chargeStationId)
+	count, err := s.writeQueries().DeleteChargingProfilesByStation(ctx, chargeStationId)
 	if err != nil {
 		return 0, fmt.Errorf("deleting all charging profiles: %w", err)
 	}
@@ -146,7 +146,7 @@ func (s *Store) ClearChargingProfile(ctx context.Context, chargeStationId string
 
 func (s *Store) GetCompositeSchedule(ctx context.Context, chargeStationId string, connectorId int, duration int, chargingRateUnit *store.ChargingRateUnit) (*store.ChargingSchedule, error) {
 	// Get profiles for the specific connector and connector 0 (defaults)
-	rows, err := s.q.GetChargingProfilesByStation(ctx, chargeStationId)
+	rows, err := s.readQueries().GetChargingProfilesByStation(ctx, chargeStationId)
 	if err != nil {
 		return nil, fmt.Errorf("getting charging profiles: %w", err)
 	}

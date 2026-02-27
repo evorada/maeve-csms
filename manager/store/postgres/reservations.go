@@ -25,7 +25,7 @@ func (s *Store) CreateReservation(ctx context.Context, reservation *store.Reserv
 		params.ParentIDTag = pgtype.Text{String: *reservation.ParentIdTag, Valid: true}
 	}
 
-	err := s.q.CreateReservation(ctx, params)
+	err := s.writeQueries().CreateReservation(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to create reservation: %w", err)
 	}
@@ -33,7 +33,7 @@ func (s *Store) CreateReservation(ctx context.Context, reservation *store.Reserv
 }
 
 func (s *Store) GetReservation(ctx context.Context, reservationId int) (*store.Reservation, error) {
-	r, err := s.q.GetReservation(ctx, int32(reservationId))
+	r, err := s.readQueries().GetReservation(ctx, int32(reservationId))
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -44,7 +44,7 @@ func (s *Store) GetReservation(ctx context.Context, reservationId int) (*store.R
 }
 
 func (s *Store) CancelReservation(ctx context.Context, reservationId int) error {
-	err := s.q.CancelReservation(ctx, int32(reservationId))
+	err := s.writeQueries().CancelReservation(ctx, int32(reservationId))
 	if err != nil {
 		return fmt.Errorf("failed to cancel reservation: %w", err)
 	}
@@ -52,7 +52,7 @@ func (s *Store) CancelReservation(ctx context.Context, reservationId int) error 
 }
 
 func (s *Store) UpdateReservationStatus(ctx context.Context, reservationId int, status store.ReservationStatus) error {
-	err := s.q.UpdateReservationStatus(ctx, UpdateReservationStatusParams{
+	err := s.writeQueries().UpdateReservationStatus(ctx, UpdateReservationStatusParams{
 		ReservationID: int32(reservationId),
 		Status:        string(status),
 	})
@@ -63,7 +63,7 @@ func (s *Store) UpdateReservationStatus(ctx context.Context, reservationId int, 
 }
 
 func (s *Store) GetActiveReservations(ctx context.Context, chargeStationId string) ([]*store.Reservation, error) {
-	rows, err := s.q.GetActiveReservations(ctx, chargeStationId)
+	rows, err := s.readQueries().GetActiveReservations(ctx, chargeStationId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active reservations: %w", err)
 	}
@@ -75,7 +75,7 @@ func (s *Store) GetActiveReservations(ctx context.Context, chargeStationId strin
 }
 
 func (s *Store) GetReservationByConnector(ctx context.Context, chargeStationId string, connectorId int) (*store.Reservation, error) {
-	r, err := s.q.GetReservationByConnector(ctx, GetReservationByConnectorParams{
+	r, err := s.readQueries().GetReservationByConnector(ctx, GetReservationByConnectorParams{
 		ChargeStationID: chargeStationId,
 		ConnectorID:     int32(connectorId),
 	})
@@ -89,7 +89,7 @@ func (s *Store) GetReservationByConnector(ctx context.Context, chargeStationId s
 }
 
 func (s *Store) ExpireReservations(ctx context.Context) (int, error) {
-	count, err := s.q.ExpireReservations(ctx)
+	count, err := s.writeQueries().ExpireReservations(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to expire reservations: %w", err)
 	}
