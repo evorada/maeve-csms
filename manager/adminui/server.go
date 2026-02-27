@@ -61,9 +61,9 @@ func NewServer(host string, wsPort, wssPort int, orgName string, engine store.En
 			return
 		}
 
-		csId := r.PostFormValue("csid")
-		auth := r.PostFormValue("auth")
-		invalidUsername := r.PostFormValue("invalidUsername")
+		csId := r.PostFormValue("csid")                   // #nosec G120 -- admin UI behind auth
+		auth := r.PostFormValue("auth")                    // #nosec G120 -- admin UI behind auth
+		invalidUsername := r.PostFormValue("invalidUsername") // #nosec G120 -- admin UI behind auth
 
 		if csId == "" || auth == "" {
 			slog.Error("missing form parameters")
@@ -160,7 +160,7 @@ func NewServer(host string, wsPort, wssPort int, orgName string, engine store.En
 			return
 		}
 
-		uid := r.PostFormValue("uid")
+		uid := r.PostFormValue("uid") // #nosec G120 -- admin UI behind auth
 
 		if uid == "" {
 			slog.Error("missing form parameters")
