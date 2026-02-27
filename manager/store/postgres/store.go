@@ -16,10 +16,10 @@ var _ store.Engine = (*Store)(nil)
 
 // Store provides PostgreSQL implementation of the store.Engine interface
 type Store struct {
-	pool         *pgxpool.Pool
-	readPool     *pgxpool.Pool
-	q            *Queries
-	readQ        *Queries
+	pool           *pgxpool.Pool
+	readPool       *pgxpool.Pool
+	q              *Queries
+	readQ          *Queries
 	hasReadReplica bool
 }
 
@@ -60,10 +60,10 @@ func NewStore(ctx context.Context, connString string, readOnlyConnString ...stri
 	}
 
 	store := &Store{
-		pool:         pool,
-		readPool:     pool,
-		q:            New(pool),
-		readQ:        New(pool),
+		pool:           pool,
+		readPool:       pool,
+		q:              New(pool),
+		readQ:          New(pool),
 		hasReadReplica: false,
 	}
 
@@ -120,7 +120,7 @@ func (s *Store) Close() {
 		slog.Info("closing PostgreSQL primary connection pool")
 		s.pool.Close()
 	}
-	
+
 	if s.hasReadReplica && s.readPool != nil && s.readPool != s.pool {
 		slog.Info("closing PostgreSQL read-only connection pool")
 		s.readPool.Close()
