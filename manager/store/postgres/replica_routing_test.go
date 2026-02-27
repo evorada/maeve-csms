@@ -41,10 +41,10 @@ func TestReadReplicaRouting(t *testing.T) {
 		// Create distinct pool pointers to verify routing
 		primaryPool := &pgxpool.Pool{}
 		replicaPool := &pgxpool.Pool{}
-		
+
 		// These are different pointers
 		require.NotSame(t, primaryPool, replicaPool, "pools should be different instances")
-		
+
 		primaryQ := New(primaryPool)
 		replicaQ := New(replicaPool)
 
@@ -112,7 +112,7 @@ func TestNewStoreWithReplica(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	
+
 	// Use the same connection string for both primary and replica for testing
 	// In production, these would be different hosts
 	store, err := NewStore(ctx, connStr, connStr)
@@ -143,12 +143,12 @@ func TestNewStoreWithInvalidReplicaConnectionString(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	
+
 	// Try to create store with invalid read replica connection string
 	invalidReadConnStr := "host=invalid-host port=9999 user=invalid password=invalid dbname=invalid sslmode=disable"
-	
+
 	store, err := NewStore(ctx, connStr, invalidReadConnStr)
-	
+
 	// Should return error because replica connection fails
 	assert.Error(t, err)
 	assert.Nil(t, store)
@@ -166,7 +166,7 @@ func TestHealthCheckWithBothConnections(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	
+
 	// Create store with replica (using same DB for testing)
 	store, err := NewStore(ctx, connStr, connStr)
 	require.NoError(t, err)

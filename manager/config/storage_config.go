@@ -25,9 +25,9 @@ type PostgresReadOnlyStorageConfig struct {
 }
 
 type StorageConfig struct {
-	Type                   string                          `mapstructure:"type" toml:"type" validate:"required,oneof=firestore in_memory postgres"`
-	FirestoreStorage       *FirestoreStorageConfig         `mapstructure:"firestore,omitempty" toml:"firestore,omitempty" validate:"required_if=Type firestore"`
-	InMemoryStorage        *InMemoryStorageConfig          `mapstructure:"in_memory,omitempty" toml:"in_memory,omitempty"`
-	PostgresStorage        *PostgresStorageConfig          `mapstructure:"postgres,omitempty" toml:"postgres,omitempty" validate:"required_if=Type postgres"`
+	Type                    string                         `mapstructure:"type" toml:"type" validate:"required,oneof=firestore in_memory postgres"`
+	FirestoreStorage        *FirestoreStorageConfig        `mapstructure:"firestore,omitempty" toml:"firestore,omitempty" validate:"required_if=Type firestore"`
+	InMemoryStorage         *InMemoryStorageConfig         `mapstructure:"in_memory,omitempty" toml:"in_memory,omitempty"`
+	PostgresStorage         *PostgresStorageConfig         `mapstructure:"postgres,omitempty" toml:"postgres,omitempty" validate:"required_if=Type postgres"`
 	PostgresReadOnlyStorage *PostgresReadOnlyStorageConfig `mapstructure:"postgres_read_only,omitempty" toml:"postgres_read_only,omitempty"`
 }
