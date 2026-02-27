@@ -61,8 +61,8 @@ func NewServer(host string, wsPort, wssPort int, orgName string, engine store.En
 			return
 		}
 
-		csId := r.PostFormValue("csid")                   // #nosec G120 -- admin UI behind auth
-		auth := r.PostFormValue("auth")                    // #nosec G120 -- admin UI behind auth
+		csId := r.PostFormValue("csid")                       // #nosec G120 -- admin UI behind auth
+		auth := r.PostFormValue("auth")                       // #nosec G120 -- admin UI behind auth
 		invalidUsername := r.PostFormValue("invalidUsername") // #nosec G120 -- admin UI behind auth
 
 		if csId == "" || auth == "" {
