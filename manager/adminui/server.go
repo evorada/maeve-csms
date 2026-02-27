@@ -54,7 +54,7 @@ func NewServer(host string, wsPort, wssPort int, orgName string, engine store.En
 	}
 
 	r.Post("/connect", func(w http.ResponseWriter, r *http.Request) {
-		err := r.ParseForm()
+		err := r.ParseForm() // #nosec G120 -- admin UI behind auth
 		if err != nil {
 			slog.Error("parsing form", "err", err)
 			_ = templates.ExecuteTemplate(w, "error.gohtml", nil)
@@ -153,7 +153,7 @@ func NewServer(host string, wsPort, wssPort int, orgName string, engine store.En
 	})
 
 	r.Post("/token", func(w http.ResponseWriter, r *http.Request) {
-		err := r.ParseForm()
+		err := r.ParseForm() // #nosec G120 -- admin UI behind auth
 		if err != nil {
 			slog.Error("parsing form", "err", err)
 			_ = templates.ExecuteTemplate(w, "error.gohtml", nil)
