@@ -12,7 +12,7 @@ import (
 )
 
 func (s *Store) SetFirmwareUpdateStatus(ctx context.Context, chargeStationId string, status *store.FirmwareUpdateStatus) error {
-	err := s.q.UpsertFirmwareUpdateStatus(ctx, UpsertFirmwareUpdateStatusParams{
+	err := s.writeQueries().UpsertFirmwareUpdateStatus(ctx, UpsertFirmwareUpdateStatusParams{
 		ChargeStationID: chargeStationId,
 		Status:          string(status.Status),
 		Location:        status.Location,
@@ -27,7 +27,7 @@ func (s *Store) SetFirmwareUpdateStatus(ctx context.Context, chargeStationId str
 }
 
 func (s *Store) GetFirmwareUpdateStatus(ctx context.Context, chargeStationId string) (*store.FirmwareUpdateStatus, error) {
-	row, err := s.q.GetFirmwareUpdateStatus(ctx, chargeStationId)
+	row, err := s.readQueries().GetFirmwareUpdateStatus(ctx, chargeStationId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -46,7 +46,7 @@ func (s *Store) GetFirmwareUpdateStatus(ctx context.Context, chargeStationId str
 }
 
 func (s *Store) SetDiagnosticsStatus(ctx context.Context, chargeStationId string, status *store.DiagnosticsStatus) error {
-	err := s.q.UpsertDiagnosticsStatus(ctx, UpsertDiagnosticsStatusParams{
+	err := s.writeQueries().UpsertDiagnosticsStatus(ctx, UpsertDiagnosticsStatusParams{
 		ChargeStationID: chargeStationId,
 		Status:          string(status.Status),
 		Location:        status.Location,
@@ -59,7 +59,7 @@ func (s *Store) SetDiagnosticsStatus(ctx context.Context, chargeStationId string
 }
 
 func (s *Store) GetDiagnosticsStatus(ctx context.Context, chargeStationId string) (*store.DiagnosticsStatus, error) {
-	row, err := s.q.GetDiagnosticsStatus(ctx, chargeStationId)
+	row, err := s.readQueries().GetDiagnosticsStatus(ctx, chargeStationId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -76,7 +76,7 @@ func (s *Store) GetDiagnosticsStatus(ctx context.Context, chargeStationId string
 }
 
 func (s *Store) SetPublishFirmwareStatus(ctx context.Context, chargeStationId string, status *store.PublishFirmwareStatus) error {
-	err := s.q.UpsertPublishFirmwareStatus(ctx, UpsertPublishFirmwareStatusParams{
+	err := s.writeQueries().UpsertPublishFirmwareStatus(ctx, UpsertPublishFirmwareStatusParams{
 		ChargeStationID: chargeStationId,
 		Status:          string(status.Status),
 		Location:        status.Location,
@@ -91,7 +91,7 @@ func (s *Store) SetPublishFirmwareStatus(ctx context.Context, chargeStationId st
 }
 
 func (s *Store) GetPublishFirmwareStatus(ctx context.Context, chargeStationId string) (*store.PublishFirmwareStatus, error) {
-	row, err := s.q.GetPublishFirmwareStatus(ctx, chargeStationId)
+	row, err := s.readQueries().GetPublishFirmwareStatus(ctx, chargeStationId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -136,7 +136,7 @@ func (s *Store) SetFirmwareUpdateRequest(ctx context.Context, chargeStationId st
 		signingCertificate = pgtype.Text{String: *request.SigningCertificate, Valid: true}
 	}
 
-	err := s.q.UpsertFirmwareUpdateRequest(ctx, UpsertFirmwareUpdateRequestParams{
+	err := s.writeQueries().UpsertFirmwareUpdateRequest(ctx, UpsertFirmwareUpdateRequestParams{
 		ChargeStationID:    chargeStationId,
 		Location:           request.Location,
 		RetrieveDate:       retrieveDate,
@@ -154,7 +154,7 @@ func (s *Store) SetFirmwareUpdateRequest(ctx context.Context, chargeStationId st
 }
 
 func (s *Store) GetFirmwareUpdateRequest(ctx context.Context, chargeStationId string) (*store.FirmwareUpdateRequest, error) {
-	row, err := s.q.GetFirmwareUpdateRequest(ctx, chargeStationId)
+	row, err := s.readQueries().GetFirmwareUpdateRequest(ctx, chargeStationId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -195,7 +195,7 @@ func (s *Store) GetFirmwareUpdateRequest(ctx context.Context, chargeStationId st
 }
 
 func (s *Store) DeleteFirmwareUpdateRequest(ctx context.Context, chargeStationId string) error {
-	err := s.q.DeleteFirmwareUpdateRequest(ctx, chargeStationId)
+	err := s.writeQueries().DeleteFirmwareUpdateRequest(ctx, chargeStationId)
 	if err != nil {
 		return fmt.Errorf("failed to delete firmware update request: %w", err)
 	}
@@ -203,7 +203,7 @@ func (s *Store) DeleteFirmwareUpdateRequest(ctx context.Context, chargeStationId
 }
 
 func (s *Store) ListFirmwareUpdateRequests(ctx context.Context, pageSize int, previousChargeStationId string) ([]*store.FirmwareUpdateRequest, error) {
-	rows, err := s.q.ListFirmwareUpdateRequests(ctx, ListFirmwareUpdateRequestsParams{
+	rows, err := s.readQueries().ListFirmwareUpdateRequests(ctx, ListFirmwareUpdateRequestsParams{
 		ChargeStationID: previousChargeStationId,
 		Limit:           int32(pageSize),
 	})
@@ -249,7 +249,7 @@ func (s *Store) ListFirmwareUpdateRequests(ctx context.Context, pageSize int, pr
 }
 
 func (s *Store) SetLogStatus(ctx context.Context, chargeStationId string, logStatus *store.LogStatus) error {
-	err := s.q.UpsertLogStatus(ctx, UpsertLogStatusParams{
+	err := s.writeQueries().UpsertLogStatus(ctx, UpsertLogStatusParams{
 		ChargeStationID: chargeStationId,
 		Status:          string(logStatus.Status),
 		RequestID:       int32(logStatus.RequestId),
@@ -262,7 +262,7 @@ func (s *Store) SetLogStatus(ctx context.Context, chargeStationId string, logSta
 }
 
 func (s *Store) GetLogStatus(ctx context.Context, chargeStationId string) (*store.LogStatus, error) {
-	row, err := s.q.GetLogStatus(ctx, chargeStationId)
+	row, err := s.readQueries().GetLogStatus(ctx, chargeStationId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil

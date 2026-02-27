@@ -23,7 +23,7 @@ func (s *Store) SetCertificate(ctx context.Context, pemCertificate string) error
 		CertificateData: pemCertificate,
 	}
 
-	_, err := s.q.SetCertificate(ctx, params)
+	_, err := s.writeQueries().SetCertificate(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to set certificate: %w", err)
 	}
@@ -33,7 +33,7 @@ func (s *Store) SetCertificate(ctx context.Context, pemCertificate string) error
 
 // LookupCertificate retrieves a certificate by its hash
 func (s *Store) LookupCertificate(ctx context.Context, certificateHash string) (string, error) {
-	cert, err := s.q.GetCertificate(ctx, certificateHash)
+	cert, err := s.readQueries().GetCertificate(ctx, certificateHash)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return "", nil
@@ -46,7 +46,7 @@ func (s *Store) LookupCertificate(ctx context.Context, certificateHash string) (
 
 // DeleteCertificate removes a certificate from the database
 func (s *Store) DeleteCertificate(ctx context.Context, certificateHash string) error {
-	err := s.q.DeleteCertificate(ctx, certificateHash)
+	err := s.writeQueries().DeleteCertificate(ctx, certificateHash)
 	if err != nil {
 		return fmt.Errorf("failed to delete certificate: %w", err)
 	}

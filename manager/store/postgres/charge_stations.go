@@ -23,7 +23,7 @@ func (s *Store) SetChargeStationAuth(ctx context.Context, csId string, csAuth *s
 		InvalidUsernameAllowed: csAuth.InvalidUsernameAllowed,
 	}
 
-	_, err := s.q.SetChargeStationAuth(ctx, params)
+	_, err := s.writeQueries().SetChargeStationAuth(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to set charge station auth: %w", err)
 	}
@@ -32,7 +32,7 @@ func (s *Store) SetChargeStationAuth(ctx context.Context, csId string, csAuth *s
 }
 
 func (s *Store) LookupChargeStationAuth(ctx context.Context, csId string) (*store.ChargeStationAuth, error) {
-	cs, err := s.q.GetChargeStationAuth(ctx, csId)
+	cs, err := s.readQueries().GetChargeStationAuth(ctx, csId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -66,7 +66,7 @@ func (s *Store) UpdateChargeStationSettings(ctx context.Context, chargeStationId
 		Settings:        settingsJSON,
 	}
 
-	_, err = s.q.SetChargeStationSettings(ctx, params)
+	_, err = s.writeQueries().SetChargeStationSettings(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to update charge station settings: %w", err)
 	}
@@ -75,7 +75,7 @@ func (s *Store) UpdateChargeStationSettings(ctx context.Context, chargeStationId
 }
 
 func (s *Store) LookupChargeStationSettings(ctx context.Context, chargeStationId string) (*store.ChargeStationSettings, error) {
-	dbSettings, err := s.q.GetChargeStationSettings(ctx, chargeStationId)
+	dbSettings, err := s.readQueries().GetChargeStationSettings(ctx, chargeStationId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -105,7 +105,7 @@ func (s *Store) ListChargeStationSettings(ctx context.Context, pageSize int, pre
 		return nil, fmt.Errorf("invalid page size value: %w", err)
 	}
 
-	dbSettingsList, err := s.q.ListChargeStationSettings(ctx, ListChargeStationSettingsParams{
+	dbSettingsList, err := s.readQueries().ListChargeStationSettings(ctx, ListChargeStationSettingsParams{
 		ChargeStationID: previousChargeStationId,
 		Limit:           pageSizeInt32,
 	})
@@ -130,7 +130,7 @@ func (s *Store) ListChargeStationSettings(ctx context.Context, pageSize int, pre
 }
 
 func (s *Store) DeleteChargeStationSettings(ctx context.Context, chargeStationId string) error {
-	err := s.q.DeleteChargeStationSettings(ctx, chargeStationId)
+	err := s.writeQueries().DeleteChargeStationSettings(ctx, chargeStationId)
 	if err != nil {
 		return fmt.Errorf("failed to delete charge station settings: %w", err)
 	}
@@ -149,7 +149,7 @@ func (s *Store) SetChargeStationRuntimeDetails(ctx context.Context, chargeStatio
 		FirmwareVersion: pgtype.Text{Valid: false},
 	}
 
-	_, err := s.q.SetChargeStationRuntime(ctx, params)
+	_, err := s.writeQueries().SetChargeStationRuntime(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to set charge station runtime details: %w", err)
 	}
@@ -158,7 +158,7 @@ func (s *Store) SetChargeStationRuntimeDetails(ctx context.Context, chargeStatio
 }
 
 func (s *Store) LookupChargeStationRuntimeDetails(ctx context.Context, chargeStationId string) (*store.ChargeStationRuntimeDetails, error) {
-	runtime, err := s.q.GetChargeStationRuntime(ctx, chargeStationId)
+	runtime, err := s.readQueries().GetChargeStationRuntime(ctx, chargeStationId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -175,7 +175,7 @@ func (s *Store) LookupChargeStationRuntimeDetails(ctx context.Context, chargeSta
 
 func (s *Store) UpdateChargeStationInstallCertificates(ctx context.Context, chargeStationId string, certificates *store.ChargeStationInstallCertificates) error {
 	// First, delete all existing certificates for this station
-	if err := s.q.DeleteChargeStationCertificates(ctx, chargeStationId); err != nil {
+	if err := s.writeQueries().DeleteChargeStationCertificates(ctx, chargeStationId); err != nil {
 		return fmt.Errorf("failed to delete existing certificates: %w", err)
 	}
 
@@ -190,7 +190,7 @@ func (s *Store) UpdateChargeStationInstallCertificates(ctx context.Context, char
 			SendAfter:                     toPgTimestamp(cert.SendAfter),
 		}
 
-		_, err := s.q.AddChargeStationCertificate(ctx, params)
+		_, err := s.writeQueries().AddChargeStationCertificate(ctx, params)
 		if err != nil {
 			return fmt.Errorf("failed to add certificate: %w", err)
 		}
@@ -200,7 +200,7 @@ func (s *Store) UpdateChargeStationInstallCertificates(ctx context.Context, char
 }
 
 func (s *Store) LookupChargeStationInstallCertificates(ctx context.Context, chargeStationId string) (*store.ChargeStationInstallCertificates, error) {
-	dbCerts, err := s.q.GetChargeStationCertificates(ctx, chargeStationId)
+	dbCerts, err := s.readQueries().GetChargeStationCertificates(ctx, chargeStationId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -239,7 +239,7 @@ func (s *Store) ListChargeStationInstallCertificates(ctx context.Context, pageSi
 		return nil, fmt.Errorf("invalid page size value: %w", err)
 	}
 
-	dbCertsList, err := s.q.ListChargeStationCertificates(ctx, ListChargeStationCertificatesParams{
+	dbCertsList, err := s.readQueries().ListChargeStationCertificates(ctx, ListChargeStationCertificatesParams{
 		ChargeStationID: previousChargeStationId,
 		Limit:           pageSizeInt32,
 	})
@@ -282,7 +282,7 @@ func (s *Store) SetChargeStationTriggerMessage(ctx context.Context, chargeStatio
 		SendAfter:       toPgTimestamp(triggerMessage.SendAfter),
 	}
 
-	_, err := s.q.SetChargeStationTrigger(ctx, params)
+	_, err := s.writeQueries().SetChargeStationTrigger(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to set charge station trigger message: %w", err)
 	}
@@ -291,7 +291,7 @@ func (s *Store) SetChargeStationTriggerMessage(ctx context.Context, chargeStatio
 }
 
 func (s *Store) DeleteChargeStationTriggerMessage(ctx context.Context, chargeStationId string) error {
-	err := s.q.DeleteChargeStationTrigger(ctx, chargeStationId)
+	err := s.writeQueries().DeleteChargeStationTrigger(ctx, chargeStationId)
 	if err != nil {
 		return fmt.Errorf("failed to delete charge station trigger message: %w", err)
 	}
@@ -299,7 +299,7 @@ func (s *Store) DeleteChargeStationTriggerMessage(ctx context.Context, chargeSta
 }
 
 func (s *Store) LookupChargeStationTriggerMessage(ctx context.Context, chargeStationId string) (*store.ChargeStationTriggerMessage, error) {
-	trigger, err := s.q.GetChargeStationTrigger(ctx, chargeStationId)
+	trigger, err := s.readQueries().GetChargeStationTrigger(ctx, chargeStationId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -326,7 +326,7 @@ func (s *Store) ListChargeStationTriggerMessages(ctx context.Context, pageSize i
 		return nil, fmt.Errorf("invalid page size value: %w", err)
 	}
 
-	triggers, err := s.q.ListChargeStationTriggers(ctx, ListChargeStationTriggersParams{
+	triggers, err := s.readQueries().ListChargeStationTriggers(ctx, ListChargeStationTriggersParams{
 		ChargeStationID: previousChargeStationId,
 		Limit:           pageSizeInt32,
 	})
@@ -360,7 +360,7 @@ func (s *Store) SetChargeStationDataTransfer(ctx context.Context, chargeStationI
 		SendAfter:       toPgTimestamptz(dataTransfer.SendAfter),
 	}
 
-	_, err := s.q.SetChargeStationDataTransfer(ctx, params)
+	_, err := s.writeQueries().SetChargeStationDataTransfer(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to set charge station data transfer: %w", err)
 	}
@@ -369,7 +369,7 @@ func (s *Store) SetChargeStationDataTransfer(ctx context.Context, chargeStationI
 }
 
 func (s *Store) LookupChargeStationDataTransfer(ctx context.Context, chargeStationId string) (*store.ChargeStationDataTransfer, error) {
-	dataTransfer, err := s.q.GetChargeStationDataTransfer(ctx, chargeStationId)
+	dataTransfer, err := s.readQueries().GetChargeStationDataTransfer(ctx, chargeStationId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -398,7 +398,7 @@ func (s *Store) ListChargeStationDataTransfers(ctx context.Context, pageSize int
 		return nil, fmt.Errorf("invalid page size value: %w", err)
 	}
 
-	dataTransfers, err := s.q.ListChargeStationDataTransfers(ctx, ListChargeStationDataTransfersParams{
+	dataTransfers, err := s.readQueries().ListChargeStationDataTransfers(ctx, ListChargeStationDataTransfersParams{
 		ChargeStationID: previousChargeStationId,
 		Limit:           pageSizeInt32,
 	})
@@ -423,7 +423,7 @@ func (s *Store) ListChargeStationDataTransfers(ctx context.Context, pageSize int
 }
 
 func (s *Store) DeleteChargeStationDataTransfer(ctx context.Context, chargeStationId string) error {
-	err := s.q.DeleteChargeStationDataTransfer(ctx, chargeStationId)
+	err := s.writeQueries().DeleteChargeStationDataTransfer(ctx, chargeStationId)
 	if err != nil {
 		return fmt.Errorf("failed to delete charge station data transfer: %w", err)
 	}
@@ -439,7 +439,7 @@ func (s *Store) SetChargeStationClearCache(ctx context.Context, chargeStationId 
 		SendAfter:       toPgTimestamptz(clearCache.SendAfter),
 	}
 
-	_, err := s.q.SetChargeStationClearCache(ctx, params)
+	_, err := s.writeQueries().SetChargeStationClearCache(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to set charge station clear cache: %w", err)
 	}
@@ -448,7 +448,7 @@ func (s *Store) SetChargeStationClearCache(ctx context.Context, chargeStationId 
 }
 
 func (s *Store) LookupChargeStationClearCache(ctx context.Context, chargeStationId string) (*store.ChargeStationClearCache, error) {
-	clearCache, err := s.q.GetChargeStationClearCache(ctx, chargeStationId)
+	clearCache, err := s.readQueries().GetChargeStationClearCache(ctx, chargeStationId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -473,7 +473,7 @@ func (s *Store) ListChargeStationClearCaches(ctx context.Context, pageSize int, 
 		return nil, fmt.Errorf("invalid page size value: %w", err)
 	}
 
-	clearCaches, err := s.q.ListChargeStationClearCaches(ctx, ListChargeStationClearCachesParams{
+	clearCaches, err := s.readQueries().ListChargeStationClearCaches(ctx, ListChargeStationClearCachesParams{
 		ChargeStationID: previousChargeStationId,
 		Limit:           pageSizeInt32,
 	})
@@ -494,7 +494,7 @@ func (s *Store) ListChargeStationClearCaches(ctx context.Context, pageSize int, 
 }
 
 func (s *Store) DeleteChargeStationClearCache(ctx context.Context, chargeStationId string) error {
-	err := s.q.DeleteChargeStationClearCache(ctx, chargeStationId)
+	err := s.writeQueries().DeleteChargeStationClearCache(ctx, chargeStationId)
 	if err != nil {
 		return fmt.Errorf("failed to delete charge station clear cache: %w", err)
 	}
@@ -513,7 +513,7 @@ func (s *Store) SetChargeStationChangeAvailability(ctx context.Context, chargeSt
 		SendAfter:        toPgTimestamptz(changeAvailability.SendAfter),
 	}
 
-	_, err := s.q.SetChargeStationChangeAvailability(ctx, params)
+	_, err := s.writeQueries().SetChargeStationChangeAvailability(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to set charge station change availability: %w", err)
 	}
@@ -522,7 +522,7 @@ func (s *Store) SetChargeStationChangeAvailability(ctx context.Context, chargeSt
 }
 
 func (s *Store) LookupChargeStationChangeAvailability(ctx context.Context, chargeStationId string) (*store.ChargeStationChangeAvailability, error) {
-	changeAvailability, err := s.q.GetChargeStationChangeAvailability(ctx, chargeStationId)
+	changeAvailability, err := s.readQueries().GetChargeStationChangeAvailability(ctx, chargeStationId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -550,7 +550,7 @@ func (s *Store) ListChargeStationChangeAvailabilities(ctx context.Context, pageS
 		return nil, fmt.Errorf("invalid page size value: %w", err)
 	}
 
-	changeAvailabilities, err := s.q.ListChargeStationChangeAvailabilities(ctx, ListChargeStationChangeAvailabilitiesParams{
+	changeAvailabilities, err := s.readQueries().ListChargeStationChangeAvailabilities(ctx, ListChargeStationChangeAvailabilitiesParams{
 		ChargeStationID: previousChargeStationId,
 		Limit:           pageSizeInt32,
 	})
@@ -574,7 +574,7 @@ func (s *Store) ListChargeStationChangeAvailabilities(ctx context.Context, pageS
 }
 
 func (s *Store) DeleteChargeStationChangeAvailability(ctx context.Context, chargeStationId string) error {
-	err := s.q.DeleteChargeStationChangeAvailability(ctx, chargeStationId)
+	err := s.writeQueries().DeleteChargeStationChangeAvailability(ctx, chargeStationId)
 	if err != nil {
 		return fmt.Errorf("failed to delete charge station change availability: %w", err)
 	}
@@ -582,7 +582,7 @@ func (s *Store) DeleteChargeStationChangeAvailability(ctx context.Context, charg
 }
 
 func (s *Store) SetChargeStationCertificateQuery(ctx context.Context, chargeStationId string, query *store.ChargeStationCertificateQuery) error {
-	_, err := s.q.SetChargeStationCertificateQuery(ctx, SetChargeStationCertificateQueryParams{
+	_, err := s.writeQueries().SetChargeStationCertificateQuery(ctx, SetChargeStationCertificateQueryParams{
 		ChargeStationID: chargeStationId,
 		CertificateType: textFromString(query.CertificateType),
 		QueryStatus:     string(query.QueryStatus),
@@ -595,7 +595,7 @@ func (s *Store) SetChargeStationCertificateQuery(ctx context.Context, chargeStat
 }
 
 func (s *Store) DeleteChargeStationCertificateQuery(ctx context.Context, chargeStationId string) error {
-	err := s.q.DeleteChargeStationCertificateQuery(ctx, chargeStationId)
+	err := s.writeQueries().DeleteChargeStationCertificateQuery(ctx, chargeStationId)
 	if err != nil {
 		return fmt.Errorf("failed to delete certificate query: %w", err)
 	}
@@ -603,7 +603,7 @@ func (s *Store) DeleteChargeStationCertificateQuery(ctx context.Context, chargeS
 }
 
 func (s *Store) LookupChargeStationCertificateQuery(ctx context.Context, chargeStationId string) (*store.ChargeStationCertificateQuery, error) {
-	row, err := s.q.LookupChargeStationCertificateQuery(ctx, chargeStationId)
+	row, err := s.readQueries().LookupChargeStationCertificateQuery(ctx, chargeStationId)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -619,7 +619,7 @@ func (s *Store) LookupChargeStationCertificateQuery(ctx context.Context, chargeS
 }
 
 func (s *Store) ListChargeStationCertificateQueries(ctx context.Context, pageSize int, previousChargeStationId string) ([]*store.ChargeStationCertificateQuery, error) {
-	rows, err := s.q.ListChargeStationCertificateQueries(ctx, ListChargeStationCertificateQueriesParams{
+	rows, err := s.readQueries().ListChargeStationCertificateQueries(ctx, ListChargeStationCertificateQueriesParams{
 		ChargeStationID: previousChargeStationId,
 		Limit:           int32(pageSize),
 	})
@@ -640,7 +640,7 @@ func (s *Store) ListChargeStationCertificateQueries(ctx context.Context, pageSiz
 }
 
 func (s *Store) SetChargeStationCertificateDeletion(ctx context.Context, chargeStationId string, deletion *store.ChargeStationCertificateDeletion) error {
-	_, err := s.q.SetChargeStationCertificateDeletion(ctx, SetChargeStationCertificateDeletionParams{
+	_, err := s.writeQueries().SetChargeStationCertificateDeletion(ctx, SetChargeStationCertificateDeletionParams{
 		ChargeStationID: chargeStationId,
 		HashAlgorithm:   deletion.HashAlgorithm,
 		IssuerNameHash:  deletion.IssuerNameHash,
@@ -656,7 +656,7 @@ func (s *Store) SetChargeStationCertificateDeletion(ctx context.Context, chargeS
 }
 
 func (s *Store) DeleteChargeStationCertificateDeletion(ctx context.Context, chargeStationId string) error {
-	err := s.q.DeleteChargeStationCertificateDeletion(ctx, chargeStationId)
+	err := s.writeQueries().DeleteChargeStationCertificateDeletion(ctx, chargeStationId)
 	if err != nil {
 		return fmt.Errorf("failed to delete certificate deletion: %w", err)
 	}
@@ -664,7 +664,7 @@ func (s *Store) DeleteChargeStationCertificateDeletion(ctx context.Context, char
 }
 
 func (s *Store) LookupChargeStationCertificateDeletion(ctx context.Context, chargeStationId string) (*store.ChargeStationCertificateDeletion, error) {
-	row, err := s.q.LookupChargeStationCertificateDeletion(ctx, chargeStationId)
+	row, err := s.readQueries().LookupChargeStationCertificateDeletion(ctx, chargeStationId)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -683,7 +683,7 @@ func (s *Store) LookupChargeStationCertificateDeletion(ctx context.Context, char
 }
 
 func (s *Store) ListChargeStationCertificateDeletions(ctx context.Context, pageSize int, previousChargeStationId string) ([]*store.ChargeStationCertificateDeletion, error) {
-	rows, err := s.q.ListChargeStationCertificateDeletions(ctx, ListChargeStationCertificateDeletionsParams{
+	rows, err := s.readQueries().ListChargeStationCertificateDeletions(ctx, ListChargeStationCertificateDeletionsParams{
 		ChargeStationID: previousChargeStationId,
 		Limit:           int32(pageSize),
 	})

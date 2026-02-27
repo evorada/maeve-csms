@@ -17,7 +17,7 @@ func (s *Store) SetRegistrationDetails(ctx context.Context, token string, regist
 		Status: string(registration.Status),
 	}
 
-	_, err := s.q.SetOcpiRegistration(ctx, params)
+	_, err := s.writeQueries().SetOcpiRegistration(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to set registration details: %w", err)
 	}
@@ -27,7 +27,7 @@ func (s *Store) SetRegistrationDetails(ctx context.Context, token string, regist
 
 // GetRegistrationDetails retrieves an OCPI registration by token
 func (s *Store) GetRegistrationDetails(ctx context.Context, token string) (*store.OcpiRegistration, error) {
-	reg, err := s.q.GetOcpiRegistration(ctx, token)
+	reg, err := s.readQueries().GetOcpiRegistration(ctx, token)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -42,7 +42,7 @@ func (s *Store) GetRegistrationDetails(ctx context.Context, token string) (*stor
 
 // DeleteRegistrationDetails removes an OCPI registration by token
 func (s *Store) DeleteRegistrationDetails(ctx context.Context, token string) error {
-	err := s.q.DeleteOcpiRegistration(ctx, token)
+	err := s.writeQueries().DeleteOcpiRegistration(ctx, token)
 	if err != nil {
 		return fmt.Errorf("failed to delete registration details: %w", err)
 	}
@@ -60,7 +60,7 @@ func (s *Store) SetPartyDetails(ctx context.Context, partyDetails *store.OcpiPar
 		Token:       partyDetails.Token,
 	}
 
-	_, err := s.q.SetOcpiParty(ctx, params)
+	_, err := s.writeQueries().SetOcpiParty(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to set party details: %w", err)
 	}
@@ -76,7 +76,7 @@ func (s *Store) GetPartyDetails(ctx context.Context, role, countryCode, partyId 
 		PartyID:     partyId,
 	}
 
-	party, err := s.q.GetOcpiParty(ctx, params)
+	party, err := s.readQueries().GetOcpiParty(ctx, params)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -95,7 +95,7 @@ func (s *Store) GetPartyDetails(ctx context.Context, role, countryCode, partyId 
 
 // ListPartyDetailsForRole retrieves all OCPI party details for a specific role
 func (s *Store) ListPartyDetailsForRole(ctx context.Context, role string) ([]*store.OcpiParty, error) {
-	parties, err := s.q.ListOcpiPartiesForRole(ctx, role)
+	parties, err := s.readQueries().ListOcpiPartiesForRole(ctx, role)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list party details for role: %w", err)
 	}

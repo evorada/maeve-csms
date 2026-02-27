@@ -33,7 +33,7 @@ func (s *Store) SetDiagnosticsRequest(ctx context.Context, chargeStationId strin
 		retryInterval = pgtype.Int4{Int32: int32(*request.RetryInterval), Valid: true}
 	}
 
-	err := s.q.UpsertDiagnosticsRequest(ctx, UpsertDiagnosticsRequestParams{
+	err := s.writeQueries().UpsertDiagnosticsRequest(ctx, UpsertDiagnosticsRequestParams{
 		ChargeStationID: chargeStationId,
 		Location:        request.Location,
 		StartTime:       startTime,
@@ -50,7 +50,7 @@ func (s *Store) SetDiagnosticsRequest(ctx context.Context, chargeStationId strin
 }
 
 func (s *Store) GetDiagnosticsRequest(ctx context.Context, chargeStationId string) (*store.DiagnosticsRequest, error) {
-	row, err := s.q.GetDiagnosticsRequest(ctx, chargeStationId)
+	row, err := s.readQueries().GetDiagnosticsRequest(ctx, chargeStationId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -87,7 +87,7 @@ func (s *Store) GetDiagnosticsRequest(ctx context.Context, chargeStationId strin
 }
 
 func (s *Store) DeleteDiagnosticsRequest(ctx context.Context, chargeStationId string) error {
-	err := s.q.DeleteDiagnosticsRequest(ctx, chargeStationId)
+	err := s.writeQueries().DeleteDiagnosticsRequest(ctx, chargeStationId)
 	if err != nil {
 		return fmt.Errorf("failed to delete diagnostics request: %w", err)
 	}
@@ -95,7 +95,7 @@ func (s *Store) DeleteDiagnosticsRequest(ctx context.Context, chargeStationId st
 }
 
 func (s *Store) ListDiagnosticsRequests(ctx context.Context, pageSize int, previousChargeStationId string) ([]*store.DiagnosticsRequest, error) {
-	rows, err := s.q.ListDiagnosticsRequests(ctx, ListDiagnosticsRequestsParams{
+	rows, err := s.readQueries().ListDiagnosticsRequests(ctx, ListDiagnosticsRequestsParams{
 		ChargeStationID: previousChargeStationId,
 		Limit:           int32(pageSize),
 	})
@@ -158,7 +158,7 @@ func (s *Store) SetLogRequest(ctx context.Context, chargeStationId string, reque
 		retryInterval = pgtype.Int4{Int32: int32(*request.RetryInterval), Valid: true}
 	}
 
-	err := s.q.UpsertLogRequest(ctx, UpsertLogRequestParams{
+	err := s.writeQueries().UpsertLogRequest(ctx, UpsertLogRequestParams{
 		ChargeStationID: chargeStationId,
 		LogType:         request.LogType,
 		RequestID:       int32(request.RequestId),
@@ -177,7 +177,7 @@ func (s *Store) SetLogRequest(ctx context.Context, chargeStationId string, reque
 }
 
 func (s *Store) GetLogRequest(ctx context.Context, chargeStationId string) (*store.LogRequest, error) {
-	row, err := s.q.GetLogRequest(ctx, chargeStationId)
+	row, err := s.readQueries().GetLogRequest(ctx, chargeStationId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -216,7 +216,7 @@ func (s *Store) GetLogRequest(ctx context.Context, chargeStationId string) (*sto
 }
 
 func (s *Store) DeleteLogRequest(ctx context.Context, chargeStationId string) error {
-	err := s.q.DeleteLogRequest(ctx, chargeStationId)
+	err := s.writeQueries().DeleteLogRequest(ctx, chargeStationId)
 	if err != nil {
 		return fmt.Errorf("failed to delete log request: %w", err)
 	}
@@ -224,7 +224,7 @@ func (s *Store) DeleteLogRequest(ctx context.Context, chargeStationId string) er
 }
 
 func (s *Store) ListLogRequests(ctx context.Context, pageSize int, previousChargeStationId string) ([]*store.LogRequest, error) {
-	rows, err := s.q.ListLogRequests(ctx, ListLogRequestsParams{
+	rows, err := s.readQueries().ListLogRequests(ctx, ListLogRequestsParams{
 		ChargeStationID: previousChargeStationId,
 		Limit:           int32(pageSize),
 	})
