@@ -52,6 +52,10 @@ cp "${cert_dir}"/root-V2G-cert.pem "$everest_dir"/certs/ca/v2g/V2G_ROOT_CA.pem
 
 if [ ! -f "${cert_dir}/evccTruststore.jks" ]; then
   echo "Creating EVCC trust store with V2G root"
+  if [ ! -s "${cert_dir}/root-V2G-cert.pem" ] || ! grep -q 'BEGIN CERTIFICATE' "${cert_dir}/root-V2G-cert.pem" 2>/dev/null; then
+    echo "ERROR: root-V2G-cert.pem is empty or invalid. Certificate fetching may have failed."
+    exit 1
+  fi
   keytool -import -keystore "${cert_dir}/evccTruststore.jks" -storepass "${store_pass}" -alias v2g_root -noprompt -file "${cert_dir}"/root-V2G-cert.pem
 fi
 

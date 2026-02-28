@@ -64,6 +64,15 @@ jobs:
           --build-arg TARGETARCH=amd64
       env:
         DOCKER_BUILDKIT: 1
+    - name: Run Trivy container vulnerability scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: '${{env.SERVICE}}:${{ github.sha }}'
+        format: 'table'
+        exit-code: '1'
+        ignore-unfixed: true
+        vuln-type: 'os,library'
+        severity: 'CRITICAL,HIGH'
   integration-tests:
     runs-on: ubuntu-latest
     services:
@@ -95,13 +104,3 @@ jobs:
       env:
         TEST_POSTGRES_CONN: postgres://test:test@localhost:5432/maeve_test?sslmode=disable
       run: go test -tags integration -v -count=1 ./store/postgres/...
-
-    - name: Run Trivy container vulnerability scan
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: '${{env.SERVICE}}:${{ github.sha }}'
-        format: 'table'
-        exit-code: '1'
-        ignore-unfixed: true
-        vuln-type: 'os,library'
-        severity: 'CRITICAL,HIGH'
