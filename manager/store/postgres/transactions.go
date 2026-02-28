@@ -328,6 +328,14 @@ func (s *Store) toStoreTransaction(ctx context.Context, txn *Transaction) (*stor
 		endedSeqNo = int(txn.UpdatedSeqNo)
 	}
 
+	var lastCost *float64
+	if txn.LastCost.Valid {
+		f, _ := txn.LastCost.Float64Value()
+		if f.Valid {
+			lastCost = &f.Float64
+		}
+	}
+
 	return &store.Transaction{
 		ChargeStationId:   txn.ChargeStationID,
 		TransactionId:     txn.ID,
@@ -338,5 +346,6 @@ func (s *Store) toStoreTransaction(ctx context.Context, txn *Transaction) (*stor
 		EndedSeqNo:        endedSeqNo,
 		UpdatedSeqNoCount: int(txn.UpdatedSeqNo),
 		Offline:           txn.Offline,
+		LastCost:          lastCost,
 	}, nil
 }

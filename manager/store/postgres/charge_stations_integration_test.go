@@ -173,7 +173,7 @@ func TestChargeStationTriggerMessage_SetAndLookup(t *testing.T) {
 	got, err := testStore.LookupChargeStationTriggerMessage(ctx, "cs001")
 	require.NoError(t, err)
 	require.NotNil(t, got)
-	assert.Equal(t, "StatusNotification", got.TriggerMessage)
+	assert.Equal(t, store.TriggerMessageStatusNotification, got.TriggerMessage)
 }
 
 func TestChargeStationTriggerMessage_Delete(t *testing.T) {
@@ -188,6 +188,7 @@ func TestChargeStationTriggerMessage_Delete(t *testing.T) {
 	err = testStore.SetChargeStationTriggerMessage(ctx, "cs001", &store.ChargeStationTriggerMessage{
 		ChargeStationId: "cs001",
 		TriggerMessage:  "StatusNotification",
+		SendAfter:       time.Now().UTC().Truncate(time.Second),
 	})
 	require.NoError(t, err)
 

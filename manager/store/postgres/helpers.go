@@ -50,7 +50,7 @@ func timeFromTimestamp(ts pgtype.Timestamp) time.Time {
 	if !ts.Valid {
 		return time.Time{}
 	}
-	return ts.Time
+	return ts.Time.UTC()
 }
 
 // toPgText converts a *string to pgtype.Text
@@ -162,5 +162,5 @@ func fromPgTimestamptz(ts pgtype.Timestamptz) time.Time {
 	if !ts.Valid {
 		return time.Time{}
 	}
-	return ts.Time
+	return ts.Time.UTC()
 }

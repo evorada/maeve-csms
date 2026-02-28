@@ -66,11 +66,12 @@ func (s *Store) GetChargeStationStatus(ctx context.Context, chargeStationId stri
 	status := &store.ChargeStationStatus{
 		ChargeStationId: row.ChargeStationID,
 		Connected:       row.Connected,
-		UpdatedAt:       row.UpdatedAt.Time,
+		UpdatedAt:       row.UpdatedAt.Time.UTC(),
 	}
 
 	if row.LastHeartbeat.Valid {
-		status.LastHeartbeat = &row.LastHeartbeat.Time
+		t := row.LastHeartbeat.Time.UTC()
+		status.LastHeartbeat = &t
 	}
 
 	if row.FirmwareVersion.Valid {
@@ -164,7 +165,7 @@ func (s *Store) GetConnectorStatus(ctx context.Context, chargeStationId string, 
 		ConnectorId:     int(row.ConnectorID),
 		Status:          store.ConnectorStatusType(row.Status),
 		ErrorCode:       store.ConnectorErrorCode(row.ErrorCode),
-		UpdatedAt:       row.UpdatedAt.Time,
+		UpdatedAt:       row.UpdatedAt.Time.UTC(),
 	}
 
 	if row.Info.Valid {
@@ -203,7 +204,7 @@ func (s *Store) ListConnectorStatuses(ctx context.Context, chargeStationId strin
 			ConnectorId:     int(row.ConnectorID),
 			Status:          store.ConnectorStatusType(row.Status),
 			ErrorCode:       store.ConnectorErrorCode(row.ErrorCode),
-			UpdatedAt:       row.UpdatedAt.Time,
+			UpdatedAt:       row.UpdatedAt.Time.UTC(),
 		}
 
 		if row.Info.Valid {

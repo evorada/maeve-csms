@@ -22,7 +22,7 @@ func TestLocation_SetAndLookup(t *testing.T) {
 		Name:    "Test Location",
 		Address: "123 Test St",
 		City:    "TestCity",
-		Country: "GBR",
+		Country: "GB",
 		Coordinates: store.GeoLocation{
 			Latitude:  "51.5074",
 			Longitude: "-0.1278",
@@ -61,7 +61,7 @@ func TestLocation_List(t *testing.T) {
 			Name:        "Location " + string(rune('1'+i)),
 			Address:     "Addr",
 			City:        "City",
-			Country:     "GBR",
+			Country:     "GB",
 			Coordinates: store.GeoLocation{Latitude: "51.5", Longitude: "-0.1"},
 			PostalCode:  "EC1",
 			ParkingType: "ON_STREET",
