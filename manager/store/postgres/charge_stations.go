@@ -9,7 +9,6 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
@@ -143,10 +142,10 @@ func (s *Store) SetChargeStationRuntimeDetails(ctx context.Context, chargeStatio
 	params := SetChargeStationRuntimeParams{
 		ChargeStationID: chargeStationId,
 		OcppVersion:     details.OcppVersion,
-		Vendor:          pgtype.Text{Valid: false}, // Not in store interface currently
-		Model:           pgtype.Text{Valid: false},
-		SerialNumber:    pgtype.Text{Valid: false},
-		FirmwareVersion: pgtype.Text{Valid: false},
+		Vendor:          toPgText(details.Vendor),
+		Model:           toPgText(details.Model),
+		SerialNumber:    toPgText(details.SerialNumber),
+		FirmwareVersion: toPgText(details.FirmwareVersion),
 	}
 
 	_, err := s.writeQueries().SetChargeStationRuntime(ctx, params)
@@ -167,7 +166,11 @@ func (s *Store) LookupChargeStationRuntimeDetails(ctx context.Context, chargeSta
 	}
 
 	return &store.ChargeStationRuntimeDetails{
-		OcppVersion: runtime.OcppVersion,
+		OcppVersion:     runtime.OcppVersion,
+		FirmwareVersion: fromPgText(runtime.FirmwareVersion),
+		Model:           fromPgText(runtime.Model),
+		Vendor:          fromPgText(runtime.Vendor),
+		SerialNumber:    fromPgText(runtime.SerialNumber),
 	}, nil
 }
 

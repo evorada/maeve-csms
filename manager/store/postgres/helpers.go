@@ -53,6 +53,22 @@ func timeFromTimestamp(ts pgtype.Timestamp) time.Time {
 	return ts.Time
 }
 
+// toPgText converts a *string to pgtype.Text
+func toPgText(s *string) pgtype.Text {
+	if s == nil {
+		return pgtype.Text{Valid: false}
+	}
+	return pgtype.Text{String: *s, Valid: true}
+}
+
+// fromPgText converts pgtype.Text to *string (returns nil if not valid)
+func fromPgText(t pgtype.Text) *string {
+	if !t.Valid {
+		return nil
+	}
+	return &t.String
+}
+
 // toPgTimestamp converts time.Time to pgtype.Timestamp (treats zero time as NULL)
 func toPgTimestamp(t time.Time) pgtype.Timestamp {
 	if t.IsZero() {
