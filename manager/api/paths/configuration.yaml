@@ -27,7 +27,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ChargeStationSettings'
+              $ref: '../schemas/schemas.yaml#/components/schemas/ChargeStationSettings'
       responses:
         '200':
           description: OK
@@ -36,7 +36,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/configuration:
     get:
       summary: Get charge station configuration (OCPP 1.6)
@@ -67,19 +67,60 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConfigurationResponse'
+                $ref: '../schemas/schemas.yaml#/components/schemas/ConfigurationResponse'
         '404':
           description: Unknown charge station
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+    patch:
+      summary: Change charge station configuration (OCPP 1.6)
+      description: 'Changes configuration values on a charge station using OCPP 1.6 ChangeConfiguration.
+
+        Returns 202 Accepted with per-key results. Some changes may require a reboot.
+
+        '
+      operationId: changeChargeStationConfiguration
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        required: true
+        schema:
+          type: string
+          maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/schemas.yaml#/components/schemas/ConfigurationChangeRequest'
+      responses:
+        '202':
+          description: Accepted - configuration change initiated
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/ConfigurationChangeResponse'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/variables:
     get:
       summary: Get charge station variables (OCPP 2.0.1)
@@ -115,16 +156,57 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VariablesResponse'
+                $ref: '../schemas/schemas.yaml#/components/schemas/VariablesResponse'
         '404':
           description: Unknown charge station
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+    patch:
+      summary: Set charge station variables (OCPP 2.0.1)
+      description: 'Sets variable values on a charge station using OCPP 2.0.1 SetVariables.
+
+        Returns 202 Accepted with per-variable results.
+
+        '
+      operationId: setChargeStationVariables
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        required: true
+        schema:
+          type: string
+          maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/schemas.yaml#/components/schemas/VariablesChangeRequest'
+      responses:
+        '202':
+          description: Accepted - variable change initiated
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/VariablesChangeResponse'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'

@@ -63,16 +63,16 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MeterValuesResponse'
+                $ref: '../schemas/schemas.yaml#/components/schemas/MeterValuesResponse'
         '404':
           description: Unknown charge station
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'

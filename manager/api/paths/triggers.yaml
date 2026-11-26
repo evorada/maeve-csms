@@ -1,7 +1,6 @@
 paths:
   /cs/{csId}/trigger:
     post:
-      summary: Trigger a message from the charge station
       operationId: triggerChargeStation
       parameters:
       - name: csId
@@ -17,8 +16,8 @@ paths:
             schema:
               $ref: '../schemas/schemas.yaml#/components/schemas/ChargeStationTrigger'
       responses:
-        '201':
-          description: Created
+        '200':
+          description: OK
         default:
           description: Unexpected error
           content:

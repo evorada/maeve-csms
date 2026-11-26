@@ -24,7 +24,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ChangeAvailabilityRequest'
+              $ref: '../schemas/schemas.yaml#/components/schemas/ChangeAvailabilityRequest'
       responses:
         '202':
           description: Accepted - availability change request submitted
@@ -33,7 +33,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/reset:
     post:
       operationId: ResetChargeStation
@@ -49,7 +49,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ResetRequest'
+              $ref: '../schemas/schemas.yaml#/components/schemas/ResetRequest'
       responses:
         '202':
           description: Reset request accepted
@@ -72,7 +72,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UnlockConnectorRequest'
+              $ref: '../schemas/schemas.yaml#/components/schemas/UnlockConnectorRequest'
       responses:
         '202':
           description: Unlock request accepted

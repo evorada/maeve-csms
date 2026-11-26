@@ -23,19 +23,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChargeStationStatusResponse'
+                $ref: '../schemas/schemas.yaml#/components/schemas/ChargeStationStatusResponse'
         '404':
           description: Unknown charge station
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/connectors:
     get:
       summary: Get connector statuses
@@ -62,16 +62,16 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/ConnectorStatusResponse'
+                  $ref: '../schemas/schemas.yaml#/components/schemas/ConnectorStatusResponse'
         '404':
           description: Unknown charge station
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'

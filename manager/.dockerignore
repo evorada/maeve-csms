@@ -1,0 +1,2 @@
+# Tooling installed by api/bundle-spec.sh (npm ci); not needed to build the manager
+api/node_modules

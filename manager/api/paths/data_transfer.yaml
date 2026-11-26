@@ -21,17 +21,17 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DataTransferRequest'
+              $ref: '../schemas/schemas.yaml#/components/schemas/DataTransferRequest'
       responses:
         '202':
           description: Accepted - data transfer request submitted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DataTransferResponse'
+                $ref: '../schemas/schemas.yaml#/components/schemas/DataTransferResponse'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'

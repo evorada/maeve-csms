@@ -22,16 +22,16 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocalListVersionResponse'
+                $ref: '../schemas/schemas.yaml#/components/schemas/LocalListVersionResponse'
         '404':
           description: Unknown charge station or no local list
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'

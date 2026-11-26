@@ -2,9 +2,11 @@
 api-bundle:
 	cd api && ./bundle-spec.sh
 
+# Bundles the split OpenAPI spec and regenerates api/api.gen.go with the pinned
+# oapi-codegen version and the options in api/cfg.yaml.
 .PHONY: api-generate
 api-generate: api-bundle
-	~/go/bin/oapi-codegen -generate chi-server,models,spec -package api api/api-spec.bundled.yaml > api/api.gen.go
+	cd api && go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.1 -config cfg.yaml api-spec.bundled.yaml
 
 .PHONY: postgres-generate
 postgres-generate:

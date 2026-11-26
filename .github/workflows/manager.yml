@@ -33,13 +33,13 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '20'
-    - name: Check OpenAPI bundle is up to date
+    - name: Check generated API is up to date
       run: |
-        cd api && ./bundle-spec.sh
+        make api-generate
         cd "$GITHUB_WORKSPACE"
-        if ! git diff --quiet -- manager/api/api-spec.bundled.yaml; then
-          echo "::error::api-spec.bundled.yaml is out of date. Run 'make api-bundle' and commit the result."
-          git diff -- manager/api/api-spec.bundled.yaml | head -50
+        if ! git diff --exit-code --stat -- manager/api/api-spec.bundled.yaml manager/api/api.gen.go; then
+          echo "::error::The generated API is out of date. Run 'make api-generate' in manager/ and commit api-spec.bundled.yaml and api.gen.go."
+          git diff -- manager/api/api-spec.bundled.yaml manager/api/api.gen.go | head -50
           exit 1
         fi
     - name: Run Gosec Security Scanner
