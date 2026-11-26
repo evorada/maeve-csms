@@ -206,6 +206,16 @@ func (s *Store) ListTransactionsForChargeStation(ctx context.Context, chargeStat
 	return result, total, nil
 }
 
+// UpdateTransactionDetails is not implemented for Firestore.
+func (s *Store) UpdateTransactionDetails(ctx context.Context, chargeStationId, transactionId string, details *store.TransactionDetails) error {
+	return fmt.Errorf("UpdateTransactionDetails: %w", store.ErrNotImplemented)
+}
+
+// NextOcpp16TransactionId is not implemented for Firestore.
+func (s *Store) NextOcpp16TransactionId(ctx context.Context) (int, error) {
+	return 0, fmt.Errorf("NextOcpp16TransactionId: %w", store.ErrNotImplemented)
+}
+
 func getPath(chargeStationId, transactionId string) string {
 	return fmt.Sprintf("Transaction/%s-%s", chargeStationId, transactionId)
 }

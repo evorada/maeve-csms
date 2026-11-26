@@ -445,9 +445,19 @@ func TestTransactionStore_UpdateWrongChargeStation(t *testing.T) {
 		},
 	}
 
+	// transaction ids are only unique per charge station: the transaction of another
+	// charge station is simply not found
 	err = db.store.UpdateTransaction(ctx, wrongStationId, transactionId, updateMeterValues)
-	assert.Error(t, err, "Should fail to update with wrong charge station ID")
-	assert.Contains(t, err.Error(), "does not belong")
+	require.Error(t, err, "Should fail to update with wrong charge station ID")
+	assert.ErrorIs(t, err, store.ErrNotFound)
+	assert.Contains(t, err.Error(), "transaction not found")
+
+	// the transaction of the correct charge station is untouched
+	found, err := db.store.FindTransaction(ctx, correctStationId, transactionId)
+	require.NoError(t, err)
+	require.NotNil(t, found)
+	assert.Len(t, found.MeterValues, 1)
+	assert.Equal(t, 0, found.UpdatedSeqNoCount)
 }
 
 func TestTransactionStore_EndWrongChargeStation(t *testing.T) {
@@ -489,9 +499,20 @@ func TestTransactionStore_EndWrongChargeStation(t *testing.T) {
 		},
 	}
 
+	// transaction ids are only unique per charge station: the transaction of another
+	// charge station is simply not found
 	err = db.store.EndTransaction(ctx, wrongStationId, transactionId, "TOKEN", "RFID", endMeterValues, 1)
-	assert.Error(t, err, "Should fail to end with wrong charge station ID")
-	assert.Contains(t, err.Error(), "does not belong")
+	require.Error(t, err, "Should fail to end with wrong charge station ID")
+	assert.ErrorIs(t, err, store.ErrNotFound)
+	assert.Contains(t, err.Error(), "transaction not found")
+
+	// the transaction of the correct charge station is still active
+	found, err := db.store.FindTransaction(ctx, correctStationId, transactionId)
+	require.NoError(t, err)
+	require.NotNil(t, found)
+	assert.Len(t, found.MeterValues, 1)
+	assert.Equal(t, 0, found.EndedSeqNo)
+	assert.Nil(t, found.StoppedAt)
 }
 
 func TestTransactionStore_EmptyMeterValues(t *testing.T) {

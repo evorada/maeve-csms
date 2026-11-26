@@ -1,5 +1,7 @@
+-- Transactions are identified by (charge_station_id, id): ids are only unique per station.
+
 -- name: GetTransaction :one
-SELECT * FROM transactions WHERE id = $1;
+SELECT * FROM transactions WHERE charge_station_id = $1 AND id = $2;
 
 -- name: ListTransactions :many
 SELECT * FROM transactions
@@ -11,31 +13,53 @@ WHERE charge_station_id = $1 AND stop_timestamp IS NULL
 ORDER BY start_timestamp DESC
 LIMIT 1;
 
+-- CreateTransaction returns no row when the transaction already exists, instead of
+-- raising a unique violation that would abort an enclosing database transaction.
+
 -- name: CreateTransaction :one
 INSERT INTO transactions (
     id, charge_station_id, token_uid, token_type,
     meter_start, start_timestamp, offline
 ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (charge_station_id, id) DO NOTHING
 RETURNING *;
 
 -- name: UpdateTransaction :one
 UPDATE transactions
-SET meter_stop = $2,
-    stop_timestamp = $3,
-    stopped_reason = $4,
-    updated_seq_no = $5,
+SET meter_stop = $3,
+    stop_timestamp = $4,
+    stopped_reason = $5,
+    updated_seq_no = $6,
     updated_at = NOW()
-WHERE id = $1
+WHERE charge_station_id = $1 AND id = $2
 RETURNING *;
 
 -- name: AddMeterValues :exec
-INSERT INTO transaction_meter_values (transaction_id, timestamp, sampled_values)
-VALUES ($1, $2, $3);
+INSERT INTO transaction_meter_values (charge_station_id, transaction_id, timestamp, sampled_values)
+VALUES ($1, $2, $3, $4);
 
 -- name: GetMeterValues :many
 SELECT * FROM transaction_meter_values
-WHERE transaction_id = $1
+WHERE charge_station_id = $1 AND transaction_id = $2
 ORDER BY timestamp ASC;
+
+-- name: UpdateTransactionDetails :execrows
+UPDATE transactions SET
+    evse_id         = COALESCE(sqlc.narg('evse_id'), evse_id),
+    connector_id    = COALESCE(sqlc.narg('connector_id'), connector_id),
+    start_timestamp = COALESCE(sqlc.narg('started_at'), start_timestamp),
+    stop_timestamp  = COALESCE(sqlc.narg('stopped_at'), stop_timestamp),
+    meter_start     = COALESCE(sqlc.narg('meter_start_wh'), meter_start),
+    meter_stop      = COALESCE(sqlc.narg('meter_stop_wh'), meter_stop),
+    energy_wh       = COALESCE(sqlc.narg('energy_wh'), energy_wh),
+    stopped_reason  = COALESCE(sqlc.narg('stop_reason'), stopped_reason),
+    id_token_group  = COALESCE(sqlc.narg('id_token_group'), id_token_group),
+    reservation_id  = COALESCE(sqlc.narg('reservation_id'), reservation_id),
+    updated_at      = NOW()
+WHERE charge_station_id = sqlc.arg('charge_station_id') AND id = sqlc.arg('id');
+
+-- name: NextOcpp16TransactionId :one
+SELECT nextval('ocpp16_transaction_id_seq')::integer AS id;
 
 -- name: ListTransactionsFiltered :many
 SELECT * FROM transactions

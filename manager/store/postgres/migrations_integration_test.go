@@ -1,0 +1,242 @@
+// SPDX-License-Identifier: Apache-2.0
+
+//go:build integration
+
+package postgres_test
+
+import (
+	"context"
+	"errors"
+	"net/url"
+	"testing"
+
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/thoughtworks/maeve-csms/manager/store/postgres"
+)
+
+// migrationTestDatabase creates an empty database next to the one used by the other
+// integration tests and returns its connection string and a pool connected to it.
+func migrationTestDatabase(t *testing.T, name string) (string, *pgxpool.Pool) {
+	t.Helper()
+	ctx := context.Background()
+
+	_, err := testPool.Exec(ctx, `DROP DATABASE IF EXISTS `+name)
+	require.NoError(t, err)
+	_, err = testPool.Exec(ctx, `CREATE DATABASE `+name)
+	require.NoError(t, err)
+
+	u, err := url.Parse(connString)
+	require.NoError(t, err)
+	u.Path = "/" + name
+	migrationConnString := u.String()
+
+	pool, err := pgxpool.New(ctx, migrationConnString)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		pool.Close()
+		_, err := testPool.Exec(context.Background(), `DROP DATABASE IF EXISTS `+name+` WITH (FORCE)`)
+		assert.NoError(t, err)
+	})
+
+	return migrationConnString, pool
+}
+
+// migrateTo migrates the database to the given version (up or down).
+func migrateTo(t *testing.T, migrationConnString string, version uint) {
+	t.Helper()
+
+	m, err := migrate.New("file://./migrations", migrationConnString)
+	require.NoError(t, err)
+	defer func() {
+		sourceErr, dbErr := m.Close()
+		require.NoError(t, sourceErr)
+		require.NoError(t, dbErr)
+	}()
+
+	err = m.Migrate(version)
+	if err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		require.NoError(t, err)
+	}
+}
+
+// migrateUp applies every migration.
+func migrateUp(t *testing.T, migrationConnString string) {
+	t.Helper()
+
+	m, err := migrate.New("file://./migrations", migrationConnString)
+	require.NoError(t, err)
+	defer func() {
+		sourceErr, dbErr := m.Close()
+		require.NoError(t, sourceErr)
+		require.NoError(t, dbErr)
+	}()
+
+	err = m.Up()
+	if err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		require.NoError(t, err)
+	}
+}
+
+// Migration 000031 changes the identity of a transaction from (id) to
+// (charge_station_id, id). Transactions and meter values stored before the migration
+// must still belong together afterwards, and the migration must be reversible.
+func TestMigration_EnrichTransactions_KeepsExistingData(t *testing.T) {
+	ctx := context.Background()
+
+	const (
+		versionBefore = 30
+		versionAfter  = 31
+	)
+
+	migrationConnString, pool := migrationTestDatabase(t, "maeve_migration_000031")
+
+	primaryKeyColumns := func(table string) []string {
+		rows, err := pool.Query(ctx, `
+			SELECT a.attname
+			FROM pg_index i
+			JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+			WHERE i.indrelid = $1::regclass AND i.indisprimary
+			ORDER BY array_position(i.indkey, a.attnum)`, table)
+		require.NoError(t, err)
+		defer rows.Close()
+		var columns []string
+		for rows.Next() {
+			var column string
+			require.NoError(t, rows.Scan(&column))
+			columns = append(columns, column)
+		}
+		require.NoError(t, rows.Err())
+		return columns
+	}
+
+	columnType := func(table, column string) (dataType string, nullable string) {
+		err := pool.QueryRow(ctx, `
+			SELECT data_type, is_nullable FROM information_schema.columns
+			WHERE table_name = $1 AND column_name = $2`, table, column).Scan(&dataType, &nullable)
+		require.NoError(t, err)
+		return dataType, nullable
+	}
+
+	hasColumn := func(table, column string) bool {
+		var count int
+		err := pool.QueryRow(ctx, `
+			SELECT COUNT(*) FROM information_schema.columns
+			WHERE table_name = $1 AND column_name = $2`, table, column).Scan(&count)
+		require.NoError(t, err)
+		return count == 1
+	}
+
+	meterValueStations := func() map[string][]string {
+		rows, err := pool.Query(ctx, `
+			SELECT transaction_id, charge_station_id FROM transaction_meter_values ORDER BY transaction_id, timestamp`)
+		require.NoError(t, err)
+		defer rows.Close()
+		stations := make(map[string][]string)
+		for rows.Next() {
+			var transactionId, chargeStationId string
+			require.NoError(t, rows.Scan(&transactionId, &chargeStationId))
+			stations[transactionId] = append(stations[transactionId], chargeStationId)
+		}
+		require.NoError(t, rows.Err())
+		return stations
+	}
+
+	// 1. the schema before the migration, with two transactions and their meter values
+	migrateTo(t, migrationConnString, versionBefore)
+	require.Equal(t, []string{"id"}, primaryKeyColumns("transactions"))
+	require.False(t, hasColumn("transaction_meter_values", "charge_station_id"))
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO transactions (id, charge_station_id, token_uid, token_type, meter_start, start_timestamp)
+		VALUES ('tx-a', 'cs001', 'TOKEN001', 'RFID', 1000, '2026-11-26 10:00:00'),
+		       ('tx-b', 'cs002', 'TOKEN002', 'RFID', 0, '2026-11-26 10:05:00')`)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO transaction_meter_values (transaction_id, timestamp, sampled_values)
+		VALUES ('tx-a', '2026-11-26 10:00:00', '[{"Measurand": "Energy.Active.Import.Register", "Value": 1000}]'),
+		       ('tx-a', '2026-11-26 10:15:00', '[{"Measurand": "Energy.Active.Import.Register", "Value": 4000}]'),
+		       ('tx-b', '2026-11-26 10:05:00', '[{"Measurand": "Energy.Active.Import.Register", "Value": 0}]')`)
+	require.NoError(t, err)
+
+	// 2. up: per-station identity, the meter values carry the station of their transaction
+	migrateTo(t, migrationConnString, versionAfter)
+	assert.Equal(t, []string{"charge_station_id", "id"}, primaryKeyColumns("transactions"))
+	assert.Equal(t, map[string][]string{
+		"tx-a": {"cs001", "cs001"},
+		"tx-b": {"cs002"},
+	}, meterValueStations())
+
+	dataType, nullable := columnType("transactions", "meter_start")
+	assert.Equal(t, "bigint", dataType)
+	assert.Equal(t, "YES", nullable)
+	dataType, _ = columnType("transactions", "meter_stop")
+	assert.Equal(t, "bigint", dataType)
+
+	// the same transaction id can now be used by another charge station
+	_, err = pool.Exec(ctx, `
+		INSERT INTO transactions (id, charge_station_id, token_uid, token_type, start_timestamp)
+		VALUES ('tx-a', 'cs003', 'TOKEN003', 'RFID', '2026-11-26 11:00:00')`)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `DELETE FROM transactions WHERE charge_station_id = 'cs003'`)
+	require.NoError(t, err)
+
+	// the OCPP 1.6 transaction id allocator starts at 1
+	var nextId int
+	require.NoError(t, pool.QueryRow(ctx, `SELECT nextval('ocpp16_transaction_id_seq')`).Scan(&nextId))
+	assert.Equal(t, 1, nextId)
+
+	// 3. down: the old identity is back and no data is lost
+	migrateTo(t, migrationConnString, versionBefore)
+	assert.Equal(t, []string{"id"}, primaryKeyColumns("transactions"))
+	assert.False(t, hasColumn("transaction_meter_values", "charge_station_id"))
+	assert.False(t, hasColumn("transactions", "energy_wh"))
+	dataType, nullable = columnType("transactions", "meter_start")
+	assert.Equal(t, "integer", dataType)
+	assert.Equal(t, "NO", nullable)
+
+	var transactions, meterValues int
+	require.NoError(t, pool.QueryRow(ctx, `SELECT COUNT(*) FROM transactions`).Scan(&transactions))
+	require.NoError(t, pool.QueryRow(ctx, `SELECT COUNT(*) FROM transaction_meter_values`).Scan(&meterValues))
+	assert.Equal(t, 2, transactions)
+	assert.Equal(t, 3, meterValues)
+
+	// 4. up again, to the latest version: the store reads the migrated data
+	migrateUp(t, migrationConnString)
+	assert.Equal(t, []string{"charge_station_id", "id"}, primaryKeyColumns("transactions"))
+	assert.Equal(t, map[string][]string{
+		"tx-a": {"cs001", "cs001"},
+		"tx-b": {"cs002"},
+	}, meterValueStations())
+
+	migratedStore, err := postgres.NewStore(ctx, migrationConnString)
+	require.NoError(t, err)
+	defer migratedStore.Close()
+
+	got, err := migratedStore.FindTransaction(ctx, "cs001", "tx-a")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, "TOKEN001", got.IdToken)
+	require.Len(t, got.MeterValues, 2)
+	assert.Equal(t, 1000.0, got.MeterValues[0].SampledValues[0].Value)
+	assert.Equal(t, 4000.0, got.MeterValues[1].SampledValues[0].Value)
+	require.NotNil(t, got.MeterStartWh)
+	assert.Equal(t, int64(1000), *got.MeterStartWh)
+	require.NotNil(t, got.StartedAt)
+	assert.Equal(t, "2026-11-26T10:00:00Z", got.StartedAt.Format("2006-01-02T15:04:05Z07:00"))
+
+	got, err = migratedStore.FindTransaction(ctx, "cs002", "tx-b")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Len(t, got.MeterValues, 1)
+
+	// a transaction id of another charge station is not found
+	got, err = migratedStore.FindTransaction(ctx, "cs002", "tx-a")
+	require.NoError(t, err)
+	assert.Nil(t, got)
+}
