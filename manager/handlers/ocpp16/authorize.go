@@ -7,14 +7,17 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	"k8s.io/utils/clock"
 
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
+// AuthorizeHandler answers an Authorize.req with what the token store knows about the idTag.
 type AuthorizeHandler struct {
 	TokenStore store.TokenStore
+	Clock      clock.PassiveClock
 }
 
 func (a AuthorizeHandler) HandleCall(ctx context.Context, chargeStationId string, request ocpp.Request) (ocpp.Response, error) {
@@ -22,22 +25,18 @@ func (a AuthorizeHandler) HandleCall(ctx context.Context, chargeStationId string
 
 	req := request.(*types.AuthorizeJson)
 
-	status := types.AuthorizeResponseJsonIdTagInfoStatusInvalid
-	tok, err := a.TokenStore.LookupToken(ctx, req.IdTag)
+	auth, err := authorizeIdTag(ctx, a.TokenStore, a.Clock, req.IdTag)
 	if err != nil {
 		return nil, err
 	}
-	if tok != nil {
-		status = types.AuthorizeResponseJsonIdTagInfoStatusAccepted
-	}
 
-	span.SetAttributes(
-		attribute.String("request.status", string(status)),
-		attribute.String("authorize.token", req.IdTag))
+	span.SetAttributes(attribute.String("request.status", auth.Status))
 
 	return &types.AuthorizeResponseJson{
 		IdTagInfo: types.AuthorizeResponseJsonIdTagInfo{
-			Status: status,
+			Status:      types.AuthorizeResponseJsonIdTagInfoStatus(auth.Status),
+			ExpiryDate:  auth.ExpiryDate,
+			ParentIdTag: auth.ParentIdTag,
 		},
 	}, nil
 }

@@ -161,7 +161,8 @@ func TestOcpp16Transaction_StartAndStop(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, &types.StopTransactionResponseJson{
 		IdTagInfo: &types.StopTransactionResponseJsonIdTagInfo{
-			Status: types.StopTransactionResponseJsonIdTagInfoStatusAccepted,
+			Status:      types.StopTransactionResponseJsonIdTagInfoStatusAccepted,
+			ParentIdTag: ptr("FLEET1"),
 		},
 	}, resp)
 	stoppedAt := time.Date(2026, 11, 26, 10, 30, 0, 250_000_000, time.UTC)

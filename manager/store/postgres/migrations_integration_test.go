@@ -240,3 +240,72 @@ func TestMigration_EnrichTransactions_KeepsExistingData(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, got)
 }
+
+// Migration 000032 adds the expiry time of a token. Tokens stored before the migration
+// do not expire, and the migration must be reversible with tokens in the table.
+func TestMigration_AddTokenExpiresAt_KeepsExistingTokens(t *testing.T) {
+	ctx := context.Background()
+
+	const (
+		versionBefore = 31
+		versionAfter  = 32
+	)
+
+	migrationConnString, pool := migrationTestDatabase(t, "maeve_migration_000032")
+
+	hasExpiresAt := func() bool {
+		var exists bool
+		err := pool.QueryRow(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM information_schema.columns
+				WHERE table_name = 'tokens' AND column_name = 'expires_at' AND data_type = 'timestamp with time zone'
+			)`).Scan(&exists)
+		require.NoError(t, err)
+		return exists
+	}
+	tokenUids := func() []string {
+		rows, err := pool.Query(ctx, `SELECT uid FROM tokens ORDER BY uid`)
+		require.NoError(t, err)
+		defer rows.Close()
+		uids := []string{}
+		for rows.Next() {
+			var uid string
+			require.NoError(t, rows.Scan(&uid))
+			uids = append(uids, uid)
+		}
+		require.NoError(t, rows.Err())
+		return uids
+	}
+
+	migrateTo(t, migrationConnString, versionBefore)
+	require.False(t, hasExpiresAt())
+	_, err := pool.Exec(ctx, `
+		INSERT INTO tokens (country_code, party_id, type, uid, contract_id, issuer, valid, cache_mode, last_updated)
+		VALUES ('GB', 'TWK', 'RFID', 'OLDTOKEN', 'GBTWK001', 'TestIssuer', true, 'ALWAYS', NOW())`)
+	require.NoError(t, err)
+
+	// up: the token that was there does not expire
+	migrateTo(t, migrationConnString, versionAfter)
+	require.True(t, hasExpiresAt())
+	var expires bool
+	require.NoError(t, pool.QueryRow(ctx, `SELECT expires_at IS NOT NULL FROM tokens WHERE uid = 'OLDTOKEN'`).Scan(&expires))
+	assert.False(t, expires)
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO tokens (country_code, party_id, type, uid, contract_id, issuer, valid, cache_mode, last_updated, expires_at)
+		VALUES ('GB', 'TWK', 'RFID', 'NEWTOKEN', 'GBTWK002', 'TestIssuer', true, 'ALWAYS', NOW(), '2027-01-31T08:30:00Z')`)
+	require.NoError(t, err)
+
+	// down: both tokens stay, without their expiry time
+	migrateTo(t, migrationConnString, versionBefore)
+	require.False(t, hasExpiresAt())
+	assert.Equal(t, []string{"NEWTOKEN", "OLDTOKEN"}, tokenUids())
+
+	// up again with tokens in the table
+	migrateUp(t, migrationConnString)
+	require.True(t, hasExpiresAt())
+	assert.Equal(t, []string{"NEWTOKEN", "OLDTOKEN"}, tokenUids())
+	var expiring int
+	require.NoError(t, pool.QueryRow(ctx, `SELECT COUNT(*) FROM tokens WHERE expires_at IS NOT NULL`).Scan(&expiring))
+	assert.Equal(t, 0, expiring)
+}

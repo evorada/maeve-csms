@@ -40,13 +40,9 @@ func (t StartTransactionHandler) HandleCall(ctx context.Context, chargeStationId
 
 	slog.Info("starting transaction", slog.Any("request", req))
 
-	status := types.StartTransactionResponseJsonIdTagInfoStatusInvalid
-	tok, err := t.TokenStore.LookupToken(ctx, req.IdTag)
+	auth, err := authorizeIdTag(ctx, t.TokenStore, t.Clock, req.IdTag)
 	if err != nil {
 		return nil, err
-	}
-	if tok != nil {
-		status = types.StartTransactionResponseJsonIdTagInfoStatusAccepted
 	}
 
 	startedAt, err := time.Parse(time.RFC3339, req.Timestamp)
@@ -71,8 +67,8 @@ func (t StartTransactionHandler) HandleCall(ctx context.Context, chargeStationId
 		MeterStartWh:  &meterStart,
 		ReservationId: req.ReservationId,
 	}
-	if tok != nil {
-		details.IdTokenGroup = tok.GroupId
+	if auth.Token != nil {
+		details.IdTokenGroup = auth.Token.GroupId
 	}
 	err = t.TransactionStore.UpdateTransactionDetails(ctx, chargeStationId, transactionUuid, details)
 	if errors.Is(err, store.ErrNotImplemented) {
@@ -83,12 +79,14 @@ func (t StartTransactionHandler) HandleCall(ctx context.Context, chargeStationId
 	}
 
 	if req.ReservationId != nil {
-		t.consumeReservation(ctx, chargeStationId, req, tok)
+		t.consumeReservation(ctx, chargeStationId, req, auth.Token)
 	}
 
 	return &types.StartTransactionResponseJson{
 		IdTagInfo: types.StartTransactionResponseJsonIdTagInfo{
-			Status: status,
+			Status:      types.StartTransactionResponseJsonIdTagInfoStatus(auth.Status),
+			ExpiryDate:  auth.ExpiryDate,
+			ParentIdTag: auth.ParentIdTag,
 		},
 		TransactionId: transactionId,
 	}, nil

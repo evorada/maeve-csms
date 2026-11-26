@@ -75,6 +75,7 @@ func NewRouter(emitter transport.Emitter,
 				ResponseSchema: "ocpp16/AuthorizeResponse.json",
 				Handler: AuthorizeHandler{
 					TokenStore: engine,
+					Clock:      clk,
 				},
 			},
 			"StartTransaction": {

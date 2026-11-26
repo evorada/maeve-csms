@@ -43,16 +43,14 @@ func (s StopTransactionHandler) HandleCall(ctx context.Context, chargeStationId 
 
 	var idTagInfo *types.StopTransactionResponseJsonIdTagInfo
 	if req.IdTag != nil {
-		status := types.StopTransactionResponseJsonIdTagInfoStatusInvalid
-		tok, err := s.TokenStore.LookupToken(ctx, *req.IdTag)
+		auth, err := authorizeIdTag(ctx, s.TokenStore, s.Clock, *req.IdTag)
 		if err != nil {
 			return nil, err
 		}
-		if tok != nil {
-			status = types.StopTransactionResponseJsonIdTagInfoStatusAccepted
-		}
 		idTagInfo = &types.StopTransactionResponseJsonIdTagInfo{
-			Status: status,
+			Status:      types.StopTransactionResponseJsonIdTagInfoStatus(auth.Status),
+			ExpiryDate:  auth.ExpiryDate,
+			ParentIdTag: auth.ParentIdTag,
 		}
 	}
 

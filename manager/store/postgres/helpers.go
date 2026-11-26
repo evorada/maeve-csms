@@ -158,6 +158,23 @@ func fromNullTimestamp(ts pgtype.Timestamp) *time.Time {
 	return &t
 }
 
+// toNullTimestamptz converts *time.Time to pgtype.Timestamptz (nil is NULL)
+func toNullTimestamptz(t *time.Time) pgtype.Timestamptz {
+	if t == nil {
+		return pgtype.Timestamptz{Valid: false}
+	}
+	return pgtype.Timestamptz{Time: *t, Valid: true}
+}
+
+// fromNullTimestamptz converts pgtype.Timestamptz to *time.Time in UTC (returns nil for NULL)
+func fromNullTimestamptz(ts pgtype.Timestamptz) *time.Time {
+	if !ts.Valid {
+		return nil
+	}
+	t := ts.Time.UTC()
+	return &t
+}
+
 // toNullableInt32 is an alias for toNullInt32
 func toNullableInt32(i *int) pgtype.Int4 {
 	return toNullInt32(i)

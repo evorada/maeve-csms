@@ -26,6 +26,8 @@ type token struct {
 	Valid        bool    `firestore:"valid"`
 	LanguageCode *string `firestore:"lang"`
 	CacheMode    string  `firestore:"cache"`
+	// ExpiresAt is not written when the token does not expire
+	ExpiresAt *time.Time `firestore:"expiresAt,omitempty"`
 }
 
 func (s *Store) SetToken(ctx context.Context, tok *store.Token) error {
@@ -42,6 +44,7 @@ func (s *Store) SetToken(ctx context.Context, tok *store.Token) error {
 		Valid:        tok.Valid,
 		LanguageCode: tok.LanguageCode,
 		CacheMode:    tok.CacheMode,
+		ExpiresAt:    tok.ExpiresAt,
 	}
 	_, err := tokenRef.Set(ctx, tokenData)
 
@@ -81,6 +84,7 @@ func newToken(snap *firestore.DocumentSnapshot, tokenUid string) (*store.Token, 
 		LanguageCode: tok.LanguageCode,
 		CacheMode:    tok.CacheMode,
 		LastUpdated:  snap.UpdateTime.Format(time.RFC3339),
+		ExpiresAt:    tok.ExpiresAt,
 	}, nil
 }
 

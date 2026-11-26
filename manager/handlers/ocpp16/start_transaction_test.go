@@ -146,10 +146,15 @@ func TestStartTransaction(t *testing.T) {
 
 	got := startTransaction(t, handler, startTransactionChargeStationId, startTransactionRequest(startTransactionIdTag))
 
+	// the token must not be cached: it expires at the time of the handler's clock
+	expiryDate := "2023-06-15T14:05:00Z"
+	parentIdTag := startTransactionGroupId
 	// the first id of the sequence of a new store
 	want := &types.StartTransactionResponseJson{
 		IdTagInfo: types.StartTransactionResponseJsonIdTagInfo{
-			Status: types.StartTransactionResponseJsonIdTagInfoStatusAccepted,
+			Status:      types.StartTransactionResponseJsonIdTagInfoStatusAccepted,
+			ExpiryDate:  &expiryDate,
+			ParentIdTag: &parentIdTag,
 		},
 		TransactionId: 1,
 	}
@@ -253,6 +258,66 @@ func TestStartTransactionWithUnknownIdTag(t *testing.T) {
 	transactions, err := engine.Transactions(ctx)
 	require.NoError(t, err)
 	assert.Len(t, transactions, 2)
+}
+
+func TestStartTransactionWithTokenThatIsNotAccepted(t *testing.T) {
+	// one second before the time of the handler's clock
+	expiredAt := time.Date(2023, 6, 15, 14, 4, 59, 0, time.UTC)
+	parentIdTag := startTransactionGroupId
+
+	tests := []struct {
+		name string
+		// change makes the token of the store unacceptable
+		change     func(tok *store.Token)
+		wantStatus types.StartTransactionResponseJsonIdTagInfoStatus
+	}{
+		{
+			name:       "blocked token",
+			change:     func(tok *store.Token) { tok.Valid = false },
+			wantStatus: types.StartTransactionResponseJsonIdTagInfoStatusBlocked,
+		},
+		{
+			name:       "expired token",
+			change:     func(tok *store.Token) { tok.ExpiresAt = &expiredAt },
+			wantStatus: types.StartTransactionResponseJsonIdTagInfoStatusExpired,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler, engine := newStartTransactionHandler(t)
+			ctx := context.Background()
+
+			tok, err := engine.LookupToken(ctx, startTransactionIdTag)
+			require.NoError(t, err)
+			require.NotNil(t, tok)
+			tt.change(tok)
+			require.NoError(t, engine.SetToken(ctx, tok))
+
+			got := startTransaction(t, handler, startTransactionChargeStationId, startTransactionRequest(startTransactionIdTag))
+
+			// no expiry date: the token is not accepted
+			want := &types.StartTransactionResponseJson{
+				IdTagInfo: types.StartTransactionResponseJsonIdTagInfo{
+					Status:      tt.wantStatus,
+					ParentIdTag: &parentIdTag,
+				},
+				TransactionId: 1,
+			}
+			assert.Equal(t, want, got)
+
+			// the start is recorded all the same, with the group of the token
+			found, err := engine.FindTransaction(ctx, startTransactionChargeStationId, handlers.ConvertToUUID(got.TransactionId))
+			require.NoError(t, err)
+			require.NotNil(t, found, "the transaction is not recorded")
+			assert.Equal(t, startTransactionIdTag, found.IdToken)
+			assert.Equal(t, []store.MeterValue{beginMeterValue(startTransactionStationTime, 100)}, found.MeterValues)
+			require.NotNil(t, found.MeterStartWh)
+			assert.Equal(t, int64(100), *found.MeterStartWh)
+			require.NotNil(t, found.IdTokenGroup)
+			assert.Equal(t, startTransactionGroupId, *found.IdTokenGroup)
+		})
+	}
 }
 
 func TestStartTransactionConsumesReservation(t *testing.T) {

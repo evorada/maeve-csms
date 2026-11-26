@@ -188,6 +188,74 @@ func TestLookupToken(t *testing.T) {
 	assert.Equal(t, want, got)
 }
 
+func TestSetAndLookupTokenWithExpiryTime(t *testing.T) {
+	server, r, engine, _ := setupServer(t)
+	defer server.Close()
+
+	post := func(payload string) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/token", strings.NewReader(payload))
+		req.Header.Set("content-type", "application/json")
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		require.Equal(t, http.StatusCreated, rr.Result().StatusCode)
+	}
+	get := func() map[string]any {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/token/012345678", nil)
+		req.Header.Set("accept", "application/json")
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		require.Equal(t, http.StatusOK, rr.Result().StatusCode)
+		var got map[string]any
+		require.NoError(t, json.NewDecoder(rr.Result().Body).Decode(&got))
+		return got
+	}
+
+	post(`{
+		"cacheMode": "ALWAYS",
+		"contractId": "GB-TWK-012345678-V",
+		"countryCode": "GB",
+		"issuer": "Thoughtworks",
+		"partyId": "TWK",
+		"type": "RFID",
+		"uid": "012345678",
+		"valid": true,
+		"expiresAt": "2027-01-31T09:30:00+01:00"
+	}`)
+
+	expiresAt := time.Date(2027, 1, 31, 8, 30, 0, 0, time.UTC)
+	stored, err := engine.LookupToken(context.Background(), "012345678")
+	require.NoError(t, err)
+	require.NotNil(t, stored)
+	require.NotNil(t, stored.ExpiresAt)
+	assert.True(t, expiresAt.Equal(*stored.ExpiresAt), "stored expiry time %s, want %s", stored.ExpiresAt, expiresAt)
+
+	got := get()
+	require.Contains(t, got, "expiresAt")
+	gotExpiresAt, err := time.Parse(time.RFC3339, got["expiresAt"].(string))
+	require.NoError(t, err)
+	assert.True(t, expiresAt.Equal(gotExpiresAt), "expiresAt %s, want %s", gotExpiresAt, expiresAt)
+
+	// setting the token without expiresAt removes the expiry time
+	post(`{
+		"cacheMode": "ALWAYS",
+		"contractId": "GB-TWK-012345678-V",
+		"countryCode": "GB",
+		"issuer": "Thoughtworks",
+		"partyId": "TWK",
+		"type": "RFID",
+		"uid": "012345678",
+		"valid": true
+	}`)
+
+	stored, err = engine.LookupToken(context.Background(), "012345678")
+	require.NoError(t, err)
+	require.NotNil(t, stored)
+	assert.Nil(t, stored.ExpiresAt)
+	assert.NotContains(t, get(), "expiresAt")
+}
+
 func TestListTokens(t *testing.T) {
 	ctx := context.Background()
 	server, r, engine, _ := setupServer(t)

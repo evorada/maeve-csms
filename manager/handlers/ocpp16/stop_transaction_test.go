@@ -150,9 +150,12 @@ func TestStopTransactionHandler(t *testing.T) {
 	got, err := handler.HandleCall(context.Background(), stopTransactionChargeStationId, req)
 	require.NoError(t, err)
 
+	// the token must not be cached: it expires at the time of the handler's clock
+	expiryDate := "2023-06-15T15:10:00Z"
 	want := &types.StopTransactionResponseJson{
 		IdTagInfo: &types.StopTransactionResponseJsonIdTagInfo{
-			Status: types.StopTransactionResponseJsonIdTagInfoStatusAccepted,
+			Status:     types.StopTransactionResponseJsonIdTagInfoStatusAccepted,
+			ExpiryDate: &expiryDate,
 		},
 	}
 	assert.Equal(t, want, got)
@@ -253,6 +256,68 @@ func TestStopTransactionHandlerWithUnknownIdTag(t *testing.T) {
 	require.NotNil(t, found)
 	assert.NotNil(t, found.StoppedAt)
 	assert.Equal(t, 1, found.EndedSeqNo)
+}
+
+func TestStopTransactionHandlerWithTokenThatIsNotAccepted(t *testing.T) {
+	// one second before the time of the handler's clock
+	expiredAt := time.Date(2023, 6, 15, 15, 9, 59, 0, time.UTC)
+	groupId := "MYGROUP"
+
+	tests := []struct {
+		name string
+		// change makes the token of the store unacceptable
+		change     func(tok *store.Token)
+		wantStatus types.StopTransactionResponseJsonIdTagInfoStatus
+	}{
+		{
+			name:       "blocked token",
+			change:     func(tok *store.Token) { tok.Valid = false },
+			wantStatus: types.StopTransactionResponseJsonIdTagInfoStatusBlocked,
+		},
+		{
+			name:       "expired token",
+			change:     func(tok *store.Token) { tok.ExpiresAt = &expiredAt },
+			wantStatus: types.StopTransactionResponseJsonIdTagInfoStatusExpired,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler, engine := newStopTransactionHandler(t)
+			ctx := context.Background()
+			transactionId := startedTransaction(t, engine)
+
+			// the token stops being acceptable during the transaction
+			tok, err := engine.LookupToken(ctx, stopTransactionIdTag)
+			require.NoError(t, err)
+			require.NotNil(t, tok)
+			tok.GroupId = &groupId
+			tt.change(tok)
+			require.NoError(t, engine.SetToken(ctx, tok))
+
+			idTag := stopTransactionIdTag
+			req := stopTransactionRequest(transactionId)
+			req.IdTag = &idTag
+			got, err := handler.HandleCall(ctx, stopTransactionChargeStationId, req)
+			require.NoError(t, err)
+
+			// no expiry date: the token is not accepted
+			want := &types.StopTransactionResponseJson{
+				IdTagInfo: &types.StopTransactionResponseJsonIdTagInfo{
+					Status:      tt.wantStatus,
+					ParentIdTag: &groupId,
+				},
+			}
+			assert.Equal(t, want, got)
+
+			// the transaction is stopped all the same
+			found, err := engine.FindTransaction(ctx, stopTransactionChargeStationId, handlers.ConvertToUUID(transactionId))
+			require.NoError(t, err)
+			require.NotNil(t, found)
+			assert.NotNil(t, found.StoppedAt)
+			assert.Equal(t, 1, found.EndedSeqNo)
+		})
+	}
 }
 
 func TestStopTransactionHandlerKeepsTheOffsetAndFractionOfTheStationTime(t *testing.T) {
@@ -453,9 +518,12 @@ func TestStopTransactionHandlerForUnknownTransaction(t *testing.T) {
 	got, err := handler.HandleCall(context.Background(), stopTransactionChargeStationId, req)
 	require.NoError(t, err, "the station retries a StopTransaction.req that fails")
 
+	// the token must not be cached: it expires at the time of the handler's clock
+	expiryDate := "2023-06-15T15:10:00Z"
 	want := &types.StopTransactionResponseJson{
 		IdTagInfo: &types.StopTransactionResponseJsonIdTagInfo{
-			Status: types.StopTransactionResponseJsonIdTagInfoStatusAccepted,
+			Status:     types.StopTransactionResponseJsonIdTagInfoStatusAccepted,
+			ExpiryDate: &expiryDate,
 		},
 	}
 	assert.Equal(t, want, got)

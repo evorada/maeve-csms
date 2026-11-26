@@ -4,6 +4,7 @@ package ocpp16_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -13,63 +14,191 @@ import (
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
-	"k8s.io/utils/clock"
+	clockTest "k8s.io/utils/clock/testing"
 )
 
-func TestAuthorizeKnownRfidCard(t *testing.T) {
-	engine := inmemory.NewStore(clock.RealClock{})
-	err := engine.SetToken(context.Background(), &store.Token{
+// the time of the handler's clock in the Authorize tests
+const authorizeClockTime = "2023-06-15T15:05:00Z"
+
+// newAuthorizeHandler returns a handler whose token store has the given tokens.
+func newAuthorizeHandler(t *testing.T, tokens ...*store.Token) handlers.AuthorizeHandler {
+	t.Helper()
+
+	now, err := time.Parse(time.RFC3339, authorizeClockTime)
+	require.NoError(t, err)
+	clk := clockTest.NewFakePassiveClock(now)
+	engine := inmemory.NewStore(clk)
+	for _, tok := range tokens {
+		require.NoError(t, engine.SetToken(context.Background(), tok))
+	}
+
+	return handlers.AuthorizeHandler{
+		TokenStore: engine,
+		Clock:      clk,
+	}
+}
+
+// rfidToken is a valid token that the station may cache and that does not expire.
+func rfidToken(uid string) *store.Token {
+	return &store.Token{
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
-		Uid:         "MYRFIDCARD",
+		Uid:         uid,
 		ContractId:  "GBTWK012345678V",
 		Issuer:      "Thoughtworks",
 		Valid:       true,
-		CacheMode:   "NEVER",
-		LastUpdated: time.Now().Format(time.RFC3339),
-	})
+		CacheMode:   store.CacheModeAlways,
+	}
+}
+
+func authorize(t *testing.T, handler handlers.AuthorizeHandler, idTag string) *types.AuthorizeResponseJson {
+	t.Helper()
+
+	resp, err := handler.HandleCall(context.Background(), "cs001", &types.AuthorizeJson{IdTag: idTag})
 	require.NoError(t, err)
+	got, ok := resp.(*types.AuthorizeResponseJson)
+	require.True(t, ok, "unexpected response type %T", resp)
+	return got
+}
 
-	ah := handlers.AuthorizeHandler{
-		TokenStore: engine,
-	}
+func TestAuthorizeKnownRfidCard(t *testing.T) {
+	ah := newAuthorizeHandler(t, rfidToken("MYRFIDCARD"))
 
-	req := &types.AuthorizeJson{
-		IdTag: "MYRFIDCARD",
-	}
-
-	got, err := ah.HandleCall(context.Background(), "cs001", req)
-	assert.NoError(t, err)
+	got := authorize(t, ah, "MYRFIDCARD")
 
 	want := &types.AuthorizeResponseJson{
 		IdTagInfo: types.AuthorizeResponseJsonIdTagInfo{
 			Status: types.AuthorizeResponseJsonIdTagInfoStatusAccepted,
 		},
 	}
-
 	assert.Equal(t, want, got)
 }
 
 func TestAuthorizeWithUnknownRfidCard(t *testing.T) {
-	engine := inmemory.NewStore(clock.RealClock{})
+	ah := newAuthorizeHandler(t)
 
-	ah := handlers.AuthorizeHandler{
-		TokenStore: engine,
-	}
-
-	req := &types.AuthorizeJson{
-		IdTag: "MYBADRFID",
-	}
-
-	got, err := ah.HandleCall(context.Background(), "cs001", req)
-	assert.NoError(t, err)
+	got := authorize(t, ah, "MYBADRFID")
 
 	want := &types.AuthorizeResponseJson{
 		IdTagInfo: types.AuthorizeResponseJsonIdTagInfo{
 			Status: types.AuthorizeResponseJsonIdTagInfoStatusInvalid,
 		},
 	}
-
 	assert.Equal(t, want, got)
+}
+
+func TestAuthorizeBlockedRfidCard(t *testing.T) {
+	tok := rfidToken("MYRFIDCARD")
+	tok.Valid = false
+	ah := newAuthorizeHandler(t, tok)
+
+	got := authorize(t, ah, "MYRFIDCARD")
+
+	want := &types.AuthorizeResponseJson{
+		IdTagInfo: types.AuthorizeResponseJsonIdTagInfo{
+			Status: types.AuthorizeResponseJsonIdTagInfoStatusBlocked,
+		},
+	}
+	assert.Equal(t, want, got)
+}
+
+func TestAuthorizeExpiredRfidCard(t *testing.T) {
+	expiresAt := time.Date(2023, 6, 15, 15, 4, 59, 0, time.UTC)
+	tok := rfidToken("MYRFIDCARD")
+	tok.ExpiresAt = &expiresAt
+	ah := newAuthorizeHandler(t, tok)
+
+	got := authorize(t, ah, "MYRFIDCARD")
+
+	want := &types.AuthorizeResponseJson{
+		IdTagInfo: types.AuthorizeResponseJsonIdTagInfo{
+			Status: types.AuthorizeResponseJsonIdTagInfoStatusExpired,
+		},
+	}
+	assert.Equal(t, want, got)
+}
+
+func TestAuthorizeReturnsTheGroupAsParentIdTag(t *testing.T) {
+	groupId := "MYGROUP"
+	accepted := rfidToken("MYRFIDCARD")
+	accepted.GroupId = &groupId
+	blocked := rfidToken("BLOCKEDCARD")
+	blocked.GroupId = &groupId
+	blocked.Valid = false
+	ah := newAuthorizeHandler(t, accepted, blocked)
+
+	got := authorize(t, ah, "MYRFIDCARD")
+	want := &types.AuthorizeResponseJson{
+		IdTagInfo: types.AuthorizeResponseJsonIdTagInfo{
+			Status:      types.AuthorizeResponseJsonIdTagInfoStatusAccepted,
+			ParentIdTag: &groupId,
+		},
+	}
+	assert.Equal(t, want, got)
+
+	// the group is returned whenever the token is known
+	got = authorize(t, ah, "BLOCKEDCARD")
+	want = &types.AuthorizeResponseJson{
+		IdTagInfo: types.AuthorizeResponseJsonIdTagInfo{
+			Status:      types.AuthorizeResponseJsonIdTagInfoStatusBlocked,
+			ParentIdTag: &groupId,
+		},
+	}
+	assert.Equal(t, want, got)
+}
+
+func TestAuthorizeReturnsTheExpiryDateOfTheAuthorizationCache(t *testing.T) {
+	expiresAt := time.Date(2023, 12, 31, 23, 0, 0, 0, time.UTC)
+	expiring := rfidToken("EXPIRINGCARD")
+	expiring.ExpiresAt = &expiresAt
+	neverCached := rfidToken("NEVERCACHED")
+	neverCached.CacheMode = store.CacheModeNever
+	neverCached.ExpiresAt = &expiresAt
+	ah := newAuthorizeHandler(t, expiring, neverCached)
+
+	// the station drops the idTag from its cache when the token expires
+	got := authorize(t, ah, "EXPIRINGCARD")
+	expiryDate := "2023-12-31T23:00:00Z"
+	want := &types.AuthorizeResponseJson{
+		IdTagInfo: types.AuthorizeResponseJsonIdTagInfo{
+			Status:     types.AuthorizeResponseJsonIdTagInfoStatusAccepted,
+			ExpiryDate: &expiryDate,
+		},
+	}
+	assert.Equal(t, want, got)
+
+	// a token that must not be cached expires in the cache at once
+	got = authorize(t, ah, "NEVERCACHED")
+	now := authorizeClockTime
+	want = &types.AuthorizeResponseJson{
+		IdTagInfo: types.AuthorizeResponseJsonIdTagInfo{
+			Status:     types.AuthorizeResponseJsonIdTagInfoStatusAccepted,
+			ExpiryDate: &now,
+		},
+	}
+	assert.Equal(t, want, got)
+}
+
+func TestAuthorizeReturnsStoreError(t *testing.T) {
+	lookupErr := errors.New("token store is down")
+	ah := handlers.AuthorizeHandler{
+		TokenStore: failingTokenLookupStore{err: lookupErr},
+		Clock:      clockTest.NewFakePassiveClock(time.Now()),
+	}
+
+	resp, err := ah.HandleCall(context.Background(), "cs001", &types.AuthorizeJson{IdTag: "MYRFIDCARD"})
+
+	assert.ErrorIs(t, err, lookupErr)
+	assert.Nil(t, resp)
+}
+
+// failingTokenLookupStore fails every lookup of a token.
+type failingTokenLookupStore struct {
+	store.TokenStore
+	err error
+}
+
+func (s failingTokenLookupStore) LookupToken(context.Context, string) (*store.Token, error) {
+	return nil, s.err
 }

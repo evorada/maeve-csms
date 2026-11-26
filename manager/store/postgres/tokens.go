@@ -36,6 +36,7 @@ func (s *Store) SetToken(ctx context.Context, token *store.Token) error {
 		LanguageCode: textFromString(token.LanguageCode),
 		CacheMode:    token.CacheMode,
 		LastUpdated:  timestampFromTime(lastUpdated),
+		ExpiresAt:    toNullTimestamptz(token.ExpiresAt),
 	}
 
 	_, err = s.writeQueries().UpdateToken(ctx, updateParams)
@@ -55,6 +56,7 @@ func (s *Store) SetToken(ctx context.Context, token *store.Token) error {
 				LanguageCode: textFromString(token.LanguageCode),
 				CacheMode:    token.CacheMode,
 				LastUpdated:  timestampFromTime(lastUpdated),
+				ExpiresAt:    toNullTimestamptz(token.ExpiresAt),
 			}
 
 			_, err = s.writeQueries().CreateToken(ctx, createParams)
@@ -132,5 +134,6 @@ func toStoreToken(t *Token) *store.Token {
 		LanguageCode: stringFromText(t.LanguageCode),
 		CacheMode:    t.CacheMode,
 		LastUpdated:  timeFromTimestamp(t.LastUpdated).Format(time.RFC3339),
+		ExpiresAt:    fromNullTimestamptz(t.ExpiresAt),
 	}
 }

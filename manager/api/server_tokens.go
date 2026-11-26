@@ -37,6 +37,7 @@ func (s *Server) SetToken(w http.ResponseWriter, r *http.Request) {
 		LanguageCode: req.LanguageCode,
 		CacheMode:    string(req.CacheMode),
 		LastUpdated:  s.clock.Now().Format(time.RFC3339),
+		ExpiresAt:    req.ExpiresAt,
 	})
 	if err != nil {
 		_ = render.Render(w, r, ErrInternalError(err))
@@ -116,6 +117,7 @@ func newToken(tok *store.Token) (*Token, error) {
 		LanguageCode: tok.LanguageCode,
 		CacheMode:    TokenCacheMode(tok.CacheMode),
 		LastUpdated:  &lastUpdated,
+		ExpiresAt:    tok.ExpiresAt,
 	}, nil
 }
 

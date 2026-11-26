@@ -106,7 +106,9 @@ func TestOcpp16TransactionFlow(t *testing.T) {
 	assert.JSONEq(t, `{"currentTime": "2026-11-26T12:00:00Z", "interval": 60, "status": "Accepted"}`, string(boot))
 
 	authorize := call("Authorize", `{"idTag": "MYRFIDTAG"}`)
-	assert.JSONEq(t, `{"idTagInfo": {"status": "Accepted"}}`, string(authorize))
+	// the token must not be cached: it expires at the time of the CSMS
+	const idTagInfo = `{"status": "Accepted", "expiryDate": "2026-11-26T12:00:00Z", "parentIdTag": "FLEET1"}`
+	assert.JSONEq(t, `{"idTagInfo": `+idTagInfo+`}`, string(authorize))
 
 	start := call("StartTransaction", `{
 		"connectorId": 1,
@@ -116,13 +118,11 @@ func TestOcpp16TransactionFlow(t *testing.T) {
 		"timestamp": "2026-11-26T10:00:00Z"
 	}`)
 	var startResponse struct {
-		TransactionId *int `json:"transactionId"`
-		IdTagInfo     struct {
-			Status string `json:"status"`
-		} `json:"idTagInfo"`
+		TransactionId *int            `json:"transactionId"`
+		IdTagInfo     json.RawMessage `json:"idTagInfo"`
 	}
 	require.NoError(t, json.Unmarshal(start, &startResponse))
-	assert.Equal(t, "Accepted", startResponse.IdTagInfo.Status)
+	assert.JSONEq(t, idTagInfo, string(startResponse.IdTagInfo))
 	require.NotNil(t, startResponse.TransactionId)
 	transactionId := *startResponse.TransactionId
 	assert.Equal(t, 1, transactionId, "the first id of the sequence of a new store")
@@ -157,7 +157,7 @@ func TestOcpp16TransactionFlow(t *testing.T) {
 			}
 		]
 	}`, transactionId))
-	assert.JSONEq(t, `{"idTagInfo": {"status": "Accepted"}}`, string(stop))
+	assert.JSONEq(t, `{"idTagInfo": `+idTagInfo+`}`, string(stop))
 
 	// BootNotification
 	runtimeDetails, err := engine.LookupChargeStationRuntimeDetails(ctx, chargeStationId)

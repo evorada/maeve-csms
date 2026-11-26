@@ -15,26 +15,27 @@ const CreateToken = `-- name: CreateToken :one
 INSERT INTO tokens (
     country_code, party_id, type, uid, contract_id,
     visual_number, issuer, group_id, valid, language_code,
-    cache_mode, last_updated
+    cache_mode, last_updated, expires_at
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
 )
-RETURNING id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at
+RETURNING id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at
 `
 
 type CreateTokenParams struct {
-	CountryCode  string           `db:"country_code" json:"country_code"`
-	PartyID      string           `db:"party_id" json:"party_id"`
-	Type         string           `db:"type" json:"type"`
-	Uid          string           `db:"uid" json:"uid"`
-	ContractID   string           `db:"contract_id" json:"contract_id"`
-	VisualNumber pgtype.Text      `db:"visual_number" json:"visual_number"`
-	Issuer       string           `db:"issuer" json:"issuer"`
-	GroupID      pgtype.Text      `db:"group_id" json:"group_id"`
-	Valid        bool             `db:"valid" json:"valid"`
-	LanguageCode pgtype.Text      `db:"language_code" json:"language_code"`
-	CacheMode    string           `db:"cache_mode" json:"cache_mode"`
-	LastUpdated  pgtype.Timestamp `db:"last_updated" json:"last_updated"`
+	CountryCode  string             `db:"country_code" json:"country_code"`
+	PartyID      string             `db:"party_id" json:"party_id"`
+	Type         string             `db:"type" json:"type"`
+	Uid          string             `db:"uid" json:"uid"`
+	ContractID   string             `db:"contract_id" json:"contract_id"`
+	VisualNumber pgtype.Text        `db:"visual_number" json:"visual_number"`
+	Issuer       string             `db:"issuer" json:"issuer"`
+	GroupID      pgtype.Text        `db:"group_id" json:"group_id"`
+	Valid        bool               `db:"valid" json:"valid"`
+	LanguageCode pgtype.Text        `db:"language_code" json:"language_code"`
+	CacheMode    string             `db:"cache_mode" json:"cache_mode"`
+	LastUpdated  pgtype.Timestamp   `db:"last_updated" json:"last_updated"`
+	ExpiresAt    pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
 }
 
 func (q *Queries) CreateToken(ctx context.Context, arg CreateTokenParams) (Token, error) {
@@ -51,6 +52,7 @@ func (q *Queries) CreateToken(ctx context.Context, arg CreateTokenParams) (Token
 		arg.LanguageCode,
 		arg.CacheMode,
 		arg.LastUpdated,
+		arg.ExpiresAt,
 	)
 	var i Token
 	err := row.Scan(
@@ -69,6 +71,7 @@ func (q *Queries) CreateToken(ctx context.Context, arg CreateTokenParams) (Token
 		&i.LastUpdated,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ExpiresAt,
 	)
 	return i, err
 }
@@ -83,7 +86,7 @@ func (q *Queries) DeleteToken(ctx context.Context, uid string) error {
 }
 
 const GetToken = `-- name: GetToken :one
-SELECT id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at FROM tokens
+SELECT id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at FROM tokens
 WHERE uid = $1 LIMIT 1
 `
 
@@ -106,12 +109,13 @@ func (q *Queries) GetToken(ctx context.Context, uid string) (Token, error) {
 		&i.LastUpdated,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ExpiresAt,
 	)
 	return i, err
 }
 
 const ListTokens = `-- name: ListTokens :many
-SELECT id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at FROM tokens
+SELECT id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at FROM tokens
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -146,6 +150,7 @@ func (q *Queries) ListTokens(ctx context.Context, arg ListTokensParams) ([]Token
 			&i.LastUpdated,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ExpiresAt,
 		); err != nil {
 			return nil, err
 		}
@@ -171,24 +176,26 @@ SET
     language_code = $10,
     cache_mode = $11,
     last_updated = $12,
+    expires_at = $13,
     updated_at = NOW()
 WHERE uid = $1
-RETURNING id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at
+RETURNING id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at
 `
 
 type UpdateTokenParams struct {
-	Uid          string           `db:"uid" json:"uid"`
-	CountryCode  string           `db:"country_code" json:"country_code"`
-	PartyID      string           `db:"party_id" json:"party_id"`
-	Type         string           `db:"type" json:"type"`
-	ContractID   string           `db:"contract_id" json:"contract_id"`
-	VisualNumber pgtype.Text      `db:"visual_number" json:"visual_number"`
-	Issuer       string           `db:"issuer" json:"issuer"`
-	GroupID      pgtype.Text      `db:"group_id" json:"group_id"`
-	Valid        bool             `db:"valid" json:"valid"`
-	LanguageCode pgtype.Text      `db:"language_code" json:"language_code"`
-	CacheMode    string           `db:"cache_mode" json:"cache_mode"`
-	LastUpdated  pgtype.Timestamp `db:"last_updated" json:"last_updated"`
+	Uid          string             `db:"uid" json:"uid"`
+	CountryCode  string             `db:"country_code" json:"country_code"`
+	PartyID      string             `db:"party_id" json:"party_id"`
+	Type         string             `db:"type" json:"type"`
+	ContractID   string             `db:"contract_id" json:"contract_id"`
+	VisualNumber pgtype.Text        `db:"visual_number" json:"visual_number"`
+	Issuer       string             `db:"issuer" json:"issuer"`
+	GroupID      pgtype.Text        `db:"group_id" json:"group_id"`
+	Valid        bool               `db:"valid" json:"valid"`
+	LanguageCode pgtype.Text        `db:"language_code" json:"language_code"`
+	CacheMode    string             `db:"cache_mode" json:"cache_mode"`
+	LastUpdated  pgtype.Timestamp   `db:"last_updated" json:"last_updated"`
+	ExpiresAt    pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
 }
 
 func (q *Queries) UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token, error) {
@@ -205,6 +212,7 @@ func (q *Queries) UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token
 		arg.LanguageCode,
 		arg.CacheMode,
 		arg.LastUpdated,
+		arg.ExpiresAt,
 	)
 	var i Token
 	err := row.Scan(
@@ -223,6 +231,7 @@ func (q *Queries) UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token
 		&i.LastUpdated,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ExpiresAt,
 	)
 	return i, err
 }

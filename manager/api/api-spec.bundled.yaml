@@ -2455,6 +2455,10 @@ components:
           type: string
           format: date-time
           description: The date the record was last updated (ignored on create/update)
+        expiresAt:
+          type: string
+          format: date-time
+          description: After this instant the token is rejected with status Expired. A token without it does not expire
     RemoteStartTransactionRequest:
       type: object
       description: Request to remotely start a charging transaction

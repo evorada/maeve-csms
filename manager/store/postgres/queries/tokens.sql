@@ -11,9 +11,9 @@ LIMIT $1 OFFSET $2;
 INSERT INTO tokens (
     country_code, party_id, type, uid, contract_id,
     visual_number, issuer, group_id, valid, language_code,
-    cache_mode, last_updated
+    cache_mode, last_updated, expires_at
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
 )
 RETURNING *;
 
@@ -31,6 +31,7 @@ SET
     language_code = $10,
     cache_mode = $11,
     last_updated = $12,
+    expires_at = $13,
     updated_at = NOW()
 WHERE uid = $1
 RETURNING *;

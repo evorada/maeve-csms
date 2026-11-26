@@ -303,3 +303,56 @@ func TestUpdateChargeStationCertificateWithNewCertificate(t *testing.T) {
 	assert.Equal(t, "evcc-pem-data", got.Certificates[1].CertificateData)
 	assert.Equal(t, store.CertificateInstallationPending, got.Certificates[1].CertificateInstallationStatus)
 }
+
+func TestSetTokenKeepsTheExpiryTime(t *testing.T) {
+	ctx := context.Background()
+	engine := inmemory.NewStore(clock.RealClock{})
+
+	expiresAt := time.Date(2027, 1, 31, 8, 30, 0, 0, time.UTC)
+	err := engine.SetToken(ctx, &store.Token{
+		CountryCode: "GB",
+		PartyId:     "TWK",
+		Type:        "RFID",
+		Uid:         "EXPIRING",
+		ContractId:  "GBTWK012345678V",
+		Issuer:      "Thoughtworks",
+		Valid:       true,
+		CacheMode:   store.CacheModeAlways,
+		ExpiresAt:   &expiresAt,
+	})
+	require.NoError(t, err)
+	err = engine.SetToken(ctx, &store.Token{
+		CountryCode: "GB",
+		PartyId:     "TWK",
+		Type:        "RFID",
+		Uid:         "FOREVER",
+		ContractId:  "GBTWK012345679V",
+		Issuer:      "Thoughtworks",
+		Valid:       true,
+		CacheMode:   store.CacheModeAlways,
+	})
+	require.NoError(t, err)
+
+	got, err := engine.LookupToken(ctx, "EXPIRING")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.NotNil(t, got.ExpiresAt)
+	assert.True(t, expiresAt.Equal(*got.ExpiresAt), "expires at %s, want %s", got.ExpiresAt, expiresAt)
+
+	got, err = engine.LookupToken(ctx, "FOREVER")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Nil(t, got.ExpiresAt)
+
+	listed, err := engine.ListTokens(ctx, 0, 10)
+	require.NoError(t, err)
+	require.Len(t, listed, 2)
+	for _, tok := range listed {
+		if tok.Uid == "EXPIRING" {
+			require.NotNil(t, tok.ExpiresAt)
+			assert.True(t, expiresAt.Equal(*tok.ExpiresAt))
+		} else {
+			assert.Nil(t, tok.ExpiresAt)
+		}
+	}
+}
