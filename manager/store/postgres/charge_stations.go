@@ -53,9 +53,18 @@ func (s *Store) LookupChargeStationAuth(ctx context.Context, csId string) (*stor
 
 // ChargeStationSettingsStore implementation
 
+// UpdateChargeStationSettings merges the given settings into the stored ones: keys in
+// settings replace the stored keys of the same name and all other stored keys are kept.
+// Use DeleteChargeStationSettings to remove all settings of a charge station.
 func (s *Store) UpdateChargeStationSettings(ctx context.Context, chargeStationId string, settings *store.ChargeStationSettings) error {
-	// Marshal settings map to JSON
-	settingsJSON, err := json.Marshal(settings.Settings)
+	// The query merges JSON objects with the || operator. A nil map would be marshalled
+	// to JSON null and || would then turn the stored object into an array.
+	toMerge := settings.Settings
+	if toMerge == nil {
+		toMerge = map[string]*store.ChargeStationSetting{}
+	}
+
+	settingsJSON, err := json.Marshal(toMerge)
 	if err != nil {
 		return fmt.Errorf("failed to marshal settings: %w", err)
 	}

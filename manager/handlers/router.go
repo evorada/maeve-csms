@@ -63,11 +63,7 @@ func (r Router) route(ctx context.Context, chargeStationId string, message *tran
 		}
 		err := schemas.Validate(message.RequestPayload, r.SchemaFS, route.RequestSchema)
 		if err != nil {
-			var validationErr *jsonschema.ValidationError
-			if errors.As(validationErr, &validationErr) {
-				err = transport.NewError(transport.ErrorFormatViolation, err)
-			}
-			return fmt.Errorf("validating %s request: %w", message.Action, err)
+			return fmt.Errorf("validating %s request: %w", message.Action, schemaValidationError(route.RequestSchema, err))
 		}
 		req := route.NewRequest()
 		err = json.Unmarshal(message.RequestPayload, &req)
@@ -111,11 +107,7 @@ func (r Router) route(ctx context.Context, chargeStationId string, message *tran
 		}
 		err = schemas.Validate(message.ResponsePayload, r.SchemaFS, route.ResponseSchema)
 		if err != nil {
-			var validationErr *jsonschema.ValidationError
-			if errors.As(validationErr, &validationErr) {
-				err = transport.NewError(transport.ErrorFormatViolation, err)
-			}
-			return fmt.Errorf("validating %s response: %w", message.Action, err)
+			return fmt.Errorf("validating %s response: %w", message.Action, schemaValidationError(route.ResponseSchema, err))
 		}
 		req := route.NewRequest()
 		err = json.Unmarshal(message.RequestPayload, &req)
@@ -137,4 +129,17 @@ func (r Router) route(ctx context.Context, chargeStationId string, message *tran
 	}
 
 	return nil
+}
+
+// schemaValidationError maps an error returned by schemas.Validate. A payload that
+// violates its schema is a FormatViolation. Any other error means that the schema
+// itself could not be loaded or compiled: that is a fault in the CSMS, so it is left
+// to the default InternalError mapping in Handle and carries the schema path so that
+// the missing or broken file shows up in the error log.
+func schemaValidationError(schemaFile string, err error) error {
+	var validationErr *jsonschema.ValidationError
+	if errors.As(err, &validationErr) {
+		return transport.NewError(transport.ErrorFormatViolation, err)
+	}
+	return fmt.Errorf("schema %s: %w", schemaFile, err)
 }

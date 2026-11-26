@@ -953,7 +953,7 @@ const SetChargeStationSettings = `-- name: SetChargeStationSettings :one
 INSERT INTO charge_station_settings (charge_station_id, settings)
 VALUES ($1, $2)
 ON CONFLICT (charge_station_id) DO UPDATE
-SET settings = EXCLUDED.settings, updated_at = NOW()
+SET settings = charge_station_settings.settings || EXCLUDED.settings, updated_at = NOW()
 RETURNING charge_station_id, settings, created_at, updated_at
 `
 

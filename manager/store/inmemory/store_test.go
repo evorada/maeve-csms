@@ -72,6 +72,94 @@ func TestUpdateChargeStationSettingsWithExistingSettings(t *testing.T) {
 	assert.Equal(t, store.ChargeStationSettingStatusAccepted, got.Settings["baz"].Status)
 }
 
+func TestUpdateChargeStationSettingsMergesKeys(t *testing.T) {
+	ctx := context.Background()
+	engine := inmemory.NewStore(clock.RealClock{})
+
+	err := engine.UpdateChargeStationSettings(ctx, "cs001", &store.ChargeStationSettings{
+		Settings: map[string]*store.ChargeStationSetting{
+			"A": {Value: "1", Status: store.ChargeStationSettingStatusPending},
+			"B": {Value: "2", Status: store.ChargeStationSettingStatusPending},
+		},
+	})
+	require.NoError(t, err)
+
+	// update only A: B must be kept
+	err = engine.UpdateChargeStationSettings(ctx, "cs001", &store.ChargeStationSettings{
+		Settings: map[string]*store.ChargeStationSetting{
+			"A": {Value: "1", Status: store.ChargeStationSettingStatusAccepted},
+		},
+	})
+	require.NoError(t, err)
+
+	got, err := engine.LookupChargeStationSettings(ctx, "cs001")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Len(t, got.Settings, 2)
+	assert.Equal(t, store.ChargeStationSettingStatusAccepted, got.Settings["A"].Status)
+	assert.Equal(t, "1", got.Settings["A"].Value)
+	assert.Equal(t, store.ChargeStationSettingStatusPending, got.Settings["B"].Status)
+	assert.Equal(t, "2", got.Settings["B"].Value)
+}
+
+func TestUpdateChargeStationSettingsReplacesSettingWithNewSendAfter(t *testing.T) {
+	ctx := context.Background()
+	engine := inmemory.NewStore(clock.RealClock{})
+
+	sendAfter := time.Date(2026, 11, 26, 10, 0, 0, 0, time.UTC)
+	retryAfter := sendAfter.Add(5 * time.Minute)
+
+	err := engine.UpdateChargeStationSettings(ctx, "cs001", &store.ChargeStationSettings{
+		Settings: map[string]*store.ChargeStationSetting{
+			"A": {Value: "1", Status: store.ChargeStationSettingStatusPending, SendAfter: sendAfter},
+			"B": {Value: "2", Status: store.ChargeStationSettingStatusPending, SendAfter: sendAfter},
+		},
+	})
+	require.NoError(t, err)
+
+	// the whole setting is replaced, not merged field by field
+	err = engine.UpdateChargeStationSettings(ctx, "cs001", &store.ChargeStationSettings{
+		Settings: map[string]*store.ChargeStationSetting{
+			"A": {Value: "3", Status: store.ChargeStationSettingStatusPending, SendAfter: retryAfter},
+		},
+	})
+	require.NoError(t, err)
+
+	got, err := engine.LookupChargeStationSettings(ctx, "cs001")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Len(t, got.Settings, 2)
+	assert.Equal(t, "3", got.Settings["A"].Value)
+	assert.True(t, retryAfter.Equal(got.Settings["A"].SendAfter), "got %s", got.Settings["A"].SendAfter)
+	assert.Equal(t, "2", got.Settings["B"].Value)
+	assert.True(t, sendAfter.Equal(got.Settings["B"].SendAfter), "got %s", got.Settings["B"].SendAfter)
+}
+
+func TestDeleteChargeStationSettingsRemovesAllSettings(t *testing.T) {
+	ctx := context.Background()
+	engine := inmemory.NewStore(clock.RealClock{})
+
+	err := engine.UpdateChargeStationSettings(ctx, "cs001", &store.ChargeStationSettings{
+		Settings: map[string]*store.ChargeStationSetting{
+			"A": {Value: "1", Status: store.ChargeStationSettingStatusPending},
+		},
+	})
+	require.NoError(t, err)
+	err = engine.UpdateChargeStationSettings(ctx, "cs001", &store.ChargeStationSettings{
+		Settings: map[string]*store.ChargeStationSetting{
+			"B": {Value: "2", Status: store.ChargeStationSettingStatusPending},
+		},
+	})
+	require.NoError(t, err)
+
+	err = engine.DeleteChargeStationSettings(ctx, "cs001")
+	require.NoError(t, err)
+
+	got, err := engine.LookupChargeStationSettings(ctx, "cs001")
+	require.NoError(t, err)
+	assert.Nil(t, got)
+}
+
 func TestListChargeStationSettingsReturnsDataInPages(t *testing.T) {
 	now := time.Now()
 	engine := inmemory.NewStore(clockTest.NewFakePassiveClock(now))

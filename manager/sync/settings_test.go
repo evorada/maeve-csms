@@ -5,6 +5,7 @@ package sync_test
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -142,6 +143,67 @@ func TestSyncV16Settings(t *testing.T) {
 	assert.Len(t, settings.Settings, 1)
 	for _, v := range settings.Settings {
 		assert.Equal(t, store.ChargeStationSettingStatusAccepted, v.Status)
+	}
+}
+
+// cycleCountingEngine counts the sync cycles: the sync loop lists the charge station
+// settings once at the start of every cycle.
+type cycleCountingEngine struct {
+	store.Engine
+	cycle atomic.Int32
+}
+
+func (e *cycleCountingEngine) ListChargeStationSettings(ctx context.Context, pageSize int, previousChargeStationId string) ([]*store.ChargeStationSettings, error) {
+	e.cycle.Add(1)
+	return e.Engine.ListChargeStationSettings(ctx, pageSize, previousChargeStationId)
+}
+
+func TestSyncV16SettingsSendsAllPendingSettingsInOneCycle(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 450*time.Millisecond)
+	defer cancel()
+	engine := &cycleCountingEngine{Engine: inmemory.NewStore(clock.RealClock{})}
+
+	err := engine.SetChargeStationRuntimeDetails(ctx, "cs001", &store.ChargeStationRuntimeDetails{
+		OcppVersion: "1.6",
+	})
+	require.NoError(t, err)
+	err = engine.UpdateChargeStationSettings(ctx, "cs001", &store.ChargeStationSettings{
+		Settings: map[string]*store.ChargeStationSetting{
+			"foo": {Value: "bar", Status: store.ChargeStationSettingStatusPending},
+			"baz": {Value: "qux", Status: store.ChargeStationSettingStatusPending},
+		},
+	})
+	require.NoError(t, err)
+
+	// the charge station never answers, so both settings stay pending
+	sentInCycle := make(map[string][]int32)
+	v16CallMaker := &mockCallMaker{engine: engine, updateFn: func(_ context.Context, _ store.Engine, _ string, request ocpp.Request) error {
+		req := request.(*ocpp16.ChangeConfigurationJson)
+		sentInCycle[req.Key] = append(sentInCycle[req.Key], engine.cycle.Load())
+		return nil
+	}}
+
+	// several cycles run, but the retry time is far away: each setting is sent once
+	started := time.Now()
+	sync.SyncSettings(ctx, engine, clock.RealClock{}, v16CallMaker, nil, 100*time.Millisecond, time.Hour)
+
+	require.Greater(t, engine.cycle.Load(), int32(1), "expected more than one sync cycle to run")
+	require.Len(t, v16CallMaker.callEvents, 2)
+	require.Len(t, sentInCycle["foo"], 1)
+	require.Len(t, sentInCycle["baz"], 1)
+	assert.Equal(t, sentInCycle["foo"][0], sentInCycle["baz"][0], "both settings should be sent in the same cycle")
+
+	// marking one setting as sent must not drop the other one: both are still stored,
+	// pending, and are not retried before the retry time
+	settings, err := engine.LookupChargeStationSettings(ctx, "cs001")
+	require.NoError(t, err)
+	require.Len(t, settings.Settings, 2)
+	for name, want := range map[string]string{"foo": "bar", "baz": "qux"} {
+		got := settings.Settings[name]
+		require.NotNil(t, got, name)
+		assert.Equal(t, want, got.Value)
+		assert.Equal(t, store.ChargeStationSettingStatusPending, got.Status)
+		assert.True(t, got.SendAfter.After(started.Add(59*time.Minute)), "%s: send after %s", name, got.SendAfter)
 	}
 }
 

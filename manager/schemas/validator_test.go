@@ -47,3 +47,19 @@ func TestValidateInvalidRequest(t *testing.T) {
 	var valError *jsonschema.ValidationError
 	assert.ErrorAs(t, err, &valError)
 }
+
+func TestValidateWithMissingSchemaIsNotAValidationError(t *testing.T) {
+	err := schemas.Validate([]byte("{}"), schemas.OcppSchemas, "ocpp201/DoesNotExist.json")
+	require.Error(t, err)
+	var valError *jsonschema.ValidationError
+	assert.False(t, errors.As(err, &valError), "a missing schema must not be reported as a validation error")
+}
+
+func TestCompile(t *testing.T) {
+	schema, err := schemas.Compile(schemas.OcppSchemas, "ocpp201/HeartbeatRequest.json")
+	require.NoError(t, err)
+	assert.NotNil(t, schema)
+
+	_, err = schemas.Compile(schemas.OcppSchemas, "ocpp201/DoesNotExist.json")
+	assert.Error(t, err)
+}

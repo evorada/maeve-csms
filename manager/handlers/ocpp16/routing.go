@@ -224,8 +224,8 @@ func NewRouter(emitter transport.Emitter,
 							},
 							"SignCertificate": {
 								NewRequest:     func() ocpp.Request { return new(has2be.SignCertificateRequestJson) },
-								RequestSchema:  "has2be/SignCertificateRequestJson.json",
-								ResponseSchema: "has2be/SignCertificateRequestJson.json",
+								RequestSchema:  "has2be/SignCertificateRequest.json",
+								ResponseSchema: "has2be/SignCertificateResponse.json",
 								Handler: handlersHasToBe.SignCertificateHandler{
 									Handler201: handlers201.SignCertificateHandler{
 										ChargeStationCertificateProvider: chargeStationCertProvider,

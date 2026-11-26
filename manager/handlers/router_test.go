@@ -94,8 +94,8 @@ func TestRouterErrorWhenCallRequestPayloadIsInvalid(t *testing.T) {
 		CallRoutes: map[string]handlers.CallRoute{
 			"Heartbeat": {
 				NewRequest:     func() ocpp.Request { return new(noUnmarshalRequest) },
-				RequestSchema:  "ocpp201/Heartbeat.json",
-				ResponseSchema: "ocpp201/Heartbeat.json",
+				RequestSchema:  "ocpp201/HeartbeatRequest.json",
+				ResponseSchema: "ocpp201/HeartbeatResponse.json",
 				Handler: handlers201.HeartbeatHandler{
 					Clock: clock.RealClock{},
 				},
@@ -103,20 +103,73 @@ func TestRouterErrorWhenCallRequestPayloadIsInvalid(t *testing.T) {
 		},
 	}
 
-	var heartbeatMsgWithEmptyPayload = transport.Message{
+	// the heartbeat request schema does not allow additional properties
+	var heartbeatMsgWithInvalidPayload = transport.Message{
 		Action:         "Heartbeat",
 		MessageType:    transport.MessageTypeCall,
-		RequestPayload: []byte("{}"),
+		RequestPayload: []byte(`{"unexpected": true}`),
 	}
 
-	router.Handle(context.Background(), "id", &heartbeatMsgWithEmptyPayload)
+	router.Handle(context.Background(), "id", &heartbeatMsgWithInvalidPayload)
 
+	require.NotNil(t, emitter.msg)
 	assert.Equal(t, "id", emitter.chargeStationId)
 	assert.Equal(t, transport.MessageTypeCallError, emitter.msg.MessageType)
 	assert.Equal(t, "Heartbeat", emitter.msg.Action)
 	assert.Equal(t, "", emitter.msg.MessageId)
 	assert.Equal(t, transport.ErrorFormatViolation, emitter.msg.ErrorCode)
 	assert.Nil(t, emitter.msg.ResponsePayload)
+}
+
+func TestRouterInternalErrorWhenSchemaMissing(t *testing.T) {
+	tracer, exporter := testutil.GetTracer()
+
+	emitter := new(FakeEmitter)
+
+	handlerCalled := false
+	handler := func(ctx context.Context, chargeStationId string, request ocpp.Request) (ocpp.Response, error) {
+		handlerCalled = true
+		return new(ocpp201.HeartbeatResponseJson), nil
+	}
+
+	router := handlers.Router{
+		Emitter:  emitter,
+		SchemaFS: schemas.OcppSchemas,
+		CallRoutes: map[string]handlers.CallRoute{
+			"Heartbeat": {
+				NewRequest:     func() ocpp.Request { return new(ocpp201.HeartbeatRequestJson) },
+				RequestSchema:  "ocpp201/DoesNotExist.json",
+				ResponseSchema: "ocpp201/HeartbeatResponse.json",
+				Handler:        handlers.CallHandlerFunc(handler),
+			},
+		},
+	}
+
+	func() {
+		ctx, span := tracer.Start(context.Background(), "test")
+		defer span.End()
+		router.Handle(ctx, "id", &heartbeatMsg)
+	}()
+
+	// a schema that cannot be loaded is a fault in the CSMS, not in the message
+	require.NotNil(t, emitter.msg)
+	assert.Equal(t, "id", emitter.chargeStationId)
+	assert.Equal(t, transport.MessageTypeCallError, emitter.msg.MessageType)
+	assert.Equal(t, "Heartbeat", emitter.msg.Action)
+	assert.Equal(t, transport.ErrorInternalError, emitter.msg.ErrorCode)
+	assert.Nil(t, emitter.msg.ResponsePayload)
+	assert.False(t, handlerCalled)
+
+	// the schema path is part of the recorded error
+	require.Greater(t, len(exporter.GetSpans()), 0)
+	assert.Equal(t, codes.Error, exporter.GetSpans()[0].Status.Code)
+	require.Greater(t, len(exporter.GetSpans()[0].Events), 0)
+	testutil.AssertAttributes(t, exporter.GetSpans()[0].Events[0].Attributes, map[string]any{
+		"exception.type": "*fmt.wrapError",
+		"exception.message": func(val attribute.Value) bool {
+			return strings.Contains(val.AsString(), "validating Heartbeat request: schema ocpp201/DoesNotExist.json")
+		},
+	})
 }
 
 func TestRouterErrorWhenCantUnmarshallCallRequestPayload(t *testing.T) {
@@ -445,7 +498,60 @@ func TestRouterErrorWhenInvalidCallResultResponsePayload(t *testing.T) {
 	testutil.AssertAttributes(t, exporter.GetSpans()[0].Events[0].Attributes, map[string]any{
 		"exception.type": "*fmt.wrapError",
 		"exception.message": func(val attribute.Value) bool {
-			return strings.Contains(val.AsString(), "validating MyCallResult response")
+			return strings.Contains(val.AsString(), "validating MyCallResult response: FormatViolation")
+		},
+	})
+}
+
+func TestRouterErrorWhenCallResultResponseSchemaMissing(t *testing.T) {
+	tracer, exporter := testutil.GetTracer()
+
+	emitter := new(FakeEmitter)
+
+	handlerCalled := false
+	handler := func(ctx context.Context,
+		chargeStationId string,
+		request ocpp.Request,
+		response ocpp.Response,
+		state any) error {
+		handlerCalled = true
+		return nil
+	}
+
+	router := handlers.Router{
+		Emitter:  emitter,
+		SchemaFS: os.DirFS("testdata"),
+		CallResultRoutes: map[string]handlers.CallResultRoute{
+			"Result": {
+				NewRequest:     func() ocpp.Request { return new(fakeRequest) },
+				NewResponse:    func() ocpp.Response { return new(fakeResponse) },
+				RequestSchema:  "schemas/EmptySchema.json",
+				ResponseSchema: "schemas/DoesNotExist.json",
+				Handler:        handlers.CallResultHandlerFunc(handler),
+			},
+		},
+	}
+
+	func() {
+		ctx, span := tracer.Start(context.Background(), "test")
+		defer span.End()
+		router.Handle(ctx, "id", &resultMsg)
+	}()
+
+	// for a call response the emitter should never be called
+	assert.False(t, emitter.called)
+	assert.False(t, handlerCalled)
+
+	// check that the error names the schema and is not reported as a format violation
+	require.Greater(t, len(exporter.GetSpans()), 0)
+	assert.Equal(t, codes.Error, exporter.GetSpans()[0].Status.Code)
+	require.Greater(t, len(exporter.GetSpans()[0].Events), 0)
+	testutil.AssertAttributes(t, exporter.GetSpans()[0].Events[0].Attributes, map[string]any{
+		"exception.type": "*fmt.wrapError",
+		"exception.message": func(val attribute.Value) bool {
+			msg := val.AsString()
+			return strings.Contains(msg, "validating Result response: schema schemas/DoesNotExist.json") &&
+				!strings.Contains(msg, string(transport.ErrorFormatViolation))
 		},
 	})
 }

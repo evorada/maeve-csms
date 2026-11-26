@@ -70,8 +70,9 @@ func (s *Store) UpdateChargeStationSettings(ctx context.Context, chargeStationId
 	var set = make(map[string]*chargeStationSetting)
 	for k, v := range settings.Settings {
 		set[k] = &chargeStationSetting{
-			Value:  v.Value,
-			Status: string(v.Status),
+			Value:     v.Value,
+			Status:    string(v.Status),
+			SendAfter: v.SendAfter,
 		}
 	}
 	_, err := csRef.Set(ctx, set, firestore.MergeAll)
