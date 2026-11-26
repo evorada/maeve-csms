@@ -4,6 +4,7 @@ package ocpp16_test
 
 import (
 	"context"
+	"encoding/json"
 	"io/fs"
 	"regexp"
 	"testing"
@@ -15,6 +16,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/schemas"
+	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	"k8s.io/utils/clock"
@@ -120,4 +122,91 @@ func TestAllRouteSchemasExist(t *testing.T) {
 		_, err = schemas.Compile(schemas.OcppSchemas, schemaFile)
 		assert.NoErrorf(t, err, "%s: schema file %q does not compile", route, schemaFile)
 	}
+}
+
+// TestMeterValuesCallIsStoredThroughTheRouter sends a MeterValues call through the router
+// that NewRouter builds, so it also covers the schema validation and the store wiring of the route.
+func TestMeterValuesCallIsStoredThroughTheRouter(t *testing.T) {
+	engine := inmemory.NewStore(clock.RealClock{})
+	emitter := &FakeEmitter{}
+
+	router := ocpp16.NewRouter(emitter,
+		clock.RealClock{},
+		engine,
+		nil,
+		nil,
+		nil,
+		time.Minute,
+		schemas.OcppSchemas)
+
+	msg := &transport.Message{
+		MessageType: transport.MessageTypeCall,
+		Action:      "MeterValues",
+		MessageId:   "b5a0e9f4-6a1c-4d2e-9c51-0c2f4b9d7e11",
+		RequestPayload: json.RawMessage(`{
+			"connectorId": 1,
+			"transactionId": 42,
+			"meterValue": [
+				{
+					"timestamp": "2026-11-26T10:05:00Z",
+					"sampledValue": [
+						{"value": "1500"},
+						{"value": "7.4", "context": "Sample.Clock", "measurand": "Power.Active.Import", "location": "Outlet", "unit": "kW", "phase": "L1"}
+					]
+				}
+			]
+		}`),
+	}
+
+	router.Handle(context.Background(), "cs001", msg)
+
+	require.NotNil(t, emitter.got, "no response was emitted")
+	assert.Equal(t, transport.MessageTypeCallResult, emitter.got.MessageType)
+	assert.Equal(t, "MeterValues", emitter.got.Action)
+	assert.Equal(t, msg.MessageId, emitter.got.MessageId)
+	assert.JSONEq(t, `{}`, string(emitter.got.ResponsePayload))
+
+	transactionId := ocpp16.ConvertToUUID(42)
+	result, err := engine.QueryMeterValues(context.Background(), store.MeterValuesFilter{
+		ChargeStationId: "cs001",
+		TransactionId:   &transactionId,
+		Limit:           100,
+	})
+	require.NoError(t, err)
+
+	periodic := "Sample.Periodic"
+	clockAligned := "Sample.Clock"
+	outlet := "Outlet"
+	energy := "Energy.Active.Import.Register"
+	power := "Power.Active.Import"
+	phase := "L1"
+	want := []store.StoredMeterValue{
+		{
+			ChargeStationId: "cs001",
+			EvseId:          1,
+			TransactionId:   transactionId,
+			MeterValue: store.MeterValue{
+				Timestamp: "2026-11-26T10:05:00Z",
+				SampledValues: []store.SampledValue{
+					{
+						Context:       &periodic,
+						Location:      &outlet,
+						Measurand:     &energy,
+						UnitOfMeasure: &store.UnitOfMeasure{Unit: "Wh", Multipler: 0},
+						Value:         1500,
+					},
+					{
+						Context:       &clockAligned,
+						Location:      &outlet,
+						Measurand:     &power,
+						Phase:         &phase,
+						UnitOfMeasure: &store.UnitOfMeasure{Unit: "kW", Multipler: 0},
+						Value:         7.4,
+					},
+				},
+			},
+		},
+	}
+	assert.Equal(t, want, result.MeterValues)
+	assert.Equal(t, 1, result.Total)
 }

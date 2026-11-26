@@ -14,27 +14,27 @@ import (
 const CountMeterValues = `-- name: CountMeterValues :one
 SELECT COUNT(*) FROM meter_values
 WHERE charge_station_id = $1
-  AND ($2::int IS NULL OR evse_id = $2)
-  AND ($3::text IS NULL OR transaction_id = $3)
-  AND ($4::timestamp IS NULL OR timestamp >= $4)
-  AND ($5::timestamp IS NULL OR timestamp <= $5)
+  AND ($2::int IS NULL OR evse_id = $2::int)
+  AND ($3::text IS NULL OR transaction_id = $3::text)
+  AND ($4::timestamp IS NULL OR timestamp >= $4::timestamp)
+  AND ($5::timestamp IS NULL OR timestamp <= $5::timestamp)
 `
 
 type CountMeterValuesParams struct {
 	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
-	Column2         int32            `db:"column_2" json:"column_2"`
-	Column3         string           `db:"column_3" json:"column_3"`
-	Column4         pgtype.Timestamp `db:"column_4" json:"column_4"`
-	Column5         pgtype.Timestamp `db:"column_5" json:"column_5"`
+	ConnectorID     pgtype.Int4      `db:"connector_id" json:"connector_id"`
+	TransactionID   pgtype.Text      `db:"transaction_id" json:"transaction_id"`
+	StartTime       pgtype.Timestamp `db:"start_time" json:"start_time"`
+	EndTime         pgtype.Timestamp `db:"end_time" json:"end_time"`
 }
 
 func (q *Queries) CountMeterValues(ctx context.Context, arg CountMeterValuesParams) (int64, error) {
 	row := q.db.QueryRow(ctx, CountMeterValues,
 		arg.ChargeStationID,
-		arg.Column2,
-		arg.Column3,
-		arg.Column4,
-		arg.Column5,
+		arg.ConnectorID,
+		arg.TransactionID,
+		arg.StartTime,
+		arg.EndTime,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -124,33 +124,34 @@ func (q *Queries) GetMeterValuesByStationAndEvse(ctx context.Context, arg GetMet
 const QueryMeterValues = `-- name: QueryMeterValues :many
 SELECT id, charge_station_id, evse_id, transaction_id, timestamp, sampled_values, received_at FROM meter_values
 WHERE charge_station_id = $1
-  AND ($2::int IS NULL OR evse_id = $2)
-  AND ($3::text IS NULL OR transaction_id = $3)
-  AND ($4::timestamp IS NULL OR timestamp >= $4)
-  AND ($5::timestamp IS NULL OR timestamp <= $5)
+  AND ($4::int IS NULL OR evse_id = $4::int)
+  AND ($5::text IS NULL OR transaction_id = $5::text)
+  AND ($6::timestamp IS NULL OR timestamp >= $6::timestamp)
+  AND ($7::timestamp IS NULL OR timestamp <= $7::timestamp)
 ORDER BY timestamp DESC
-LIMIT $6 OFFSET $7
+LIMIT $2 OFFSET $3
 `
 
 type QueryMeterValuesParams struct {
 	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
-	Column2         int32            `db:"column_2" json:"column_2"`
-	Column3         string           `db:"column_3" json:"column_3"`
-	Column4         pgtype.Timestamp `db:"column_4" json:"column_4"`
-	Column5         pgtype.Timestamp `db:"column_5" json:"column_5"`
 	Limit           int32            `db:"limit" json:"limit"`
 	Offset          int32            `db:"offset" json:"offset"`
+	ConnectorID     pgtype.Int4      `db:"connector_id" json:"connector_id"`
+	TransactionID   pgtype.Text      `db:"transaction_id" json:"transaction_id"`
+	StartTime       pgtype.Timestamp `db:"start_time" json:"start_time"`
+	EndTime         pgtype.Timestamp `db:"end_time" json:"end_time"`
 }
 
+// The optional filters are nullable parameters: NULL means "no filter".
 func (q *Queries) QueryMeterValues(ctx context.Context, arg QueryMeterValuesParams) ([]MeterValue, error) {
 	rows, err := q.db.Query(ctx, QueryMeterValues,
 		arg.ChargeStationID,
-		arg.Column2,
-		arg.Column3,
-		arg.Column4,
-		arg.Column5,
 		arg.Limit,
 		arg.Offset,
+		arg.ConnectorID,
+		arg.TransactionID,
+		arg.StartTime,
+		arg.EndTime,
 	)
 	if err != nil {
 		return nil, err

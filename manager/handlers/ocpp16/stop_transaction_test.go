@@ -135,7 +135,9 @@ func TestStopTransactionHandler(t *testing.T) {
 						Context:   &expectedPeriodicContext,
 						Location:  &expectedOutletLocation,
 						Measurand: &expectedMeasurand,
-						Value:     100,
+						// OCPP 1.6 default unit of an energy measurand
+						UnitOfMeasure: &store.UnitOfMeasure{Unit: "Wh", Multipler: 0},
+						Value:         100,
 					},
 				},
 			},
@@ -158,4 +160,108 @@ func TestStopTransactionHandler(t *testing.T) {
 	}
 
 	assert.Equal(t, expected, found)
+}
+
+func TestStopTransactionHandlerSkipsSignedTransactionData(t *testing.T) {
+	chargingStationId := fmt.Sprintf("cs%03d", rand.Intn(1000))
+
+	now, err := time.Parse(time.RFC3339, "2023-06-15T15:06:00+01:00")
+	require.NoError(t, err)
+
+	engine := inmemory.NewStore(clock.RealClock{})
+
+	startContext := "Transaction.Begin"
+	startMeasurand := "MeterValue"
+	startLocation := "Outlet"
+	beginMeterValue := store.MeterValue{
+		SampledValues: []store.SampledValue{
+			{
+				Context:   &startContext,
+				Measurand: &startMeasurand,
+				Location:  &startLocation,
+				Value:     50,
+			},
+		},
+		Timestamp: now.Format(time.RFC3339),
+	}
+	err = engine.CreateTransaction(context.TODO(), chargingStationId, handlers.ConvertToUUID(42), "MYRFIDTAG", "ISO14443",
+		[]store.MeterValue{beginMeterValue}, 0, false)
+	require.NoError(t, err)
+
+	handler := handlers.StopTransactionHandler{
+		Clock:            clockTest.NewFakePassiveClock(now),
+		TokenStore:       engine,
+		TransactionStore: engine,
+	}
+
+	signedFormat := types.StopTransactionJsonTransactionDataElemSampledValueElemFormatSignedData
+	transactionEndContext := types.StopTransactionJsonTransactionDataElemSampledValueElemContextTransactionEnd
+	// the value is a hex encoded signature that happens to have only decimal digits,
+	// so the sample must be skipped because of its format
+	signedSample := types.StopTransactionJsonTransactionDataElemSampledValueElem{
+		Context: &transactionEndContext,
+		Format:  &signedFormat,
+		Value:   "3045022100",
+	}
+	req := &types.StopTransactionJson{
+		MeterStop: 200,
+		Timestamp: now.Format(time.RFC3339),
+		TransactionData: []types.StopTransactionJsonTransactionDataElem{
+			{
+				// only the raw sample of this meter value can be stored
+				SampledValue: []types.StopTransactionJsonTransactionDataElemSampledValueElem{
+					signedSample,
+					{Value: "100"},
+				},
+				Timestamp: now.Format(time.RFC3339),
+			},
+			{
+				// nothing of this meter value can be stored
+				SampledValue: []types.StopTransactionJsonTransactionDataElemSampledValueElem{signedSample},
+				Timestamp:    now.Format(time.RFC3339),
+			},
+		},
+		TransactionId: 42,
+	}
+
+	got, err := handler.HandleCall(context.Background(), chargingStationId, req)
+	require.NoError(t, err)
+	assert.Equal(t, &types.StopTransactionResponseJson{}, got)
+
+	found, err := engine.FindTransaction(context.TODO(), chargingStationId, handlers.ConvertToUUID(42))
+	require.NoError(t, err)
+	require.NotNil(t, found)
+
+	expectedTransactionEndContext := "Transaction.End"
+	expectedPeriodicContext := "Sample.Periodic"
+	expectedOutletLocation := "Outlet"
+	expectedMeasurand := "Energy.Active.Import.Register"
+	expectedMeterValues := []store.MeterValue{
+		beginMeterValue,
+		{
+			Timestamp: now.Format(time.RFC3339),
+			SampledValues: []store.SampledValue{
+				{
+					Context:       &expectedPeriodicContext,
+					Location:      &expectedOutletLocation,
+					Measurand:     &expectedMeasurand,
+					UnitOfMeasure: &store.UnitOfMeasure{Unit: "Wh", Multipler: 0},
+					Value:         100,
+				},
+			},
+		},
+		{
+			Timestamp: now.Format(time.RFC3339),
+			SampledValues: []store.SampledValue{
+				{
+					Context:   &expectedTransactionEndContext,
+					Location:  &expectedOutletLocation,
+					Measurand: &expectedMeasurand,
+					Value:     150,
+				},
+			},
+		},
+	}
+	assert.Equal(t, expectedMeterValues, found.MeterValues)
+	assert.Equal(t, 1, found.EndedSeqNo)
 }

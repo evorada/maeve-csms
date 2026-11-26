@@ -14,19 +14,20 @@ WHERE charge_station_id = $1 AND evse_id = $2
 ORDER BY timestamp DESC;
 
 -- name: QueryMeterValues :many
+-- The optional filters are nullable parameters: NULL means "no filter".
 SELECT * FROM meter_values
 WHERE charge_station_id = $1
-  AND ($2::int IS NULL OR evse_id = $2)
-  AND ($3::text IS NULL OR transaction_id = $3)
-  AND ($4::timestamp IS NULL OR timestamp >= $4)
-  AND ($5::timestamp IS NULL OR timestamp <= $5)
+  AND (sqlc.narg('connector_id')::int IS NULL OR evse_id = sqlc.narg('connector_id')::int)
+  AND (sqlc.narg('transaction_id')::text IS NULL OR transaction_id = sqlc.narg('transaction_id')::text)
+  AND (sqlc.narg('start_time')::timestamp IS NULL OR timestamp >= sqlc.narg('start_time')::timestamp)
+  AND (sqlc.narg('end_time')::timestamp IS NULL OR timestamp <= sqlc.narg('end_time')::timestamp)
 ORDER BY timestamp DESC
-LIMIT $6 OFFSET $7;
+LIMIT $2 OFFSET $3;
 
 -- name: CountMeterValues :one
 SELECT COUNT(*) FROM meter_values
 WHERE charge_station_id = $1
-  AND ($2::int IS NULL OR evse_id = $2)
-  AND ($3::text IS NULL OR transaction_id = $3)
-  AND ($4::timestamp IS NULL OR timestamp >= $4)
-  AND ($5::timestamp IS NULL OR timestamp <= $5);
+  AND (sqlc.narg('connector_id')::int IS NULL OR evse_id = sqlc.narg('connector_id')::int)
+  AND (sqlc.narg('transaction_id')::text IS NULL OR transaction_id = sqlc.narg('transaction_id')::text)
+  AND (sqlc.narg('start_time')::timestamp IS NULL OR timestamp >= sqlc.narg('start_time')::timestamp)
+  AND (sqlc.narg('end_time')::timestamp IS NULL OR timestamp <= sqlc.narg('end_time')::timestamp);

@@ -136,6 +136,7 @@ type Querier interface {
 	LookupChargeStationCertificateDeletion(ctx context.Context, chargeStationID string) (ChargeStationCertificateDeletion, error)
 	LookupChargeStationCertificateQuery(ctx context.Context, chargeStationID string) (ChargeStationCertificateQuery, error)
 	NextOcpp16TransactionId(ctx context.Context) (int32, error)
+	// The optional filters are nullable parameters: NULL means "no filter".
 	QueryMeterValues(ctx context.Context, arg QueryMeterValuesParams) ([]MeterValue, error)
 	SetCertificate(ctx context.Context, arg SetCertificateParams) (Certificate, error)
 	SetChargeStationAuth(ctx context.Context, arg SetChargeStationAuthParams) (ChargeStation, error)

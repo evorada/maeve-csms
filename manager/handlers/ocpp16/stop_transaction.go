@@ -4,8 +4,6 @@ package ocpp16
 
 import (
 	"context"
-	"errors"
-	"strconv"
 	"time"
 
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
@@ -61,10 +59,7 @@ func (s StopTransactionHandler) HandleCall(ctx context.Context, chargeStationId 
 		tokenType = "ISO14443"
 	}
 
-	meterValues, err := convertMeterValues(req.TransactionData)
-	if err != nil {
-		return nil, err
-	}
+	meterValues := convertTransactionData(req.TransactionData)
 
 	var previousMeterValues []store.MeterValue
 	if transaction != nil {
@@ -136,71 +131,15 @@ func findTransactionBeginMeterValues(values []store.MeterValue) (int, bool) {
 	return 0, false
 }
 
-func convertMeterValues(meterValues []types.StopTransactionJsonTransactionDataElem) ([]store.MeterValue, error) {
+// convertTransactionData converts the transactionData of a StopTransaction.req.
+// Meter values and samples that cannot be stored are skipped (see convertMeterValue),
+// so that they do not fail the message: the station retries a failed StopTransaction forever.
+func convertTransactionData(transactionData []types.StopTransactionJsonTransactionDataElem) []store.MeterValue {
 	var converted []store.MeterValue
-	for _, meterValue := range meterValues {
-		convertedMeterValue, err := convertMeterValue(meterValue)
-		if err != nil {
-			return nil, err
+	for _, meterValue := range transactionData {
+		if mv, ok := convertMeterValue(meterValue.Timestamp, rawTransactionDataSamples(meterValue.SampledValue)); ok {
+			converted = append(converted, mv)
 		}
-		converted = append(converted, convertedMeterValue)
 	}
-	return converted, nil
-}
-
-func convertMeterValue(meterValue types.StopTransactionJsonTransactionDataElem) (store.MeterValue, error) {
-	sampledValues, err := convertSampledValues(meterValue.SampledValue)
-	if err != nil {
-		return store.MeterValue{}, err
-	}
-	return store.MeterValue{
-		SampledValues: sampledValues,
-		Timestamp:     meterValue.Timestamp,
-	}, nil
-}
-
-func convertSampledValues(sampledValues []types.StopTransactionJsonTransactionDataElemSampledValueElem) ([]store.SampledValue, error) {
-	var converted []store.SampledValue
-	for _, sampleValue := range sampledValues {
-		convertedSampleValue, err := convertSampleValue(sampleValue)
-		if err != nil {
-			return nil, err
-		}
-		converted = append(converted, convertedSampleValue)
-	}
-	return converted, nil
-}
-
-func convertSampleValue(sampleValue types.StopTransactionJsonTransactionDataElemSampledValueElem) (store.SampledValue, error) {
-	value, err := convertValue(sampleValue.Format, sampleValue.Value)
-	if err != nil {
-		return store.SampledValue{}, err
-	}
-	return store.SampledValue{
-		Context:       (*string)(sampleValue.Context),
-		Location:      (*string)(sampleValue.Location),
-		Measurand:     (*string)(sampleValue.Measurand),
-		Phase:         (*string)(sampleValue.Phase),
-		UnitOfMeasure: convertUnitOfMeasure(sampleValue.Unit),
-		Value:         value,
-	}, nil
-}
-
-func convertValue(format *types.StopTransactionJsonTransactionDataElemSampledValueElemFormat, value string) (float64, error) {
-	if format != nil && *format != types.StopTransactionJsonTransactionDataElemSampledValueElemFormatRaw {
-		return 0, errors.New("conversion from signed data not implemented")
-	}
-
-	return strconv.ParseFloat(value, 64)
-}
-
-func convertUnitOfMeasure(unit *types.StopTransactionJsonTransactionDataElemSampledValueElemUnit) *store.UnitOfMeasure {
-	if unit == nil {
-		return nil
-	}
-
-	return &store.UnitOfMeasure{
-		Unit:      string(*unit),
-		Multipler: 1,
-	}
+	return converted
 }

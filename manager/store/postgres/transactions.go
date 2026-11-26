@@ -286,10 +286,12 @@ func (s *Store) addMeterValue(ctx context.Context, chargeStationId, transactionI
 		return fmt.Errorf("failed to marshal sampled values: %w", err)
 	}
 
+	// The column has no time zone and pgx drops the zone of the value it is given,
+	// so the instant is stored in UTC.
 	params := AddMeterValuesParams{
 		ChargeStationID: chargeStationId,
 		TransactionID:   transactionId,
-		Timestamp:       timestampFromTime(parsedTime),
+		Timestamp:       timestampFromTime(parsedTime.UTC()),
 		SampledValues:   sampledValuesJSON,
 	}
 

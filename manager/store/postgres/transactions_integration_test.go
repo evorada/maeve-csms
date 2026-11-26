@@ -464,6 +464,34 @@ func TestTransaction_CreateDuplicate_DoesNotAbortDatabaseTransaction(t *testing.
 	}
 }
 
+func TestTransaction_MeterValueTimestampWithOffsetIsStoredAsInstant(t *testing.T) {
+	defer truncateAll(t)
+	ctx := context.Background()
+
+	// three instants, one hour apart, written with different UTC offsets
+	err := testStore.CreateTransaction(ctx, "cs001", "tx001", "TOKEN001", "RFID",
+		[]store.MeterValue{energyMeterValue("2026-11-26T11:00:00+01:00", 100)}, 1, false)
+	require.NoError(t, err)
+	err = testStore.UpdateTransaction(ctx, "cs001", "tx001",
+		[]store.MeterValue{energyMeterValue("2026-11-26T06:00:00-05:00", 200)})
+	require.NoError(t, err)
+	err = testStore.EndTransaction(ctx, "cs001", "tx001", "TOKEN001", "RFID",
+		[]store.MeterValue{energyMeterValue("2026-11-26T12:00:00Z", 300)}, 2)
+	require.NoError(t, err)
+
+	got, err := testStore.FindTransaction(ctx, "cs001", "tx001")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+
+	// read back in the order of the instants
+	want := []store.MeterValue{
+		energyMeterValue("2026-11-26T10:00:00Z", 100),
+		energyMeterValue("2026-11-26T11:00:00Z", 200),
+		energyMeterValue("2026-11-26T12:00:00Z", 300),
+	}
+	assert.Equal(t, want, got.MeterValues)
+}
+
 func TestTransaction_End_StopReason(t *testing.T) {
 	defer truncateAll(t)
 	ctx := context.Background()

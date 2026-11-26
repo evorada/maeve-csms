@@ -103,6 +103,7 @@ func NewRouter(emitter transport.Emitter,
 				ResponseSchema: "ocpp16/MeterValuesResponse.json",
 				Handler: MeterValuesHandler{
 					TransactionStore: engine,
+					MeterValuesStore: engine,
 				},
 			},
 			"SecurityEventNotification": {
