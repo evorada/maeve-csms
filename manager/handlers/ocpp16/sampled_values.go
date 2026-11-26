@@ -26,6 +26,10 @@ const (
 	sampledValueEnergyMeasurandPrefix = "Energy."
 	sampledValueUnitWh                = string(types.MeterValuesJsonMeterValueElemSampledValueElemUnitWh)
 	sampledValueUnitKWh               = string(types.MeterValuesJsonMeterValueElemSampledValueElemUnitKWh)
+
+	// contexts of the samples at the start and at the end of a transaction
+	sampledValueContextTransactionBegin = string(types.MeterValuesJsonMeterValueElemSampledValueElemContextTransactionBegin)
+	sampledValueContextTransactionEnd   = string(types.MeterValuesJsonMeterValueElemSampledValueElemContextTransactionEnd)
 )
 
 // Reasons for skipping a sampled value.
@@ -157,6 +161,29 @@ func energyRegisterWh(sv store.SampledValue) (wh int64, ok bool) {
 		return 0, false
 	}
 	return int64(reading), true
+}
+
+// energyRegisterMeterValue returns the meter value for the energy register of the
+// connector that a station reports as meterStart (StartTransaction.req) or meterStop
+// (StopTransaction.req): Energy.Active.Import.Register at the outlet, in Wh.
+func energyRegisterMeterValue(timestamp time.Time, sampleContext string, wh int) store.MeterValue {
+	measurand := sampledValueDefaultMeasurand
+	location := sampledValueDefaultLocation
+
+	return store.MeterValue{
+		// fractions of a second are kept, so that the sample sorts like the samples
+		// of the station whose timestamps are stored as received
+		Timestamp: timestamp.Format(time.RFC3339Nano),
+		SampledValues: []store.SampledValue{
+			{
+				Context:       &sampleContext,
+				Location:      &location,
+				Measurand:     &measurand,
+				UnitOfMeasure: &store.UnitOfMeasure{Unit: sampledValueUnitWh, Multipler: 0},
+				Value:         float64(wh),
+			},
+		},
+	}
 }
 
 // stringPointer converts a pointer to a generated OCPP enum into a pointer to a copy of its value.

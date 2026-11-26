@@ -714,6 +714,19 @@ components:
           - active
           - completed
           description: Status of the transaction
+        connectorId:
+          type: integer
+          description: The OCPP connector the transaction took place on
+        evseId:
+          type: integer
+          description: The EVSE the transaction took place on (equal to connectorId for OCPP 1.6)
+        stopReason:
+          type: string
+          description: The reason the transaction was stopped, as reported by the charge station (null if active)
+        energyWh:
+          type: integer
+          format: int64
+          description: Delivered energy in Wh, null while active or if unknown
     TransactionDetail:
       type: object
       description: Detailed transaction information including meter values
@@ -754,6 +767,19 @@ components:
           - active
           - completed
           description: Status of the transaction
+        connectorId:
+          type: integer
+          description: The OCPP connector the transaction took place on
+        evseId:
+          type: integer
+          description: The EVSE the transaction took place on (equal to connectorId for OCPP 1.6)
+        stopReason:
+          type: string
+          description: The reason the transaction was stopped, as reported by the charge station (null if active)
+        energyWh:
+          type: integer
+          format: int64
+          description: Delivered energy in Wh, null while active or if unknown
         meterValues:
           type: array
           items:
@@ -797,6 +823,7 @@ components:
           - Unavailable
           - Cancelled
           - Expired
+          - Used
           description: Current status of the reservation
         createdAt:
           type: string

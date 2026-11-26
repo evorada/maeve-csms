@@ -17,6 +17,7 @@ const (
 	ReservationStatusUnavailable ReservationStatus = "Unavailable"
 	ReservationStatusCancelled   ReservationStatus = "Cancelled"
 	ReservationStatusExpired     ReservationStatus = "Expired"
+	ReservationStatusUsed        ReservationStatus = "Used" // consumed by the start of a transaction
 )
 
 type Reservation struct {

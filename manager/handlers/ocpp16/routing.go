@@ -85,6 +85,7 @@ func NewRouter(emitter transport.Emitter,
 					Clock:            clk,
 					TokenStore:       engine,
 					TransactionStore: engine,
+					ReservationStore: engine,
 				},
 			},
 			"StopTransaction": {

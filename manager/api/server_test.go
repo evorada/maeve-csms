@@ -27,7 +27,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/api"
+	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/ocpi"
+	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
 	"k8s.io/utils/clock"
@@ -958,4 +960,427 @@ func TestSetChargeStationVariables(t *testing.T) {
 	assert.Equal(t, "Accepted", string(got.Results[0].AttributeStatus))
 	assert.Equal(t, "OCPPCommCtrlr", got.Results[0].Component.Name)
 	assert.Equal(t, "HeartbeatInterval", got.Results[0].Variable.Name)
+}
+
+// getJson sends a GET request and decodes the body of the 200 response into got.
+func getJson(t *testing.T, r *chi.Mux, url string, got any) {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+	req.Header.Set("accept", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	b, err := io.ReadAll(rr.Result().Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rr.Result().StatusCode, string(b))
+	require.NoError(t, json.Unmarshal(b, got), string(b))
+}
+
+func transactionSample(sampleContext, measurand string, value float64) store.SampledValue {
+	location := "Outlet"
+	return store.SampledValue{
+		Context:       &sampleContext,
+		Location:      &location,
+		Measurand:     &measurand,
+		UnitOfMeasure: &store.UnitOfMeasure{Unit: "Wh"},
+		Value:         value,
+	}
+}
+
+// TestTransactionsReturnOcpp16Transaction checks that what the OCPP 1.6 StartTransaction
+// and StopTransaction handlers store is returned by the list and by the detail.
+func TestTransactionsReturnOcpp16Transaction(t *testing.T) {
+	server, r, engine, c := setupServer(t)
+	defer server.Close()
+	ctx := context.Background()
+
+	require.NoError(t, engine.SetToken(ctx, &store.Token{
+		CountryCode: "GB",
+		PartyId:     "TWK",
+		Type:        "RFID",
+		Uid:         "MYRFIDTAG",
+		ContractId:  "GBTWK012345678V",
+		Issuer:      "Thoughtworks",
+		Valid:       true,
+		CacheMode:   "NEVER",
+	}))
+
+	startHandler := ocpp16.StartTransactionHandler{
+		Clock:            c,
+		TokenStore:       engine,
+		TransactionStore: engine,
+		ReservationStore: engine,
+	}
+	startResponse, err := startHandler.HandleCall(ctx, "cs001", &types.StartTransactionJson{
+		ConnectorId: 2,
+		IdTag:       "MYRFIDTAG",
+		MeterStart:  1000,
+		Timestamp:   "2026-11-26T10:00:00Z",
+	})
+	require.NoError(t, err)
+	transactionId := startResponse.(*types.StartTransactionResponseJson).TransactionId
+	wantTransactionId := ocpp16.ConvertToUUID(transactionId)
+
+	startTime := time.Date(2026, 11, 26, 10, 0, 0, 0, time.UTC)
+	stopTime := time.Date(2026, 11, 26, 10, 30, 0, 0, time.UTC)
+	connectorId := 2
+	tokenType := "ISO14443"
+	outlet := "Outlet"
+	energyRegister := "Energy.Active.Import.Register"
+	wattHours := "Wh"
+	transactionBegin := "Transaction.Begin"
+	transactionEnd := "Transaction.End"
+	beginMeterValue := api.MeterValue{
+		Timestamp: startTime,
+		SampledValue: []api.MeterValuesSampledValue{
+			{Value: "1000", Context: &transactionBegin, Location: &outlet, Measurand: &energyRegister, Unit: &wattHours},
+		},
+	}
+
+	// while the transaction is active
+	gotList := new(api.TransactionList)
+	getJson(t, r, "/cs/cs001/transactions", gotList)
+	wantList := &api.TransactionList{
+		Total:  1,
+		Limit:  50,
+		Offset: 0,
+		Transactions: []api.TransactionSummary{
+			{
+				TransactionId: wantTransactionId,
+				IdTag:         "MYRFIDTAG",
+				StartTime:     startTime,
+				MeterStart:    1000,
+				Status:        api.TransactionSummaryStatusActive,
+				ConnectorId:   &connectorId,
+				EvseId:        &connectorId,
+			},
+		},
+	}
+	assert.Equal(t, wantList, gotList)
+
+	gotDetail := new(api.TransactionDetail)
+	getJson(t, r, "/cs/cs001/transaction/"+wantTransactionId, gotDetail)
+	wantDetail := &api.TransactionDetail{
+		TransactionId: wantTransactionId,
+		IdTag:         "MYRFIDTAG",
+		TokenType:     &tokenType,
+		StartTime:     startTime,
+		MeterStart:    1000,
+		Status:        api.TransactionDetailStatusActive,
+		ConnectorId:   &connectorId,
+		EvseId:        &connectorId,
+		MeterValues:   []api.MeterValue{beginMeterValue},
+	}
+	assert.Equal(t, wantDetail, gotDetail)
+
+	// after the stop
+	stopHandler := ocpp16.StopTransactionHandler{
+		Clock:            c,
+		TokenStore:       engine,
+		TransactionStore: engine,
+	}
+	reason := types.StopTransactionJsonReasonEVDisconnected
+	_, err = stopHandler.HandleCall(ctx, "cs001", &types.StopTransactionJson{
+		TransactionId: transactionId,
+		MeterStop:     2500,
+		Reason:        &reason,
+		Timestamp:     "2026-11-26T10:30:00Z",
+	})
+	require.NoError(t, err)
+
+	meterStop := 2500
+	energy := int64(1500)
+	stopReason := "EVDisconnected"
+
+	gotList = new(api.TransactionList)
+	getJson(t, r, "/cs/cs001/transactions", gotList)
+	wantList.Transactions[0].Status = api.TransactionSummaryStatusCompleted
+	wantList.Transactions[0].StopTime = &stopTime
+	wantList.Transactions[0].MeterStop = &meterStop
+	wantList.Transactions[0].StopReason = &stopReason
+	wantList.Transactions[0].EnergyWh = &energy
+	assert.Equal(t, wantList, gotList)
+
+	gotDetail = new(api.TransactionDetail)
+	getJson(t, r, "/cs/cs001/transaction/"+wantTransactionId, gotDetail)
+	wantDetail.Status = api.TransactionDetailStatusCompleted
+	wantDetail.StopTime = &stopTime
+	wantDetail.MeterStop = &meterStop
+	wantDetail.StopReason = &stopReason
+	wantDetail.EnergyWh = &energy
+	wantDetail.MeterValues = []api.MeterValue{
+		beginMeterValue,
+		{
+			Timestamp: stopTime,
+			SampledValue: []api.MeterValuesSampledValue{
+				{Value: "2500", Context: &transactionEnd, Location: &outlet, Measurand: &energyRegister, Unit: &wattHours},
+			},
+		},
+	}
+	assert.Equal(t, wantDetail, gotDetail)
+}
+
+// TestTransactionsPreferStoredDetailsOverSamples checks that the times and the meter
+// readings that are stored with the transaction win over the ones of its samples.
+func TestTransactionsPreferStoredDetailsOverSamples(t *testing.T) {
+	server, r, engine, _ := setupServer(t)
+	defer server.Close()
+	ctx := context.Background()
+
+	err := engine.CreateTransaction(ctx, "cs001", "tx001", "MYRFIDTAG", "ISO14443", []store.MeterValue{
+		{
+			Timestamp:     "2026-11-26T10:00:07Z",
+			SampledValues: []store.SampledValue{transactionSample("Sample.Periodic", "Energy.Active.Import.Register", 1010)},
+		},
+	}, 0, false)
+	require.NoError(t, err)
+	err = engine.EndTransaction(ctx, "cs001", "tx001", "MYRFIDTAG", "ISO14443", []store.MeterValue{
+		{
+			Timestamp:     "2026-11-26T10:29:55Z",
+			SampledValues: []store.SampledValue{transactionSample("Sample.Periodic", "Energy.Active.Import.Register", 2490)},
+		},
+	}, 1)
+	require.NoError(t, err)
+
+	startTime := time.Date(2026, 11, 26, 10, 0, 0, 0, time.UTC)
+	stopTime := time.Date(2026, 11, 26, 10, 30, 0, 0, time.UTC)
+	connectorId := 1
+	evseId := 3
+	meterStartWh := int64(1000)
+	meterStopWh := int64(2500)
+	energy := int64(1500)
+	stopReason := "Remote"
+	err = engine.UpdateTransactionDetails(ctx, "cs001", "tx001", &store.TransactionDetails{
+		ConnectorId:  &connectorId,
+		EvseId:       &evseId,
+		StartedAt:    &startTime,
+		StoppedAt:    &stopTime,
+		MeterStartWh: &meterStartWh,
+		MeterStopWh:  &meterStopWh,
+		EnergyWh:     &energy,
+		StopReason:   &stopReason,
+	})
+	require.NoError(t, err)
+
+	meterStop := 2500
+	want := api.TransactionSummary{
+		TransactionId: "tx001",
+		IdTag:         "MYRFIDTAG",
+		StartTime:     startTime,
+		StopTime:      &stopTime,
+		MeterStart:    1000,
+		MeterStop:     &meterStop,
+		Status:        api.TransactionSummaryStatusCompleted,
+		ConnectorId:   &connectorId,
+		EvseId:        &evseId,
+		StopReason:    &stopReason,
+		EnergyWh:      &energy,
+	}
+
+	gotList := new(api.TransactionList)
+	getJson(t, r, "/cs/cs001/transactions", gotList)
+	assert.Equal(t, []api.TransactionSummary{want}, gotList.Transactions)
+
+	gotDetail := new(api.TransactionDetail)
+	getJson(t, r, "/cs/cs001/transaction/tx001", gotDetail)
+	assert.Equal(t, want.StartTime, gotDetail.StartTime)
+	assert.Equal(t, want.StopTime, gotDetail.StopTime)
+	assert.Equal(t, want.MeterStart, gotDetail.MeterStart)
+	assert.Equal(t, want.MeterStop, gotDetail.MeterStop)
+	assert.Equal(t, want.ConnectorId, gotDetail.ConnectorId)
+	assert.Equal(t, want.EvseId, gotDetail.EvseId)
+	assert.Equal(t, want.StopReason, gotDetail.StopReason)
+	assert.Equal(t, want.EnergyWh, gotDetail.EnergyWh)
+	assert.Len(t, gotDetail.MeterValues, 2)
+}
+
+// TestTransactionsFallBackToSamples covers transactions that have no stored details
+// (written before the details existed, or by a store that does not keep them): the
+// times and the meter readings are derived from the samples.
+func TestTransactionsFallBackToSamples(t *testing.T) {
+	firstTime := time.Date(2026, 11, 26, 10, 0, 0, 0, time.UTC)
+	lastTime := time.Date(2026, 11, 26, 10, 30, 0, 0, time.UTC)
+
+	// the energy register is not in the first and not in the last meter value
+	meterValues := []store.MeterValue{
+		{
+			Timestamp:     "2026-11-26T10:00:00Z",
+			SampledValues: []store.SampledValue{transactionSample("Transaction.Begin", "MeterValue", 990)},
+		},
+		{
+			Timestamp: "2026-11-26T10:10:00Z",
+			SampledValues: []store.SampledValue{
+				transactionSample("Sample.Periodic", "Power.Active.Import", 7400),
+				transactionSample("Sample.Periodic", "Energy.Active.Import.Register", 1200),
+				transactionSample("Sample.Periodic", "Energy.Active.Import.Register", 1201),
+			},
+		},
+		{
+			Timestamp: "2026-11-26T10:20:00Z",
+			SampledValues: []store.SampledValue{
+				transactionSample("Sample.Periodic", "Energy.Active.Import.Register", 2399),
+				transactionSample("Sample.Periodic", "Energy.Active.Import.Register", 2400),
+				transactionSample("Sample.Periodic", "Power.Active.Import", 7300),
+			},
+		},
+		{
+			Timestamp:     "2026-11-26T10:30:00Z",
+			SampledValues: []store.SampledValue{transactionSample("Transaction.End", "Power.Active.Import", 0)},
+		},
+	}
+	noRegister := []store.MeterValue{meterValues[0], meterValues[3]}
+
+	tests := []struct {
+		name           string
+		meterValues    []store.MeterValue
+		ended          bool
+		wantStart      time.Time
+		wantStop       *time.Time
+		wantMeterStart int
+		wantMeterStop  *int
+	}{
+		{
+			name:           "active transaction has no stop time and no meter stop",
+			meterValues:    meterValues,
+			ended:          false,
+			wantStart:      firstTime,
+			wantMeterStart: 1200,
+		},
+		{
+			name:           "completed transaction",
+			meterValues:    meterValues,
+			ended:          true,
+			wantStart:      firstTime,
+			wantStop:       &lastTime,
+			wantMeterStart: 1200,
+			wantMeterStop:  intRef(2400),
+		},
+		{
+			name:           "completed transaction without energy register samples",
+			meterValues:    noRegister,
+			ended:          true,
+			wantStart:      firstTime,
+			wantStop:       &lastTime,
+			wantMeterStart: 0,
+		},
+		{
+			name:      "active transaction without meter values",
+			ended:     false,
+			wantStart: time.Time{},
+		},
+		{
+			name:      "completed transaction without meter values",
+			ended:     true,
+			wantStart: time.Time{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server, r, engine, _ := setupServer(t)
+			defer server.Close()
+			ctx := context.Background()
+
+			require.NoError(t, engine.CreateTransaction(ctx, "cs001", "tx001", "MYRFIDTAG", "ISO14443", tt.meterValues, 0, false))
+			wantStatus := api.TransactionSummaryStatusActive
+			if tt.ended {
+				require.NoError(t, engine.EndTransaction(ctx, "cs001", "tx001", "MYRFIDTAG", "ISO14443", nil, 1))
+				wantStatus = api.TransactionSummaryStatusCompleted
+			}
+
+			gotList := new(api.TransactionList)
+			getJson(t, r, "/cs/cs001/transactions", gotList)
+			want := api.TransactionSummary{
+				TransactionId: "tx001",
+				IdTag:         "MYRFIDTAG",
+				StartTime:     tt.wantStart,
+				StopTime:      tt.wantStop,
+				MeterStart:    tt.wantMeterStart,
+				MeterStop:     tt.wantMeterStop,
+				Status:        wantStatus,
+			}
+			assert.Equal(t, []api.TransactionSummary{want}, gotList.Transactions)
+
+			gotDetail := new(api.TransactionDetail)
+			getJson(t, r, "/cs/cs001/transaction/tx001", gotDetail)
+			assert.Equal(t, tt.wantStart, gotDetail.StartTime)
+			assert.Equal(t, tt.wantStop, gotDetail.StopTime)
+			assert.Equal(t, tt.wantMeterStart, gotDetail.MeterStart)
+			assert.Equal(t, tt.wantMeterStop, gotDetail.MeterStop)
+			assert.Equal(t, api.TransactionDetailStatus(wantStatus), gotDetail.Status)
+			assert.Len(t, gotDetail.MeterValues, len(tt.meterValues))
+			assert.Nil(t, gotDetail.ConnectorId)
+			assert.Nil(t, gotDetail.EvseId)
+			assert.Nil(t, gotDetail.StopReason)
+			assert.Nil(t, gotDetail.EnergyWh)
+		})
+	}
+}
+
+func intRef(v int) *int {
+	return &v
+}
+
+// listedReservationsStore lists its reservations whatever their status. The stores only
+// list the reservations that are still active, and the API has no other way to read one.
+type listedReservationsStore struct {
+	store.Engine
+	reservations []*store.Reservation
+}
+
+func (s listedReservationsStore) GetActiveReservations(context.Context, string) ([]*store.Reservation, error) {
+	return s.reservations, nil
+}
+
+func TestListReservationsRendersEveryReservationStatus(t *testing.T) {
+	statuses := []store.ReservationStatus{
+		store.ReservationStatusAccepted,
+		store.ReservationStatusFaulted,
+		store.ReservationStatusOccupied,
+		store.ReservationStatusRejected,
+		store.ReservationStatusUnavailable,
+		store.ReservationStatusCancelled,
+		store.ReservationStatusExpired,
+		store.ReservationStatusUsed,
+	}
+
+	now := time.Now().UTC()
+	c := clockTest.NewFakePassiveClock(now)
+	engine := listedReservationsStore{Engine: inmemory.NewStore(c)}
+	for i, status := range statuses {
+		engine.reservations = append(engine.reservations, &store.Reservation{
+			ReservationId:   i + 1,
+			ChargeStationId: "cs001",
+			ConnectorId:     1,
+			IdTag:           "USER001",
+			ExpiryDate:      now.Add(time.Hour),
+			Status:          status,
+			CreatedAt:       now,
+		})
+	}
+
+	srv, err := api.NewServer(engine, c, ocpi.NewOCPI(engine, nil, "GB", "TWK"))
+	require.NoError(t, err)
+	r := chi.NewRouter()
+	r.Use(api.ValidationMiddleware)
+	r.Mount("/", api.Handler(srv))
+
+	response := new(api.ReservationList)
+	getJson(t, r, "/cs/cs001/reservations", response)
+
+	got := make([]store.ReservationStatus, 0, len(response.Reservations))
+	for _, reservation := range response.Reservations {
+		got = append(got, store.ReservationStatus(reservation.Status))
+	}
+	assert.Equal(t, statuses, got)
+	assert.Equal(t, api.ReservationResponseStatusUsed, response.Reservations[len(statuses)-1].Status)
+
+	// every status that is rendered is a value of the schema of the response
+	swagger, err := api.GetSwagger()
+	require.NoError(t, err)
+	statusSchema := swagger.Components.Schemas["ReservationResponse"].Value.Properties["status"].Value
+	for _, status := range statuses {
+		assert.Containsf(t, statusSchema.Enum, string(status), "reservation status %s is not in the API schema", status)
+	}
 }
