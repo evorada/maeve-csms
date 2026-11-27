@@ -210,3 +210,92 @@ func TestMeterValuesCallIsStoredThroughTheRouter(t *testing.T) {
 	assert.Equal(t, want, result.MeterValues)
 	assert.Equal(t, 1, result.Total)
 }
+
+// TestChangeConfigurationCallErrorRejectsSettingThroughTheRouter sends the CallError of a charge
+// station through the router that NewRouter builds, so it also covers the wiring of the route's
+// error handler.
+func TestChangeConfigurationCallErrorRejectsSettingThroughTheRouter(t *testing.T) {
+	ctx := context.Background()
+	engine := inmemory.NewStore(clock.RealClock{})
+	emitter := &FakeEmitter{}
+
+	router := ocpp16.NewRouter(emitter,
+		clock.RealClock{},
+		engine,
+		nil,
+		nil,
+		nil,
+		time.Minute,
+		schemas.OcppSchemas)
+
+	err := engine.UpdateChargeStationSettings(ctx, "cs001", &store.ChargeStationSettings{
+		Settings: map[string]*store.ChargeStationSetting{
+			"UnknownKey":        {Value: "value", Status: store.ChargeStationSettingStatusPending},
+			"HeartbeatInterval": {Value: "300", Status: store.ChargeStationSettingStatusPending},
+		},
+	})
+	require.NoError(t, err)
+
+	router.Handle(ctx, "cs001", &transport.Message{
+		MessageType:      transport.MessageTypeCallError,
+		Action:           "ChangeConfiguration",
+		MessageId:        "5d0f3a1e-7c1b-4f0e-8a44-2f6f6c7f9a10",
+		RequestPayload:   json.RawMessage(`{"key":"UnknownKey","value":"value"}`),
+		ErrorCode:        transport.ErrorNotSupported,
+		ErrorDescription: "Requested Action is recognized but not supported by the receiver",
+	})
+
+	assert.Nil(t, emitter.got, "nothing must be sent in reply to a call error")
+
+	settings, err := engine.LookupChargeStationSettings(ctx, "cs001")
+	require.NoError(t, err)
+	require.Len(t, settings.Settings, 2)
+	assert.Equal(t, store.ChargeStationSettingStatusRejected, settings.Settings["UnknownKey"].Status)
+	assert.Equal(t, store.ChargeStationSettingStatusPending, settings.Settings["HeartbeatInterval"].Status)
+}
+
+// TestTriggerMessageCallErrorStoresStatusThroughTheRouter covers the wiring of the store and
+// of the error handler of the TriggerMessage route.
+func TestTriggerMessageCallErrorStoresStatusThroughTheRouter(t *testing.T) {
+	ctx := context.Background()
+	engine := inmemory.NewStore(clock.RealClock{})
+	emitter := &FakeEmitter{}
+
+	router := ocpp16.NewRouter(emitter,
+		clock.RealClock{},
+		engine,
+		nil,
+		nil,
+		nil,
+		time.Minute,
+		schemas.OcppSchemas)
+
+	connectorId := 1
+	err := engine.SetChargeStationTriggerMessage(ctx, "cs001", &store.ChargeStationTriggerMessage{
+		ChargeStationId: "cs001",
+		TriggerMessage:  store.TriggerMessageStatusNotification,
+		ConnectorId:     &connectorId,
+		TriggerStatus:   store.TriggerStatusPending,
+	})
+	require.NoError(t, err)
+
+	router.Handle(ctx, "cs001", &transport.Message{
+		MessageType:      transport.MessageTypeCallError,
+		Action:           "TriggerMessage",
+		MessageId:        "0c6d5a52-0f0e-4a55-9f6b-0d6f1c3f6f2b",
+		RequestPayload:   json.RawMessage(`{"requestedMessage":"StatusNotification","connectorId":1}`),
+		ErrorCode:        transport.ErrorNotImplemented,
+		ErrorDescription: "Requested Action is not known by receiver",
+	})
+
+	assert.Nil(t, emitter.got, "nothing must be sent in reply to a call error")
+
+	got, err := engine.LookupChargeStationTriggerMessage(ctx, "cs001")
+	require.NoError(t, err)
+	assert.Equal(t, &store.ChargeStationTriggerMessage{
+		ChargeStationId: "cs001",
+		TriggerMessage:  store.TriggerMessageStatusNotification,
+		ConnectorId:     &connectorId,
+		TriggerStatus:   store.TriggerStatusNotImplemented,
+	}, got)
+}

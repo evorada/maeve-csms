@@ -4,8 +4,10 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
+	"github.com/thoughtworks/maeve-csms/manager/transport"
 )
 
 // CallHandler is the interface implemented by handlers that are designed to process an OCPP Call.
@@ -45,6 +47,35 @@ func (crh CallResultHandlerFunc) HandleCallResult(ctx context.Context, chargeSta
 	return crh(ctx, chargeStationId, request, response, state)
 }
 
+// CallError is an OCPP CallError returned by a charge station in reply to a
+// CSMS-initiated Call.
+type CallError struct {
+	MessageId        string
+	Action           string // action of the original Call
+	ErrorCode        transport.ErrorCode
+	ErrorDescription string
+}
+
+func (e *CallError) Error() string {
+	return fmt.Sprintf("%s %s: %s: %s", e.Action, e.MessageId, e.ErrorCode, e.ErrorDescription)
+}
+
+// CallErrorHandler is the interface implemented by the handlers that are designed to process an OCPP CallError.
+type CallErrorHandler interface {
+	// HandleCallError receives the charge station id, the OCPP Request message of the original Call
+	// and the CallError along with any cached state. The request is the original Call payload
+	// unmarshalled with the route's NewRequest, or nil if no route exists or the payload
+	// cannot be decoded. It may return an error.
+	HandleCallError(ctx context.Context, chargeStationId string, request ocpp.Request, callError *CallError, state any) error
+}
+
+// CallErrorHandlerFunc allows a plain function to be used as a CallErrorHandler
+type CallErrorHandlerFunc func(ctx context.Context, chargeStationId string, request ocpp.Request, callError *CallError, state any) error
+
+func (f CallErrorHandlerFunc) HandleCallError(ctx context.Context, chargeStationId string, request ocpp.Request, callError *CallError, state any) error {
+	return f(ctx, chargeStationId, request, callError, state)
+}
+
 // CallResultRoute is the configuration that is used by the Router for process an OCPP CallResult.
 // In the Router this is indexed by the OCPP Action (of the corresponding Call).
 type CallResultRoute struct {
@@ -53,6 +84,7 @@ type CallResultRoute struct {
 	RequestSchema  string               // JSON schema file that corresponds to the request data structure
 	ResponseSchema string               // JSON schema file that corresponds to the response data structure
 	Handler        CallResultHandler    // Function to process a call result
+	ErrorHandler   CallErrorHandler     // optional: invoked when the station answers the Call with a CallError
 }
 
 // CallMaker is the interface used by handlers (and other parts of the system) that want to initiate

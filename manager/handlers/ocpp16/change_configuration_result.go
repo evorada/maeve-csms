@@ -23,18 +23,34 @@ func (c ChangeConfigurationResultHandler) HandleCallResult(ctx context.Context, 
 	req := request.(*ocpp16.ChangeConfigurationJson)
 	resp := response.(*ocpp16.ChangeConfigurationResponseJson)
 
+	return c.updateSetting(ctx, chargeStationId, req, store.ChargeStationSettingStatus(resp.Status))
+}
+
+// HandleCallError marks the setting as rejected when the charge station answers the
+// ChangeConfiguration call with a CallError: only pending settings are (re)sent, so
+// the call is not repeated.
+func (c ChangeConfigurationResultHandler) HandleCallError(ctx context.Context, chargeStationId string, request ocpp.Request, callError *handlers.CallError, state any) error {
+	req, ok := request.(*ocpp16.ChangeConfigurationJson)
+	if !ok || req == nil {
+		return fmt.Errorf("no request for call error: %w", callError)
+	}
+
+	return c.updateSetting(ctx, chargeStationId, req, store.ChargeStationSettingStatusRejected)
+}
+
+func (c ChangeConfigurationResultHandler) updateSetting(ctx context.Context, chargeStationId string, req *ocpp16.ChangeConfigurationJson, status store.ChargeStationSettingStatus) error {
 	span := trace.SpanFromContext(ctx)
 	span.SetAttributes(
 		attribute.String("setting.key", req.Key),
 		attribute.String("setting.value", req.Value),
-		attribute.String("setting.status", string(resp.Status)))
+		attribute.String("setting.status", string(status)))
 
 	err := c.SettingsStore.UpdateChargeStationSettings(ctx, chargeStationId, &store.ChargeStationSettings{
 		ChargeStationId: chargeStationId,
 		Settings: map[string]*store.ChargeStationSetting{
 			req.Key: {
 				Value:  req.Value,
-				Status: store.ChargeStationSettingStatus(resp.Status),
+				Status: status,
 			},
 		},
 	})

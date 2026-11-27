@@ -49,6 +49,11 @@ func SyncTriggers(ctx context.Context,
 				}
 				span.SetAttributes(attribute.Int("sync.trigger.count", len(triggerMessages)))
 				for _, pendingTriggerMessage := range triggerMessages {
+					// only pending trigger messages are (re)sent: a trigger message that the
+					// charge station refused stays in the store with its final status
+					if pendingTriggerMessage.TriggerStatus != store.TriggerStatusPending {
+						continue
+					}
 					func() {
 						ctx, span := tracer.Start(ctx, "sync trigger", trace.WithSpanKind(trace.SpanKindInternal),
 							trace.WithAttributes(

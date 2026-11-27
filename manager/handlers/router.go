@@ -10,8 +10,10 @@ import (
 	"io/fs"
 
 	"github.com/santhosh-tekuri/jsonschema"
+	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	"github.com/thoughtworks/maeve-csms/manager/schemas"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/slog"
@@ -24,6 +26,7 @@ type Router struct {
 	OcppVersion      transport.OcppVersion      // the OCPP version that this router supports
 	CallRoutes       map[string]CallRoute       // the set of routes for incoming calls (indexed by action)
 	CallResultRoutes map[string]CallResultRoute // the set of routes for call results (indexed by action)
+	CallErrorHandler CallErrorHandler           // optional: invoked for every CallError after the route's ErrorHandler
 }
 
 func (r Router) Handle(ctx context.Context, chargeStationId string, msg *transport.Message) {
@@ -124,11 +127,73 @@ func (r Router) route(ctx context.Context, chargeStationId string, message *tran
 			return err
 		}
 	case transport.MessageTypeCallError:
-		// TODO: what do we want to do with errors?
-		return errors.New("we shouldn't get here at the moment")
+		return r.routeCallError(ctx, chargeStationId, message)
 	}
 
 	return nil
+}
+
+// routeCallError delivers a CallError sent by a charge station in reply to a CSMS-initiated
+// Call: first to the ErrorHandler of the route for the action of that Call, then to the
+// router-wide CallErrorHandler. Nothing is sent back to the charge station.
+func (r Router) routeCallError(ctx context.Context, chargeStationId string, message *transport.Message) error {
+	callErr := &CallError{
+		MessageId:        message.MessageId,
+		Action:           message.Action,
+		ErrorCode:        message.ErrorCode,
+		ErrorDescription: message.ErrorDescription,
+	}
+
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("call_error.action", callErr.Action),
+		attribute.String("call_error.code", string(callErr.ErrorCode)),
+		attribute.String("call_error.description", callErr.ErrorDescription))
+
+	// the request is the CSMS's own Call, so it is not validated against the schema
+	var req ocpp.Request
+	route, ok := r.CallResultRoutes[message.Action]
+	if ok && len(message.RequestPayload) > 0 {
+		req = route.NewRequest()
+		err := json.Unmarshal(message.RequestPayload, &req)
+		if err != nil {
+			slog.Warn("unable to unmarshal request payload of call error",
+				slog.String("chargeStationId", chargeStationId),
+				slog.String("action", callErr.Action),
+				slog.String("messageId", callErr.MessageId),
+				"err", err)
+			req = nil
+		}
+	}
+
+	handled := false
+	var errs []error
+	if ok && route.ErrorHandler != nil {
+		handled = true
+		err := route.ErrorHandler.HandleCallError(ctx, chargeStationId, req, callErr, message.State)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("handling %s call error: %w", callErr.Action, err))
+		}
+	}
+	if r.CallErrorHandler != nil {
+		handled = true
+		err := r.CallErrorHandler.HandleCallError(ctx, chargeStationId, req, callErr, message.State)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("handling call error: %w", err))
+		}
+	}
+
+	if !handled {
+		slog.Warn("unhandled call error",
+			slog.String("chargeStationId", chargeStationId),
+			slog.String("action", callErr.Action),
+			slog.String("messageId", callErr.MessageId),
+			slog.String("code", string(callErr.ErrorCode)),
+			slog.String("description", callErr.ErrorDescription))
+		return nil
+	}
+
+	return errors.Join(errs...)
 }
 
 // schemaValidationError maps an error returned by schemas.Validate. A payload that

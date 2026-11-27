@@ -35,6 +35,15 @@ func NewRouter(emitter transport.Emitter,
 
 	standardCallMaker := NewCallMaker(emitter)
 
+	// these handlers process both the result and the error returned for their call
+	changeConfigurationResultHandler := ChangeConfigurationResultHandler{
+		SettingsStore: engine,
+		CallMaker:     standardCallMaker,
+	}
+	triggerMessageResultHandler := TriggerMessageResultHandler{
+		Store: engine,
+	}
+
 	return &handlers.Router{
 		Emitter:     emitter,
 		SchemaFS:    schemaFS,
@@ -324,17 +333,16 @@ func NewRouter(emitter transport.Emitter,
 				NewResponse:    func() ocpp.Response { return new(ocpp16.ChangeConfigurationResponseJson) },
 				RequestSchema:  "ocpp16/ChangeConfiguration.json",
 				ResponseSchema: "ocpp16/ChangeConfigurationResponse.json",
-				Handler: ChangeConfigurationResultHandler{
-					SettingsStore: engine,
-					CallMaker:     standardCallMaker,
-				},
+				Handler:        changeConfigurationResultHandler,
+				ErrorHandler:   changeConfigurationResultHandler,
 			},
 			"TriggerMessage": {
 				NewRequest:     func() ocpp.Request { return new(ocpp16.TriggerMessageJson) },
 				NewResponse:    func() ocpp.Response { return new(ocpp16.TriggerMessageResponseJson) },
 				RequestSchema:  "ocpp16/TriggerMessage.json",
 				ResponseSchema: "ocpp16/TriggerMessageResponse.json",
-				Handler:        TriggerMessageResultHandler{},
+				Handler:        triggerMessageResultHandler,
+				ErrorHandler:   triggerMessageResultHandler,
 			},
 			"ExtendedTriggerMessage": {
 				NewRequest:     func() ocpp.Request { return new(ocpp16.ExtendedTriggerMessageJson) },
