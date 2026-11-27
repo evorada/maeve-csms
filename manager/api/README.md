@@ -35,7 +35,10 @@ The API is described by an OpenAPI spec that is split over several files:
    every operation, so add the new one there. An operation on a charge station has the station key as the path
    parameter `csId` (`/cs/{csId}/...`): `api.AuthzMiddleware` answers `404` for a charge station outside the
    scope of the caller before the operation runs. Any other operation scopes what it reads and writes itself,
-   with the `tenancy.Scoper` of the server.
+   with the `tenancy.Scoper` of the server. A request with a token whose path or query parameters cannot be
+   read (a number that is not one, a required query parameter that is missing) is answered `400` by the
+   generated code before the permission and the scope are checked; the answer says nothing about the charge
+   station.
 
    An operation that creates or changes something that a tenant owns has one of `tenancy.WritePermissions` and
    is answered with `403` and the error `tenant_suspended` while that tenant is suspended: on a charge station

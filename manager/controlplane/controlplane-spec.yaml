@@ -63,7 +63,7 @@ paths:
         slug and the org key of a tenant never change. The entitlements and the config
         are only replaced by a document whose version is not lower than the stored one;
         an older document is ignored, without an error. The status of a tenant is not
-        changed. Sending the same document again changes nothing.
+        changed. Sending the same document again changes nothing but `updated_at`.
       requestBody:
         required: true
         content:
@@ -392,6 +392,7 @@ components:
         updated_at:
           type: string
           format: date-time
+          description: When the tenant was last written. Every accepted write sets it, also one that changed nothing else (the same or an older document)
     Manifest:
       type: object
       required:
