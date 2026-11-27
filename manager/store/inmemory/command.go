@@ -74,11 +74,13 @@ func (s *Store) ListCommands(_ context.Context, filter store.CommandFilter) ([]*
 		}
 		orgId = u.String()
 	}
-	var payloadFilter map[string]any
-	if len(filter.PayloadContains) > 0 {
-		if err := json.Unmarshal(filter.PayloadContains, &payloadFilter); err != nil || payloadFilter == nil {
-			return nil, 0, fmt.Errorf("list commands: payload filter is not a JSON object: %s", filter.PayloadContains)
-		}
+	payloadFilter, ok := containmentFilter(filter.PayloadContains)
+	if !ok {
+		return nil, 0, fmt.Errorf("list commands: payload filter is not a JSON object: %s", filter.PayloadContains)
+	}
+	progressFilter, ok := containmentFilter(filter.ProgressContains)
+	if !ok {
+		return nil, 0, fmt.Errorf("list commands: progress filter is not a JSON object: %s", filter.ProgressContains)
 	}
 
 	s.Lock()
@@ -92,6 +94,7 @@ func (s *Store) ListCommands(_ context.Context, filter store.CommandFilter) ([]*
 			len(filter.Actions) > 0 && !slices.Contains(filter.Actions, cmd.Action),
 			len(filter.Statuses) > 0 && !slices.Contains(filter.Statuses, cmd.Status),
 			payloadFilter != nil && !payloadContains(cmd.Payload, payloadFilter),
+			progressFilter != nil && !payloadContains(cmd.Progress, progressFilter),
 			filter.CreatedAfter != nil && !cmd.CreatedAt.After(*filter.CreatedAfter),
 			filter.CreatedBefore != nil && !cmd.CreatedAt.Before(*filter.CreatedBefore):
 			continue
@@ -114,9 +117,22 @@ func (s *Store) ListCommands(_ context.Context, filter store.CommandFilter) ([]*
 	return page, total, nil
 }
 
+// containmentFilter decodes a containment filter of ListCommands: nil when it is not
+// set, false when it is not a JSON object.
+func containmentFilter(filter json.RawMessage) (map[string]any, bool) {
+	if len(filter) == 0 {
+		return nil, true
+	}
+	var want map[string]any
+	if err := json.Unmarshal(filter, &want); err != nil || want == nil {
+		return nil, false
+	}
+	return want, true
+}
+
 // payloadContains reports whether every top-level key of want is in the JSON object
-// payload with an equal value. Unlike the containment of PostgreSQL, nested values must
-// be equal, not contained.
+// payload (or progress) with an equal value. Unlike the containment of PostgreSQL,
+// nested values must be equal, not contained.
 func payloadContains(payload json.RawMessage, want map[string]any) bool {
 	var got map[string]any
 	if err := json.Unmarshal(payload, &got); err != nil {

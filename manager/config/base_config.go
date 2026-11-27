@@ -146,6 +146,9 @@ var DefaultConfig = BaseConfig{
 		DefaultTTL:           commands.DefaultTTL.String(),
 		MaxTTL:               commands.DefaultMaxTTL.String(),
 		Retention:            commands.DefaultRetention.String(),
+		RemoteStartWindow:    commands.DefaultRemoteStartWindow.String(),
+		RemoteStopWindow:     commands.DefaultRemoteStopWindow.String(),
+		AvailabilityWindow:   commands.DefaultAvailabilityWindow.String(),
 	},
 	Nats: &NatsConfig{
 		Urls: []string{"nats://localhost:4222"},

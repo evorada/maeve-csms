@@ -328,6 +328,51 @@ func TestCommandStore(t *testing.T, newStore func(t *testing.T) store.Engine) {
 		assert.Error(t, err, "a payload filter that is not a JSON object")
 	})
 
+	t.Run("list filters on the top-level keys of the progress", func(t *testing.T) {
+		s := newStore(t)
+		c1 := testCommand(1, "k7f2.cs001", 0)
+		c1.Action = "RemoteStartTransaction"
+		c1.Payload = json.RawMessage(`{"idTag":"DEADBEEF","connectorId":1}`)
+		c2 := testCommand(2, "k7f2.cs001", 10)
+		c2.Action = "RemoteStartTransaction"
+		c2.Payload = json.RawMessage(`{"idTag":"DEADBEEF"}`)
+		c3 := testCommand(3, "k7f2.cs001", 20)
+		c3.Action = "RemoteStartTransaction"
+		c3.Payload = json.RawMessage(`{"idTag":"CAFEBABE"}`)
+		c4 := testCommand(4, "k7f2.cs002", 30) // no progress
+		createCommands(t, s, c1, c2, c3, c4)
+		for id, progress := range map[string]string{
+			c1.Id: `{"state":"awaiting_transaction","deadline":"2026-11-27T12:05:00Z"}`,
+			c2.Id: `{"state":"transaction_started","transactionId":"t-1","ocppTransactionId":7,"connectorId":2}`,
+			c3.Id: `{"state":"awaiting_transaction","deadline":"2026-11-27T12:25:00Z"}`,
+		} {
+			_, err := s.SetCommandProgress(ctx, id, json.RawMessage(progress), commandAt(40), nil)
+			require.NoError(t, err)
+		}
+		ids := func(commands ...*store.Command) []string { return commandIds(commands) }
+
+		page, total := listCommands(t, s, store.CommandFilter{ProgressContains: json.RawMessage(`{"state":"awaiting_transaction"}`)})
+		assert.Equal(t, ids(c3, c1), page)
+		assert.Equal(t, 2, total)
+		page, _ = listCommands(t, s, store.CommandFilter{ProgressContains: json.RawMessage(`{"state":"transaction_started","ocppTransactionId":7}`)})
+		assert.Equal(t, ids(c2), page, "every key must be there with an equal value")
+		page, _ = listCommands(t, s, store.CommandFilter{ProgressContains: json.RawMessage(`{"state":"transaction_started","ocppTransactionId":8}`)})
+		assert.Empty(t, page)
+		page, _ = listCommands(t, s, store.CommandFilter{ProgressContains: json.RawMessage(`{"state":"no_transaction"}`)})
+		assert.Empty(t, page)
+		page, _ = listCommands(t, s, store.CommandFilter{ProgressContains: json.RawMessage(`{}`)})
+		assert.Equal(t, ids(c3, c2, c1), page, "an empty object matches every command with progress, not those without")
+
+		page, total = listCommands(t, s, store.CommandFilter{StationKey: "k7f2.cs001",
+			PayloadContains:  json.RawMessage(`{"idTag":"DEADBEEF"}`),
+			ProgressContains: json.RawMessage(`{"state":"awaiting_transaction"}`)})
+		assert.Equal(t, ids(c1), page, "with the payload filter")
+		assert.Equal(t, 1, total)
+
+		_, _, err := s.ListCommands(ctx, store.CommandFilter{ProgressContains: json.RawMessage(`"awaiting_transaction"`)})
+		assert.Error(t, err, "a progress filter that is not a JSON object")
+	})
+
 	t.Run("claim takes the oldest queued command and sets sent_at", func(t *testing.T) {
 		s := newStore(t)
 		// created in this order: 3, then 1 and 2 at the same time (the lower id first)

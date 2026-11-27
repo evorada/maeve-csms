@@ -14,4 +14,9 @@
 // Every final status (accepted, rejected, failed, timeout, cancelled) is stored in one
 // store transaction with its command.completed event. The actions that can be sent are
 // those of the catalogue (Lookup), by OCPP version.
+//
+// The Tracker follows some accepted OCPP 1.6 commands to their effect (the transaction
+// of a remote start, the end of the transaction of a remote stop, the connector status
+// of a change of availability) and stores each step as the progress of the command,
+// with a command.progress event.
 package commands

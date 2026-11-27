@@ -39,7 +39,7 @@ func TestRemoteStopTransactionHandler_HandleCallResult(t *testing.T) {
 			},
 			setupStore: func() store.TransactionStore {
 				engine := inmemory.NewStore(clock.RealClock{})
-				_ = engine.CreateTransaction(ctx, chargeStationId, "12345", idToken, "RFID", []store.MeterValue{}, 1, false)
+				_ = engine.CreateTransaction(ctx, chargeStationId, ocpp16.ConvertToUUID(12345), idToken, "RFID", []store.MeterValue{}, 1, false)
 				return engine
 			},
 			expectedError: nil,
@@ -54,7 +54,7 @@ func TestRemoteStopTransactionHandler_HandleCallResult(t *testing.T) {
 			},
 			setupStore: func() store.TransactionStore {
 				engine := inmemory.NewStore(clock.RealClock{})
-				_ = engine.CreateTransaction(ctx, chargeStationId, "12345", idToken, "RFID", []store.MeterValue{}, 1, false)
+				_ = engine.CreateTransaction(ctx, chargeStationId, ocpp16.ConvertToUUID(12345), idToken, "RFID", []store.MeterValue{}, 1, false)
 				return engine
 			},
 			expectedError: nil,
@@ -147,7 +147,7 @@ func TestRemoteStopTransactionHandler_TransactionValidation(t *testing.T) {
 			name:          "transaction exists",
 			transactionId: 12345,
 			setupStore: func(engine *inmemory.Store) {
-				_ = engine.CreateTransaction(ctx, chargeStationId, "12345", idToken, "RFID", []store.MeterValue{}, 1, false)
+				_ = engine.CreateTransaction(ctx, chargeStationId, ocpp16.ConvertToUUID(12345), idToken, "RFID", []store.MeterValue{}, 1, false)
 			},
 			expectError:   false,
 			expectWarning: false,
@@ -165,9 +165,9 @@ func TestRemoteStopTransactionHandler_TransactionValidation(t *testing.T) {
 			name:          "multiple transactions, stop specific one",
 			transactionId: 67890,
 			setupStore: func(engine *inmemory.Store) {
-				_ = engine.CreateTransaction(ctx, chargeStationId, "12345", idToken, "RFID", []store.MeterValue{}, 1, false)
-				_ = engine.CreateTransaction(ctx, chargeStationId, "67890", idToken, "RFID", []store.MeterValue{}, 2, false)
-				_ = engine.CreateTransaction(ctx, "cs002", "11111", idToken, "RFID", []store.MeterValue{}, 1, false)
+				_ = engine.CreateTransaction(ctx, chargeStationId, ocpp16.ConvertToUUID(12345), idToken, "RFID", []store.MeterValue{}, 1, false)
+				_ = engine.CreateTransaction(ctx, chargeStationId, ocpp16.ConvertToUUID(67890), idToken, "RFID", []store.MeterValue{}, 2, false)
+				_ = engine.CreateTransaction(ctx, "cs002", ocpp16.ConvertToUUID(11111), idToken, "RFID", []store.MeterValue{}, 1, false)
 			},
 			expectError:   false,
 			expectWarning: false,
@@ -176,7 +176,7 @@ func TestRemoteStopTransactionHandler_TransactionValidation(t *testing.T) {
 			name:          "transaction from different charge station",
 			transactionId: 11111,
 			setupStore: func(engine *inmemory.Store) {
-				_ = engine.CreateTransaction(ctx, "cs002", "11111", idToken, "RFID", []store.MeterValue{}, 1, false)
+				_ = engine.CreateTransaction(ctx, "cs002", ocpp16.ConvertToUUID(11111), idToken, "RFID", []store.MeterValue{}, 1, false)
 			},
 			expectError:   false,
 			expectWarning: true, // Transaction exists but not for this charge station
@@ -217,7 +217,7 @@ func TestRemoteStopTransactionHandler_DifferentStatuses(t *testing.T) {
 	idToken := "VALID_TOKEN"
 
 	engine := inmemory.NewStore(clock.RealClock{})
-	_ = engine.CreateTransaction(ctx, chargeStationId, "12345", idToken, "RFID", []store.MeterValue{}, 1, false)
+	_ = engine.CreateTransaction(ctx, chargeStationId, ocpp16.ConvertToUUID(12345), idToken, "RFID", []store.MeterValue{}, 1, false)
 
 	tests := []struct {
 		name           string
@@ -267,7 +267,7 @@ func TestRemoteStopTransactionHandler_EmergencyScenarios(t *testing.T) {
 			name:          "emergency stop of active transaction",
 			transactionId: 12345,
 			setupStore: func(engine *inmemory.Store) {
-				_ = engine.CreateTransaction(ctx, chargeStationId, "12345", idToken, "RFID", []store.MeterValue{}, 1, false)
+				_ = engine.CreateTransaction(ctx, chargeStationId, ocpp16.ConvertToUUID(12345), idToken, "RFID", []store.MeterValue{}, 1, false)
 			},
 			description: "Normal emergency stop scenario",
 		},
@@ -275,7 +275,7 @@ func TestRemoteStopTransactionHandler_EmergencyScenarios(t *testing.T) {
 			name:          "emergency stop after payment failure",
 			transactionId: 67890,
 			setupStore: func(engine *inmemory.Store) {
-				_ = engine.CreateTransaction(ctx, chargeStationId, "67890", "PAYMENT_FAILED", "ISO14443", []store.MeterValue{}, 1, false)
+				_ = engine.CreateTransaction(ctx, chargeStationId, ocpp16.ConvertToUUID(67890), "PAYMENT_FAILED", "ISO14443", []store.MeterValue{}, 1, false)
 			},
 			description: "Stop transaction due to payment failure",
 		},
@@ -283,7 +283,7 @@ func TestRemoteStopTransactionHandler_EmergencyScenarios(t *testing.T) {
 			name:          "emergency stop of offline transaction",
 			transactionId: 11111,
 			setupStore: func(engine *inmemory.Store) {
-				_ = engine.CreateTransaction(ctx, chargeStationId, "11111", idToken, "RFID", []store.MeterValue{}, 1, true)
+				_ = engine.CreateTransaction(ctx, chargeStationId, ocpp16.ConvertToUUID(11111), idToken, "RFID", []store.MeterValue{}, 1, true)
 			},
 			description: "Stop offline transaction",
 		},
@@ -317,4 +317,34 @@ func TestRemoteStopTransactionHandler_EmergencyScenarios(t *testing.T) {
 			require.NoError(t, err, tt.description)
 		})
 	}
+}
+
+// findRecorder records the transaction ids that are looked up and whether they were found.
+type findRecorder struct {
+	store.TransactionStore
+	lookedUp []string
+	found    []bool
+}
+
+func (r *findRecorder) FindTransaction(ctx context.Context, chargeStationId, transactionId string) (*store.Transaction, error) {
+	transaction, err := r.TransactionStore.FindTransaction(ctx, chargeStationId, transactionId)
+	r.lookedUp = append(r.lookedUp, transactionId)
+	r.found = append(r.found, transaction != nil)
+	return transaction, err
+}
+
+// The transactions of OCPP 1.6 are stored with the UUID form of their integer id.
+func TestRemoteStopTransactionHandlerFindsTheStoredTransaction(t *testing.T) {
+	ctx := context.Background()
+	engine := inmemory.NewStore(clock.RealClock{})
+	require.NoError(t, engine.CreateTransaction(ctx, "cs001", ocpp16.ConvertToUUID(12345), "TAG", "ISO14443", nil, 1, false))
+	recorder := &findRecorder{TransactionStore: engine}
+	handler := ocpp16.RemoteStopTransactionHandler{TransactionStore: recorder}
+
+	err := handler.HandleCallResult(ctx, "cs001", &types.RemoteStopTransactionJson{TransactionId: 12345},
+		&types.RemoteStopTransactionResponseJson{Status: types.RemoteStopTransactionResponseJsonStatusAccepted}, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"00000000-0000-0000-0000-000000003039"}, recorder.lookedUp)
+	assert.Equal(t, []bool{true}, recorder.found)
 }

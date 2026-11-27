@@ -22,7 +22,9 @@ import (
 // retries a StopTransaction.req that fails.
 //
 // The end of the transaction, its details and the session.completed event are stored in
-// one transaction.
+// one transaction. Once it is stored, the end is given to the CommandTracker (when there
+// is one), which records it on the remote stop that asked for it; nothing the tracker
+// does changes the answer.
 type StopTransactionHandler struct {
 	Clock            clock.PassiveClock
 	TokenStore       store.TokenStore
@@ -30,6 +32,7 @@ type StopTransactionHandler struct {
 	TransactionStore store.TransactionStore
 	Tx               store.Transactor
 	Events           events.Emitter
+	CommandTracker   CommandTracker // nil: commands are not followed
 }
 
 func (s StopTransactionHandler) HandleCall(ctx context.Context, chargeStationId string, request ocpp.Request) (response ocpp.Response, err error) {
@@ -75,6 +78,10 @@ func (s StopTransactionHandler) HandleCall(ctx context.Context, chargeStationId 
 	if err != nil {
 		return nil, err
 	}
+
+	trackCommand(ctx, s.CommandTracker, chargeStationId, "StopTransaction", func(tracker CommandTracker) {
+		tracker.OnTransactionStopped(ctx, chargeStationId, req.TransactionId, reason)
+	})
 
 	return &types.StopTransactionResponseJson{
 		IdTagInfo: idTagInfo,

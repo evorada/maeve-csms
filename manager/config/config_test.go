@@ -20,6 +20,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/entitlements"
 	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/handlers"
+	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/jobs"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
@@ -115,10 +116,33 @@ func TestConfigureFirestoreStorage(t *testing.T) {
 	// no command queue: the routers have no observer (a nil interface, not a nil pointer)
 	assert.Nil(t, settings.Commands)
 	assert.Nil(t, settings.CommandDispatcher)
+	assert.Nil(t, settings.CommandTracker)
 	for name, handler := range map[string]transport.MessageHandler{"1.6": settings.Ocpp16Handler, "2.0.1": settings.Ocpp201Handler} {
 		router, ok := handler.(*handlers.Router)
 		require.True(t, ok, name)
 		assert.True(t, router.Observer == nil, name)
+	}
+	// nor a tracker: the OCPP 1.6 handlers get a nil interface, not a nil pointer
+	router16 := settings.Ocpp16Handler.(*handlers.Router)
+	for _, action := range []string{"StartTransaction", "StopTransaction", "StatusNotification"} {
+		assert.True(t, trackerOf(t, router16.CallRoutes[action].Handler) == nil, action)
+	}
+}
+
+// trackerOf returns the command tracker of the OCPP 1.6 handler of a message that
+// tells the tracker about what the station did.
+func trackerOf(t *testing.T, handler any) ocpp16.CommandTracker {
+	t.Helper()
+	switch h := handler.(type) {
+	case ocpp16.StartTransactionHandler:
+		return h.CommandTracker
+	case ocpp16.StopTransactionHandler:
+		return h.CommandTracker
+	case ocpp16.StatusNotificationHandler:
+		return h.CommandTracker
+	default:
+		t.Fatalf("handler %T has no command tracker", handler)
+		return nil
 	}
 }
 
@@ -1372,9 +1396,13 @@ func TestConfigureCommands(t *testing.T) {
 			MaxTTL:               168 * time.Hour,
 			Retention:            2160 * time.Hour,
 			TTL:                  map[string]time.Duration{},
+			RemoteStartWindow:    5 * time.Minute,
+			RemoteStopWindow:     2 * time.Minute,
+			AvailabilityWindow:   2 * time.Minute,
 		}
 		assert.Equal(t, want, settings.CommandDispatcher.Config)
 		assert.Equal(t, want, settings.Commands.Config)
+		assert.Equal(t, want, settings.CommandTracker.Config)
 		assert.Same(t, settings.Storage, settings.CommandDispatcher.Store)
 		assert.Same(t, settings.Storage, settings.Commands.Store)
 		assert.Same(t, settings.Events, settings.CommandDispatcher.Events)
@@ -1390,12 +1418,26 @@ func TestConfigureCommands(t *testing.T) {
 		}
 		require.NotNil(t, settings.Connectivity)
 		assert.Same(t, settings.CommandDispatcher, settings.Connectivity.OnConnected)
+
+		// the tracker hears about the answers, sweeps with the queue and is told about the
+		// transactions and statuses of the OCPP 1.6 stations
+		require.NotNil(t, settings.CommandTracker)
+		assert.Same(t, settings.Storage, settings.CommandTracker.Store)
+		assert.Same(t, settings.Storage, settings.CommandTracker.Tx)
+		assert.Same(t, settings.Events, settings.CommandTracker.Events)
+		assert.Equal(t, []commands.ResultHook{settings.CommandTracker}, settings.CommandDispatcher.AfterResult)
+		assert.Equal(t, []commands.Sweeper{settings.CommandTracker}, settings.CommandDispatcher.AfterSweep)
+		router16 := settings.Ocpp16Handler.(*handlers.Router)
+		for _, action := range []string{"StartTransaction", "StopTransaction", "StatusNotification"} {
+			assert.Same(t, settings.CommandTracker, trackerOf(t, router16.CallRoutes[action].Handler), action)
+		}
 	})
 
 	t.Run("overridden", func(t *testing.T) {
 		settings, err := config.Configure(context.TODO(), newConfig(t, "[commands]\nresponse_timeout = \"1m\"\n"+
 			"connect_dispatch_delay = \"0s\"\nsweep_interval = \"10s\"\ndefault_ttl = \"2h\"\nmax_ttl = \"48h\"\n"+
-			"retention = \"720h\"\n[commands.ttl]\nReset = \"10m\"\nGetDiagnostics = \"12h\"\n"))
+			"retention = \"720h\"\nremote_start_window = \"10m\"\nremote_stop_window = \"1m\"\navailability_window = \"30s\"\n"+
+			"[commands.ttl]\nReset = \"10m\"\nGetDiagnostics = \"12h\"\n"))
 		require.NoError(t, err)
 
 		assert.Equal(t, commands.Config{
@@ -1406,11 +1448,15 @@ func TestConfigureCommands(t *testing.T) {
 			MaxTTL:               48 * time.Hour,
 			Retention:            720 * time.Hour,
 			TTL:                  map[string]time.Duration{"Reset": 10 * time.Minute, "GetDiagnostics": 12 * time.Hour},
-		}, settings.CommandDispatcher.Config)
+			RemoteStartWindow:    10 * time.Minute,
+			RemoteStopWindow:     time.Minute,
+			AvailabilityWindow:   30 * time.Second,
+		}, settings.CommandTracker.Config)
 		assert.Equal(t, 10*time.Second, settings.CommandDispatcher.SweepJob().Interval)
 	})
 
-	for _, key := range []string{"response_timeout", "connect_dispatch_delay", "sweep_interval", "default_ttl", "max_ttl", "retention"} {
+	for _, key := range []string{"response_timeout", "connect_dispatch_delay", "sweep_interval", "default_ttl", "max_ttl", "retention",
+		"remote_start_window", "remote_stop_window", "availability_window"} {
 		values := map[string]string{
 			"not a duration": "every minute",
 			"no unit":        "60",

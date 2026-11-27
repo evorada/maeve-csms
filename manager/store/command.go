@@ -83,8 +83,12 @@ type CommandFilter struct {
 	// {"transactionId":123}. Only the top-level keys are compared, and their values must
 	// be equal.
 	PayloadContains json.RawMessage
-	CreatedAfter    *time.Time // created strictly after this instant
-	CreatedBefore   *time.Time // created strictly before this instant
+	// ProgressContains selects commands whose progress contains this JSON object, e.g.
+	// {"state":"awaiting_transaction"}, compared like PayloadContains. A command without
+	// progress never matches.
+	ProgressContains json.RawMessage
+	CreatedAfter     *time.Time // created strictly after this instant
+	CreatedBefore    *time.Time // created strictly before this instant
 	// Limit is 1..MaxCommandListLimit: 0 or less is DefaultCommandListLimit, more than
 	// the maximum is the maximum.
 	Limit  int

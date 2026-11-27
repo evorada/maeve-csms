@@ -13,6 +13,9 @@ const (
 	DefaultTTL                  = time.Hour
 	DefaultMaxTTL               = 7 * 24 * time.Hour
 	DefaultRetention            = 90 * 24 * time.Hour
+	DefaultRemoteStartWindow    = 5 * time.Minute
+	DefaultRemoteStopWindow     = 2 * time.Minute
+	DefaultAvailabilityWindow   = 2 * time.Minute
 )
 
 // Config holds the timings of the command queue.
@@ -35,6 +38,15 @@ type Config struct {
 	Retention time.Duration
 	// TTL is how long a command of an action may wait in the queue, by action.
 	TTL map[string]time.Duration
+	// RemoteStartWindow is how long after an accepted RemoteStartTransaction the
+	// transaction it began is waited for.
+	RemoteStartWindow time.Duration
+	// RemoteStopWindow is how long after an accepted RemoteStopTransaction the end of
+	// the transaction is waited for.
+	RemoteStopWindow time.Duration
+	// AvailabilityWindow is how long after an accepted ChangeAvailability the connector
+	// status it asks for is waited for.
+	AvailabilityWindow time.Duration
 }
 
 func orDefault(d, def time.Duration) time.Duration {
@@ -58,6 +70,18 @@ func (c Config) maxTTL() time.Duration {
 
 func (c Config) retention() time.Duration {
 	return orDefault(c.Retention, DefaultRetention)
+}
+
+func (c Config) remoteStartWindow() time.Duration {
+	return orDefault(c.RemoteStartWindow, DefaultRemoteStartWindow)
+}
+
+func (c Config) remoteStopWindow() time.Duration {
+	return orDefault(c.RemoteStopWindow, DefaultRemoteStopWindow)
+}
+
+func (c Config) availabilityWindow() time.Duration {
+	return orDefault(c.AvailabilityWindow, DefaultAvailabilityWindow)
 }
 
 // TTLFor returns how long a command of the action may wait in the queue when its caller

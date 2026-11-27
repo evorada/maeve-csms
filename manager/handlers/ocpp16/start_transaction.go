@@ -37,7 +37,9 @@ const idTagTokenType = "ISO14443"
 // StopTransaction.req for it (or keeps charging when StopTransactionOnInvalidId is false).
 //
 // The transaction, its details, the reservation it uses and the session.started event
-// are stored in one transaction.
+// are stored in one transaction. Once it is stored, a transaction whose idTag is
+// accepted is given to the CommandTracker (when there is one), which links it to the
+// remote start that asked for it; nothing the tracker does changes the answer.
 type StartTransactionHandler struct {
 	Clock            clock.PassiveClock
 	TokenStore       store.TokenStore
@@ -46,6 +48,7 @@ type StartTransactionHandler struct {
 	ReservationStore store.ReservationStore
 	Tx               store.Transactor
 	Events           events.Emitter
+	CommandTracker   CommandTracker // nil: commands are not followed
 }
 
 func (t StartTransactionHandler) HandleCall(ctx context.Context, chargeStationId string, request ocpp.Request) (ocpp.Response, error) {
@@ -66,8 +69,8 @@ func (t StartTransactionHandler) HandleCall(ctx context.Context, chargeStationId
 	}
 
 	var transactionId int
+	var transactionUuid string
 	err = t.Tx.RunInTx(ctx, func(ctx context.Context) error {
-		var transactionUuid string
 		var err error
 		transactionId, transactionUuid, err = t.createTransaction(ctx, chargeStationId, req, startedAt)
 		if err != nil {
@@ -103,6 +106,12 @@ func (t StartTransactionHandler) HandleCall(ctx context.Context, chargeStationId
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	if auth.Status == string(types.StartTransactionResponseJsonIdTagInfoStatusAccepted) {
+		trackCommand(ctx, t.CommandTracker, chargeStationId, "StartTransaction", func(tracker CommandTracker) {
+			tracker.OnTransactionStarted(ctx, chargeStationId, req.ConnectorId, req.IdTag, transactionUuid, transactionId)
+		})
 	}
 
 	return &types.StartTransactionResponseJson{

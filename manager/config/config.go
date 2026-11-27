@@ -128,6 +128,9 @@ type Config struct {
 	// CommandDispatcher sends the queued commands and records the answers of the
 	// stations. It is nil when Commands is.
 	CommandDispatcher *commands.Dispatcher
+	// CommandTracker follows the commands that the stations accepted to their effect.
+	// It is nil when Commands is.
+	CommandTracker *commands.Tracker
 }
 
 // devSubject is the caller of every API request in dev mode.
@@ -448,7 +451,7 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		return nil, err
 	}
 
-	c.Commands, c.CommandDispatcher = getCommandService(commandSettings, cfg.Storage.Type, c.Storage, c.Events, c.MsgEmitter)
+	c.Commands, c.CommandDispatcher, c.CommandTracker = getCommandService(commandSettings, cfg.Storage.Type, c.Storage, c.Events, c.MsgEmitter)
 	if c.CommandDispatcher != nil && c.Connectivity != nil {
 		// a station that connects gets its queued commands
 		c.Connectivity.OnConnected = c.CommandDispatcher
@@ -466,7 +469,8 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 			c.ContractCertProviderService,
 			heartbeatInterval,
 			schemas.OcppSchemas,
-			commandObserver(c.CommandDispatcher))
+			commandObserver(c.CommandDispatcher),
+			commandTracker(c.CommandTracker))
 	}
 	if cfg.Ocpp.Ocpp201Enabled {
 		c.Ocpp201Handler = ocpp201.NewRouter(c.MsgEmitter,

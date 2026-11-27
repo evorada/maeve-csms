@@ -78,6 +78,19 @@ type PayloadResolver interface {
 	Resolve(ctx context.Context, cmd *store.Command) (json.RawMessage, error)
 }
 
+// ResultHook follows a command after its station answered it.
+type ResultHook interface {
+	// AfterResult is told about a command that has just moved to accepted or rejected
+	// (also when the answer came after the command timed out). It must not fail the
+	// handling of the answer: it logs its own errors.
+	AfterResult(ctx context.Context, cmd *store.Command)
+}
+
+// Sweeper is a step of the sweep job of the queue that runs after Dispatcher.Sweep.
+type Sweeper interface {
+	Sweep(ctx context.Context) error
+}
+
 // Dispatcher sends the queued commands to the connected stations, one command per
 // station at a time, with the command id as the OCPP MessageId, and records the answer
 // of the station (CallResult or CallError), the commands that expire in the queue and
@@ -102,6 +115,11 @@ type Dispatcher struct {
 	// Resolvers build the payload sent for a command, in order, each from the output of
 	// the one before (the first from the stored payload).
 	Resolvers []PayloadResolver
+	// AfterResult are told, in order, about each command that its station accepted or
+	// rejected, once that status is stored.
+	AfterResult []ResultHook
+	// AfterSweep run, in order, after Sweep in the sweep job.
+	AfterSweep []Sweeper
 }
 
 var (
@@ -331,12 +349,32 @@ func (d *Dispatcher) finish(ctx context.Context, cmd *store.Command, upd store.C
 	}
 	log.Info("command completed", "status", done.Status, "late", late)
 
+	if done.Status == store.CommandStatusAccepted || done.Status == store.CommandStatusRejected {
+		d.afterResult(ctx, done)
+	}
+
 	kickCtx := context.WithoutCancel(ctx)
 	go func() {
 		if err := d.Kick(kickCtx, cmd.StationKey); err != nil {
 			slog.Warn("sending the next queued command", "stationKey", cmd.StationKey, "err", err)
 		}
 	}()
+}
+
+// afterResult tells the result hooks about a command that its station accepted or
+// rejected. A hook that panics is logged and the next one is told all the same.
+func (d *Dispatcher) afterResult(ctx context.Context, cmd *store.Command) {
+	for _, hook := range d.AfterResult {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("a hook on the result of a command panicked", "commandId", cmd.Id,
+						"stationKey", cmd.StationKey, "action", cmd.Action, "panic", r)
+				}
+			}()
+			hook.AfterResult(ctx, cmd)
+		}()
+	}
 }
 
 // Sweep times out the queued commands that expired and the sent commands that got no
@@ -465,9 +503,19 @@ func (d *Dispatcher) Purge(ctx context.Context) error {
 	return nil
 }
 
-// SweepJob returns the job that runs Sweep every Config.SweepInterval.
+// SweepJob returns the job that runs Sweep and then each of AfterSweep, every
+// Config.SweepInterval. The steps of AfterSweep run also when Sweep fails.
 func (d *Dispatcher) SweepJob() jobs.Job {
-	return jobs.Job{Name: SweepJobName, Interval: d.Config.sweepInterval(), Run: d.Sweep}
+	return jobs.Job{Name: SweepJobName, Interval: d.Config.sweepInterval(), Run: d.sweepAll}
+}
+
+// sweepAll runs Sweep and then each of AfterSweep, and returns all their errors.
+func (d *Dispatcher) sweepAll(ctx context.Context) error {
+	errs := []error{d.Sweep(ctx)}
+	for _, sweeper := range d.AfterSweep {
+		errs = append(errs, sweeper.Sweep(ctx))
+	}
+	return errors.Join(errs...)
 }
 
 // PurgeJob returns the job that runs Purge every PurgeInterval.

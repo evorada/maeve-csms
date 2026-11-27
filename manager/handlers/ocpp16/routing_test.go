@@ -78,7 +78,7 @@ func TestAllRouteSchemasExist(t *testing.T) {
 		nil,
 		nil,
 		time.Minute,
-		schemas.OcppSchemas, nil).(*handlers.Router)
+		schemas.OcppSchemas, nil, nil).(*handlers.Router)
 	require.True(t, ok, "expected NewRouter to return a *handlers.Router")
 
 	// schema path indexed by a description of the route that uses it
@@ -146,7 +146,7 @@ func TestMeterValuesCallIsStoredThroughTheRouter(t *testing.T) {
 		nil,
 		nil,
 		time.Minute,
-		schemas.OcppSchemas, nil)
+		schemas.OcppSchemas, nil, nil)
 
 	msg := &transport.Message{
 		MessageType: transport.MessageTypeCall,
@@ -238,7 +238,7 @@ func TestChangeConfigurationCallErrorRejectsSettingThroughTheRouter(t *testing.T
 		nil,
 		nil,
 		time.Minute,
-		schemas.OcppSchemas, nil)
+		schemas.OcppSchemas, nil, nil)
 
 	err := engine.UpdateChargeStationSettings(ctx, "cs001", &store.ChargeStationSettings{
 		Settings: map[string]*store.ChargeStationSetting{
@@ -283,7 +283,7 @@ func TestTriggerMessageCallErrorStoresStatusThroughTheRouter(t *testing.T) {
 		nil,
 		nil,
 		time.Minute,
-		schemas.OcppSchemas, nil)
+		schemas.OcppSchemas, nil, nil)
 
 	connectorId := 1
 	err := engine.SetChargeStationTriggerMessage(ctx, "cs001", &store.ChargeStationTriggerMessage{

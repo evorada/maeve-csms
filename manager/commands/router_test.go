@@ -23,10 +23,10 @@ import (
 )
 
 // router returns the OCPP 1.6 router of the manager with the dispatcher of f as its
-// observer, sending through the emitter of f.
+// observer and the tracker of f as its command tracker, sending through the emitter of f.
 func (f *fixture) router() transport.MessageHandler {
 	return ocpp16.NewRouter(f.emitter, f.clock, f.store, events.NopEmitter{}, &tenancy.Resolver{Stations: f.store},
-		nil, nil, nil, nil, time.Minute, schemas.OcppSchemas, f.dispatcher)
+		nil, nil, nil, nil, time.Minute, schemas.OcppSchemas, f.dispatcher, f.tracker)
 }
 
 // responses returns the CallResults and CallErrors that the router sent to the station.

@@ -131,6 +131,16 @@ func TestPayloadFieldNames(t *testing.T) {
 				`"completed_at":"2026-11-27T10:30:00Z","org_id":"org","ocpp_version":"ocpp1.6",` +
 				`"created_at":"2026-11-27T10:30:00Z","late":false}`,
 		},
+		"command.progress": {
+			payload: events.CommandProgressData{CommandId: "cmd", OrgId: "0193b2c4-0000-7000-8000-0000000000a1",
+				StationId: "CP001", StationKey: "k7f2.CP001", Action: "RemoteStartTransaction", Status: "accepted",
+				Progress:   json.RawMessage(`{"state":"transaction_started","transactionId":"tx","ocppTransactionId":17,"connectorId":1}`),
+				ProgressAt: payloadTime},
+			want: `{"command_id":"cmd","org_id":"0193b2c4-0000-7000-8000-0000000000a1","station_id":"CP001",` +
+				`"station_key":"k7f2.CP001","action":"RemoteStartTransaction","status":"accepted",` +
+				`"progress":{"state":"transaction_started","transactionId":"tx","ocppTransactionId":17,"connectorId":1},` +
+				`"progress_at":"2026-11-27T10:30:00Z"}`,
+		},
 	} {
 		got, err := json.Marshal(tc.payload)
 		require.NoError(t, err, name)
@@ -152,10 +162,10 @@ func TestStationActorAndConnectorResourceId(t *testing.T) {
 
 // Every type of the catalogue is one that the emitter accepts.
 func TestAllTypesCanBeEmitted(t *testing.T) {
-	assert.Len(t, events.AllTypes, 8)
+	assert.Len(t, events.AllTypes, 9)
 	assert.Equal(t, []string{
 		"station.registered", "station.connected", "station.disconnected", "connector.status_changed",
-		"session.started", "session.updated", "session.completed", "command.completed",
+		"session.started", "session.updated", "session.completed", "command.completed", "command.progress",
 	}, events.AllTypes)
 
 	s := inmemory.NewStore(clocktest.NewFakePassiveClock(testNow))

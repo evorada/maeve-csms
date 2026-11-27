@@ -72,7 +72,7 @@ func (f *commandsFixture) sentCalls() []*transport.Message {
 // its observer; it answers the charge stations through the emitter of the fixture.
 func (f *commandsFixture) router16() transport.MessageHandler {
 	return ocpp16.NewRouter(f.calls, f.clock, f.engine, events.NopEmitter{}, f.scoper.Resolver,
-		nil, nil, nil, nil, time.Minute, schemas.OcppSchemas, f.dispatcher)
+		nil, nil, nil, nil, time.Minute, schemas.OcppSchemas, f.dispatcher, nil)
 }
 
 // answer is the CallResult of the charge station to the command.

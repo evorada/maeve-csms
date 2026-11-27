@@ -58,6 +58,9 @@ sweep_interval = "10s"
 default_ttl = "2h"
 max_ttl = "72h"
 retention = "720h"
+remote_start_window = "3m"
+remote_stop_window = "1m"
+availability_window = "90s"
 
 [commands.ttl]
 Reset = "10m"

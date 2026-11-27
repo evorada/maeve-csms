@@ -530,3 +530,55 @@ func TestTheSweepLeavesACommandAnsweredWhileItSweeps(t *testing.T) {
 	require.Len(t, completed, 1)
 	assertCompletedEvent(t, completed[0], done, false)
 }
+
+func TestAGetConfigurationThroughTheQueueUpdatesTheSettings(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	router := f.router()
+	cmd := f.enqueue("GetConfiguration", `{"key":["HeartbeatInterval","MeterValueSampleInterval","Unknown"]}`)
+
+	router.Handle(ctx, testStation, result(f.get(cmd.Id), `{"configurationKey":[`+
+		`{"key":"HeartbeatInterval","readonly":false,"value":"300"},`+
+		`{"key":"MeterValueSampleInterval","readonly":false,"value":"60"}],"unknownKey":["Unknown"]}`))
+
+	assert.Equal(t, store.CommandStatusAccepted, f.get(cmd.Id).Status)
+	settings, err := f.store.LookupChargeStationSettings(ctx, testStation)
+	require.NoError(t, err)
+	require.NotNil(t, settings)
+	assert.Equal(t, map[string]*store.ChargeStationSetting{
+		"HeartbeatInterval":        {Value: "300", Status: store.ChargeStationSettingStatusAccepted},
+		"MeterValueSampleInterval": {Value: "60", Status: store.ChargeStationSettingStatusAccepted},
+	}, withoutSendAfter(settings.Settings))
+}
+
+func TestAChangeConfigurationThroughTheQueueRecordsThatItNeedsAReboot(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	router := f.router()
+	cmd := f.enqueue("ChangeConfiguration", `{"key":"HeartbeatInterval","value":"60"}`)
+	f.waitSent(1)
+
+	router.Handle(ctx, testStation, result(f.get(cmd.Id), `{"status":"RebootRequired"}`))
+
+	assert.Equal(t, store.CommandStatusAccepted, f.get(cmd.Id).Status)
+	settings, err := f.store.LookupChargeStationSettings(ctx, testStation)
+	require.NoError(t, err)
+	require.NotNil(t, settings)
+	assert.Equal(t, map[string]*store.ChargeStationSetting{
+		"HeartbeatInterval": {Value: "60", Status: store.ChargeStationSettingStatusRebootRequired},
+	}, withoutSendAfter(settings.Settings))
+	// no key waits any more: the station is asked for a BootNotification
+	sent := f.waitSent(2)
+	assert.Equal(t, "TriggerMessage", sent[1].msg.Action)
+	assert.JSONEq(t, `{"requestedMessage":"BootNotification"}`, string(sent[1].msg.RequestPayload))
+}
+
+// withoutSendAfter returns the settings without their time of the next send, which the
+// store sets.
+func withoutSendAfter(settings map[string]*store.ChargeStationSetting) map[string]*store.ChargeStationSetting {
+	out := make(map[string]*store.ChargeStationSetting, len(settings))
+	for key, setting := range settings {
+		out[key] = &store.ChargeStationSetting{Value: setting.Value, Status: setting.Status}
+	}
+	return out
+}

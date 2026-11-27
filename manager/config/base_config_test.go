@@ -156,6 +156,9 @@ func TestParseConfig(t *testing.T) {
 			DefaultTTL:           "2h",
 			MaxTTL:               "72h",
 			Retention:            "720h",
+			RemoteStartWindow:    "3m",
+			RemoteStopWindow:     "1m",
+			AvailabilityWindow:   "90s",
 			TTL:                  map[string]string{"Reset": "10m", "ChangeConfiguration": "24h"},
 		},
 		// the default stays and is not used with the MQTT transport

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -388,4 +389,141 @@ func TestCommandDispatchersOnOneDatabase(t *testing.T) {
 	assert.Equal(t, 1, maxInFlight, "never more than one command in flight")
 	assert.Equal(t, ids, sentIds, "each command sent once, in order")
 	assert.Len(t, unpublishedOutboxEventIds(t), count, "one command.completed event per command")
+}
+
+func TestMigration_CommandsProgressIndex(t *testing.T) {
+	ctx := context.Background()
+
+	const (
+		versionBefore = 39
+		versionAfter  = 40
+	)
+
+	migrationConnString, pool := migrationTestDatabase(t, "maeve_migration_000040")
+	progressIndex := func() string {
+		var definition string
+		err := pool.QueryRow(ctx, `SELECT indexdef FROM pg_indexes WHERE indexname = 'commands_accepted_progress_created_idx'`).
+			Scan(&definition)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ""
+		}
+		require.NoError(t, err)
+		return definition
+	}
+	const wantIndex = "CREATE INDEX commands_accepted_progress_created_idx ON public.commands USING btree (created_at) " +
+		"WHERE ((status = 'accepted'::text) AND (progress IS NOT NULL))"
+
+	migrateTo(t, migrationConnString, versionBefore)
+	assert.Empty(t, progressIndex())
+	migrateTo(t, migrationConnString, versionAfter)
+	assert.Equal(t, wantIndex, progressIndex())
+	migrateTo(t, migrationConnString, versionBefore)
+	assert.Empty(t, progressIndex())
+	migrateTo(t, migrationConnString, versionAfter)
+	assert.Equal(t, wantIndex, progressIndex())
+}
+
+// acceptedTestCommand stores a command of the action with the payload that its station
+// has accepted.
+func acceptedTestCommand(t *testing.T, s store.Engine, stationKey, action, payload string, at time.Time) *store.Command {
+	t.Helper()
+	ctx := context.Background()
+	cmd := queuedTestCommand(stationKey, at)
+	cmd.Action = action
+	cmd.Payload = json.RawMessage(payload)
+	cmd.Actor = ptr("user:alice")
+	require.NoError(t, s.CreateCommand(ctx, cmd))
+	claimed, err := s.ClaimNextCommand(ctx, stationKey, at)
+	require.NoError(t, err)
+	require.Equal(t, cmd.Id, claimed.Id)
+	accepted, err := s.TransitionCommand(ctx, cmd.Id, []store.CommandStatus{store.CommandStatusSent}, store.CommandUpdate{
+		Status: store.CommandStatusAccepted, Result: json.RawMessage(`{"status":"Accepted"}`), SentAt: claimed.SentAt,
+		CompletedAt: &at})
+	require.NoError(t, err)
+	return accepted
+}
+
+// commandProgressState returns the state of the progress of a stored command.
+func commandProgressState(t *testing.T, s store.Engine, id string) commands.ProgressState {
+	t.Helper()
+	cmd, err := s.GetCommand(context.Background(), id)
+	require.NoError(t, err)
+	require.NotNil(t, cmd)
+	var progress commands.Progress
+	require.NoError(t, json.Unmarshal(cmd.Progress, &progress))
+	return progress.State
+}
+
+// The tracker reads the waiting commands and writes their progress with its event in
+// one PostgreSQL transaction.
+func TestCommandTrackerOnPostgres(t *testing.T) {
+	ctx := context.Background()
+	s := emptyTestStore(t)
+	clk := clocktesting.NewFakePassiveClock(commandTestTime)
+	newTracker := func(outbox store.OutboxStore) *commands.Tracker {
+		return &commands.Tracker{Store: s, Tx: s, Clock: clk,
+			Events: &events.OutboxEmitter{Store: outbox, Orgs: events.StaticOrgResolver{OrgId: "0193b2c4-0000-7000-8000-0000000000a1"},
+				Product: events.Product}}
+	}
+	tracker := newTracker(s)
+	outboxTypes := func() []string {
+		rows, err := testPool.Query(ctx, `SELECT type FROM outbox_events ORDER BY seq`)
+		require.NoError(t, err)
+		defer rows.Close()
+		types := []string{}
+		for rows.Next() {
+			var eventType string
+			require.NoError(t, rows.Scan(&eventType))
+			types = append(types, eventType)
+		}
+		require.NoError(t, rows.Err())
+		return types
+	}
+
+	start := acceptedTestCommand(t, s, "k7f2.CP001", "RemoteStartTransaction", `{"idTag":"DEADBEEF","connectorId":1}`, commandTestTime)
+	tracker.AfterResult(ctx, start)
+	assert.Equal(t, commands.ProgressAwaitingTransaction, commandProgressState(t, s, start.Id))
+
+	tracker.OnTransactionStarted(ctx, "k7f2.CP001", 2, "DEADBEEF", "tx-2", 2)
+	assert.Equal(t, commands.ProgressAwaitingTransaction, commandProgressState(t, s, start.Id), "another connector")
+	tracker.OnTransactionStarted(ctx, "k7f2.CP001", 1, "DEADBEEF", "tx-1", 1)
+	assert.Equal(t, commands.ProgressTransactionStarted, commandProgressState(t, s, start.Id))
+	assert.Equal(t, []string{events.TypeCommandProgress, events.TypeCommandProgress}, outboxTypes())
+	requireNoOpenTransaction(t)
+
+	t.Run("an event that cannot be stored leaves the progress as it was", func(t *testing.T) {
+		stop := acceptedTestCommand(t, s, "k7f2.CP002", "RemoteStopTransaction", `{"transactionId":1}`, commandTestTime)
+		tracker.AfterResult(ctx, stop)
+		require.Equal(t, commands.ProgressAwaitingStop, commandProgressState(t, s, stop.Id))
+		before := outboxRows(t)
+
+		newTracker(failingOutbox{OutboxStore: s}).OnTransactionStopped(ctx, "k7f2.CP002", 1, "Remote")
+
+		assert.Equal(t, commands.ProgressAwaitingStop, commandProgressState(t, s, stop.Id))
+		assert.Equal(t, before, outboxRows(t))
+		requireNoOpenTransaction(t)
+
+		tracker.OnTransactionStopped(ctx, "k7f2.CP002", 1, "Remote")
+		assert.Equal(t, commands.ProgressTransactionStopped, commandProgressState(t, s, stop.Id))
+	})
+
+	t.Run("the sweep ends the waits past their deadline", func(t *testing.T) {
+		availability := acceptedTestCommand(t, s, "k7f2.CP003", "ChangeAvailability", `{"connectorId":1,"type":"Inoperative"}`,
+			commandTestTime)
+		tracker.AfterResult(ctx, availability)
+		waiting := acceptedTestCommand(t, s, "k7f2.CP004", "RemoteStartTransaction", `{"idTag":"CAFEBABE"}`, commandTestTime)
+		tracker.AfterResult(ctx, waiting)
+
+		clk.SetTime(commandTestTime.Add(3 * time.Minute))
+		require.NoError(t, tracker.Sweep(ctx))
+
+		assert.Equal(t, commands.ProgressNotApplied, commandProgressState(t, s, availability.Id))
+		assert.Equal(t, commands.ProgressAwaitingTransaction, commandProgressState(t, s, waiting.Id), "its window is longer")
+		assert.Equal(t, commands.ProgressTransactionStarted, commandProgressState(t, s, start.Id))
+
+		clk.SetTime(commandTestTime.Add(6 * time.Minute))
+		require.NoError(t, tracker.Sweep(ctx))
+		assert.Equal(t, commands.ProgressNoTransaction, commandProgressState(t, s, waiting.Id))
+		requireNoOpenTransaction(t)
+	})
 }

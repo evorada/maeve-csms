@@ -16,6 +16,7 @@ WHERE (sqlc.narg('org_id')::uuid IS NULL OR org_id = sqlc.narg('org_id')::uuid)
   AND (cardinality(sqlc.arg('actions')::text[]) = 0 OR action = ANY(sqlc.arg('actions')::text[]))
   AND (cardinality(sqlc.arg('statuses')::text[]) = 0 OR status = ANY(sqlc.arg('statuses')::text[]))
   AND (sqlc.narg('payload_contains')::jsonb IS NULL OR payload @> sqlc.narg('payload_contains')::jsonb)
+  AND (sqlc.narg('progress_contains')::jsonb IS NULL OR progress @> sqlc.narg('progress_contains')::jsonb)
   AND (sqlc.narg('created_after')::timestamptz IS NULL OR created_at > sqlc.narg('created_after')::timestamptz)
   AND (sqlc.narg('created_before')::timestamptz IS NULL OR created_at < sqlc.narg('created_before')::timestamptz)
 ORDER BY created_at DESC, id DESC
@@ -29,6 +30,7 @@ WHERE (sqlc.narg('org_id')::uuid IS NULL OR org_id = sqlc.narg('org_id')::uuid)
   AND (cardinality(sqlc.arg('actions')::text[]) = 0 OR action = ANY(sqlc.arg('actions')::text[]))
   AND (cardinality(sqlc.arg('statuses')::text[]) = 0 OR status = ANY(sqlc.arg('statuses')::text[]))
   AND (sqlc.narg('payload_contains')::jsonb IS NULL OR payload @> sqlc.narg('payload_contains')::jsonb)
+  AND (sqlc.narg('progress_contains')::jsonb IS NULL OR progress @> sqlc.narg('progress_contains')::jsonb)
   AND (sqlc.narg('created_after')::timestamptz IS NULL OR created_at > sqlc.narg('created_after')::timestamptz)
   AND (sqlc.narg('created_before')::timestamptz IS NULL OR created_at < sqlc.narg('created_before')::timestamptz);
 

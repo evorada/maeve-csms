@@ -36,6 +36,15 @@ type CommandsConfig struct {
 	MaxTTL string `mapstructure:"max_ttl" toml:"max_ttl"`
 	// Retention is how long a completed command is kept.
 	Retention string `mapstructure:"retention" toml:"retention"`
+	// RemoteStartWindow is how long after an accepted remote start its transaction is
+	// waited for.
+	RemoteStartWindow string `mapstructure:"remote_start_window" toml:"remote_start_window"`
+	// RemoteStopWindow is how long after an accepted remote stop the end of the
+	// transaction is waited for.
+	RemoteStopWindow string `mapstructure:"remote_stop_window" toml:"remote_stop_window"`
+	// AvailabilityWindow is how long after an accepted change of availability the
+	// connector status it asks for is waited for.
+	AvailabilityWindow string `mapstructure:"availability_window" toml:"availability_window"`
 	// TTL is how long a command may wait in the queue, by OCPP action.
 	TTL map[string]string `mapstructure:"ttl" toml:"ttl,omitempty"`
 }
@@ -55,6 +64,9 @@ func parseCommandsConfig(cfg *CommandsConfig) (commands.Config, error) {
 		{"default_ttl", cfg.DefaultTTL, &settings.DefaultTTL, false},
 		{"max_ttl", cfg.MaxTTL, &settings.MaxTTL, false},
 		{"retention", cfg.Retention, &settings.Retention, false},
+		{"remote_start_window", cfg.RemoteStartWindow, &settings.RemoteStartWindow, false},
+		{"remote_stop_window", cfg.RemoteStopWindow, &settings.RemoteStopWindow, false},
+		{"availability_window", cfg.AvailabilityWindow, &settings.AvailabilityWindow, false},
 	} {
 		parsed, err := parsePositiveDuration("commands "+d.name, d.value, d.allowZero)
 		if err != nil {
@@ -121,14 +133,23 @@ func parsePositiveDuration(name, value string, allowZero bool) (time.Duration, e
 	return parsed, nil
 }
 
-// getCommandService creates the command queue: the service that the API uses and the
-// dispatcher that sends the commands and sees the answers. The Firestore storage has no
-// command store: both are nil there and the manager works as before.
+// getCommandService creates the command queue: the service that the API uses, the
+// dispatcher that sends the commands and sees the answers, and the tracker that follows
+// the accepted commands to their effect (told by the dispatcher about the answers and
+// sweeping in its sweep job). The Firestore storage has no command store: all three are
+// nil there and the manager works as before.
 func getCommandService(settings commands.Config, storageType string, engine store.Engine, domainEvents events.Emitter,
-	emitter transport.Emitter) (*commands.Service, *commands.Dispatcher) {
+	emitter transport.Emitter) (*commands.Service, *commands.Dispatcher, *commands.Tracker) {
 	if storageType == "firestore" {
 		slog.Warn("the command queue is not available: the firestore storage does not implement it")
-		return nil, nil
+		return nil, nil, nil
+	}
+	tracker := &commands.Tracker{
+		Store:  engine,
+		Tx:     engine,
+		Events: domainEvents,
+		Clock:  clock.RealClock{},
+		Config: settings,
 	}
 	dispatcher := &commands.Dispatcher{
 		Store:  engine,
@@ -142,6 +163,8 @@ func getCommandService(settings commands.Config, storageType string, engine stor
 		SchemaFS:     schemas.OcppSchemas,
 		Clock:        clock.RealClock{},
 		Config:       settings,
+		AfterResult:  []commands.ResultHook{tracker},
+		AfterSweep:   []commands.Sweeper{tracker},
 	}
 	service := &commands.Service{
 		Store:          engine,
@@ -153,7 +176,7 @@ func getCommandService(settings commands.Config, storageType string, engine stor
 		Clock:          clock.RealClock{},
 		Config:         settings,
 	}
-	return service, dispatcher
+	return service, dispatcher, tracker
 }
 
 // commandObserver returns the dispatcher as the observer of the answers of the stations,
@@ -163,4 +186,14 @@ func commandObserver(dispatcher *commands.Dispatcher) handlers.CallOutcomeObserv
 		return nil
 	}
 	return dispatcher
+}
+
+// commandTracker returns the tracker as what the OCPP 1.6 handlers tell about the
+// transactions and connector statuses, or a nil interface (not a nil pointer) when there
+// is no command queue.
+func commandTracker(tracker *commands.Tracker) ocpp16.CommandTracker {
+	if tracker == nil {
+		return nil
+	}
+	return tracker
 }

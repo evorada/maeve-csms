@@ -18,18 +18,20 @@ WHERE ($1::uuid IS NULL OR org_id = $1::uuid)
   AND (cardinality($3::text[]) = 0 OR action = ANY($3::text[]))
   AND (cardinality($4::text[]) = 0 OR status = ANY($4::text[]))
   AND ($5::jsonb IS NULL OR payload @> $5::jsonb)
-  AND ($6::timestamptz IS NULL OR created_at > $6::timestamptz)
-  AND ($7::timestamptz IS NULL OR created_at < $7::timestamptz)
+  AND ($6::jsonb IS NULL OR progress @> $6::jsonb)
+  AND ($7::timestamptz IS NULL OR created_at > $7::timestamptz)
+  AND ($8::timestamptz IS NULL OR created_at < $8::timestamptz)
 `
 
 type CountCommandsParams struct {
-	OrgID           pgtype.UUID        `db:"org_id" json:"org_id"`
-	StationKey      pgtype.Text        `db:"station_key" json:"station_key"`
-	Actions         []string           `db:"actions" json:"actions"`
-	Statuses        []string           `db:"statuses" json:"statuses"`
-	PayloadContains []byte             `db:"payload_contains" json:"payload_contains"`
-	CreatedAfter    pgtype.Timestamptz `db:"created_after" json:"created_after"`
-	CreatedBefore   pgtype.Timestamptz `db:"created_before" json:"created_before"`
+	OrgID            pgtype.UUID        `db:"org_id" json:"org_id"`
+	StationKey       pgtype.Text        `db:"station_key" json:"station_key"`
+	Actions          []string           `db:"actions" json:"actions"`
+	Statuses         []string           `db:"statuses" json:"statuses"`
+	PayloadContains  []byte             `db:"payload_contains" json:"payload_contains"`
+	ProgressContains []byte             `db:"progress_contains" json:"progress_contains"`
+	CreatedAfter     pgtype.Timestamptz `db:"created_after" json:"created_after"`
+	CreatedBefore    pgtype.Timestamptz `db:"created_before" json:"created_before"`
 }
 
 // The same conditions as ListCommands.
@@ -40,6 +42,7 @@ func (q *Queries) CountCommands(ctx context.Context, arg CountCommandsParams) (i
 		arg.Actions,
 		arg.Statuses,
 		arg.PayloadContains,
+		arg.ProgressContains,
 		arg.CreatedAfter,
 		arg.CreatedBefore,
 	)
@@ -174,22 +177,24 @@ WHERE ($1::uuid IS NULL OR org_id = $1::uuid)
   AND (cardinality($3::text[]) = 0 OR action = ANY($3::text[]))
   AND (cardinality($4::text[]) = 0 OR status = ANY($4::text[]))
   AND ($5::jsonb IS NULL OR payload @> $5::jsonb)
-  AND ($6::timestamptz IS NULL OR created_at > $6::timestamptz)
-  AND ($7::timestamptz IS NULL OR created_at < $7::timestamptz)
+  AND ($6::jsonb IS NULL OR progress @> $6::jsonb)
+  AND ($7::timestamptz IS NULL OR created_at > $7::timestamptz)
+  AND ($8::timestamptz IS NULL OR created_at < $8::timestamptz)
 ORDER BY created_at DESC, id DESC
-LIMIT $9 OFFSET $8
+LIMIT $10 OFFSET $9
 `
 
 type ListCommandsParams struct {
-	OrgID           pgtype.UUID        `db:"org_id" json:"org_id"`
-	StationKey      pgtype.Text        `db:"station_key" json:"station_key"`
-	Actions         []string           `db:"actions" json:"actions"`
-	Statuses        []string           `db:"statuses" json:"statuses"`
-	PayloadContains []byte             `db:"payload_contains" json:"payload_contains"`
-	CreatedAfter    pgtype.Timestamptz `db:"created_after" json:"created_after"`
-	CreatedBefore   pgtype.Timestamptz `db:"created_before" json:"created_before"`
-	RowOffset       int32              `db:"row_offset" json:"row_offset"`
-	RowLimit        int32              `db:"row_limit" json:"row_limit"`
+	OrgID            pgtype.UUID        `db:"org_id" json:"org_id"`
+	StationKey       pgtype.Text        `db:"station_key" json:"station_key"`
+	Actions          []string           `db:"actions" json:"actions"`
+	Statuses         []string           `db:"statuses" json:"statuses"`
+	PayloadContains  []byte             `db:"payload_contains" json:"payload_contains"`
+	ProgressContains []byte             `db:"progress_contains" json:"progress_contains"`
+	CreatedAfter     pgtype.Timestamptz `db:"created_after" json:"created_after"`
+	CreatedBefore    pgtype.Timestamptz `db:"created_before" json:"created_before"`
+	RowOffset        int32              `db:"row_offset" json:"row_offset"`
+	RowLimit         int32              `db:"row_limit" json:"row_limit"`
 }
 
 func (q *Queries) ListCommands(ctx context.Context, arg ListCommandsParams) ([]Command, error) {
@@ -199,6 +204,7 @@ func (q *Queries) ListCommands(ctx context.Context, arg ListCommandsParams) ([]C
 		arg.Actions,
 		arg.Statuses,
 		arg.PayloadContains,
+		arg.ProgressContains,
 		arg.CreatedAfter,
 		arg.CreatedBefore,
 		arg.RowOffset,

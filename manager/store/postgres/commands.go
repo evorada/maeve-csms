@@ -105,11 +105,11 @@ func (s *Store) ListCommands(ctx context.Context, filter store.CommandFilter) ([
 			return nil, 0, fmt.Errorf("list commands: invalid org id %q: %w", filter.OrgId, err)
 		}
 	}
-	if len(filter.PayloadContains) > 0 {
-		var object map[string]json.RawMessage
-		if err := json.Unmarshal(filter.PayloadContains, &object); err != nil || object == nil {
-			return nil, 0, fmt.Errorf("list commands: payload filter is not a JSON object: %s", filter.PayloadContains)
-		}
+	if !isJSONObjectOrEmpty(filter.PayloadContains) {
+		return nil, 0, fmt.Errorf("list commands: payload filter is not a JSON object: %s", filter.PayloadContains)
+	}
+	if !isJSONObjectOrEmpty(filter.ProgressContains) {
+		return nil, 0, fmt.Errorf("list commands: progress filter is not a JSON object: %s", filter.ProgressContains)
 	}
 	rowLimit, err := safeIntToInt32(filter.EffectiveLimit())
 	if err != nil {
@@ -131,32 +131,43 @@ func (s *Store) ListCommands(ctx context.Context, filter store.CommandFilter) ([
 
 	q := s.readQueries(ctx)
 	rows, err := q.ListCommands(ctx, ListCommandsParams{
-		OrgID:           orgId,
-		StationKey:      toNullableText(filter.StationKey),
-		Actions:         actions,
-		Statuses:        statuses,
-		PayloadContains: filter.PayloadContains,
-		CreatedAfter:    toNullTimestamptz(filter.CreatedAfter),
-		CreatedBefore:   toNullTimestamptz(filter.CreatedBefore),
-		RowLimit:        rowLimit,
-		RowOffset:       rowOffset,
+		OrgID:            orgId,
+		StationKey:       toNullableText(filter.StationKey),
+		Actions:          actions,
+		Statuses:         statuses,
+		PayloadContains:  filter.PayloadContains,
+		ProgressContains: filter.ProgressContains,
+		CreatedAfter:     toNullTimestamptz(filter.CreatedAfter),
+		CreatedBefore:    toNullTimestamptz(filter.CreatedBefore),
+		RowLimit:         rowLimit,
+		RowOffset:        rowOffset,
 	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("list commands: %w", err)
 	}
 	total, err := q.CountCommands(ctx, CountCommandsParams{
-		OrgID:           orgId,
-		StationKey:      toNullableText(filter.StationKey),
-		Actions:         actions,
-		Statuses:        statuses,
-		PayloadContains: filter.PayloadContains,
-		CreatedAfter:    toNullTimestamptz(filter.CreatedAfter),
-		CreatedBefore:   toNullTimestamptz(filter.CreatedBefore),
+		OrgID:            orgId,
+		StationKey:       toNullableText(filter.StationKey),
+		Actions:          actions,
+		Statuses:         statuses,
+		PayloadContains:  filter.PayloadContains,
+		ProgressContains: filter.ProgressContains,
+		CreatedAfter:     toNullTimestamptz(filter.CreatedAfter),
+		CreatedBefore:    toNullTimestamptz(filter.CreatedBefore),
 	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("count commands: %w", err)
 	}
 	return commandsFromRows(rows), int(total), nil
+}
+
+// isJSONObjectOrEmpty reports whether a containment filter is unset or a JSON object.
+func isJSONObjectOrEmpty(filter json.RawMessage) bool {
+	if len(filter) == 0 {
+		return true
+	}
+	var object map[string]json.RawMessage
+	return json.Unmarshal(filter, &object) == nil && object != nil
 }
 
 // ClaimNextCommand holds an advisory lock on the station for the rest of its

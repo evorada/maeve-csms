@@ -88,7 +88,8 @@ func (c *fakeConnectivity) set(stationKey string, connected bool) {
 	c.connected[stationKey] = connected
 }
 
-// fixture is a dispatcher and a service on an in-memory store with a fake clock.
+// fixture is a dispatcher, a service and a tracker on an in-memory store with a fake
+// clock. The tracker hears about the answers that the dispatcher records.
 type fixture struct {
 	t          *testing.T
 	clock      *testingclock.FakeClock
@@ -98,6 +99,7 @@ type fixture struct {
 	conn       *fakeConnectivity
 	dispatcher *commands.Dispatcher
 	service    *commands.Service
+	tracker    *commands.Tracker
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -114,6 +116,16 @@ func newFixture(t *testing.T) *fixture {
 		DefaultTTL:           time.Hour,
 		MaxTTL:               168 * time.Hour,
 		Retention:            90 * 24 * time.Hour,
+		RemoteStartWindow:    5 * time.Minute,
+		RemoteStopWindow:     2 * time.Minute,
+		AvailabilityWindow:   2 * time.Minute,
+	}
+	tracker := &commands.Tracker{
+		Store:  engine,
+		Tx:     evs.Tx,
+		Events: evs.Events,
+		Clock:  clk,
+		Config: config,
 	}
 	dispatcher := &commands.Dispatcher{
 		Store:  engine,
@@ -126,6 +138,8 @@ func newFixture(t *testing.T) *fixture {
 		SchemaFS:     schemas.OcppSchemas,
 		Clock:        clk,
 		Config:       config,
+		AfterResult:  []commands.ResultHook{tracker},
+		AfterSweep:   []commands.Sweeper{tracker},
 	}
 	service := &commands.Service{
 		Store:          engine,
@@ -140,7 +154,7 @@ func newFixture(t *testing.T) *fixture {
 	require.NoError(t, engine.SetChargeStationRuntimeDetails(context.Background(), testStation,
 		&store.ChargeStationRuntimeDetails{OcppVersion: "1.6"}))
 	return &fixture{t: t, clock: clk, store: engine, events: evs, emitter: emitter, conn: conn,
-		dispatcher: dispatcher, service: service}
+		dispatcher: dispatcher, service: service, tracker: tracker}
 }
 
 // enqueue enqueues a command for the test station.

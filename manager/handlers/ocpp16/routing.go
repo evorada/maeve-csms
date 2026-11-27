@@ -30,6 +30,8 @@ import (
 // domain events of the state changes that the messages cause. observer (may be nil) sees
 // every CallResult and CallError first; when it also implements CommandKicker it is
 // asked to send the next queued command of a station after each BootNotification.
+// commandTracker (may be nil) learns about the transactions and connector statuses that
+// the stations report, to follow the commands to their effect.
 func NewRouter(emitter transport.Emitter,
 	clk clock.PassiveClock,
 	engine store.Engine,
@@ -41,7 +43,8 @@ func NewRouter(emitter transport.Emitter,
 	contractCertProvider services.ContractCertificateProvider,
 	heartbeatInterval time.Duration,
 	schemaFS fs.FS,
-	observer handlers.CallOutcomeObserver) transport.MessageHandler {
+	observer handlers.CallOutcomeObserver,
+	commandTracker CommandTracker) transport.MessageHandler {
 
 	standardCallMaker := NewCallMaker(emitter)
 	commandKicker, _ := observer.(CommandKicker)
@@ -89,10 +92,11 @@ func NewRouter(emitter transport.Emitter,
 				RequestSchema:  "ocpp16/StatusNotification.json",
 				ResponseSchema: "ocpp16/StatusNotificationResponse.json",
 				Handler: StatusNotificationHandler{
-					Clock:       clk,
-					StatusStore: engine,
-					Tx:          engine,
-					Events:      domainEvents,
+					Clock:          clk,
+					StatusStore:    engine,
+					Tx:             engine,
+					Events:         domainEvents,
+					CommandTracker: commandTracker,
 				},
 			},
 			"Authorize": {
@@ -117,6 +121,7 @@ func NewRouter(emitter transport.Emitter,
 					ReservationStore: engine,
 					Tx:               engine,
 					Events:           domainEvents,
+					CommandTracker:   commandTracker,
 				},
 			},
 			"StopTransaction": {
@@ -130,6 +135,7 @@ func NewRouter(emitter transport.Emitter,
 					TransactionStore: engine,
 					Tx:               engine,
 					Events:           domainEvents,
+					CommandTracker:   commandTracker,
 				},
 			},
 			"MeterValues": {

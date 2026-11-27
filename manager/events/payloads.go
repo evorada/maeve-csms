@@ -140,3 +140,20 @@ type CommandCompletedData struct {
 	SentAt           *time.Time      `json:"sent_at,omitempty"`
 	Late             bool            `json:"late"`
 }
+
+// CommandProgressData is the payload of command.progress, which follows a command that
+// its station accepted to its effect: the transaction that a remote start began, the
+// end of the transaction that a remote stop asked for, the connector status that a
+// change of availability led to. One event per change of the progress.
+type CommandProgressData struct {
+	CommandId  string `json:"command_id"`
+	OrgId      string `json:"org_id"`
+	StationId  string `json:"station_id"`
+	StationKey string `json:"station_key"`
+	Action     string `json:"action"`
+	Status     string `json:"status"` // status of the command, accepted
+	// Progress is the progress as stored on the command, e.g.
+	// {"state":"transaction_started","transactionId":"…","ocppTransactionId":42,"connectorId":1}.
+	Progress   json.RawMessage `json:"progress"`
+	ProgressAt time.Time       `json:"progress_at"`
+}
