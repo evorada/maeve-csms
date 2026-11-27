@@ -166,6 +166,27 @@ type ChargingProfile struct {
 	OrgID                   pgtype.UUID      `db:"org_id" json:"org_id"`
 }
 
+type Command struct {
+	ID               pgtype.UUID        `db:"id" json:"id"`
+	OrgID            pgtype.UUID        `db:"org_id" json:"org_id"`
+	StationKey       string             `db:"station_key" json:"station_key"`
+	OcppVersion      string             `db:"ocpp_version" json:"ocpp_version"`
+	Action           string             `db:"action" json:"action"`
+	Payload          []byte             `db:"payload" json:"payload"`
+	Status           string             `db:"status" json:"status"`
+	Result           []byte             `db:"result" json:"result"`
+	ErrorCode        pgtype.Text        `db:"error_code" json:"error_code"`
+	ErrorDescription pgtype.Text        `db:"error_description" json:"error_description"`
+	Progress         []byte             `db:"progress" json:"progress"`
+	ProgressAt       pgtype.Timestamptz `db:"progress_at" json:"progress_at"`
+	Actor            pgtype.Text        `db:"actor" json:"actor"`
+	Jti              pgtype.Text        `db:"jti" json:"jti"`
+	CreatedAt        pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	SentAt           pgtype.Timestamptz `db:"sent_at" json:"sent_at"`
+	CompletedAt      pgtype.Timestamptz `db:"completed_at" json:"completed_at"`
+	ExpiresAt        pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
+}
+
 type ConnectorStatus struct {
 	ChargeStationID      string             `db:"charge_station_id" json:"charge_station_id"`
 	ConnectorID          int32              `db:"connector_id" json:"connector_id"`

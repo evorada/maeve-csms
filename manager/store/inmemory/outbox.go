@@ -23,6 +23,15 @@ type stagedOutboxEvent struct {
 // set aside and stored, with their Seq, when the transaction ends without an error;
 // CreatedAt is set at once.
 func (s *Store) AppendOutboxEvents(ctx context.Context, events ...*store.OutboxEvent) error {
+	s.Lock()
+	defer s.Unlock()
+	s.appendOutboxEventsLocked(ctx, events...)
+	return nil
+}
+
+// appendOutboxEventsLocked is AppendOutboxEvents for a caller that holds the store
+// mutex, so that the events are appended together with the change the caller makes.
+func (s *Store) appendOutboxEventsLocked(ctx context.Context, events ...*store.OutboxEvent) {
 	now := s.clock.Now().UTC()
 	staged := make([]stagedOutboxEvent, len(events))
 	for i, ev := range events {
@@ -36,13 +45,9 @@ func (s *Store) AppendOutboxEvents(ctx context.Context, events ...*store.OutboxE
 
 	if tx := memTxFrom(ctx); tx != nil {
 		tx.outbox = append(tx.outbox, staged...)
-		return nil
+		return
 	}
-
-	s.Lock()
-	defer s.Unlock()
 	s.storeOutboxEvents(staged)
-	return nil
 }
 
 // storeOutboxEvents appends events to the outbox and gives them their Seq. The caller

@@ -16,6 +16,8 @@ type Querier interface {
 	CancelReservation(ctx context.Context, reservationID int32) error
 	ClaimUnpublishedOutboxEvents(ctx context.Context, limit int32) ([]OutboxEvent, error)
 	CountChargeStationEvents(ctx context.Context, chargeStationID string) (int64, error)
+	// The same conditions as ListCommands.
+	CountCommands(ctx context.Context, arg CountCommandsParams) (int64, error)
 	CountConnectorsForOrgs(ctx context.Context, orgIds []pgtype.UUID) (int64, error)
 	CountDeviceReports(ctx context.Context, chargeStationID string) (int64, error)
 	CountMeterValues(ctx context.Context, arg CountMeterValuesParams) (int64, error)
@@ -45,6 +47,10 @@ type Querier interface {
 	DeleteChargingProfilesByStationAndConnector(ctx context.Context, arg DeleteChargingProfilesByStationAndConnectorParams) (int64, error)
 	DeleteChargingProfilesByStationAndPurpose(ctx context.Context, arg DeleteChargingProfilesByStationAndPurposeParams) (int64, error)
 	DeleteChargingProfilesByStationConnectorPurposeStack(ctx context.Context, arg DeleteChargingProfilesByStationConnectorPurposeStackParams) (int64, error)
+	// Only terminal commands: a queued or sent command is never deleted, whatever its
+	// completed_at. The subquery has an alias only for sqlc, which would find the columns
+	// ambiguous without it.
+	DeleteCompletedCommandsBefore(ctx context.Context, arg DeleteCompletedCommandsBeforeParams) (int64, error)
 	DeleteDiagnosticsRequest(ctx context.Context, chargeStationID string) error
 	DeleteDisplayMessage(ctx context.Context, arg DeleteDisplayMessageParams) error
 	DeleteFirmwareUpdateRequest(ctx context.Context, chargeStationID string) error
@@ -85,6 +91,7 @@ type Querier interface {
 	GetChargeStationTrigger(ctx context.Context, chargeStationID string) (ChargeStationTrigger, error)
 	GetChargingProfilesByStation(ctx context.Context, chargeStationID string) ([]ChargingProfile, error)
 	GetChargingProfilesByStationAndConnector(ctx context.Context, arg GetChargingProfilesByStationAndConnectorParams) ([]ChargingProfile, error)
+	GetCommand(ctx context.Context, id pgtype.UUID) (Command, error)
 	GetConnectorStatus(ctx context.Context, arg GetConnectorStatusParams) (ConnectorStatus, error)
 	GetDiagnosticsRequest(ctx context.Context, chargeStationID string) (DiagnosticsRequest, error)
 	GetDiagnosticsStatus(ctx context.Context, chargeStationID string) (DiagnosticsStatus, error)
@@ -121,7 +128,9 @@ type Querier interface {
 	GetTransaction(ctx context.Context, arg GetTransactionParams) (Transaction, error)
 	GetUnlockConnectorRequest(ctx context.Context, chargeStationID string) (UnlockConnectorRequest, error)
 	GetVariableMonitoring(ctx context.Context, arg GetVariableMonitoringParams) (VariableMonitoring, error)
+	HasSentCommand(ctx context.Context, stationKey string) (bool, error)
 	InsertChargeStationEvent(ctx context.Context, arg InsertChargeStationEventParams) (int32, error)
+	InsertCommand(ctx context.Context, arg InsertCommandParams) error
 	InsertDeviceReport(ctx context.Context, arg InsertDeviceReportParams) (int32, error)
 	InsertOutboxEvent(ctx context.Context, arg InsertOutboxEventParams) (InsertOutboxEventRow, error)
 	InsertTenant(ctx context.Context, arg InsertTenantParams) error
@@ -137,6 +146,7 @@ type Querier interface {
 	ListChargeStationEvents(ctx context.Context, arg ListChargeStationEventsParams) ([]ChargeStationEvent, error)
 	ListChargeStationSettings(ctx context.Context, arg ListChargeStationSettingsParams) ([]ChargeStationSetting, error)
 	ListChargeStationTriggers(ctx context.Context, arg ListChargeStationTriggersParams) ([]ChargeStationTrigger, error)
+	ListCommands(ctx context.Context, arg ListCommandsParams) ([]Command, error)
 	ListConnectorStatuses(ctx context.Context, chargeStationID string) ([]ConnectorStatus, error)
 	ListDeviceReports(ctx context.Context, arg ListDeviceReportsParams) ([]DeviceReport, error)
 	ListDiagnosticsRequests(ctx context.Context, arg ListDiagnosticsRequestsParams) ([]DiagnosticsRequest, error)
@@ -144,11 +154,14 @@ type Querier interface {
 	ListDisplayMessagesByPriority(ctx context.Context, arg ListDisplayMessagesByPriorityParams) ([]DisplayMessage, error)
 	ListDisplayMessagesByState(ctx context.Context, arg ListDisplayMessagesByStateParams) ([]DisplayMessage, error)
 	ListDisplayMessagesByStateAndPriority(ctx context.Context, arg ListDisplayMessagesByStateAndPriorityParams) ([]DisplayMessage, error)
+	ListExpiredQueuedCommands(ctx context.Context, arg ListExpiredQueuedCommandsParams) ([]Command, error)
 	ListFirmwareUpdateRequests(ctx context.Context, arg ListFirmwareUpdateRequestsParams) ([]FirmwareUpdateRequest, error)
 	ListLocations(ctx context.Context, arg ListLocationsParams) ([]Location, error)
 	ListLogRequests(ctx context.Context, arg ListLogRequestsParams) ([]LogRequest, error)
 	ListOcpiPartiesForRole(ctx context.Context, role string) ([]OcpiParty, error)
+	ListOverdueSentCommands(ctx context.Context, arg ListOverdueSentCommandsParams) ([]Command, error)
 	ListPublishedOutboxEvents(ctx context.Context, arg ListPublishedOutboxEventsParams) ([]OutboxEvent, error)
+	ListQueuedStationKeys(ctx context.Context, arg ListQueuedStationKeysParams) ([]string, error)
 	ListRemoteStartTransactionRequests(ctx context.Context, arg ListRemoteStartTransactionRequestsParams) ([]RemoteStartTransactionRequest, error)
 	ListRemoteStopTransactionRequests(ctx context.Context, arg ListRemoteStopTransactionRequestsParams) ([]RemoteStopTransactionRequest, error)
 	ListSubtreeOrgIds(ctx context.Context, arg ListSubtreeOrgIdsParams) ([]pgtype.UUID, error)
@@ -158,10 +171,17 @@ type Querier interface {
 	ListTransactions(ctx context.Context) ([]Transaction, error)
 	ListTransactionsFiltered(ctx context.Context, arg ListTransactionsFilteredParams) ([]Transaction, error)
 	ListVariableMonitoring(ctx context.Context, arg ListVariableMonitoringParams) ([]VariableMonitoring, error)
+	// Serialises the claims of one station until the transaction ends. The two-key form of
+	// the advisory lock has a key space of its own, apart from the one-key locks (such as
+	// the outbox relay lock); lock_class is a constant of the store that names this lock.
+	// Two stations whose keys hash alike only wait for each other's claims.
+	LockStationCommands(ctx context.Context, arg LockStationCommandsParams) error
 	LookupChargeStationCertificateDeletion(ctx context.Context, chargeStationID string) (ChargeStationCertificateDeletion, error)
 	LookupChargeStationCertificateQuery(ctx context.Context, chargeStationID string) (ChargeStationCertificateQuery, error)
+	MarkCommandSent(ctx context.Context, arg MarkCommandSentParams) (Command, error)
 	MarkOutboxEventPublished(ctx context.Context, arg MarkOutboxEventPublishedParams) error
 	NextOcpp16TransactionId(ctx context.Context) (int32, error)
+	NextQueuedCommandForUpdate(ctx context.Context, arg NextQueuedCommandForUpdateParams) (Command, error)
 	// Deletes at most 10000 of the events published before $1, so that one statement does
 	// not lock the whole table. The subquery has an alias only for sqlc, which would find
 	// published_at ambiguous without it.
@@ -185,6 +205,7 @@ type Querier interface {
 	SetChargeStationRuntime(ctx context.Context, arg SetChargeStationRuntimeParams) (ChargeStationRuntime, error)
 	SetChargeStationSettings(ctx context.Context, arg SetChargeStationSettingsParams) (ChargeStationSetting, error)
 	SetChargeStationTrigger(ctx context.Context, arg SetChargeStationTriggerParams) (ChargeStationTrigger, error)
+	SetCommandProgress(ctx context.Context, arg SetCommandProgressParams) (Command, error)
 	// Location ids are global. SetLocation returns no row, and changes nothing, when the
 	// id is already used by a location of another org.
 	SetLocation(ctx context.Context, arg SetLocationParams) (Location, error)
@@ -199,6 +220,7 @@ type Querier interface {
 	SetUnlockConnectorRequest(ctx context.Context, arg SetUnlockConnectorRequestParams) (UnlockConnectorRequest, error)
 	StoreMeterValue(ctx context.Context, arg StoreMeterValueParams) error
 	TouchStationLastSeen(ctx context.Context, arg TouchStationLastSeenParams) error
+	TransitionCommand(ctx context.Context, arg TransitionCommandParams) (Command, error)
 	// The key of the lock is a constant of the store (outboxRelayLockKey): a transaction
 	// that holds it is the only relay batch of every manager that shares the database.
 	TryLockOutboxRelay(ctx context.Context, lockKey int64) (bool, error)

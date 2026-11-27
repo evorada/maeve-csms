@@ -79,6 +79,8 @@ type Store struct {
 	outboxSeq                        int64
 	outboxPublishedSeq               int64
 	relayMu                          sync.Mutex // held by the relay batch that runs
+	// commands by the canonical text of their id (see commandKey)
+	commands map[string]*store.Command
 }
 
 func NewStore(clock clock.PassiveClock) *Store {
@@ -129,6 +131,7 @@ func NewStore(clock clock.PassiveClock) *Store {
 		tenantsByHost:                    make(map[string]string),
 		tenantsByOrgKey:                  make(map[string]string),
 		tenantsBySlug:                    make(map[string]string),
+		commands:                         make(map[string]*store.Command),
 	}
 }
 

@@ -38,4 +38,5 @@ type Engine interface {
 	TenantStore
 	Transactor
 	OutboxStore
+	CommandStore
 }
