@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/api"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 )
@@ -32,6 +33,8 @@ func TestGetMeterValuesReturnsOcpp16MeterValues(t *testing.T) {
 	handler := ocpp16.MeterValuesHandler{
 		TransactionStore: engine,
 		MeterValuesStore: engine,
+		Tx:               engine,
+		Events:           events.NopEmitter{},
 	}
 
 	energy := types.MeterValuesJsonMeterValueElemSampledValueElemMeasurandEnergyActiveImportRegister

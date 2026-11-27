@@ -12,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/handlers"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
@@ -69,6 +70,7 @@ func TestAllRouteSchemasExist(t *testing.T) {
 	router, ok := ocpp16.NewRouter(&FakeEmitter{},
 		clock.RealClock{},
 		engine,
+		events.NopEmitter{},
 		&tenancy.Resolver{Stations: engine},
 		nil,
 		nil,
@@ -136,6 +138,7 @@ func TestMeterValuesCallIsStoredThroughTheRouter(t *testing.T) {
 	router := ocpp16.NewRouter(emitter,
 		clock.RealClock{},
 		engine,
+		events.NopEmitter{},
 		&tenancy.Resolver{Stations: engine},
 		nil,
 		nil,
@@ -227,6 +230,7 @@ func TestChangeConfigurationCallErrorRejectsSettingThroughTheRouter(t *testing.T
 	router := ocpp16.NewRouter(emitter,
 		clock.RealClock{},
 		engine,
+		events.NopEmitter{},
 		&tenancy.Resolver{Stations: engine},
 		nil,
 		nil,
@@ -271,6 +275,7 @@ func TestTriggerMessageCallErrorStoresStatusThroughTheRouter(t *testing.T) {
 	router := ocpp16.NewRouter(emitter,
 		clock.RealClock{},
 		engine,
+		events.NopEmitter{},
 		&tenancy.Resolver{Stations: engine},
 		nil,
 		nil,

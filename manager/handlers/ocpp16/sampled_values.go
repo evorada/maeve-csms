@@ -27,6 +27,13 @@ const (
 	sampledValueUnitWh                = string(types.MeterValuesJsonMeterValueElemSampledValueElemUnitWh)
 	sampledValueUnitKWh               = string(types.MeterValuesJsonMeterValueElemSampledValueElemUnitKWh)
 
+	// the readings of session.updated besides the energy register
+	sampledValueMeasurandPowerActiveImport = string(types.MeterValuesJsonMeterValueElemSampledValueElemMeasurandPowerActiveImport)
+	sampledValueMeasurandSoC               = string(types.MeterValuesJsonMeterValueElemSampledValueElemMeasurandSoC)
+	sampledValueUnitW                      = string(types.MeterValuesJsonMeterValueElemSampledValueElemUnitW)
+	sampledValueUnitKW                     = string(types.MeterValuesJsonMeterValueElemSampledValueElemUnitKW)
+	sampledValueUnitPercent                = string(types.MeterValuesJsonMeterValueElemSampledValueElemUnitPercent)
+
 	// contexts of the samples at the start and at the end of a transaction
 	sampledValueContextTransactionBegin = string(types.MeterValuesJsonMeterValueElemSampledValueElemContextTransactionBegin)
 	sampledValueContextTransactionEnd   = string(types.MeterValuesJsonMeterValueElemSampledValueElemContextTransactionEnd)

@@ -365,7 +365,7 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 	}
 	c.Events = getEventEmitter(&cfg.Events, cfg.Storage.Type, c.Storage, c.TenantResolver)
 	c.OutboxPurge = getOutboxPurge(evSettings, cfg.Storage.Type)
-	c.Connectivity = getConnectivityTracker(connSettings, cfg.Storage.Type, c.Storage)
+	c.Connectivity = getConnectivityTracker(connSettings, cfg.Storage.Type, c.Storage, c.Events)
 	c.TenantConfig = &tenancy.ConfigProvider{Resolver: c.TenantResolver}
 	c.TenantScoper = &tenancy.Scoper{
 		Mode:         c.Tenancy,
@@ -430,6 +430,7 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		c.Ocpp16Handler = ocpp16.NewRouter(c.MsgEmitter,
 			clock.RealClock{},
 			c.Storage,
+			c.Events,
 			c.TenantResolver,
 			c.TenantConfig,
 			c.ContractCertValidationService,

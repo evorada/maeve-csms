@@ -16,6 +16,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/connectivity"
+	"github.com/thoughtworks/maeve-csms/manager/events"
+	"github.com/thoughtworks/maeve-csms/manager/events/eventstest"
 	"github.com/thoughtworks/maeve-csms/manager/jobs"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
@@ -25,6 +27,8 @@ import (
 )
 
 const stationKey = "k7f2.CP001"
+
+const orgId = "0193b2c4-0000-7000-8000-0000000000a1"
 
 var t0 = time.Date(2026, 11, 27, 10, 0, 0, 0, time.UTC)
 
@@ -91,6 +95,7 @@ type fixture struct {
 	clock   *clockTest.FakePassiveClock
 	engine  *inmemory.Store
 	store   *countingStore
+	events  *eventstest.Fixture
 	tracker *connectivity.Tracker
 }
 
@@ -98,12 +103,16 @@ func newFixture() *fixture {
 	clk := clockTest.NewFakePassiveClock(t0)
 	engine := inmemory.NewStore(clk)
 	counting := &countingStore{ConnectivityStore: engine}
+	domainEvents := eventstest.New(engine, orgId, clk)
 	return &fixture{
 		clock:  clk,
 		engine: engine,
 		store:  counting,
+		events: domainEvents,
 		tracker: &connectivity.Tracker{
 			Store:          counting,
+			Tx:             domainEvents.Tx,
+			Events:         domainEvents.Events,
 			Clock:          clk,
 			SeenWriteEvery: 30 * time.Second,
 			StaleAfter:     5 * time.Minute,
@@ -353,7 +362,7 @@ func TestTrackerDefaults(t *testing.T) {
 	clk := clockTest.NewFakePassiveClock(t0)
 	engine := inmemory.NewStore(clk)
 	counting := &countingStore{ConnectivityStore: engine}
-	tracker := &connectivity.Tracker{Store: counting, Clock: clk}
+	tracker := &connectivity.Tracker{Store: counting, Tx: engine, Events: events.NopEmitter{}, Clock: clk}
 	ctx := context.Background()
 	_, err := engine.RecordStationConnected(ctx, stationKey, "conn-a", t0)
 	require.NoError(t, err)
@@ -401,7 +410,8 @@ func (s *notImplementedStore) DisconnectStaleStations(context.Context, time.Time
 func TestStoreWithoutConnectivityWarnsOnce(t *testing.T) {
 	logs := captureLogs(t)
 	s := &notImplementedStore{}
-	tracker := &connectivity.Tracker{Store: s, Clock: clockTest.NewFakePassiveClock(t0)}
+	tracker := &connectivity.Tracker{Store: s, Tx: inmemory.NewStore(clockTest.NewFakePassiveClock(t0)), Events: events.NopEmitter{},
+		Clock: clockTest.NewFakePassiveClock(t0)}
 	ctx := context.Background()
 
 	for _, eventType := range []string{transport.ConnectionEventConnected, transport.ConnectionEventAlive, transport.ConnectionEventDisconnected} {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/schemas"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
@@ -30,6 +31,7 @@ func TestRouterAnswersAHeartbeatOverNats(t *testing.T) {
 	router := ocpp16.NewRouter(natstransport.NewEmitter(managerConn),
 		clock.RealClock{},
 		engine,
+		events.NopEmitter{},
 		&tenancy.Resolver{Stations: engine},
 		nil,
 		nil,

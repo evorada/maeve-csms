@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/api"
 	"github.com/thoughtworks/maeve-csms/manager/entitlements"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/ocpi"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
@@ -1238,6 +1239,8 @@ func TestTransactionsReturnOcpp16Transaction(t *testing.T) {
 		OrgResolver:      &tenancy.Resolver{Stations: engine},
 		TransactionStore: engine,
 		ReservationStore: engine,
+		Tx:               engine,
+		Events:           events.NopEmitter{},
 	}
 	startResponse, err := startHandler.HandleCall(ctx, "cs001", &types.StartTransactionJson{
 		ConnectorId: 2,
@@ -1307,6 +1310,8 @@ func TestTransactionsReturnOcpp16Transaction(t *testing.T) {
 		TokenStore:       engine,
 		OrgResolver:      &tenancy.Resolver{Stations: engine},
 		TransactionStore: engine,
+		Tx:               engine,
+		Events:           events.NopEmitter{},
 	}
 	reason := types.StopTransactionJsonReasonEVDisconnected
 	_, err = stopHandler.HandleCall(ctx, "cs001", &types.StopTransactionJson{

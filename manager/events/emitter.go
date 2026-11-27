@@ -197,7 +197,7 @@ func actorOf(ev Event, ctxActor string) string {
 	case ctxActor != "":
 		return ctxActor
 	case ev.StationKey != "":
-		return "station:" + ev.StationKey
+		return StationActor(ev.StationKey)
 	default:
 		return DefaultActor
 	}

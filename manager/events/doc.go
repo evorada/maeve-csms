@@ -11,6 +11,13 @@
 // deletes the published events after a retention period. EnsureStream and CheckStream
 // set up or check the stream at startup.
 //
+// # The catalogue
+//
+// AllTypes lists the event types (Type* constants); each has a payload type
+// (*Data structs) and is about a resource (Resource* constants). The connectivity
+// tracker emits station.connected and station.disconnected, the OCPP 1.6 handlers
+// connector.status_changed and session.started, session.updated and session.completed.
+//
 // # The envelope
 //
 // An event is stored with:

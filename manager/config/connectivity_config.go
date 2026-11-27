@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/thoughtworks/maeve-csms/manager/connectivity"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"golang.org/x/exp/slog"
 	"k8s.io/utils/clock"
@@ -71,15 +72,18 @@ func parseConnectivityConfig(cfg *ConnectivityConfig) (connectivitySettings, err
 	return settings, nil
 }
 
-// getConnectivityTracker creates what records the connectivity of the charge stations.
-// The Firestore storage does not track connectivity: it returns nil there.
-func getConnectivityTracker(settings connectivitySettings, storageType string, engine store.Engine) *connectivity.Tracker {
+// getConnectivityTracker creates what records the connectivity of the charge stations
+// and emits its domain events. The Firestore storage does not track connectivity: it
+// returns nil there.
+func getConnectivityTracker(settings connectivitySettings, storageType string, engine store.Engine, domainEvents events.Emitter) *connectivity.Tracker {
 	if storageType == "firestore" {
 		slog.Warn("station connectivity is not tracked: the firestore storage does not implement it")
 		return nil
 	}
 	return &connectivity.Tracker{
 		Store:          engine,
+		Tx:             engine,
+		Events:         domainEvents,
 		Clock:          clock.RealClock{},
 		SeenWriteEvery: settings.lastSeenWriteInterval,
 		StaleAfter:     settings.staleAfter,

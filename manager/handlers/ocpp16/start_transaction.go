@@ -7,13 +7,16 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
+	"github.com/thoughtworks/maeve-csms/manager/transport"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/slog"
 	"k8s.io/utils/clock"
@@ -24,17 +27,26 @@ import (
 // transaction with the allocated id.
 const transactionIdAttempts = 3
 
+// idTagTokenType is the token type that the transactions of OCPP 1.6 idTags are stored
+// with.
+const idTagTokenType = "ISO14443"
+
 // StartTransactionHandler records the transaction that a charge station has started.
 //
 // The transaction is recorded whatever the authorisation status of the idTag: OCPP 1.6
 // requires a transaction id in every StartTransaction.conf, and the station sends a
 // StopTransaction.req for it (or keeps charging when StopTransactionOnInvalidId is false).
+//
+// The transaction, its details, the reservation it uses and the session.started event
+// are stored in one transaction.
 type StartTransactionHandler struct {
 	Clock            clock.PassiveClock
 	TokenStore       store.TokenStore
 	OrgResolver      tenancy.StationOrgResolver
 	TransactionStore store.TransactionStore
 	ReservationStore store.ReservationStore
+	Tx               store.Transactor
+	Events           events.Emitter
 }
 
 func (t StartTransactionHandler) HandleCall(ctx context.Context, chargeStationId string, request ocpp.Request) (ocpp.Response, error) {
@@ -54,34 +66,44 @@ func (t StartTransactionHandler) HandleCall(ctx context.Context, chargeStationId
 			slog.String("chargeStationId", chargeStationId), slog.String("timestamp", req.Timestamp), "err", err)
 	}
 
-	transactionId, transactionUuid, err := t.createTransaction(ctx, chargeStationId, req, startedAt)
+	var transactionId int
+	err = t.Tx.RunInTx(ctx, func(ctx context.Context) error {
+		var transactionUuid string
+		var err error
+		transactionId, transactionUuid, err = t.createTransaction(ctx, chargeStationId, req, startedAt)
+		if err != nil {
+			return err
+		}
+
+		connectorId := req.ConnectorId
+		meterStart := int64(req.MeterStart)
+		details := &store.TransactionDetails{
+			// OCPP 1.6 has no EVSEs: the connector id is used for both
+			ConnectorId:   &connectorId,
+			EvseId:        &connectorId,
+			StartedAt:     &startedAt,
+			MeterStartWh:  &meterStart,
+			ReservationId: req.ReservationId,
+		}
+		if auth.Token != nil {
+			details.IdTokenGroup = auth.Token.GroupId
+		}
+		err = t.TransactionStore.UpdateTransactionDetails(ctx, chargeStationId, transactionUuid, details)
+		if errors.Is(err, store.ErrNotImplemented) {
+			slog.Debug("transaction details are not stored by this store",
+				slog.String("chargeStationId", chargeStationId), slog.String("transactionId", transactionUuid))
+		} else if err != nil {
+			return err
+		}
+
+		if req.ReservationId != nil {
+			t.consumeReservation(ctx, chargeStationId, req, auth.Token)
+		}
+
+		return t.Events.Emit(ctx, sessionStartedEvent(chargeStationId, req, transactionId, transactionUuid, details, auth.Status))
+	})
 	if err != nil {
 		return nil, err
-	}
-
-	connectorId := req.ConnectorId
-	meterStart := int64(req.MeterStart)
-	details := &store.TransactionDetails{
-		// OCPP 1.6 has no EVSEs: the connector id is used for both
-		ConnectorId:   &connectorId,
-		EvseId:        &connectorId,
-		StartedAt:     &startedAt,
-		MeterStartWh:  &meterStart,
-		ReservationId: req.ReservationId,
-	}
-	if auth.Token != nil {
-		details.IdTokenGroup = auth.Token.GroupId
-	}
-	err = t.TransactionStore.UpdateTransactionDetails(ctx, chargeStationId, transactionUuid, details)
-	if errors.Is(err, store.ErrNotImplemented) {
-		slog.Debug("transaction details are not stored by this store",
-			slog.String("chargeStationId", chargeStationId), slog.String("transactionId", transactionUuid))
-	} else if err != nil {
-		return nil, err
-	}
-
-	if req.ReservationId != nil {
-		t.consumeReservation(ctx, chargeStationId, req, auth.Token)
 	}
 
 	return &types.StartTransactionResponseJson{
@@ -112,7 +134,7 @@ func (t StartTransactionHandler) createTransaction(ctx context.Context, chargeSt
 		}
 
 		transactionUuid := ConvertToUUID(transactionId)
-		err = t.TransactionStore.CreateTransaction(ctx, chargeStationId, transactionUuid, req.IdTag, "ISO14443",
+		err = t.TransactionStore.CreateTransaction(ctx, chargeStationId, transactionUuid, req.IdTag, idTagTokenType,
 			[]store.MeterValue{beginSample}, 0, false)
 		if err == nil {
 			return transactionId, transactionUuid, nil
@@ -126,6 +148,35 @@ func (t StartTransactionHandler) createTransaction(ctx context.Context, chargeSt
 	}
 
 	return 0, "", fmt.Errorf("allocating a transaction id for %s: %w", chargeStationId, err)
+}
+
+// sessionStartedEvent is the session.started event of a transaction with the details
+// that were stored for it, and the authorisation status that the station gets.
+func sessionStartedEvent(chargeStationId string, req *types.StartTransactionJson, transactionId int, transactionUuid string,
+	details *store.TransactionDetails, authStatus string) events.Event {
+	return events.Event{
+		Type:         events.TypeSessionStarted,
+		StationKey:   chargeStationId,
+		ResourceType: events.ResourceSession,
+		ResourceId:   transactionUuid,
+		Actor:        events.StationActor(chargeStationId),
+		Data: events.SessionStartedData{
+			StationKey:        chargeStationId,
+			StationId:         events.StationId(chargeStationId),
+			TransactionId:     transactionUuid,
+			OcppTransactionId: strconv.Itoa(transactionId),
+			OcppVersion:       string(transport.OcppVersion16),
+			EvseId:            details.EvseId,
+			ConnectorId:       details.ConnectorId,
+			IdToken:           req.IdTag,
+			TokenType:         idTagTokenType,
+			IdTokenGroup:      details.IdTokenGroup,
+			AuthStatus:        authStatus,
+			StartedAt:         details.StartedAt.UTC(),
+			MeterStartWh:      details.MeterStartWh,
+			ReservationId:     details.ReservationId,
+		},
+	}
 }
 
 // consumeReservation marks the reservation that the station says the transaction

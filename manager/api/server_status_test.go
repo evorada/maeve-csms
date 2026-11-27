@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/connectivity"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
@@ -78,7 +79,7 @@ func TestStationThatClosesItsSocketShowsDisconnected(t *testing.T) {
 	defer server.Close()
 	ctx := context.Background()
 	registerStation(t, engine, "cs001")
-	tracker := &connectivity.Tracker{Store: engine, Clock: clk}
+	tracker := &connectivity.Tracker{Store: engine, Tx: engine, Events: events.NopEmitter{}, Clock: clk}
 	connectedAt := clk.Now().UTC()
 
 	tracker.HandleConnectionEvent(ctx, &transport.ConnectionEvent{

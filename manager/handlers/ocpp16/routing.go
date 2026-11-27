@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/handlers"
 	handlersHasToBe "github.com/thoughtworks/maeve-csms/manager/handlers/has2be"
 	handlers201 "github.com/thoughtworks/maeve-csms/manager/handlers/ocpp201"
@@ -25,9 +26,12 @@ import (
 	"k8s.io/utils/clock"
 )
 
+// NewRouter returns the handler of the OCPP 1.6 messages. domainEvents receives the
+// domain events of the state changes that the messages cause.
 func NewRouter(emitter transport.Emitter,
 	clk clock.PassiveClock,
 	engine store.Engine,
+	domainEvents events.Emitter,
 	orgResolver tenancy.StationOrgResolver,
 	tenantConfig *tenancy.ConfigProvider,
 	certValidationService services.CertificateValidationService,
@@ -79,7 +83,10 @@ func NewRouter(emitter transport.Emitter,
 				RequestSchema:  "ocpp16/StatusNotification.json",
 				ResponseSchema: "ocpp16/StatusNotificationResponse.json",
 				Handler: StatusNotificationHandler{
+					Clock:       clk,
 					StatusStore: engine,
+					Tx:          engine,
+					Events:      domainEvents,
 				},
 			},
 			"Authorize": {
@@ -102,6 +109,8 @@ func NewRouter(emitter transport.Emitter,
 					OrgResolver:      orgResolver,
 					TransactionStore: engine,
 					ReservationStore: engine,
+					Tx:               engine,
+					Events:           domainEvents,
 				},
 			},
 			"StopTransaction": {
@@ -113,6 +122,8 @@ func NewRouter(emitter transport.Emitter,
 					TokenStore:       engine,
 					OrgResolver:      orgResolver,
 					TransactionStore: engine,
+					Tx:               engine,
+					Events:           domainEvents,
 				},
 			},
 			"MeterValues": {
@@ -122,6 +133,8 @@ func NewRouter(emitter transport.Emitter,
 				Handler: MeterValuesHandler{
 					TransactionStore: engine,
 					MeterValuesStore: engine,
+					Tx:               engine,
+					Events:           domainEvents,
 				},
 			},
 			"SecurityEventNotification": {

@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/entitlements"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	handlers "github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
@@ -43,7 +44,7 @@ func TestStationOfATenantAtItsConnectorLimitStillReportsAndCharges(t *testing.T)
 
 	report := func(connectorId int) {
 		t.Helper()
-		resp, err := handlers.StatusNotificationHandler{StatusStore: engine}.HandleCall(ctx, chargeStationId, &types.StatusNotificationJson{
+		resp, err := handlers.StatusNotificationHandler{Clock: clk, StatusStore: engine, Tx: engine, Events: events.NopEmitter{}}.HandleCall(ctx, chargeStationId, &types.StatusNotificationJson{
 			ConnectorId: connectorId,
 			ErrorCode:   types.StatusNotificationJsonErrorCodeNoError,
 			Status:      types.StatusNotificationJsonStatusAvailable,
@@ -80,6 +81,7 @@ func TestStationOfATenantAtItsConnectorLimitStillReportsAndCharges(t *testing.T)
 
 	started := startTransaction(t, handlers.StartTransactionHandler{
 		Clock: clk, TokenStore: engine, OrgResolver: resolver, TransactionStore: engine, ReservationStore: engine,
+		Tx: engine, Events: events.NopEmitter{},
 	}, chargeStationId, startTransactionRequest(idTag))
 	assert.Equal(t, types.StartTransactionResponseJsonIdTagInfoStatusAccepted, started.IdTagInfo.Status)
 }
@@ -124,10 +126,13 @@ func (r *connectorStatusRecorder) SetConnectorStatus(_ context.Context, _ string
 // The PostgreSQL store writes the UpdatedAt it is given: a status without one was stored
 // as 0001-01-01. A 1.6 StatusNotification may also come without a timestamp.
 func TestStatusNotificationSetsUpdatedAt(t *testing.T) {
-	recorder := &connectorStatusRecorder{}
-	before := time.Now()
+	now := time.Date(2026, 11, 27, 10, 0, 0, 0, time.UTC)
+	clk := clockTest.NewFakePassiveClock(now)
+	engine := inmemory.NewStore(clk)
+	recorder := &connectorStatusRecorder{StatusStore: engine}
 
-	resp, err := handlers.StatusNotificationHandler{StatusStore: recorder}.HandleCall(context.Background(), "cs001", &types.StatusNotificationJson{
+	handler := handlers.StatusNotificationHandler{Clock: clk, StatusStore: recorder, Tx: engine, Events: events.NopEmitter{}}
+	resp, err := handler.HandleCall(context.Background(), "cs001", &types.StatusNotificationJson{
 		ConnectorId: 1,
 		ErrorCode:   types.StatusNotificationJsonErrorCodeNoError,
 		Status:      types.StatusNotificationJsonStatusAvailable,
@@ -137,6 +142,5 @@ func TestStatusNotificationSetsUpdatedAt(t *testing.T) {
 
 	require.NotNil(t, recorder.got)
 	assert.Nil(t, recorder.got.Timestamp)
-	assert.False(t, recorder.got.UpdatedAt.Before(before), "UpdatedAt %s is the time of the call", recorder.got.UpdatedAt)
-	assert.False(t, recorder.got.UpdatedAt.After(time.Now()), "UpdatedAt %s is the time of the call", recorder.got.UpdatedAt)
+	assert.Equal(t, now, recorder.got.UpdatedAt, "UpdatedAt is the time of the call")
 }
