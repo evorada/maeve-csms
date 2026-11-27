@@ -41,7 +41,7 @@ var DefaultConfig = BaseConfig{
 		OrgName:      "Thoughtworks",
 		Auth: AuthConfig{
 			Mode:               "jwt",
-			Issuer:             "console",
+			Issuer:             "platform",
 			Audience:           "maeve",
 			MinRefreshInterval: "5m",
 			ClockSkew:          "5s",

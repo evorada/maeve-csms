@@ -25,10 +25,10 @@ must only be reachable from inside the deployment: it serves the lookups of the 
 (`/_internal/v1`, see the [internal API](../manager/internalapi/README.md)), the health
 check (`/health`), the Prometheus metrics (`/metrics`) and the OpenAPI document of the
 administration API (`/api/openapi.json`), all without authentication. It also serves the
-control plane (`/_evorada/v1`, specified in
+control plane (`/_control/v1`, specified in
 [`controlplane-spec.yaml`](../manager/controlplane/controlplane-spec.yaml)), through
-which the console creates, updates, suspends and resumes tenants: the only part of the
-listener that needs a token, and the token must be one of a console service (subject
+which the platform creates, updates, suspends and resumes tenants: the only part of the
+listener that needs a token, and the token must be one of a platform service (subject
 `svc:...`) with the permission `cpms.tenant.manage`. The legacy pages `/transactions` (the transactions of every
 organization) and `/adminui` (registers charge stations and tokens) are off by default;
 `enable_transactions_page` and `enable_admin_ui` in `[api]` serve them on the internal

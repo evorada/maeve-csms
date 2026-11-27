@@ -22,7 +22,7 @@ import (
 )
 
 // newTestConfig returns the default configuration with API authentication in dev mode,
-// so that it can be configured without a console.
+// so that it can be configured without a platform.
 func newTestConfig(t *testing.T) *config.BaseConfig {
 	t.Helper()
 
@@ -360,7 +360,7 @@ func TestConfigureDefaultOrgId(t *testing.T) {
 	})
 
 	for name, orgId := range map[string]string{
-		"not a uuid": "evorada",
+		"not a uuid": "acme",
 		"too short":  "0193b2c4-0000-7000-8000",
 		"empty":      "",
 	} {
@@ -579,11 +579,11 @@ func TestConfigureApiAuth(t *testing.T) {
 		return cfg
 	}
 
-	t.Run("the default is to verify tokens, which needs the key set of the console", func(t *testing.T) {
+	t.Run("the default is to verify tokens, which needs the key set of the platform", func(t *testing.T) {
 		t.Setenv("ENVIRONMENT", "dev")
 		cfg := newConfig(t, "")
 		assert.Equal(t, "jwt", cfg.Api.Auth.Mode)
-		assert.Equal(t, "console", cfg.Api.Auth.Issuer)
+		assert.Equal(t, "platform", cfg.Api.Auth.Issuer)
 		assert.Equal(t, "maeve", cfg.Api.Auth.Audience)
 		assert.Equal(t, "5m", cfg.Api.Auth.MinRefreshInterval)
 		assert.Equal(t, "5s", cfg.Api.Auth.ClockSkew)
@@ -608,11 +608,11 @@ func TestConfigureApiAuth(t *testing.T) {
 	t.Run("what is not valid", func(t *testing.T) {
 		for name, toml := range map[string]string{
 			"unknown mode":          "[api.auth]\nmode = \"none\"\n",
-			"empty mode":            "[api.auth]\nmode = \"\"\njwks_url = \"https://console.example.com/jwks.json\"\n",
-			"key set URL is no URL": "[api.auth]\njwks_url = \"console\"\n",
+			"empty mode":            "[api.auth]\nmode = \"\"\njwks_url = \"https://platform.example.com/jwks.json\"\n",
+			"key set URL is no URL": "[api.auth]\njwks_url = \"platform\"\n",
 			"key set in a file":     "[api.auth]\njwks_url = \"file:///etc/jwks.json\"\n",
-			"no issuer":             "[api.auth]\njwks_url = \"https://console.example.com/jwks.json\"\nissuer = \"\"\n",
-			"no audience":           "[api.auth]\njwks_url = \"https://console.example.com/jwks.json\"\naudience = \"\"\n",
+			"no issuer":             "[api.auth]\njwks_url = \"https://platform.example.com/jwks.json\"\nissuer = \"\"\n",
+			"no audience":           "[api.auth]\njwks_url = \"https://platform.example.com/jwks.json\"\naudience = \"\"\n",
 			"dev org is not a UUID": "[api.auth]\nmode = \"dev\"\n[api.auth.dev]\norg_id = \"acme\"\n",
 			"unknown dev org scope": "[api.auth]\nmode = \"dev\"\n[api.auth.dev]\norg_scope = \"all\"\n",
 			"refresh interval typo": "[api.auth]\njwks_url = \"http://127.0.0.1:1/jwks.json\"\nmin_refresh_interval = \"soon\"\n",
@@ -714,59 +714,59 @@ perms = ["cpms.station.read"]
 		assert.Empty(t, p.Perms)
 	})
 
-	t.Run("jwt mode verifies the tokens of the console", func(t *testing.T) {
+	t.Run("jwt mode verifies the tokens of the platform", func(t *testing.T) {
 		// ENVIRONMENT=dev does not turn the verification off
 		t.Setenv("ENVIRONMENT", "dev")
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		console := testutil.NewConsole(t)
+		platform := testutil.NewPlatform(t)
 
-		settings, err := config.Configure(ctx, newConfig(t, "[api.auth]\njwks_url = \""+console.JWKSURL()+"\"\n"))
+		settings, err := config.Configure(ctx, newConfig(t, "[api.auth]\njwks_url = \""+platform.JWKSURL()+"\"\n"))
 		require.NoError(t, err)
 		require.IsType(t, &tenancy.JWKSVerifier{}, settings.AuthVerifier)
 
-		p, err := settings.AuthVerifier.Verify(ctx, console.Token(time.Now()))
+		p, err := settings.AuthVerifier.Verify(ctx, platform.Token(time.Now()))
 		require.NoError(t, err)
 		assert.Equal(t, "user:alice", p.Subject)
 
 		_, err = settings.AuthVerifier.Verify(ctx, "")
 		assert.Equal(t, tenancy.ErrMissingToken, err)
 
-		expired := console.Claims(time.Now().Add(-10 * time.Minute))
-		_, err = settings.AuthVerifier.Verify(ctx, console.Sign(expired))
+		expired := platform.Claims(time.Now().Add(-10 * time.Minute))
+		_, err = settings.AuthVerifier.Verify(ctx, platform.Sign(expired))
 		assert.ErrorIs(t, err, tenancy.ErrInvalidToken)
 
-		// a lifetime that the console does not use: longer than max_token_lifetime
-		longLived := console.Claims(time.Now())
+		// a lifetime that the platform does not use: longer than max_token_lifetime
+		longLived := platform.Claims(time.Now())
 		longLived["exp"] = time.Now().Add(121 * time.Second).Unix()
-		_, err = settings.AuthVerifier.Verify(ctx, console.Sign(longLived))
+		_, err = settings.AuthVerifier.Verify(ctx, platform.Sign(longLived))
 		assert.ErrorIs(t, err, tenancy.ErrInvalidToken)
 	})
 
 	t.Run("jwt mode pins the configured issuer and audience", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		console := testutil.NewConsole(t)
+		platform := testutil.NewPlatform(t)
 
-		for _, pin := range []string{"issuer = \"console2\"", "audience = \"maeve2\""} {
-			settings, err := config.Configure(ctx, newConfig(t, "[api.auth]\njwks_url = \""+console.JWKSURL()+"\"\n"+pin+"\n"))
+		for _, pin := range []string{"issuer = \"platform2\"", "audience = \"maeve2\""} {
+			settings, err := config.Configure(ctx, newConfig(t, "[api.auth]\njwks_url = \""+platform.JWKSURL()+"\"\n"+pin+"\n"))
 			require.NoError(t, err)
 
-			_, err = settings.AuthVerifier.Verify(ctx, console.Token(time.Now()))
+			_, err = settings.AuthVerifier.Verify(ctx, platform.Token(time.Now()))
 			assert.ErrorIs(t, err, tenancy.ErrInvalidToken, pin)
 		}
 	})
 
-	t.Run("jwt mode starts without the console", func(t *testing.T) {
+	t.Run("jwt mode starts without the platform", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		console := testutil.NewConsole(t)
-		console.SetDown(true)
+		platform := testutil.NewPlatform(t)
+		platform.SetDown(true)
 
-		settings, err := config.Configure(ctx, newConfig(t, "[api.auth]\njwks_url = \""+console.JWKSURL()+"\"\n"))
+		settings, err := config.Configure(ctx, newConfig(t, "[api.auth]\njwks_url = \""+platform.JWKSURL()+"\"\n"))
 		require.NoError(t, err)
 
-		_, err = settings.AuthVerifier.Verify(ctx, console.Token(time.Now()))
+		_, err = settings.AuthVerifier.Verify(ctx, platform.Token(time.Now()))
 		assert.Equal(t, tenancy.ErrKeysUnavailable, err)
 	})
 }

@@ -16,7 +16,7 @@ import (
 )
 
 // BasePath is where the control plane is mounted on the internal listener.
-const BasePath = "/_evorada/v1"
+const BasePath = "/_control/v1"
 
 // healthCheckTimeout is how long a check of GetHealth may take.
 const healthCheckTimeout = 2 * time.Second

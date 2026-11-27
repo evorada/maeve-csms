@@ -25,14 +25,14 @@ func TestOrgPathLabel(t *testing.T) {
 
 func TestNormalizeHost(t *testing.T) {
 	tests := map[string]string{
-		"ChargeCo.OCPP.evorada.io:443.": "chargeco.ocpp.evorada.io",
-		"ChargeCo.OCPP.evorada.io:443":  "chargeco.ocpp.evorada.io",
-		"chargeco.ocpp.evorada.io.:443": "chargeco.ocpp.evorada.io",
-		"chargeco.ocpp.evorada.io.":     "chargeco.ocpp.evorada.io",
-		"chargeco.ocpp.evorada.io":      "chargeco.ocpp.evorada.io",
-		"LOCALHOST:9410":                "localhost",
-		"[::1]:9410":                    "::1",
-		"":                              "",
+		"ChargeCo.OCPP.example.com:443.": "chargeco.ocpp.example.com",
+		"ChargeCo.OCPP.example.com:443":  "chargeco.ocpp.example.com",
+		"chargeco.ocpp.example.com.:443": "chargeco.ocpp.example.com",
+		"chargeco.ocpp.example.com.":     "chargeco.ocpp.example.com",
+		"chargeco.ocpp.example.com":      "chargeco.ocpp.example.com",
+		"LOCALHOST:9410":                 "localhost",
+		"[::1]:9410":                     "::1",
+		"":                               "",
 	}
 	for host, want := range tests {
 		t.Run(host, func(t *testing.T) {

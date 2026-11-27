@@ -15,7 +15,7 @@ type TenancyConfig struct {
 	// kept in memory, e.g. "30s".
 	CacheTTL string `mapstructure:"cache_ttl" toml:"cache_ttl" validate:"required"`
 	// BootstrapTenants are created or updated when the manager starts in multi mode,
-	// for deployments without a console that provisions the tenants.
+	// for deployments without a platform that provisions the tenants.
 	BootstrapTenants []BootstrapTenantConfig `mapstructure:"bootstrap_tenants" toml:"bootstrap_tenants" validate:"dive"`
 }
 

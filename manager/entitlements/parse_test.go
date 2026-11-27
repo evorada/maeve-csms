@@ -11,7 +11,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/entitlements"
 )
 
-func TestParseReadsTheDocumentOfTheConsole(t *testing.T) {
+func TestParseReadsTheDocumentOfThePlatform(t *testing.T) {
 	doc, err := entitlements.Parse(json.RawMessage(`{
 		"org_id": "0193b2c4-0000-7000-8000-0000000000a1",
 		"version": 12,

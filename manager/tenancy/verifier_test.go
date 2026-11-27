@@ -33,9 +33,9 @@ const (
 // tokenTime is the time of the fake clock when a test starts.
 var tokenTime = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 
-// newTestVerifier creates a verifier for the tokens of the console, with a clock that
+// newTestVerifier creates a verifier for the tokens of the platform, with a clock that
 // only moves when the test moves it.
-func newTestVerifier(t *testing.T, console *testutil.Console) (*tenancy.JWKSVerifier, *clockTest.FakeClock) {
+func newTestVerifier(t *testing.T, platform *testutil.Platform) (*tenancy.JWKSVerifier, *clockTest.FakeClock) {
 	t.Helper()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -43,9 +43,9 @@ func newTestVerifier(t *testing.T, console *testutil.Console) (*tenancy.JWKSVeri
 
 	fakeClock := clockTest.NewFakeClock(tokenTime)
 	verifier, err := tenancy.NewJWKSVerifier(ctx, tenancy.JWKSVerifierConfig{
-		JWKSURL:            console.JWKSURL(),
-		Issuer:             testutil.ConsoleIssuer,
-		Audience:           testutil.ConsoleAudience,
+		JWKSURL:            platform.JWKSURL(),
+		Issuer:             testutil.PlatformIssuer,
+		Audience:           testutil.PlatformAudience,
 		MinRefreshInterval: testMinRefreshInterval,
 		ClockSkew:          testClockSkew,
 		MaxLifetime:        testMaxLifetime,
@@ -65,23 +65,23 @@ func requireInvalid(t *testing.T, p *tenancy.Principal, err error, reason string
 }
 
 func TestVerifyValidToken(t *testing.T) {
-	console := testutil.NewConsole(t)
-	verifier, _ := newTestVerifier(t, console)
+	platform := testutil.NewPlatform(t)
+	verifier, _ := newTestVerifier(t, platform)
 	ctx := context.Background()
 
 	t.Run("the claims become the caller", func(t *testing.T) {
-		claims := console.Claims(tokenTime)
+		claims := platform.Claims(tokenTime)
 		claims["sub"] = "svc:support-tool"
 		claims["act"] = map[string]any{"sub": "user:staff-123"}
 		claims["org_scope"] = "self"
 		claims["jti"] = "jti-42"
 
-		p, err := verifier.Verify(ctx, console.Sign(claims))
+		p, err := verifier.Verify(ctx, platform.Sign(claims))
 		require.NoError(t, err)
 		assert.Equal(t, &tenancy.Principal{
 			Subject:  "svc:support-tool",
 			Actor:    "user:staff-123",
-			OrgId:    testutil.ConsoleOrgId,
+			OrgId:    testutil.PlatformOrgId,
 			OrgScope: tenancy.OrgScopeSelf,
 			Perms:    []string{"cpms.station.read", "cpms.token.read"},
 			Jti:      "jti-42",
@@ -92,10 +92,10 @@ func TestVerifyValidToken(t *testing.T) {
 	})
 
 	t.Run("no actor and no permissions", func(t *testing.T) {
-		claims := console.Claims(tokenTime)
+		claims := platform.Claims(tokenTime)
 		delete(claims, "perms")
 
-		p, err := verifier.Verify(ctx, console.Sign(claims))
+		p, err := verifier.Verify(ctx, platform.Sign(claims))
 		require.NoError(t, err)
 		assert.Equal(t, "user:alice", p.Subject)
 		assert.Equal(t, "", p.Actor)
@@ -105,20 +105,20 @@ func TestVerifyValidToken(t *testing.T) {
 	})
 
 	t.Run("one of several audiences", func(t *testing.T) {
-		claims := console.Claims(tokenTime)
-		claims["aud"] = []string{"billing", testutil.ConsoleAudience}
+		claims := platform.Claims(tokenTime)
+		claims["aud"] = []string{"billing", testutil.PlatformAudience}
 
-		_, err := verifier.Verify(ctx, console.Sign(claims))
+		_, err := verifier.Verify(ctx, platform.Sign(claims))
 		require.NoError(t, err)
 	})
 
 	t.Run("the org is returned in lower case", func(t *testing.T) {
-		claims := console.Claims(tokenTime)
-		claims["org"] = strings.ToUpper(testutil.ConsoleOrgId)
+		claims := platform.Claims(tokenTime)
+		claims["org"] = strings.ToUpper(testutil.PlatformOrgId)
 
-		p, err := verifier.Verify(ctx, console.Sign(claims))
+		p, err := verifier.Verify(ctx, platform.Sign(claims))
 		require.NoError(t, err)
-		assert.Equal(t, testutil.ConsoleOrgId, p.OrgId)
+		assert.Equal(t, testutil.PlatformOrgId, p.OrgId)
 	})
 
 	t.Run("times at the edge of the leeway", func(t *testing.T) {
@@ -138,23 +138,23 @@ func TestVerifyValidToken(t *testing.T) {
 				claims["exp"] = tokenTime.Add(testMaxLifetime).Unix()
 			},
 		} {
-			claims := console.Claims(tokenTime)
+			claims := platform.Claims(tokenTime)
 			change(claims)
-			_, err := verifier.Verify(ctx, console.Sign(claims))
+			_, err := verifier.Verify(ctx, platform.Sign(claims))
 			assert.NoError(t, err, name)
 		}
 	})
 }
 
 func TestVerifyRefusesWrongClaims(t *testing.T) {
-	console := testutil.NewConsole(t)
-	verifier, _ := newTestVerifier(t, console)
+	platform := testutil.NewPlatform(t)
+	verifier, _ := newTestVerifier(t, platform)
 
 	tests := map[string]struct {
 		change func(claims map[string]any)
 		reason string
 	}{
-		"wrong issuer":            {func(c map[string]any) { c["iss"] = "console2" }, "wrong issuer"},
+		"wrong issuer":            {func(c map[string]any) { c["iss"] = "platform2" }, "wrong issuer"},
 		"no issuer":               {func(c map[string]any) { delete(c, "iss") }, "wrong issuer"},
 		"wrong audience":          {func(c map[string]any) { c["aud"] = "billing" }, "wrong audience"},
 		"wrong audiences":         {func(c map[string]any) { c["aud"] = []string{"billing", "maeve2"} }, "wrong audience"},
@@ -166,7 +166,7 @@ func TestVerifyRefusesWrongClaims(t *testing.T) {
 		"no issue time":           {func(c map[string]any) { delete(c, "iat") }, "no issue time"},
 		"expiry is not a number":  {func(c map[string]any) { c["exp"] = "tomorrow" }, "malformed claims"},
 		"org is not a UUID":       {func(c map[string]any) { c["org"] = "acme" }, "org is not a UUID"},
-		"org without hyphens":     {func(c map[string]any) { c["org"] = strings.ReplaceAll(testutil.ConsoleOrgId, "-", "") }, "org is not a UUID"},
+		"org without hyphens":     {func(c map[string]any) { c["org"] = strings.ReplaceAll(testutil.PlatformOrgId, "-", "") }, "org is not a UUID"},
 		"org is not a string":     {func(c map[string]any) { c["org"] = 7 }, "org is not a UUID"},
 		"no org":                  {func(c map[string]any) { delete(c, "org") }, "org is not a UUID"},
 		"org scope all":           {func(c map[string]any) { c["org_scope"] = "all" }, "unknown org scope"},
@@ -204,23 +204,23 @@ func TestVerifyRefusesWrongClaims(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			claims := console.Claims(tokenTime)
+			claims := platform.Claims(tokenTime)
 			tc.change(claims)
 
-			p, err := verifier.Verify(context.Background(), console.Sign(claims))
+			p, err := verifier.Verify(context.Background(), platform.Sign(claims))
 			requireInvalid(t, p, err, tc.reason)
 		})
 	}
 
 	// the claims that the cases start from are accepted
-	_, err := verifier.Verify(context.Background(), console.Token(tokenTime))
+	_, err := verifier.Verify(context.Background(), platform.Token(tokenTime))
 	require.NoError(t, err)
 }
 
 func TestVerifyRefusesAnExpiredTokenWhenTheClockMoves(t *testing.T) {
-	console := testutil.NewConsole(t)
-	verifier, fakeClock := newTestVerifier(t, console)
-	token := console.Token(tokenTime) // valid for 60 seconds
+	platform := testutil.NewPlatform(t)
+	verifier, fakeClock := newTestVerifier(t, platform)
+	token := platform.Token(tokenTime) // valid for 60 seconds
 
 	fakeClock.Step(60*time.Second + testClockSkew - time.Second)
 	_, err := verifier.Verify(context.Background(), token)
@@ -232,15 +232,15 @@ func TestVerifyRefusesAnExpiredTokenWhenTheClockMoves(t *testing.T) {
 }
 
 func TestVerifyRefusesWhatIsNotAToken(t *testing.T) {
-	console := testutil.NewConsole(t)
-	verifier, _ := newTestVerifier(t, console)
+	platform := testutil.NewPlatform(t)
+	verifier, _ := newTestVerifier(t, platform)
 	ctx := context.Background()
 
 	p, err := verifier.Verify(ctx, "")
 	assert.Nil(t, p)
 	assert.Equal(t, tenancy.ErrMissingToken, err)
 
-	token := console.Token(tokenTime)
+	token := platform.Token(tokenTime)
 	parts := strings.Split(token, ".")
 	require.Len(t, parts, 3)
 
@@ -258,7 +258,7 @@ func TestVerifyRefusesWhatIsNotAToken(t *testing.T) {
 		"header is not JSON":      {"bm90IGpzb24." + parts[1] + "." + parts[2], "malformed JWS"},
 		"too long":                {token + strings.Repeat("A", 16<<10), "token is too long"},
 		"signature cut short":     {token[:len(token)-4], "signature does not verify"},
-		"payload of another call": {parts[0] + "." + strings.Split(console.Sign(map[string]any{"sub": "svc:root"}), ".")[1] + "." + parts[2], "signature does not verify"},
+		"payload of another call": {parts[0] + "." + strings.Split(platform.Sign(map[string]any{"sub": "svc:root"}), ".")[1] + "." + parts[2], "signature does not verify"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			p, err := verifier.Verify(ctx, tc.token)
@@ -268,13 +268,13 @@ func TestVerifyRefusesWhatIsNotAToken(t *testing.T) {
 }
 
 func TestVerifyPinsTheAlgorithm(t *testing.T) {
-	console := testutil.NewConsole(t)
-	verifier, _ := newTestVerifier(t, console)
+	platform := testutil.NewPlatform(t)
+	verifier, _ := newTestVerifier(t, platform)
 	ctx := context.Background()
-	claims := console.Claims(tokenTime)
+	claims := platform.Claims(tokenTime)
 
 	hmacWithThePublicKey := func(signingInput []byte) []byte {
-		mac := hmac.New(sha256.New, console.PublicKey())
+		mac := hmac.New(sha256.New, platform.PublicKey())
 		mac.Write(signingInput)
 		return mac.Sum(nil)
 	}
@@ -287,53 +287,53 @@ func TestVerifyPinsTheAlgorithm(t *testing.T) {
 		reason string
 	}{
 		"HS256 with the public key as the secret": {
-			header: map[string]any{"alg": "HS256", "typ": "JWT", "kid": console.KeyId()},
+			header: map[string]any{"alg": "HS256", "typ": "JWT", "kid": platform.KeyId()},
 			sign:   hmacWithThePublicKey,
 			reason: "algorithm is not EdDSA",
 		},
 		"EdDSA in the header, HMAC with the public key as the signature": {
-			header: map[string]any{"alg": "EdDSA", "typ": "JWT", "kid": console.KeyId()},
+			header: map[string]any{"alg": "EdDSA", "typ": "JWT", "kid": platform.KeyId()},
 			sign:   hmacWithThePublicKey,
 			reason: "signature does not verify",
 		},
 		"none without a signature": {
-			header: map[string]any{"alg": "none", "typ": "JWT", "kid": console.KeyId()},
+			header: map[string]any{"alg": "none", "typ": "JWT", "kid": platform.KeyId()},
 			sign:   func([]byte) []byte { return nil },
 			reason: "not a compact JWS",
 		},
 		"none with a signature": {
-			header: map[string]any{"alg": "none", "typ": "JWT", "kid": console.KeyId()},
+			header: map[string]any{"alg": "none", "typ": "JWT", "kid": platform.KeyId()},
 			sign:   func([]byte) []byte { return []byte("signature") },
 			reason: "algorithm is not EdDSA",
 		},
 		"RS256": {
-			header: map[string]any{"alg": "RS256", "typ": "JWT", "kid": console.KeyId()},
+			header: map[string]any{"alg": "RS256", "typ": "JWT", "kid": platform.KeyId()},
 			sign:   func([]byte) []byte { return make([]byte, 256) },
 			reason: "algorithm is not EdDSA",
 		},
 		"no algorithm": {
-			header: map[string]any{"typ": "JWT", "kid": console.KeyId()},
-			sign:   console.Signature,
+			header: map[string]any{"typ": "JWT", "kid": platform.KeyId()},
+			sign:   platform.Signature,
 			reason: "algorithm is not EdDSA",
 		},
 		"signed with a key that is not in the key set": {
-			header: map[string]any{"alg": "EdDSA", "typ": "JWT", "kid": console.KeyId()},
+			header: map[string]any{"alg": "EdDSA", "typ": "JWT", "kid": platform.KeyId()},
 			sign:   func(signingInput []byte) []byte { return ed25519.Sign(otherKey, signingInput) },
 			reason: "signature does not verify",
 		},
-		"a key id that the key set does not have, signed with the key of the console": {
+		"a key id that the key set does not have, signed with the key of the platform": {
 			header: map[string]any{"alg": "EdDSA", "typ": "JWT", "kid": "key-0"},
-			sign:   console.Signature,
+			sign:   platform.Signature,
 			reason: "unknown key id",
 		},
 		"no key id": {
 			header: map[string]any{"alg": "EdDSA", "typ": "JWT"},
-			sign:   console.Signature,
+			sign:   platform.Signature,
 			reason: "no key id",
 		},
 		"a critical header parameter": {
-			header: map[string]any{"alg": "EdDSA", "typ": "JWT", "kid": console.KeyId(), "crit": []string{"exp"}},
-			sign:   console.Signature,
+			header: map[string]any{"alg": "EdDSA", "typ": "JWT", "kid": platform.KeyId(), "crit": []string{"exp"}},
+			sign:   platform.Signature,
 			reason: "unsupported header parameter",
 		},
 	} {
@@ -361,16 +361,16 @@ func TestVerifyPinsTheKeyType(t *testing.T) {
 		return signature
 	}
 
-	console := testutil.NewConsole(t)
-	publicKey := console.PublicKey()
-	// the signing key of the console: only the entry of the key in the key set is wrong
-	signEdDSA := console.Signature
+	platform := testutil.NewPlatform(t)
+	publicKey := platform.PublicKey()
+	// the signing key of the platform: only the entry of the key in the key set is wrong
+	signEdDSA := platform.Signature
 	ed25519JWK := func(keyId string, change func(key map[string]any)) map[string]any {
 		key := testutil.Ed25519JWK(keyId, publicKey)
 		change(key)
 		return key
 	}
-	console.SetKeySet(
+	platform.SetKeySet(
 		map[string]any{
 			"kty": "EC", "crv": "P-256", "kid": "ec-1", "alg": "ES256", "use": "sig",
 			"x": base64.RawURLEncoding.EncodeToString(point[1:33]),
@@ -382,9 +382,9 @@ func TestVerifyPinsTheKeyType(t *testing.T) {
 		ed25519JWK("short", func(key map[string]any) { key["x"] = base64.RawURLEncoding.EncodeToString(publicKey[:16]) }),
 		ed25519JWK("good", func(map[string]any) {}),
 	)
-	verifier, _ := newTestVerifier(t, console)
+	verifier, _ := newTestVerifier(t, platform)
 	ctx := context.Background()
-	claims := console.Claims(tokenTime)
+	claims := platform.Claims(tokenTime)
 
 	for name, tc := range map[string]struct {
 		header map[string]any
@@ -434,62 +434,62 @@ func TestVerifyPinsTheKeyType(t *testing.T) {
 }
 
 func TestVerifyRefreshesTheKeySetOnceForAnUnknownKeyId(t *testing.T) {
-	console := testutil.NewConsole(t)
-	verifier, fakeClock := newTestVerifier(t, console)
+	platform := testutil.NewPlatform(t)
+	verifier, fakeClock := newTestVerifier(t, platform)
 	ctx := context.Background()
-	require.Equal(t, 1, console.Requests(), "the key set is loaded when the verifier is created")
+	require.Equal(t, 1, platform.Requests(), "the key set is loaded when the verifier is created")
 
-	_, err := verifier.Verify(ctx, console.Token(tokenTime))
+	_, err := verifier.Verify(ctx, platform.Token(tokenTime))
 	require.NoError(t, err)
-	assert.Equal(t, 1, console.Requests(), "a known key needs no request")
+	assert.Equal(t, 1, platform.Requests(), "a known key needs no request")
 
-	oldToken := console.Token(tokenTime)
-	console.RotateKey()
+	oldToken := platform.Token(tokenTime)
+	platform.RotateKey()
 
 	// the key of the token is not in the cached key set: it is loaded again, once
-	p, err := verifier.Verify(ctx, console.Token(tokenTime))
+	p, err := verifier.Verify(ctx, platform.Token(tokenTime))
 	require.NoError(t, err)
 	assert.Equal(t, "user:alice", p.Subject)
-	assert.Equal(t, 2, console.Requests())
+	assert.Equal(t, 2, platform.Requests())
 
 	// the key that was replaced is gone with the old key set
 	p, err = verifier.Verify(ctx, oldToken)
 	requireInvalid(t, p, err, "unknown key id")
-	assert.Equal(t, 2, console.Requests(), "no second request within the refresh interval")
+	assert.Equal(t, 2, platform.Requests(), "no second request within the refresh interval")
 
 	unknownKey := func() string {
 		return testutil.SignJWS(t, map[string]any{"alg": "EdDSA", "typ": "JWT", "kid": "key-of-somebody-else"},
-			console.Claims(fakeClock.Now()), func([]byte) []byte { return make([]byte, ed25519.SignatureSize) })
+			platform.Claims(fakeClock.Now()), func([]byte) []byte { return make([]byte, ed25519.SignatureSize) })
 	}
 	for i := 0; i < 20; i++ {
 		p, err = verifier.Verify(ctx, unknownKey())
 		requireInvalid(t, p, err, "unknown key id")
 	}
-	assert.Equal(t, 2, console.Requests(), "a flood of unknown key ids does not reach the console")
+	assert.Equal(t, 2, platform.Requests(), "a flood of unknown key ids does not reach the platform")
 
 	fakeClock.Step(testMinRefreshInterval - time.Second)
 	p, err = verifier.Verify(ctx, unknownKey())
 	requireInvalid(t, p, err, "unknown key id")
-	assert.Equal(t, 2, console.Requests())
+	assert.Equal(t, 2, platform.Requests())
 
 	fakeClock.Step(time.Second)
 	for i := 0; i < 3; i++ {
 		p, err = verifier.Verify(ctx, unknownKey())
 		requireInvalid(t, p, err, "unknown key id")
 	}
-	assert.Equal(t, 3, console.Requests(), "one more request after the refresh interval")
+	assert.Equal(t, 3, platform.Requests(), "one more request after the refresh interval")
 
 	// tokens of the known key were accepted all along
-	_, err = verifier.Verify(ctx, console.Token(fakeClock.Now()))
+	_, err = verifier.Verify(ctx, platform.Token(fakeClock.Now()))
 	require.NoError(t, err)
-	assert.Equal(t, 3, console.Requests())
+	assert.Equal(t, 3, platform.Requests())
 }
 
 func TestVerifyConcurrentCallersShareOneRefresh(t *testing.T) {
-	console := testutil.NewConsole(t)
-	verifier, _ := newTestVerifier(t, console)
-	console.RotateKey()
-	token := console.Token(tokenTime)
+	platform := testutil.NewPlatform(t)
+	verifier, _ := newTestVerifier(t, platform)
+	platform.RotateKey()
+	token := platform.Token(tokenTime)
 
 	const callers = 20
 	errs := make(chan error, callers)
@@ -503,40 +503,40 @@ func TestVerifyConcurrentCallersShareOneRefresh(t *testing.T) {
 		// nobody is refused because another caller is loading the key set
 		assert.NoError(t, <-errs)
 	}
-	assert.Equal(t, 2, console.Requests())
+	assert.Equal(t, 2, platform.Requests())
 }
 
 func TestVerifyWhileTheKeySetCannotBeLoaded(t *testing.T) {
-	console := testutil.NewConsole(t)
-	console.SetDown(true)
+	platform := testutil.NewPlatform(t)
+	platform.SetDown(true)
 
-	// the console may start after the manager
-	verifier, fakeClock := newTestVerifier(t, console)
+	// the platform may start after the manager
+	verifier, fakeClock := newTestVerifier(t, platform)
 	ctx := context.Background()
-	require.Equal(t, 1, console.Requests())
+	require.Equal(t, 1, platform.Requests())
 
 	for i := 0; i < 20; i++ {
-		p, err := verifier.Verify(ctx, console.Token(tokenTime))
+		p, err := verifier.Verify(ctx, platform.Token(tokenTime))
 		assert.Nil(t, p)
 		require.Equal(t, tenancy.ErrKeysUnavailable, err)
 	}
-	assert.Equal(t, 2, console.Requests(), "requests while the console is down do not all reach it")
+	assert.Equal(t, 2, platform.Requests(), "requests while the platform is down do not all reach it")
 
-	console.SetDown(false)
-	_, err := verifier.Verify(ctx, console.Token(tokenTime))
+	platform.SetDown(false)
+	_, err := verifier.Verify(ctx, platform.Token(tokenTime))
 	require.Equal(t, tenancy.ErrKeysUnavailable, err, "not asked again before the retry interval is over")
-	assert.Equal(t, 2, console.Requests())
+	assert.Equal(t, 2, platform.Requests())
 
 	fakeClock.Step(testRetryInterval)
-	p, err := verifier.Verify(ctx, console.Token(fakeClock.Now()))
+	p, err := verifier.Verify(ctx, platform.Token(fakeClock.Now()))
 	require.NoError(t, err)
 	assert.Equal(t, "user:alice", p.Subject)
-	assert.Equal(t, 3, console.Requests())
+	assert.Equal(t, 3, platform.Requests())
 
 	// a token that is not one is refused as such, also while there are no keys
-	console2 := testutil.NewConsole(t)
-	console2.SetDown(true)
-	verifier2, _ := newTestVerifier(t, console2)
+	platform2 := testutil.NewPlatform(t)
+	platform2.SetDown(true)
+	verifier2, _ := newTestVerifier(t, platform2)
 	p, err = verifier2.Verify(ctx, "letmein")
 	requireInvalid(t, p, err, "not a compact JWS")
 	p, err = verifier2.Verify(ctx, "")
@@ -545,30 +545,30 @@ func TestVerifyWhileTheKeySetCannotBeLoaded(t *testing.T) {
 }
 
 func TestVerifyWithAnEmptyKeySet(t *testing.T) {
-	console := testutil.NewConsole(t)
-	keyId, publicKey := console.KeyId(), console.PublicKey()
-	console.SetKeySet()
+	platform := testutil.NewPlatform(t)
+	keyId, publicKey := platform.KeyId(), platform.PublicKey()
+	platform.SetKeySet()
 
-	verifier, fakeClock := newTestVerifier(t, console)
+	verifier, fakeClock := newTestVerifier(t, platform)
 	ctx := context.Background()
 
 	for i := 0; i < 5; i++ {
-		_, err := verifier.Verify(ctx, console.Token(tokenTime))
+		_, err := verifier.Verify(ctx, platform.Token(tokenTime))
 		require.Equal(t, tenancy.ErrKeysUnavailable, err)
 	}
-	assert.Equal(t, 2, console.Requests())
+	assert.Equal(t, 2, platform.Requests())
 
-	console.SetKeySet(testutil.Ed25519JWK(keyId, publicKey))
+	platform.SetKeySet(testutil.Ed25519JWK(keyId, publicKey))
 	fakeClock.Step(testRetryInterval)
-	_, err := verifier.Verify(ctx, console.Token(fakeClock.Now()))
+	_, err := verifier.Verify(ctx, platform.Token(fakeClock.Now()))
 	require.NoError(t, err)
 }
 
 func TestNewJWKSVerifierRefusesAnIncompleteConfiguration(t *testing.T) {
 	valid := tenancy.JWKSVerifierConfig{
-		JWKSURL:  "http://console.internal/jwks.json",
-		Issuer:   testutil.ConsoleIssuer,
-		Audience: testutil.ConsoleAudience,
+		JWKSURL:  "http://platform.internal/jwks.json",
+		Issuer:   testutil.PlatformIssuer,
+		Audience: testutil.PlatformAudience,
 	}
 
 	for name, change := range map[string]func(cfg *tenancy.JWKSVerifierConfig){
@@ -576,7 +576,7 @@ func TestNewJWKSVerifierRefusesAnIncompleteConfiguration(t *testing.T) {
 		"relative key set URL": func(cfg *tenancy.JWKSVerifierConfig) { cfg.JWKSURL = "/jwks.json" },
 		"key set in a file":    func(cfg *tenancy.JWKSVerifierConfig) { cfg.JWKSURL = "file:///etc/jwks.json" },
 		"user name in the URL": func(cfg *tenancy.JWKSVerifierConfig) {
-			cfg.JWKSURL = "http://manager@console.internal/jwks.json"
+			cfg.JWKSURL = "http://manager@platform.internal/jwks.json"
 		},
 		"no issuer":     func(cfg *tenancy.JWKSVerifierConfig) { cfg.Issuer = "" },
 		"no audience":   func(cfg *tenancy.JWKSVerifierConfig) { cfg.Audience = "" },
@@ -598,7 +598,7 @@ func TestNewJWKSVerifierRefusesAnIncompleteConfiguration(t *testing.T) {
 func TestDevVerifierAcceptsEveryRequest(t *testing.T) {
 	verifier := tenancy.DevVerifier{Principal: tenancy.Principal{
 		Subject:  "user:dev",
-		OrgId:    testutil.ConsoleOrgId,
+		OrgId:    testutil.PlatformOrgId,
 		OrgScope: tenancy.OrgScopeSubtree,
 		Perms:    []string{tenancy.PermStationRead},
 	}}

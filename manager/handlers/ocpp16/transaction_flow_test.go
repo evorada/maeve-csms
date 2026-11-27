@@ -106,7 +106,7 @@ func TestOcpp16TransactionFlow(t *testing.T) {
 		return reply.ResponsePayload
 	}
 
-	boot := call("BootNotification", `{"chargePointVendor": "Evorada", "chargePointModel": "AC22", "firmwareVersion": "1.4.2"}`)
+	boot := call("BootNotification", `{"chargePointVendor": "Acme", "chargePointModel": "AC22", "firmwareVersion": "1.4.2"}`)
 	assert.JSONEq(t, `{"currentTime": "2026-11-26T12:00:00Z", "interval": 60, "status": "Accepted"}`, string(boot))
 
 	authorize := call("Authorize", `{"idTag": "MYRFIDTAG"}`)

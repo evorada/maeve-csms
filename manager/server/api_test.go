@@ -49,23 +49,23 @@ func newApiHandler(engine store.Engine, verifier tenancy.Verifier) http.Handler 
 	})
 }
 
-// newConsoleVerifier creates a verifier for the tokens of a console that the test
+// newPlatformVerifier creates a verifier for the tokens of a platform that the test
 // controls.
-func newConsoleVerifier(t *testing.T) (*testutil.Console, tenancy.Verifier) {
+func newPlatformVerifier(t *testing.T) (*testutil.Platform, tenancy.Verifier) {
 	t.Helper()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	console := testutil.NewConsole(t)
+	platform := testutil.NewPlatform(t)
 	verifier, err := tenancy.NewJWKSVerifier(ctx, tenancy.JWKSVerifierConfig{
-		JWKSURL:   console.JWKSURL(),
-		Issuer:    testutil.ConsoleIssuer,
-		Audience:  testutil.ConsoleAudience,
+		JWKSURL:   platform.JWKSURL(),
+		Issuer:    testutil.PlatformIssuer,
+		Audience:  testutil.PlatformAudience,
 		ClockSkew: 5 * time.Second,
 	})
 	require.NoError(t, err)
-	return console, verifier
+	return platform, verifier
 }
 
 func get(handler http.Handler, target, token string) *httptest.ResponseRecorder {
@@ -78,8 +78,8 @@ func get(handler http.Handler, target, token string) *httptest.ResponseRecorder 
 	return rr
 }
 
-func TestApiNeedsAConsoleToken(t *testing.T) {
-	console, verifier := newConsoleVerifier(t)
+func TestApiNeedsAPlatformToken(t *testing.T) {
+	platform, verifier := newPlatformVerifier(t)
 	engine := inmemory.NewStore(clock.RealClock{})
 	handler := newApiHandler(engine, verifier)
 
@@ -91,20 +91,20 @@ func TestApiNeedsAConsoleToken(t *testing.T) {
 	})
 
 	t.Run("with a valid token", func(t *testing.T) {
-		rr := get(handler, "/api/v0/token", console.Token(time.Now()))
+		rr := get(handler, "/api/v0/token", platform.Token(time.Now()))
 		require.Equal(t, http.StatusOK, rr.Code)
 		assert.JSONEq(t, `[]`, rr.Body.String())
 	})
 
 	t.Run("with a token that is not valid", func(t *testing.T) {
-		expired := console.Token(time.Now().Add(-time.Hour))
+		expired := platform.Token(time.Now().Add(-time.Hour))
 		rr := get(handler, "/api/v0/token", expired)
 		require.Equal(t, http.StatusUnauthorized, rr.Code)
 		assert.JSONEq(t, `{"status":"Unauthorized","error":"invalid token"}`, rr.Body.String())
 
-		claims := console.Claims(time.Now())
+		claims := platform.Claims(time.Now())
 		claims["aud"] = "billing"
-		rr = get(handler, "/api/v0/token", console.Sign(claims))
+		rr = get(handler, "/api/v0/token", platform.Sign(claims))
 		require.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
 
@@ -145,7 +145,7 @@ func TestApiNeedsAConsoleToken(t *testing.T) {
 // callers with a token and nothing else: not the health check, the metrics or the
 // OpenAPI document, and not the legacy pages, whatever the configuration says.
 func TestApiListenerServesNothingButTheApi(t *testing.T) {
-	_, verifier := newConsoleVerifier(t)
+	_, verifier := newPlatformVerifier(t)
 	engine := inmemory.NewStore(clock.RealClock{})
 	handler := newApiHandler(engine, verifier)
 
@@ -182,16 +182,16 @@ func TestApiListenerServesNothingButTheApi(t *testing.T) {
 }
 
 func TestApiAnswersServiceUnavailableWithoutKeys(t *testing.T) {
-	console, _ := newConsoleVerifier(t)
-	token := console.Token(time.Now())
-	console.SetDown(true)
+	platform, _ := newPlatformVerifier(t)
+	token := platform.Token(time.Now())
+	platform.SetDown(true)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	verifier, err := tenancy.NewJWKSVerifier(ctx, tenancy.JWKSVerifierConfig{
-		JWKSURL:  console.JWKSURL(),
-		Issuer:   testutil.ConsoleIssuer,
-		Audience: testutil.ConsoleAudience,
+		JWKSURL:  platform.JWKSURL(),
+		Issuer:   testutil.PlatformIssuer,
+		Audience: testutil.PlatformAudience,
 	})
 	require.NoError(t, err)
 	handler := newApiHandler(inmemory.NewStore(clock.RealClock{}), verifier)
@@ -221,8 +221,8 @@ const (
 
 // newMultiTenantApiHandler creates the handler of the API listener of a multi-tenant
 // manager with the tenants A (org key aaaa) and B (org key bbbb), one connected charge
-// station each, and the console that mints the tokens of its callers.
-func newMultiTenantApiHandler(t *testing.T) (http.Handler, *testutil.Console, *inmemory.Store) {
+// station each, and the platform that mints the tokens of its callers.
+func newMultiTenantApiHandler(t *testing.T) (http.Handler, *testutil.Platform, *inmemory.Store) {
 	t.Helper()
 	ctx := context.Background()
 	engine := inmemory.NewStore(clock.RealClock{})
@@ -232,7 +232,7 @@ func newMultiTenantApiHandler(t *testing.T) (http.Handler, *testutil.Console, *i
 		require.NoError(t, engine.SetChargeStationStatus(ctx, orgKey+".CP001", &store.ChargeStationStatus{Connected: true}))
 	}
 
-	console, verifier := newConsoleVerifier(t)
+	platform, verifier := newPlatformVerifier(t)
 	handler := server.NewApiHandler(server.ApiDeps{
 		Engine:   engine,
 		Verifier: verifier,
@@ -243,17 +243,17 @@ func newMultiTenantApiHandler(t *testing.T) (http.Handler, *testutil.Console, *i
 			DefaultOrgId: store.LegacyOrgId,
 		},
 	})
-	return handler, console, engine
+	return handler, platform, engine
 }
 
-// tokenOf returns a token of the console for a person of the org with the scope self
+// tokenOf returns a token of the platform for a person of the org with the scope self
 // and the given permissions.
-func tokenOf(console *testutil.Console, orgId string, perms ...string) string {
-	claims := console.Claims(time.Now())
+func tokenOf(platform *testutil.Platform, orgId string, perms ...string) string {
+	claims := platform.Claims(time.Now())
 	claims["org"] = orgId
 	claims["org_scope"] = "self"
 	claims["perms"] = append([]string{}, perms...)
-	return console.Sign(claims)
+	return platform.Sign(claims)
 }
 
 func request(handler http.Handler, method, target, token, body string) *httptest.ResponseRecorder {
@@ -268,9 +268,9 @@ func request(handler http.Handler, method, target, token, body string) *httptest
 }
 
 func TestApiAnswersNotFoundForTheChargeStationOfAnotherTenant(t *testing.T) {
-	handler, console, _ := newMultiTenantApiHandler(t)
-	tokenOfA := tokenOf(console, orgA, tenancy.AllPermissions...)
-	tokenOfB := tokenOf(console, orgB, tenancy.AllPermissions...)
+	handler, platform, _ := newMultiTenantApiHandler(t)
+	tokenOfA := tokenOf(platform, orgA, tenancy.AllPermissions...)
+	tokenOfB := tokenOf(platform, orgB, tenancy.AllPermissions...)
 
 	own := get(handler, "/api/v0/cs/"+stationOfA+"/status", tokenOfA)
 	require.Equal(t, http.StatusOK, own.Code, own.Body.String())
@@ -313,7 +313,7 @@ func TestApiAnswersNotFoundForTheChargeStationOfAnotherTenant(t *testing.T) {
 }
 
 func TestApiChecksThePermissionOfTheOperation(t *testing.T) {
-	handler, console, engine := newMultiTenantApiHandler(t)
+	handler, platform, engine := newMultiTenantApiHandler(t)
 	const tokenBody = `{"countryCode":"GB","partyId":"TWK","type":"RFID","uid":"ABCDEF","contractId":"GBTWK012345678V","issuer":"TWK","valid":true,"cacheMode":"ALWAYS"}`
 
 	operations := []struct {
@@ -339,12 +339,12 @@ func TestApiChecksThePermissionOfTheOperation(t *testing.T) {
 				others = append(others, perm)
 			}
 		}
-		rr := request(handler, tc.method, tc.target, tokenOf(console, orgA, others...), tc.body)
+		rr := request(handler, tc.method, tc.target, tokenOf(platform, orgA, others...), tc.body)
 		require.Equal(t, http.StatusForbidden, rr.Code, name)
 		assert.JSONEq(t, `{"status":"Forbidden","error":"missing permission `+tc.permission+`"}`, rr.Body.String(), name)
 
 		// a token without permissions
-		rr = request(handler, tc.method, tc.target, tokenOf(console, orgA), tc.body)
+		rr = request(handler, tc.method, tc.target, tokenOf(platform, orgA), tc.body)
 		require.Equal(t, http.StatusForbidden, rr.Code, name)
 	}
 
@@ -358,13 +358,13 @@ func TestApiChecksThePermissionOfTheOperation(t *testing.T) {
 
 	// with the permission of the operation, and no other
 	for _, tc := range operations {
-		rr := request(handler, tc.method, tc.target, tokenOf(console, orgA, tc.permission), tc.body)
+		rr := request(handler, tc.method, tc.target, tokenOf(platform, orgA, tc.permission), tc.body)
 		require.Equal(t, tc.wantStatus, rr.Code, "%s %s: %s", tc.method, tc.target, rr.Body.String())
 	}
 }
 
 func TestRequestLogNamesTheCaller(t *testing.T) {
-	console, verifier := newConsoleVerifier(t)
+	platform, verifier := newPlatformVerifier(t)
 	handler := newApiHandler(inmemory.NewStore(clock.RealClock{}), verifier)
 
 	var logged bytes.Buffer
@@ -372,11 +372,11 @@ func TestRequestLogNamesTheCaller(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
 	defer slog.SetDefault(previous)
 
-	claims := console.Claims(time.Now())
+	claims := platform.Claims(time.Now())
 	claims["sub"] = "svc:support-tool"
 	claims["act"] = map[string]any{"sub": "user:staff-123"}
 	claims["jti"] = "jti-42"
-	token := console.Sign(claims)
+	token := platform.Sign(claims)
 	require.Equal(t, http.StatusOK, get(handler, "/api/v0/token", token).Code)
 
 	var entry map[string]any
@@ -385,14 +385,14 @@ func TestRequestLogNamesTheCaller(t *testing.T) {
 	assert.Equal(t, float64(http.StatusOK), entry["status"])
 	assert.Equal(t, "svc:support-tool", entry["sub"])
 	assert.Equal(t, "user:staff-123", entry["act"])
-	assert.Equal(t, testutil.ConsoleOrgId, entry["org"])
+	assert.Equal(t, testutil.PlatformOrgId, entry["org"])
 	assert.Equal(t, "jti-42", entry["jti"])
 	assert.NotContains(t, logged.String(), token, "the token must not be logged")
 
 	// a request that is refused has no caller, and its token is not logged either
 	logged.Reset()
 	claims["aud"] = "billing"
-	refused := console.Sign(claims)
+	refused := platform.Sign(claims)
 	require.Equal(t, http.StatusUnauthorized, get(handler, "/api/v0/token", refused).Code)
 	assert.Contains(t, logged.String(), `"status":401`)
 	assert.Contains(t, logged.String(), `"reason":"invalid token: wrong audience"`)

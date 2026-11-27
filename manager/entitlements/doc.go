@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package entitlements reads the entitlement document that the console sends with a
+// Package entitlements reads the entitlement document that the platform sends with a
 // tenant and enforces the hard limits in it when something is created.
 //
 // Only creation is limited, never what exists: a charge station that is registered
 // keeps connecting, reporting new connectors and charging whatever the limits say. The
 // messages of the charge stations never reach the Enforcer. A soft limit is never
-// enforced either: the console bills what goes beyond it. The status and the features
+// enforced either: the platform bills what goes beyond it. The status and the features
 // of the document are read but not acted on.
 //
 // # Connectors
@@ -32,7 +32,7 @@
 //
 // # When the check cannot be made
 //
-// A limit must not stop a tenant because of a mistake of the console, and it must not
+// A limit must not stop a tenant because of a mistake of the platform, and it must not
 // be skipped because the storage is down:
 //
 //   - single mode, an org that is not a tenant, no document ({} or nothing), no

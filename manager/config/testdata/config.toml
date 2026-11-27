@@ -6,8 +6,8 @@ host = "example.com"
 
 [api.auth]
 mode = "jwt"
-jwks_url = "https://console.example.com/.well-known/jwks.json"
-issuer = "console.example.com"
+jwks_url = "https://platform.example.com/.well-known/jwks.json"
+issuer = "platform.example.com"
 audience = "maeve-test"
 min_refresh_interval = "10m"
 clock_skew = "2s"

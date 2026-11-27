@@ -29,9 +29,9 @@ const (
 )
 
 // fixture is a control plane on an in-memory store, behind the middleware that verifies
-// the tokens of a console that the test controls.
+// the tokens of a platform that the test controls.
 type fixture struct {
-	console  *testutil.Console
+	platform *testutil.Platform
 	engine   *inmemory.Store
 	resolver *tenancy.Resolver
 	// server can be changed by a test: the handler uses it for every request
@@ -45,11 +45,11 @@ func newFixture(t *testing.T) *fixture {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	console := testutil.NewConsole(t)
+	platform := testutil.NewPlatform(t)
 	verifier, err := tenancy.NewJWKSVerifier(ctx, tenancy.JWKSVerifierConfig{
-		JWKSURL:   console.JWKSURL(),
-		Issuer:    testutil.ConsoleIssuer,
-		Audience:  testutil.ConsoleAudience,
+		JWKSURL:   platform.JWKSURL(),
+		Issuer:    testutil.PlatformIssuer,
+		Audience:  testutil.PlatformAudience,
 		ClockSkew: 5 * time.Second,
 	})
 	require.NoError(t, err)
@@ -58,7 +58,7 @@ func newFixture(t *testing.T) *fixture {
 	resolver := &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine}
 	srv := &controlplane.Server{Tenants: engine, Resolver: resolver, Mode: tenancy.ModeMulti}
 	return &fixture{
-		console:  console,
+		platform: platform,
 		engine:   engine,
 		resolver: resolver,
 		server:   srv,
@@ -66,15 +66,15 @@ func newFixture(t *testing.T) *fixture {
 	}
 }
 
-// token returns a token of the console for the subject with the permissions.
+// token returns a token of the platform for the subject with the permissions.
 func (f *fixture) token(subject string, perms ...string) string {
-	claims := f.console.Claims(time.Now())
+	claims := f.platform.Claims(time.Now())
 	claims["sub"] = subject
 	claims["perms"] = append([]string{}, perms...)
-	return f.console.Sign(claims)
+	return f.platform.Sign(claims)
 }
 
-// provisioner returns the token of a console service that may manage tenants.
+// provisioner returns the token of a platform service that may manage tenants.
 func (f *fixture) provisioner() string {
 	return f.token("svc:provisioner", tenancy.PermTenantManage)
 }
@@ -139,7 +139,7 @@ func decode(t *testing.T, rr *httptest.ResponseRecorder) map[string]any {
 	return body
 }
 
-func TestOnlyAConsoleServiceThatMayManageTenantsIsLetThrough(t *testing.T) {
+func TestOnlyAPlatformServiceThatMayManageTenantsIsLetThrough(t *testing.T) {
 	f := newFixture(t)
 	document := tenantDocument(t, orgA, nil)
 
@@ -175,12 +175,12 @@ func TestOnlyAConsoleServiceThatMayManageTenantsIsLetThrough(t *testing.T) {
 		assert.Equal(t, http.StatusOK, f.do(http.MethodGet, "/manifest", f.provisioner(), "").Code)
 
 		// the org of the token does not matter
-		claims := f.console.Claims(time.Now())
+		claims := f.platform.Claims(time.Now())
 		claims["sub"] = "svc:provisioner"
 		claims["org"] = orgB
 		claims["org_scope"] = "self"
 		claims["perms"] = []string{tenancy.PermTenantManage}
-		assert.Equal(t, http.StatusOK, f.do(http.MethodPut, "/tenants/"+orgA, f.console.Sign(claims), document).Code)
+		assert.Equal(t, http.StatusOK, f.do(http.MethodPut, "/tenants/"+orgA, f.platform.Sign(claims), document).Code)
 		assert.NotNil(t, f.tenant(t, orgA))
 
 		rr := f.do(http.MethodGet, "/no-such-path", f.provisioner(), "")
@@ -934,9 +934,9 @@ func TestSpecIsServedWhereTheHandlerIsMounted(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, swagger.Servers, 1)
 	assert.Equal(t, controlplane.BasePath, swagger.Servers[0].URL)
-	// every operation needs the token of the console
+	// every operation needs the token of the platform
 	require.Len(t, swagger.Security, 1)
-	assert.Contains(t, swagger.Security[0], "consoleToken")
+	assert.Contains(t, swagger.Security[0], "bearerAuth")
 	for path, item := range swagger.Paths.Map() {
 		for method, operation := range item.Operations() {
 			assert.Nil(t, operation.Security, "%s %s must not change the security of the API", method, path)

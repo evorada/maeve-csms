@@ -119,7 +119,7 @@ func (s *Server) setTenantStatus(w http.ResponseWriter, r *http.Request, orgId s
 }
 
 // GetTenantEntitlements returns the entitlement document that is stored for the tenant.
-// It is read from the tenant store, not from a cache: the console compares it with what
+// It is read from the tenant store, not from a cache: the platform compares it with what
 // it sent.
 func (s *Server) GetTenantEntitlements(w http.ResponseWriter, r *http.Request, orgId OrgId, params GetTenantEntitlementsParams) {
 	id, ok := canonicalOrgId(orgId)
@@ -220,7 +220,7 @@ func canonicalOrgId(orgId string) (string, bool) {
 	return id.String(), true
 }
 
-// tenantFromDocument checks the document that the console sent for the org and returns
+// tenantFromDocument checks the document that the platform sent for the org and returns
 // the tenant to store, or the first field that is not valid.
 func tenantFromDocument(orgId string, doc *TenantDocument) (*store.Tenant, *invalidField) {
 	if !pathPattern.MatchString(doc.Path) {
@@ -355,7 +355,7 @@ func invalidConfig(err error) *invalidField {
 	return problem
 }
 
-// versionedDocument checks a document that is stored as the console sent it: it must be
+// versionedDocument checks a document that is stored as the platform sent it: it must be
 // a JSON object with a version that is not negative. A document that was not sent is
 // the empty document at version 0.
 func versionedDocument(field string, raw *json.RawMessage) (int64, json.RawMessage, *invalidField) {

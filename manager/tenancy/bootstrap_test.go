@@ -120,7 +120,7 @@ func TestValidateTenantIdentity(t *testing.T) {
 		"shortest names":             {slug: "abc", orgKey: "ab12"},
 		"longest names":              {slug: strings.Repeat("a", 32), orgKey: "abcd1234"},
 		"slug with a hyphen":         {slug: "acme-charging", orgKey: "acme"},
-		"hostnames":                  {slug: "acme", orgKey: "acme", hostnames: []string{"acme.ocpp.evorada.io", "localhost", "127.0.0.1", "xn--mnchen-3ya.example"}},
+		"hostnames":                  {slug: "acme", orgKey: "acme", hostnames: []string{"acme.ocpp.example.com", "localhost", "127.0.0.1", "xn--mnchen-3ya.example"}},
 		"hostname of 253 chars":      {slug: "acme", orgKey: "acme", hostnames: []string{strings.Repeat(strings.Repeat("a", 62)+".", 4) + "a"}},
 		"hostname label of 63":       {slug: "acme", orgKey: "acme", hostnames: []string{strings.Repeat("a", 63) + ".example"}},
 		"no hostname":                {slug: "acme", orgKey: "acme", hostnames: []string{}},

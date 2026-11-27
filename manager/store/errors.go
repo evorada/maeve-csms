@@ -9,7 +9,7 @@ import "errors"
 // with errors.Is.
 var (
 	// ErrNotImplemented is returned by a backend that does not support a method
-	// (Firestore for every store method added by the Evorada CPMS plan).
+	// (Firestore for the stores it does not have, such as the tenant store).
 	ErrNotImplemented = errors.New("not implemented by this storage backend")
 	// ErrNotFound is returned when an update targets a record that does not exist.
 	ErrNotFound = errors.New("not found")

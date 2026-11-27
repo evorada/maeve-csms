@@ -57,7 +57,7 @@ const (
 	// maxTokenLength is the longest token that is looked at.
 	maxTokenLength = 16 << 10
 
-	// the private claims of a console token
+	// the private claims of a platform token
 	claimOrg      = "org"
 	claimOrgScope = "org_scope"
 	claimPerms    = "perms"
@@ -69,14 +69,14 @@ const (
 
 // JWKSVerifierConfig configures a JWKSVerifier.
 type JWKSVerifierConfig struct {
-	// JWKSURL is where the console publishes the public keys that sign its tokens.
+	// JWKSURL is where the platform publishes the public keys that sign its tokens.
 	JWKSURL string
 	// Issuer is the only accepted "iss".
 	Issuer string
 	// Audience must be one of the "aud" values of a token.
 	Audience string
 	// MinRefreshInterval is the shortest time between two requests for the key set
-	// that the console answered. Zero is 5 minutes.
+	// that the platform answered. Zero is 5 minutes.
 	MinRefreshInterval time.Duration
 	// ClockSkew is the leeway for "exp", "iat" and "nbf".
 	ClockSkew time.Duration
@@ -90,7 +90,7 @@ type JWKSVerifierConfig struct {
 	Clock clock.PassiveClock
 }
 
-// JWKSVerifier verifies tokens that the console signed with one of the Ed25519 keys of
+// JWKSVerifier verifies tokens that the platform signed with one of the Ed25519 keys of
 // its key set. The algorithm (EdDSA), the key type, the issuer and the audience are
 // fixed by the configuration and never taken from a token or from the key set.
 type JWKSVerifier struct {
@@ -102,16 +102,16 @@ type JWKSVerifier struct {
 	// loaded is set once a key set with at least one key was fetched: from then on the
 	// key set is read from the cache without a request.
 	loaded atomic.Bool
-	// refreshing is held by the one caller that asks the console for the key set.
+	// refreshing is held by the one caller that asks the platform for the key set.
 	refreshing chan struct{}
-	// nextRefresh is when the console may be asked again. It is only touched while
+	// nextRefresh is when the platform may be asked again. It is only touched while
 	// refreshing is held.
 	nextRefresh time.Time
 }
 
 // NewJWKSVerifier creates a verifier that loads the key set from cfg.JWKSURL and keeps
 // it up to date until ctx is done. A key set that cannot be loaded is not an error: the
-// console may start after the manager, and until then every token is refused with
+// platform may start after the manager, and until then every token is refused with
 // ErrKeysUnavailable.
 func NewJWKSVerifier(ctx context.Context, cfg JWKSVerifierConfig) (*JWKSVerifier, error) {
 	keysURL, err := url.Parse(cfg.JWKSURL)
@@ -163,7 +163,7 @@ func NewJWKSVerifier(ctx context.Context, cfg JWKSVerifierConfig) (*JWKSVerifier
 		err = errors.New("the key set is empty")
 	}
 	if err != nil {
-		slog.Warn("could not load the signing keys of the console: API requests are refused until they are loaded",
+		slog.Warn("could not load the signing keys of the platform: API requests are refused until they are loaded",
 			"url", v.url, "err", err.Error())
 	} else {
 		v.loaded.Store(true)
@@ -172,7 +172,7 @@ func NewJWKSVerifier(ctx context.Context, cfg JWKSVerifierConfig) (*JWKSVerifier
 	return v, nil
 }
 
-// Verify checks a token of the console and returns the caller that it stands for.
+// Verify checks a token of the platform and returns the caller that it stands for.
 // Every token that is not proven to be valid is refused.
 func (v *JWKSVerifier) Verify(ctx context.Context, rawToken string) (*Principal, error) {
 	if rawToken == "" {
@@ -253,7 +253,7 @@ func isCompactJWS(token string) bool {
 	return true
 }
 
-// publicKey returns the Ed25519 key of the console with the given id.
+// publicKey returns the Ed25519 key of the platform with the given id.
 func (v *JWKSVerifier) publicKey(ctx context.Context, kid string) (ed25519.PublicKey, error) {
 	set := v.cachedKeySet(ctx)
 	if set == nil || set.Len() == 0 {
@@ -265,7 +265,7 @@ func (v *JWKSVerifier) publicKey(ctx context.Context, kid string) (ed25519.Publi
 
 	key, found := set.LookupKeyID(kid)
 	if !found {
-		// the console may have rotated its keys since the key set was loaded
+		// the platform may have rotated its keys since the key set was loaded
 		if set = v.refreshKeySet(ctx); set != nil {
 			key, found = set.LookupKeyID(kid)
 		}
@@ -309,10 +309,10 @@ func (v *JWKSVerifier) cachedKeySet(ctx context.Context) jwk.Set {
 	return set
 }
 
-// refreshKeySet asks the console for its key set, unless it was asked a short while
+// refreshKeySet asks the platform for its key set, unless it was asked a short while
 // ago: MinRefreshInterval after an answer, the retry interval after a failure. So the
 // number of requests does not depend on the number of tokens with an unknown key id or
-// on the number of requests while the console is down. A caller waits for a request
+// on the number of requests while the platform is down. A caller waits for a request
 // that is under way. It returns the key set that is cached afterwards, nil when there
 // is none.
 func (v *JWKSVerifier) refreshKeySet(ctx context.Context) jwk.Set {
@@ -338,7 +338,7 @@ func (v *JWKSVerifier) refreshKeySet(ctx context.Context) jwk.Set {
 	}
 	if err != nil {
 		v.nextRefresh = now.Add(v.retryInterval)
-		slog.Warn("could not load the signing keys of the console", "url", v.url, "err", err.Error())
+		slog.Warn("could not load the signing keys of the platform", "url", v.url, "err", err.Error())
 		return v.cachedKeySet(ctx)
 	}
 
@@ -470,7 +470,7 @@ func (c limitedHTTPClient) Do(req *http.Request) (*http.Response, error) {
 	return res, nil
 }
 
-// DevVerifier is for local runs without a console: it accepts every request, with any
+// DevVerifier is for local runs without a platform: it accepts every request, with any
 // token or with none, as the caller in Principal. It must only be used when the
 // configuration asks for it ([api.auth] mode = "dev") and the ENVIRONMENT environment
 // variable is "dev".

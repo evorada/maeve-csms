@@ -23,7 +23,7 @@ var (
 )
 
 // BootstrapTenant is a tenant from the configuration of the manager, for deployments
-// that have no console to provision tenants.
+// that have no platform to provision tenants.
 type BootstrapTenant struct {
 	OrgId     string // UUID
 	Slug      string

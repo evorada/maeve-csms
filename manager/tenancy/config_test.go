@@ -46,7 +46,7 @@ func TestConfigSchema(t *testing.T) {
 	var names []string
 	for name, property := range schema.Properties {
 		names = append(names, name)
-		// the console renders its form from these
+		// the platform renders its form from these
 		assert.NotEmpty(t, property.Title, name)
 		assert.NotEmpty(t, property.Description, name)
 	}

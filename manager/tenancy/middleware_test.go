@@ -56,9 +56,9 @@ func requireUnauthorized(t *testing.T, rr *httptest.ResponseRecorder, seen *tena
 }
 
 func TestMiddlewareWithTheTokenVerifier(t *testing.T) {
-	console := testutil.NewConsole(t)
-	verifier, _ := newTestVerifier(t, console)
-	token := console.Token(tokenTime)
+	platform := testutil.NewPlatform(t)
+	verifier, _ := newTestVerifier(t, platform)
+	token := platform.Token(tokenTime)
 
 	const missing = `{"status":"Unauthorized","error":"missing bearer token"}`
 	const invalid = `{"status":"Unauthorized","error":"invalid token"}`
@@ -93,9 +93,9 @@ func TestMiddlewareWithTheTokenVerifier(t *testing.T) {
 	})
 
 	t.Run("a token that is not valid", func(t *testing.T) {
-		claims := console.Claims(tokenTime)
+		claims := platform.Claims(tokenTime)
 		claims["aud"] = "billing"
-		rr, seen := serve(t, verifier, "Bearer "+console.Sign(claims))
+		rr, seen := serve(t, verifier, "Bearer "+platform.Sign(claims))
 		// the answer does not say which check failed
 		requireUnauthorized(t, rr, seen, invalid)
 
@@ -111,7 +111,7 @@ func TestMiddlewareWithTheTokenVerifier(t *testing.T) {
 			require.Equal(t, http.StatusNoContent, rr.Code, scheme)
 			require.NotNil(t, seen)
 			assert.Equal(t, "user:alice", seen.Subject)
-			assert.Equal(t, testutil.ConsoleOrgId, seen.OrgId)
+			assert.Equal(t, testutil.PlatformOrgId, seen.OrgId)
 			assert.Equal(t, tenancy.OrgScopeSubtree, seen.OrgScope)
 			assert.Equal(t, "token-1", seen.Jti)
 			assert.Empty(t, rr.Header().Get("WWW-Authenticate"))
@@ -120,11 +120,11 @@ func TestMiddlewareWithTheTokenVerifier(t *testing.T) {
 }
 
 func TestMiddlewareWhenTheKeysAreUnavailable(t *testing.T) {
-	console := testutil.NewConsole(t)
-	console.SetDown(true)
-	verifier, _ := newTestVerifier(t, console)
+	platform := testutil.NewPlatform(t)
+	platform.SetDown(true)
+	verifier, _ := newTestVerifier(t, platform)
 
-	rr, seen := serve(t, verifier, "Bearer "+console.Token(tokenTime))
+	rr, seen := serve(t, verifier, "Bearer "+platform.Token(tokenTime))
 	require.Equal(t, http.StatusServiceUnavailable, rr.Code)
 	assert.Nil(t, seen)
 	assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
@@ -192,7 +192,7 @@ func TestMiddlewareGivesTheVerifierOnlyTheToken(t *testing.T) {
 }
 
 func TestMiddlewareInDevMode(t *testing.T) {
-	verifier := tenancy.DevVerifier{Principal: tenancy.Principal{Subject: "user:dev", OrgId: testutil.ConsoleOrgId}}
+	verifier := tenancy.DevVerifier{Principal: tenancy.Principal{Subject: "user:dev", OrgId: testutil.PlatformOrgId}}
 
 	for _, authorization := range [][]string{{}, {"Bearer letmein"}, {"Basic dXNlcjpwYXNz"}} {
 		rr, seen := serve(t, verifier, authorization...)

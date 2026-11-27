@@ -18,10 +18,10 @@ const (
 	OrgScopeSubtree OrgScope = "subtree"
 )
 
-// servicePrefix starts the subject of a service of the console.
+// servicePrefix starts the subject of a service of the platform.
 const servicePrefix = "svc:"
 
-// Principal is the caller of a request, as stated by a token that the console minted
+// Principal is the caller of a request, as stated by a token that the platform minted
 // and that the manager verified.
 type Principal struct {
 	Subject  string // "user:…", "machine:…" or "svc:…"
@@ -40,7 +40,7 @@ func (p *Principal) Has(perm string) bool {
 	return slices.Contains(p.Perms, perm)
 }
 
-// IsService reports whether the caller is a service of the console and not a person
+// IsService reports whether the caller is a service of the platform and not a person
 // or a machine of a tenant.
 func (p *Principal) IsService() bool {
 	if p == nil {

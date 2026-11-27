@@ -2,7 +2,7 @@
 
 package tenancy
 
-// The permissions that a token of the console can give to a caller of the manager.
+// The permissions that a token of the platform can give to a caller of the manager.
 const (
 	PermStationRead      = "cpms.station.read"
 	PermStationWrite     = "cpms.station.write"
@@ -48,9 +48,9 @@ var WritePermissions = map[string]bool{
 	PermTokenWrite:   true,
 }
 
-// ManifestPermissions lists the permissions that the console can give to the callers of
+// ManifestPermissions lists the permissions that the platform can give to the callers of
 // the API: every permission but PermTenantManage, which is only for the services of the
-// console that call the control plane.
+// platform that call the control plane.
 var ManifestPermissions []string
 
 func init() {

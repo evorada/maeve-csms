@@ -12,7 +12,7 @@ servers:
   - url: http://localhost:9410/api/v0
     description: The local development server
 security:
-  - consoleToken: []
+  - bearerAuth: []
 paths:
   /cs/{csId}:
     post:
@@ -2955,7 +2955,7 @@ paths:
                 $ref: '#/components/schemas/Status'
 components:
   securitySchemes:
-    consoleToken:
+    bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT

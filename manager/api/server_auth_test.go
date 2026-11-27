@@ -295,7 +295,7 @@ func TestRegisterChargeStationAndTheConnectorLimitOfTheTenant(t *testing.T) {
 		{name: "a soft limit that is exceeded", entitlements: connectorLimit(0, "soft"), connectors: []int{1, 2, 3}, wantStatus: http.StatusCreated},
 		{name: "entitlements without limits", entitlements: `{"version":1,"status":"active","features":{"cpms":true}}`, connectors: []int{1, 2, 3}, wantStatus: http.StatusCreated},
 		{name: "entitlements that were never sent", entitlements: `{}`, connectors: []int{1, 2, 3}, wantStatus: http.StatusCreated},
-		// a mistake of the console does not stop the tenant
+		// a mistake of the platform does not stop the tenant
 		{name: "entitlements that cannot be read", entitlements: `{"version":1,"limits":{"cpms.connectors.max":0}}`, connectors: []int{1, 2, 3}, wantStatus: http.StatusCreated},
 		{name: "a negative limit", entitlements: connectorLimit(-1, "hard"), connectors: []int{1, 2, 3}, wantStatus: http.StatusCreated},
 	}

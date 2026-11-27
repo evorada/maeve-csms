@@ -28,8 +28,8 @@ func version() string {
 	return "dev"
 }
 
-// BuildManifest describes the manager to the console: the product, the kinds of
-// resources, the permissions that the console can give to the callers of the API, and
+// BuildManifest describes the manager to the platform: the product, the kinds of
+// resources, the permissions that the platform can give to the callers of the API, and
 // the schema of the tenant config. The permission to manage tenants is not part of it.
 func BuildManifest() Manifest {
 	return Manifest{

@@ -11,8 +11,8 @@ scraper can reach.
 
 The same listener serves the health check (`/health`), the metrics (`/metrics`) and the OpenAPI document of the
 public API (`/api/openapi.json`), and the legacy pages `/transactions` and `/adminui` when the
-[configuration](../config/README.md) enables them, all without authentication. The control plane of the console
-(`/_evorada/v1`) is on this listener too; it is the only part that needs a token.
+[configuration](../config/README.md) enables them, all without authentication. The control plane of the platform
+(`/_control/v1`) is on this listener too; it is the only part that needs a token.
 
 Every response is JSON and carries `Cache-Control: no-store`. A response that is not successful has this body, where
 `error` may be left out:

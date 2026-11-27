@@ -94,7 +94,7 @@ type Config struct {
 const devSubject = "user:dev"
 
 // getAuthVerifier creates what authenticates the callers of the API: the verifier of
-// the tokens of the console, or in dev mode one that accepts every request.
+// the tokens of the platform, or in dev mode one that accepts every request.
 func getAuthVerifier(ctx context.Context, cfg *AuthConfig, defaultOrgId string) (tenancy.Verifier, error) {
 	switch cfg.Mode {
 	case "jwt":

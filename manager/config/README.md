@@ -21,13 +21,13 @@ Configuration is defined in TOML.
 | Section       | Key                         | Type   | Description                                                          |
 |---------------|-----------------------------|--------|----------------------------------------------------------------------|
 | api           | addr                        | string | Address that API server will listen on, e.g. localhost:9410. It serves only `/api/v0`, to callers with a token (see [API authentication](#api-authentication)) |
-| api           | internal_addr               | string | Address that the internal listener will listen on. Default "localhost:9412". It serves the control plane of the console (`/_evorada/v1`, only for tokens of a console service with the permission `cpms.tenant.manage`; closed in "dev" auth mode), the lookups of the gateway (`/_internal/v1`, see [the internal API](../internalapi/README.md)), the health check (`/health`), the metrics (`/metrics`), the OpenAPI document of the API (`/api/openapi.json`) and the legacy pages that are enabled. Everything but the control plane is served without authentication, so the listener must only be reachable from inside the deployment (the console, the gateway, health probes, the metrics scraper) |
+| api           | internal_addr               | string | Address that the internal listener will listen on. Default "localhost:9412". It serves the control plane of the platform (`/_control/v1`, only for tokens of a platform service with the permission `cpms.tenant.manage`; closed in "dev" auth mode), the lookups of the gateway (`/_internal/v1`, see [the internal API](../internalapi/README.md)), the health check (`/health`), the metrics (`/metrics`), the OpenAPI document of the API (`/api/openapi.json`) and the legacy pages that are enabled. Everything but the control plane is served without authentication, so the listener must only be reachable from inside the deployment (the platform, the gateway, health probes, the metrics scraper) |
 | api           | enable_transactions_page    | bool   | Serve the legacy page `/transactions`, which lists the transactions of every org, on the internal listener. Default "false". For local development only: the page has no authentication |
 | api           | enable_admin_ui             | bool   | Serve the legacy admin pages `/adminui`, which register charge stations and tokens and issue client certificates, on the internal listener. Default "false". For local development only: the pages have no authentication |
 | api           | external_addr               | string | The Externally visible URL that the server is available on           |
 | api.auth      | mode                        | string | How the callers of `/api/v0` are authenticated: "jwt" (default) or "dev". See [API authentication](#api-authentication) |
-| api.auth      | jwks_url                    | string | URL of the key set (JWKS) with the public keys that sign the tokens of the console. Required in "jwt" mode; an http or https URL without credentials |
-| api.auth      | issuer                      | string | The only accepted issuer (`iss`) of a token. Default "console"      |
+| api.auth      | jwks_url                    | string | URL of the key set (JWKS) with the public keys that sign the tokens of the platform. Required in "jwt" mode; an http or https URL without credentials |
+| api.auth      | issuer                      | string | The only accepted issuer (`iss`) of a token. Default "platform"      |
 | api.auth      | audience                    | string | The audience (`aud`) that a token must have. Default "maeve"         |
 | api.auth      | min_refresh_interval        | string | Shortest time between two requests for the key set, e.g. "5m" (the default) |
 | api.auth      | clock_skew                  | string | Leeway for the time claims of a token (`exp`, `iat`, `nbf`), e.g. "5s" (the default) |
@@ -42,29 +42,33 @@ Configuration is defined in TOML.
 | jobs          | reservation_expiry_interval | string | How often reservations past their expiry date are expired, e.g. "1m" |
 | tenancy       | default_org_id              | string | Org (UUID) that owns the data from before orgs and everything created without a tenant. Default "00000000-0000-0000-0000-000000000000" (the legacy org). With PostgreSQL storage, the rows of the legacy org are moved to this org at startup; a token of the legacy org stays there when this org already has a token with the same country code, party id and UID (a warning in the log names it) |
 | tenancy       | mode                        | string | Either "single" (default) or "multi". In single mode a charge station is known by the id it connects with and the host it connects to is ignored. In multi mode the host names the tenant, a charge station is known as `{org_key}.{stationId}` and a host that no tenant has is refused. Multi mode needs PostgreSQL or in-memory storage |
-| tenancy       | cache_ttl                   | string | How long a tenant that was looked up by host, org key or org id is kept in memory, e.g. "30s" (the default). It is also how long another instance of the manager takes to see that the console suspended or resumed a tenant |
-| tenancy       | bootstrap_tenants           | array of tables | Tenants that are created or updated at startup, for deployments without a console that provisions them. Only allowed in multi mode. See [Bootstrap tenants](#bootstrap-tenants) |
+| tenancy       | cache_ttl                   | string | How long a tenant that was looked up by host, org key or org id is kept in memory, e.g. "30s" (the default). It is also how long another instance of the manager takes to see that the platform suspended or resumed a tenant |
+| tenancy       | bootstrap_tenants           | array of tables | Tenants that are created or updated at startup, for deployments without a platform that provisions them. Only allowed in multi mode. See [Bootstrap tenants](#bootstrap-tenants) |
 | observability | log_format                  | string | Either "json" or "text"                                              |
 | observability | otel_collector_addr         | string | Address of the OpenTelemetry collector, e.g. "localhost:4317"        |
 | observability | tls_keylog_file             | string | File where TLS session keys will be written for use with Wireshark   |
 
 ### API authentication
 
-Every request to `/api/v0` must carry a token of the console: `Authorization: Bearer <JWT>`. In "jwt" mode
+"The platform" in this document is the system that the manager is deployed under: it signs the tokens
+of the callers of the API and provisions the tenants through the control plane (`/_control/v1`). The manager
+knows it only by its key set, its issuer name and the tokens it signs.
+
+Every request to `/api/v0` must carry a token of the platform: `Authorization: Bearer <JWT>`. In "jwt" mode
 the manager only accepts a compact JWS that is signed with EdDSA by an Ed25519 key of the key set at `jwks_url`,
 with the configured issuer and audience, the claims `sub`, `jti`, `iat` and `exp` (not expired, not issued in the
 future, at most `max_token_lifetime` between `iat` and `exp`), `org` (a UUID) and `org_scope` ("self" or
 "subtree"); `perms` (a list of strings) and `act` are optional. Anything else is answered with `401`. The key set
 is loaded at startup and refreshed in the background; a token with an unknown key id makes the manager load it
-again, at most once per `min_refresh_interval`. While no key set could be loaded (the console may start after the
+again, at most once per `min_refresh_interval`. While no key set could be loaded (the platform may start after the
 manager) requests are answered with `503`.
 
 In "dev" mode nothing is verified: every request to `/api/v0`, with any token or with none, is accepted as the
 caller `user:dev` of `[api.auth.dev]`. The manager refuses to start in this mode unless the `ENVIRONMENT`
 environment variable is `dev`, and logs the warning `API authentication disabled (dev mode)` at every startup.
-Never use it on a deployment that others can reach. The control plane (`/_evorada/v1` on the internal listener)
-stays closed in this mode: it only serves services of the console, and `user:dev` is not one, so every request to
-it is answered with `403`. Tenants of a deployment without a console come from `[[tenancy.bootstrap_tenants]]`.
+Never use it on a deployment that others can reach. The control plane (`/_control/v1` on the internal listener)
+stays closed in this mode: it only serves services of the platform, and `user:dev` is not one, so every request to
+it is answered with `403`. Tenants of a deployment without a platform come from `[[tenancy.bootstrap_tenants]]`.
 
 A caller needs the permission of the operation (`x-permission` in the API spec), otherwise the answer is `403`,
 and only reaches the data of the orgs in its scope. With `[tenancy] mode = "single"` the only org is
@@ -74,14 +78,14 @@ it is a tenant here). A charge station, a token or an org outside the scope is a
 exist (`404`). In "dev" mode with `mode = "multi"` set `[api.auth.dev] org_id` to the org of a tenant: the
 default org is not a tenant, so the dev caller would reach nothing.
 
-While the console has suspended a tenant (`mode = "multi"`), the operations that create or change what the
+While the platform has suspended a tenant (`mode = "multi"`), the operations that create or change what the
 tenant owns (the ones with the permission `cpms.station.write`, `cpms.token.write` or `cpms.tariff.write`
 that do not only read) are answered with `403` and the error `tenant_suspended`. Reading and commands to
 charge stations (`cpms.connector.command`) stay possible, and the charge stations of the tenant connect,
-authorize and charge as before. The instance of the manager that the console called applies a suspension or a
+authorize and charge as before. The instance of the manager that the platform called applies a suspension or a
 resumption at once, any other instance within `[tenancy] cache_ttl`.
 
-The entitlements that the console sends with a tenant (`mode = "multi"`) can limit its connectors with
+The entitlements that the platform sends with a tenant (`mode = "multi"`) can limit its connectors with
 `cpms.connectors.max`. While the `enforcement` of that limit is `hard`, a new charge station is not registered
 (`POST /api/v0/cs/{csId}` is answered with `403` and an error that starts with `entitlement_limit_exceeded`)
 once the connectors that the charge stations of the tenant have reported use up the limit. A limit with the
@@ -92,11 +96,11 @@ connectors and charge as before, and registering one of them again is always pos
 
 #### Tenant config
 
-With `mode = "multi"` the console sends a config document with each tenant. Its JSON Schema is
+With `mode = "multi"` the platform sends a config document with each tenant. Its JSON Schema is
 [`tenancy/config_schema.json`](../tenancy/config_schema.json), published as `config_schema` in the manifest
 of the control plane; a document that does not fit it is refused (`400`, error `invalid_config`) and nothing
 of the request is stored. The settings apply without a restart: at once on the instance of the manager that
-the console called, within `[tenancy] cache_ttl` on any other instance, and for the gateway after its own
+the platform called, within `[tenancy] cache_ttl` on any other instance, and for the gateway after its own
 `--registry-cache-ttl` on top of that.
 
 | Setting                    | Applies to | Default |
@@ -123,7 +127,7 @@ the other settings).
 ```toml
 [api.auth]
 mode = "jwt"
-jwks_url = "http://console.internal:8080/.well-known/jwks.json"
+jwks_url = "http://platform.internal:8080/.well-known/jwks.json"
 ```
 
 ### Bootstrap tenants

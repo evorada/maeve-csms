@@ -8,7 +8,7 @@ internal_addr = ":9412"
 # enable_admin_ui = true
 # enable_transactions_page = true
 
-# Local runs have no console that mints tokens: every request to the API is accepted as
+# Local runs have no platform that mints tokens: every request to the API is accepted as
 # a caller with all permissions. The manager only starts in this mode with ENVIRONMENT=dev.
 [api.auth]
 mode = "dev"

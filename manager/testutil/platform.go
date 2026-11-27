@@ -16,17 +16,17 @@ import (
 )
 
 const (
-	// ConsoleIssuer is the "iss" of the tokens of a Console.
-	ConsoleIssuer = "console"
-	// ConsoleAudience is the "aud" of the tokens of a Console.
-	ConsoleAudience = "maeve"
-	// ConsoleOrgId is the org of the caller in Console.Claims.
-	ConsoleOrgId = "0193b2c4-0000-7000-8000-0000000000c1"
+	// PlatformIssuer is the "iss" of the tokens of a Platform.
+	PlatformIssuer = "platform"
+	// PlatformAudience is the "aud" of the tokens of a Platform.
+	PlatformAudience = "maeve"
+	// PlatformOrgId is the org of the caller in Platform.Claims.
+	PlatformOrgId = "0193b2c4-0000-7000-8000-0000000000c1"
 )
 
-// Console stands in for the console in tests: it serves a key set over HTTP and signs
+// Platform stands in for the platform in tests: it serves a key set over HTTP and signs
 // tokens with its Ed25519 key, without the library that the manager verifies them with.
-type Console struct {
+type Platform struct {
 	t      testing.TB
 	server *httptest.Server
 
@@ -39,18 +39,18 @@ type Console struct {
 	requests int
 }
 
-// NewConsole starts a console with one signing key. It is stopped when the test ends.
-func NewConsole(t testing.TB) *Console {
+// NewPlatform starts a platform with one signing key. It is stopped when the test ends.
+func NewPlatform(t testing.TB) *Platform {
 	t.Helper()
 
-	c := &Console{t: t}
+	c := &Platform{t: t}
 	c.RotateKey()
 	c.server = httptest.NewServer(http.HandlerFunc(c.serveKeySet))
 	t.Cleanup(c.server.Close)
 	return c
 }
 
-func (c *Console) serveKeySet(w http.ResponseWriter, _ *http.Request) {
+func (c *Platform) serveKeySet(w http.ResponseWriter, _ *http.Request) {
 	c.mu.Lock()
 	c.requests++
 	down := c.down
@@ -65,13 +65,13 @@ func (c *Console) serveKeySet(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write(body)
 }
 
-// JWKSURL is where the console serves its key set.
-func (c *Console) JWKSURL() string {
+// JWKSURL is where the platform serves its key set.
+func (c *Platform) JWKSURL() string {
 	return c.server.URL + "/jwks.json"
 }
 
 // RotateKey replaces the signing key: the key set only holds the new key afterwards.
-func (c *Console) RotateKey() {
+func (c *Platform) RotateKey() {
 	c.t.Helper()
 
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
@@ -88,58 +88,58 @@ func (c *Console) RotateKey() {
 }
 
 // KeyId is the id of the signing key.
-func (c *Console) KeyId() string {
+func (c *Platform) KeyId() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.keyId
 }
 
 // PublicKey is the public half of the signing key.
-func (c *Console) PublicKey() ed25519.PublicKey {
+func (c *Platform) PublicKey() ed25519.PublicKey {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.key.Public().(ed25519.PublicKey)
 }
 
 // SetKeySet replaces the key set that is served, without changing the signing key.
-func (c *Console) SetKeySet(keys ...map[string]any) {
+func (c *Platform) SetKeySet(keys ...map[string]any) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.keySet = append([]map[string]any{}, keys...)
 }
 
-// SetDown makes the console answer requests for the key set with an error, or not.
-func (c *Console) SetDown(down bool) {
+// SetDown makes the platform answer requests for the key set with an error, or not.
+func (c *Platform) SetDown(down bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.down = down
 }
 
 // Requests is the number of requests for the key set so far.
-func (c *Console) Requests() int {
+func (c *Platform) Requests() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.requests
 }
 
-// Claims returns the claims of a token that the console mints at the given time for a
-// person of the org ConsoleOrgId: valid for 60 seconds. A test changes what it needs.
-func (c *Console) Claims(now time.Time) map[string]any {
+// Claims returns the claims of a token that the platform mints at the given time for a
+// person of the org PlatformOrgId: valid for 60 seconds. A test changes what it needs.
+func (c *Platform) Claims(now time.Time) map[string]any {
 	return map[string]any{
-		"iss":       ConsoleIssuer,
-		"aud":       ConsoleAudience,
+		"iss":       PlatformIssuer,
+		"aud":       PlatformAudience,
 		"sub":       "user:alice",
 		"jti":       "token-1",
 		"iat":       now.Unix(),
 		"exp":       now.Add(60 * time.Second).Unix(),
-		"org":       ConsoleOrgId,
+		"org":       PlatformOrgId,
 		"org_scope": "subtree",
 		"perms":     []string{"cpms.station.read", "cpms.token.read"},
 	}
 }
 
 // Sign returns a token with the given claims, signed with the signing key.
-func (c *Console) Sign(claims map[string]any) string {
+func (c *Platform) Sign(claims map[string]any) string {
 	c.t.Helper()
 
 	header := map[string]any{"alg": "EdDSA", "typ": "JWT", "kid": c.KeyId()}
@@ -147,14 +147,14 @@ func (c *Console) Sign(claims map[string]any) string {
 }
 
 // Signature returns the signature of the signing key over the signing input of a JWS.
-func (c *Console) Signature(signingInput []byte) []byte {
+func (c *Platform) Signature(signingInput []byte) []byte {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return ed25519.Sign(c.key, signingInput)
 }
 
 // Token returns a valid token for the given time: Claims signed with the signing key.
-func (c *Console) Token(now time.Time) string {
+func (c *Platform) Token(now time.Time) string {
 	c.t.Helper()
 	return c.Sign(c.Claims(now))
 }

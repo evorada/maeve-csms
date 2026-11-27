@@ -31,8 +31,8 @@ func TestParseConfig(t *testing.T) {
 			OrgName:      "Example",
 			Auth: config.AuthConfig{
 				Mode:               "jwt",
-				JWKSURL:            "https://console.example.com/.well-known/jwks.json",
-				Issuer:             "console.example.com",
+				JWKSURL:            "https://platform.example.com/.well-known/jwks.json",
+				Issuer:             "platform.example.com",
 				Audience:           "maeve-test",
 				MinRefreshInterval: "10m",
 				ClockSkew:          "2s",
@@ -136,14 +136,14 @@ func TestParseConfig(t *testing.T) {
 func TestValidateConfig(t *testing.T) {
 	cfg := clone.Clone(&config.DefaultConfig)
 
-	// by default the callers of the API are authenticated with tokens of the console,
+	// by default the callers of the API are authenticated with tokens of the platform,
 	// and there is no default for where its keys are
 	assert.Equal(t, "jwt", cfg.Api.Auth.Mode)
 	err := cfg.Validate()
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "JWKSURL")
 
-	cfg.Api.Auth.JWKSURL = "https://console.example.com/.well-known/jwks.json"
+	cfg.Api.Auth.JWKSURL = "https://platform.example.com/.well-known/jwks.json"
 	assert.NoError(t, cfg.Validate())
 }
 
@@ -194,7 +194,7 @@ func TestLegacyPagesAreOffUnlessEnabled(t *testing.T) {
 	}
 }
 
-// The schema of the tenant config tells the console which heartbeat interval a tenant
+// The schema of the tenant config tells the platform which heartbeat interval a tenant
 // has when it sets none: the default of this configuration.
 func TestTenantConfigSchemaShowsTheDefaultHeartbeatInterval(t *testing.T) {
 	var schema struct {

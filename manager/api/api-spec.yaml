@@ -11,9 +11,9 @@ info:
 servers:
 - url: http://localhost:9410/api/v0
   description: The local development server
-# Every operation needs a token that the console minted for the caller.
+# Every operation needs a token that the platform minted for the caller.
 security:
-- consoleToken: []
+- bearerAuth: []
 paths:
   /cs/{csId}:
     $ref: 'paths/auth.yaml#/paths/~1cs~1{csId}'
@@ -117,7 +117,7 @@ paths:
     $ref: 'paths/monitoring.yaml#/paths/~1cs~1{csId}~1reports'
 components:
   securitySchemes:
-    consoleToken:
+    bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT

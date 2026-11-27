@@ -38,13 +38,13 @@ type InternalDeps struct {
 }
 
 // NewInternalHandler creates the handler of the internal listener. It serves the
-// control plane of the console at /_evorada/v1, the lookups of the gateway at
+// control plane of the platform at /_control/v1, the lookups of the gateway at
 // /_internal/v1, the health check at /health, the metrics at /metrics and the OpenAPI
 // document of the API at /api/openapi.json. The legacy pages /transactions and /adminui
 // are only served when d.Settings enables them.
 //
 // Only the control plane is authenticated: every request to it must be accepted by
-// d.Verifier and must come from a service of the console that may manage tenants.
+// d.Verifier and must come from a service of the platform that may manage tenants.
 // Everything else on the listener is open, so the listener must only be reachable from
 // inside the deployment.
 func NewInternalHandler(d InternalDeps) http.Handler {
@@ -71,7 +71,7 @@ func NewInternalHandler(d InternalDeps) http.Handler {
 		controlPlane.Store = checker
 	}
 	// a request is authenticated before anything else looks at it; the handler itself
-	// refuses every caller that is not a console service with the permission
+	// refuses every caller that is not a platform service with the permission
 	r.With(logger, tenancy.Middleware(d.Verifier), logPrincipal).Mount(controlplane.BasePath, controlplane.NewHandler(controlPlane))
 
 	// what a browser may open keeps its security headers; there are no CORS headers, so

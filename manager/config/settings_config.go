@@ -30,18 +30,18 @@ type ApiSettingsConfig struct {
 
 // AuthConfig configures the authentication of the callers of the API.
 type AuthConfig struct {
-	// Mode is "jwt" (every request needs a token that the console signed) or "dev"
+	// Mode is "jwt" (every request needs a token that the platform signed) or "dev"
 	// (every request is accepted as the caller in Dev; refused at startup unless the
 	// ENVIRONMENT environment variable is "dev").
 	Mode string `mapstructure:"mode" toml:"mode" validate:"required,oneof=jwt dev"`
-	// JWKSURL is where the console publishes the keys that sign its tokens.
+	// JWKSURL is where the platform publishes the keys that sign its tokens.
 	JWKSURL string `mapstructure:"jwks_url" toml:"jwks_url" validate:"required_if=Mode jwt,omitempty,http_url"`
 	// Issuer is the only "iss" that is accepted.
 	Issuer string `mapstructure:"issuer" toml:"issuer" validate:"required"`
 	// Audience is the "aud" that a token must have.
 	Audience string `mapstructure:"audience" toml:"audience" validate:"required"`
 	// MinRefreshInterval is the shortest time between two requests for the keys of
-	// the console, e.g. "5m".
+	// the platform, e.g. "5m".
 	MinRefreshInterval string `mapstructure:"min_refresh_interval" toml:"min_refresh_interval" validate:"required"`
 	// ClockSkew is the leeway for the time claims of a token, e.g. "5s".
 	ClockSkew string `mapstructure:"clock_skew" toml:"clock_skew" validate:"required"`

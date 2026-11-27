@@ -50,7 +50,7 @@ func minimalTenant(orgId, slug, orgKey string) *store.Tenant {
 // partnerTenant is a tenant with every field set.
 func partnerTenant() *store.Tenant {
 	tenant := minimalTenant(tenantOrgPartner, "chargeco", "chrg01")
-	tenant.Hostnames = []string{"ChargeCo.OCPP.evorada.io:443", "api.chargeco.example"}
+	tenant.Hostnames = []string{"ChargeCo.OCPP.example.com:443", "api.chargeco.example"}
 	tenant.Parties = []store.TenantParty{{Id: "party-1", Role: "CPO", CountryCode: "NL", PartyId: "CHC"}}
 	tenant.EntitlementsVersion = 3
 	tenant.Entitlements = json.RawMessage(`{"version":3,"limits":{"cpms.connectors.max":10}}`)
@@ -97,7 +97,7 @@ func TestTenantStore(t *testing.T, newStore func(t *testing.T) store.TenantStore
 		assert.Equal(t, tenantPath(tenantOrgRoot, tenantOrgPartner), got.Path)
 		assert.Equal(t, "chargeco", got.Slug)
 		assert.Equal(t, "chrg01", got.OrgKey)
-		assert.Equal(t, []string{"api.chargeco.example", "chargeco.ocpp.evorada.io"}, got.Hostnames)
+		assert.Equal(t, []string{"api.chargeco.example", "chargeco.ocpp.example.com"}, got.Hostnames)
 		assert.Equal(t, []store.TenantParty{{Id: "party-1", Role: "CPO", CountryCode: "NL", PartyId: "CHC"}}, got.Parties)
 		assert.Equal(t, int64(3), got.EntitlementsVersion)
 		assert.JSONEq(t, `{"version":3,"limits":{"cpms.connectors.max":10}}`, string(got.Entitlements))
@@ -113,7 +113,7 @@ func TestTenantStore(t *testing.T, newStore func(t *testing.T) store.TenantStore
 		require.NotNil(t, byUpperCaseId)
 		assertSameTenant(t, got, byUpperCaseId)
 
-		byHost, err := s.GetTenantByHost(ctx, "CHARGECO.ocpp.Evorada.io:8443")
+		byHost, err := s.GetTenantByHost(ctx, "CHARGECO.ocpp.Example.com:8443")
 		require.NoError(t, err)
 		require.NotNil(t, byHost)
 		assertSameTenant(t, got, byHost)
@@ -139,7 +139,7 @@ func TestTenantStore(t *testing.T, newStore func(t *testing.T) store.TenantStore
 		require.NoError(t, err)
 		assert.Nil(t, got)
 
-		got, err = s.GetTenantByHost(ctx, "unknown.ocpp.evorada.io")
+		got, err = s.GetTenantByHost(ctx, "unknown.ocpp.example.com")
 		require.NoError(t, err)
 		assert.Nil(t, got)
 
@@ -242,7 +242,7 @@ func TestTenantStore(t *testing.T, newStore func(t *testing.T) store.TenantStore
 		first := getTenant(t, s, tenantOrgPartner)
 
 		sameHostname := minimalTenant(tenantOrgUnrelated, "voltify", "volt01")
-		sameHostname.Hostnames = []string{"voltify.example", "chargeco.ocpp.evorada.io"}
+		sameHostname.Hostnames = []string{"voltify.example", "chargeco.ocpp.example.com"}
 		assert.ErrorIs(t, s.PutTenant(ctx, sameHostname), store.ErrTenantConflict)
 
 		sameSlug := minimalTenant(tenantOrgUnrelated, "chargeco", "volt01")
@@ -446,7 +446,7 @@ func TestTenantStore(t *testing.T, newStore func(t *testing.T) store.TenantStore
 			assert.NoError(t, err, "caller %d", i)
 		}
 		got := getTenant(t, s, tenantOrgPartner)
-		assert.Equal(t, []string{"api.chargeco.example", "chargeco.ocpp.evorada.io"}, got.Hostnames)
+		assert.Equal(t, []string{"api.chargeco.example", "chargeco.ocpp.example.com"}, got.Hostnames)
 		all, err := s.ListTenants(ctx, "", 10)
 		require.NoError(t, err)
 		assert.Len(t, all, 1)

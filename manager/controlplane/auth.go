@@ -9,7 +9,7 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-// RequireControlPlane only lets the services of the console that may manage tenants
+// RequireControlPlane only lets the services of the platform that may manage tenants
 // through: the caller that tenancy.Middleware verified must be a service (subject
 // "svc:…") and must have the permission tenancy.PermTenantManage. The org of the caller
 // is not looked at: the control plane works on every tenant. Any other caller is

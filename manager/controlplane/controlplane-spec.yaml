@@ -2,24 +2,24 @@ openapi: 3.0.3
 info:
   title: MaEVe CSMS control plane
   description: |
-    The API that the console uses to provision and manage the tenants of the manager.
-    It is served at `/_evorada/v1` on the internal listener of the manager and is not
+    The API that the platform uses to provision and manage the tenants of the manager.
+    It is served at `/_control/v1` on the internal listener of the manager and is not
     part of the administration API.
 
-    Every request needs a token that the console minted for one of its services: the
+    Every request needs a token that the platform minted for one of its services: the
     subject starts with `svc:` and the permissions contain `cpms.tenant.manage`. The org
     of the token is not looked at.
   version: 1.0.0
 servers:
-  - url: /_evorada/v1
+  - url: /_control/v1
 security:
-  - consoleToken: []
+  - bearerAuth: []
 paths:
   /manifest:
     get:
       operationId: getManifest
       summary: Describe the product
-      description: What the manager offers to the console - resources, permissions, events, meters and the schema of the tenant config.
+      description: What the manager offers to the platform - resources, permissions, events, meters and the schema of the tenant config.
       responses:
         '200':
           description: The manifest
@@ -155,7 +155,7 @@ paths:
     get:
       operationId: getTenantEntitlements
       summary: Read the entitlements of a tenant
-      description: Returns the entitlement document that the manager stores for the tenant, so that the console can see which version is applied.
+      description: Returns the entitlement document that the manager stores for the tenant, so that the platform can see which version is applied.
       parameters:
         - name: If-None-Match
           in: header
@@ -210,7 +210,7 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     Forbidden:
-      description: The caller is not a console service with the permission `cpms.tenant.manage`
+      description: The caller is not a platform service with the permission `cpms.tenant.manage`
       content:
         application/json:
           schema:
@@ -236,7 +236,7 @@ components:
   schemas:
     TenantDocument:
       type: object
-      description: What the console knows about a tenant.
+      description: What the platform knows about a tenant.
       required:
         - path
         - slug
@@ -305,7 +305,7 @@ components:
           pattern: '^[A-Z0-9]{3}$'
     EntitlementDocument:
       type: object
-      description: The entitlements of a tenant, kept as the console sent them.
+      description: The entitlements of a tenant, kept as the platform sent them.
       required:
         - version
       additionalProperties: true
@@ -351,7 +351,7 @@ components:
     TenantConfigDocument:
       type: object
       description: |
-        The config of a tenant, kept as the console sent it. It must be valid against
+        The config of a tenant, kept as the platform sent it. It must be valid against
         the `config_schema` of the manifest, which allows no settings but its own.
       required:
         - version
@@ -510,7 +510,7 @@ components:
           type: string
           description: Why the setting is not valid
   securitySchemes:
-    consoleToken:
+    bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT

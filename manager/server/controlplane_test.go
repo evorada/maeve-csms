@@ -69,12 +69,12 @@ func controlPlaneRoutes(t *testing.T, orgId string) []controlPlaneRoute {
 	return result
 }
 
-// serviceToken returns a token of the console for one of its services.
-func serviceToken(console *testutil.Console, subject string, perms ...string) string {
-	claims := console.Claims(time.Now())
+// serviceToken returns a token of the platform for one of its services.
+func serviceToken(platform *testutil.Platform, subject string, perms ...string) string {
+	claims := platform.Claims(time.Now())
 	claims["sub"] = subject
 	claims["perms"] = append([]string{}, perms...)
-	return console.Sign(claims)
+	return platform.Sign(claims)
 }
 
 // tenantDocumentOfA is a valid document for the tenant A of the multi-tenant tests,
@@ -83,21 +83,21 @@ var tenantDocumentOfA = `{"path":"` + store.OrgPathLabel(orgA) + `","slug":"tena
 
 // newMultiTenantInternalHandler creates the handler of the internal listener of a
 // multi-tenant manager with the tenant A (org key aaaa, host a.example.com), and the
-// console that mints the tokens of its callers.
-func newMultiTenantInternalHandler(t *testing.T) (http.Handler, *testutil.Console, *inmemory.Store) {
+// platform that mints the tokens of its callers.
+func newMultiTenantInternalHandler(t *testing.T) (http.Handler, *testutil.Platform, *inmemory.Store) {
 	t.Helper()
 	engine := inmemory.NewStore(clock.RealClock{})
 	require.NoError(t, engine.PutTenant(context.Background(), &store.Tenant{
 		OrgId: orgA, Path: store.OrgPathLabel(orgA), Slug: "tenant-aaaa", OrgKey: "aaaa", Hostnames: []string{"a.example.com"},
 	}))
 
-	console, verifier := newConsoleVerifier(t)
+	platform, verifier := newPlatformVerifier(t)
 	handler := server.NewInternalHandler(server.InternalDeps{
 		Resolver: &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine, DefaultOrgId: store.LegacyOrgId},
 		Engine:   engine,
 		Verifier: verifier,
 	})
-	return handler, console, engine
+	return handler, platform, engine
 }
 
 func send(handler http.Handler, route controlPlaneRoute, token string) *httptest.ResponseRecorder {
@@ -117,15 +117,15 @@ func send(handler http.Handler, route controlPlaneRoute, token string) *httptest
 	return rr
 }
 
-func TestControlPlaneRefusesEveryCallerButAConsoleServiceThatMayManageTenants(t *testing.T) {
-	handler, console, engine := newMultiTenantInternalHandler(t)
+func TestControlPlaneRefusesEveryCallerButAPlatformServiceThatMayManageTenants(t *testing.T) {
+	handler, platform, engine := newMultiTenantInternalHandler(t)
 	routes := controlPlaneRoutes(t, orgA)
 
 	everyPermission := append([]string{}, tenancy.AllPermissions...)
-	expired := console.Claims(time.Now().Add(-time.Hour))
+	expired := platform.Claims(time.Now().Add(-time.Hour))
 	expired["sub"] = "svc:provisioner"
 	expired["perms"] = everyPermission
-	otherConsole := testutil.NewConsole(t)
+	otherPlatform := testutil.NewPlatform(t)
 
 	callers := []struct {
 		name   string
@@ -133,12 +133,12 @@ func TestControlPlaneRefusesEveryCallerButAConsoleServiceThatMayManageTenants(t 
 		status int
 	}{
 		{"no token", "", http.StatusUnauthorized},
-		{"an expired token of a service with the permission", console.Sign(expired), http.StatusUnauthorized},
-		{"a token of another console", serviceToken(otherConsole, "svc:provisioner", everyPermission...), http.StatusUnauthorized},
-		{"a person with every permission", serviceToken(console, "user:alice", everyPermission...), http.StatusForbidden},
-		{"a machine with every permission", serviceToken(console, "machine:ci", everyPermission...), http.StatusForbidden},
-		{"a service with every permission but the one to manage tenants", serviceToken(console, "svc:provisioner", tenancy.ManifestPermissions...), http.StatusForbidden},
-		{"a service without permissions", serviceToken(console, "svc:provisioner"), http.StatusForbidden},
+		{"an expired token of a service with the permission", platform.Sign(expired), http.StatusUnauthorized},
+		{"a token of another platform", serviceToken(otherPlatform, "svc:provisioner", everyPermission...), http.StatusUnauthorized},
+		{"a person with every permission", serviceToken(platform, "user:alice", everyPermission...), http.StatusForbidden},
+		{"a machine with every permission", serviceToken(platform, "machine:ci", everyPermission...), http.StatusForbidden},
+		{"a service with every permission but the one to manage tenants", serviceToken(platform, "svc:provisioner", tenancy.ManifestPermissions...), http.StatusForbidden},
+		{"a service without permissions", serviceToken(platform, "svc:provisioner"), http.StatusForbidden},
 	}
 	for _, caller := range callers {
 		t.Run(caller.name, func(t *testing.T) {
@@ -164,7 +164,7 @@ func TestControlPlaneRefusesEveryCallerButAConsoleServiceThatMayManageTenants(t 
 	assert.Equal(t, []string{"a.example.com"}, tenant.Hostnames)
 
 	t.Run("a service that may manage tenants", func(t *testing.T) {
-		token := serviceToken(console, "svc:provisioner", tenancy.PermTenantManage)
+		token := serviceToken(platform, "svc:provisioner", tenancy.PermTenantManage)
 		for _, route := range routes {
 			rr := send(handler, route, token)
 			assert.Equal(t, http.StatusOK, rr.Code, "%s %s: %s", route.method, route.target, rr.Body.String())
@@ -182,8 +182,8 @@ func TestControlPlaneRefusesEveryCallerButAConsoleServiceThatMayManageTenants(t 
 }
 
 func TestControlPlaneChangesWhatTheGatewayLookupsAnswer(t *testing.T) {
-	handler, console, _ := newMultiTenantInternalHandler(t)
-	token := serviceToken(console, "svc:provisioner", tenancy.PermTenantManage)
+	handler, platform, _ := newMultiTenantInternalHandler(t)
+	token := serviceToken(platform, "svc:provisioner", tenancy.PermTenantManage)
 	// the answer for a charge station that is not registered says whether its host
 	// belongs to a tenant
 	lookup := func(host string) string {
@@ -206,8 +206,8 @@ func TestControlPlaneChangesWhatTheGatewayLookupsAnswer(t *testing.T) {
 }
 
 func TestTenantConfigFromTheControlPlaneReachesTheGatewayLookupAtOnce(t *testing.T) {
-	handler, console, engine := newMultiTenantInternalHandler(t)
-	token := serviceToken(console, "svc:provisioner", tenancy.PermTenantManage)
+	handler, platform, engine := newMultiTenantInternalHandler(t)
+	token := serviceToken(platform, "svc:provisioner", tenancy.PermTenantManage)
 	require.NoError(t, engine.SetChargeStationAuth(context.Background(), "aaaa.CP001", &store.ChargeStationAuth{
 		SecurityProfile: store.TLSWithClientSideCertificates,
 		OrgId:           orgA,
@@ -253,7 +253,7 @@ func TestTenantConfigFromTheControlPlaneReachesTheGatewayLookupAtOnce(t *testing
 }
 
 func TestInternalListenerOnlyAuthenticatesTheControlPlane(t *testing.T) {
-	handler, console, engine := newMultiTenantInternalHandler(t)
+	handler, platform, engine := newMultiTenantInternalHandler(t)
 	require.NoError(t, engine.SetChargeStationAuth(context.Background(), "aaaa.CP001", &store.ChargeStationAuth{
 		SecurityProfile: store.TLSWithBasicAuth,
 		OrgId:           orgA,
@@ -282,14 +282,14 @@ func TestInternalListenerOnlyAuthenticatesTheControlPlane(t *testing.T) {
 		check(t, handler, http.StatusUnauthorized)
 	})
 
-	t.Run("and do not need the console to be there", func(t *testing.T) {
-		console.SetDown(true)
+	t.Run("and do not need the platform to be there", func(t *testing.T) {
+		platform.SetDown(true)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		verifier, err := tenancy.NewJWKSVerifier(ctx, tenancy.JWKSVerifierConfig{
-			JWKSURL:  console.JWKSURL(),
-			Issuer:   testutil.ConsoleIssuer,
-			Audience: testutil.ConsoleAudience,
+			JWKSURL:  platform.JWKSURL(),
+			Issuer:   testutil.PlatformIssuer,
+			Audience: testutil.PlatformAudience,
 		})
 		require.NoError(t, err)
 		withoutKeys := server.NewInternalHandler(server.InternalDeps{
@@ -299,8 +299,8 @@ func TestInternalListenerOnlyAuthenticatesTheControlPlane(t *testing.T) {
 		})
 		check(t, withoutKeys, http.StatusUnauthorized)
 
-		// a token cannot be verified without the keys of the console
-		token := serviceToken(console, "svc:provisioner", tenancy.PermTenantManage)
+		// a token cannot be verified without the keys of the platform
+		token := serviceToken(platform, "svc:provisioner", tenancy.PermTenantManage)
 		rr := send(withoutKeys, controlPlaneRoute{http.MethodGet, controlplane.BasePath + "/manifest"}, token)
 		assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
 	})
@@ -327,10 +327,10 @@ func TestControlPlaneIsClosedInDevMode(t *testing.T) {
 }
 
 func TestApiHandlerDoesNotServeTheControlPlane(t *testing.T) {
-	console, verifier := newConsoleVerifier(t)
+	platform, verifier := newPlatformVerifier(t)
 	engine := inmemory.NewStore(clock.RealClock{})
 	handler := newApiHandler(engine, verifier)
-	token := serviceToken(console, "svc:provisioner", tenancy.AllPermissions...)
+	token := serviceToken(platform, "svc:provisioner", tenancy.AllPermissions...)
 
 	routes := append(controlPlaneRoutes(t, orgA),
 		controlPlaneRoute{http.MethodGet, controlplane.BasePath},
@@ -371,8 +371,8 @@ func (e engineWithHealth) Health(context.Context) error {
 }
 
 func TestControlPlaneHealthChecksAStorageEngineThatHasAHealthCheck(t *testing.T) {
-	console, verifier := newConsoleVerifier(t)
-	token := serviceToken(console, "svc:provisioner", tenancy.PermTenantManage)
+	platform, verifier := newPlatformVerifier(t)
+	token := serviceToken(platform, "svc:provisioner", tenancy.PermTenantManage)
 
 	for _, tc := range []struct {
 		name   string
@@ -411,7 +411,7 @@ func TestControlPlaneHealthChecksAStorageEngineThatHasAHealthCheck(t *testing.T)
 	}
 }
 
-// A tenant that the console suspends cannot create or change anything through the API
+// A tenant that the platform suspends cannot create or change anything through the API
 // from that moment on, and can again from the moment it is resumed: the API does not
 // wait until the resolver forgets what it knows about the tenant.
 func TestSuspendingATenantStopsItsWritesThroughTheApiAtOnce(t *testing.T) {
@@ -425,7 +425,7 @@ func TestSuspendingATenantStopsItsWritesThroughTheApiAtOnce(t *testing.T) {
 	// one resolver behind both listeners, as in the manager. It keeps a tenant for an
 	// hour: only the control plane makes it read the tenant again.
 	resolver := &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine, DefaultOrgId: store.LegacyOrgId, CacheTTL: time.Hour}
-	console, verifier := newConsoleVerifier(t)
+	platform, verifier := newPlatformVerifier(t)
 	internal := server.NewInternalHandler(server.InternalDeps{Resolver: resolver, Engine: engine, Verifier: verifier})
 	apiHandler := server.NewApiHandler(server.ApiDeps{
 		Engine:   engine,
@@ -433,12 +433,12 @@ func TestSuspendingATenantStopsItsWritesThroughTheApiAtOnce(t *testing.T) {
 		Scoper:   &tenancy.Scoper{Mode: tenancy.ModeMulti, Tenants: engine, Resolver: resolver, DefaultOrgId: store.LegacyOrgId},
 	})
 
-	provisioner := serviceToken(console, "svc:provisioner", tenancy.PermTenantManage)
-	claims := console.Claims(time.Now())
+	provisioner := serviceToken(platform, "svc:provisioner", tenancy.PermTenantManage)
+	claims := platform.Claims(time.Now())
 	claims["org"] = orgA
 	claims["org_scope"] = "self"
 	claims["perms"] = tenancy.ManifestPermissions
-	operator := console.Sign(claims)
+	operator := platform.Sign(claims)
 
 	call := func(method, path, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, "/api/v0"+path, strings.NewReader(body))
@@ -495,17 +495,17 @@ func TestSuspendingATenantStopsItsWritesThroughTheApiAtOnce(t *testing.T) {
 	require.Equal(t, http.StatusCreated, register().Code)
 }
 
-// A hard limit on the connectors that the console sends with the entitlements of a
+// A hard limit on the connectors that the platform sends with the entitlements of a
 // tenant stops new charge stations of that tenant from the next request on, and a
 // higher limit lets them in again: the API reads the entitlements that are stored, not
 // what the resolver keeps of the tenant.
-func TestAConnectorLimitFromTheConsoleAppliesToTheApiAtOnce(t *testing.T) {
+func TestAConnectorLimitFromThePlatformAppliesToTheApiAtOnce(t *testing.T) {
 	ctx := context.Background()
 	engine := inmemory.NewStore(clock.RealClock{})
 	// one resolver behind both listeners, as in the manager. It keeps a tenant for an
 	// hour.
 	resolver := &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine, DefaultOrgId: store.LegacyOrgId, CacheTTL: time.Hour}
-	console, verifier := newConsoleVerifier(t)
+	platform, verifier := newPlatformVerifier(t)
 	internal := server.NewInternalHandler(server.InternalDeps{Resolver: resolver, Engine: engine, Verifier: verifier})
 	apiHandler := server.NewApiHandler(server.ApiDeps{
 		Engine:       engine,
@@ -514,12 +514,12 @@ func TestAConnectorLimitFromTheConsoleAppliesToTheApiAtOnce(t *testing.T) {
 		Entitlements: &entitlements.Enforcer{Tenants: engine, Counter: engine, Mode: tenancy.ModeMulti},
 	})
 
-	provisioner := serviceToken(console, "svc:provisioner", tenancy.PermTenantManage)
-	claims := console.Claims(time.Now())
+	provisioner := serviceToken(platform, "svc:provisioner", tenancy.PermTenantManage)
+	claims := platform.Claims(time.Now())
 	claims["org"] = orgA
 	claims["org_scope"] = "self"
 	claims["perms"] = tenancy.ManifestPermissions
-	operator := console.Sign(claims)
+	operator := platform.Sign(claims)
 
 	putEntitlements := func(document string) {
 		t.Helper()

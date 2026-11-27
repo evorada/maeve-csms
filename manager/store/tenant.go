@@ -39,7 +39,7 @@ type TenantParty struct {
 	PartyId     string `json:"party_id"`     // 3 chars
 }
 
-// Tenant is the local copy of an organisation that is provisioned by the console.
+// Tenant is the local copy of an organisation that is provisioned by the platform.
 type Tenant struct {
 	OrgId               string  // UUID
 	ParentId            *string // UUID, nil for the root
@@ -71,7 +71,7 @@ func NormalizeHost(host string) string {
 	return strings.TrimSuffix(host, ".")
 }
 
-// TenantStore holds the tenants that the console provisions. Org ids are UUIDs: they are
+// TenantStore holds the tenants that the platform provisions. Org ids are UUIDs: they are
 // accepted in any case and returned in the canonical lowercase form, and a value that is
 // not a UUID is an error. Lookups return (nil, nil) when there is no such tenant.
 type TenantStore interface {
