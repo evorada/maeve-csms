@@ -12,6 +12,9 @@ import (
 func (s *Store) SetChargingProfile(_ context.Context, profile *store.ChargingProfile) error {
 	s.Lock()
 	defer s.Unlock()
+	// the profile belongs to the org of its charge station (the caller's profile is
+	// stored as it is, so the org is filled in on it)
+	profile.OrgId = s.orgIdForStation(profile.ChargeStationId)
 	s.chargingProfiles[profile.ChargingProfileId] = profile
 	return nil
 }

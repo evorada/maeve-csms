@@ -15,14 +15,22 @@ import (
 // ChargeStationAuthStore implementation
 
 func (s *Store) SetChargeStationAuth(ctx context.Context, csId string, csAuth *store.ChargeStationAuth) error {
+	// without an org the query keeps the org of the charge station, or registers a new
+	// charge station in the legacy org
+	orgId, err := optionalOrgId(csAuth.OrgId)
+	if err != nil {
+		return fmt.Errorf("failed to set charge station auth: %w", err)
+	}
+
 	params := SetChargeStationAuthParams{
 		ChargeStationID:        csId,
 		SecurityProfile:        int32(csAuth.SecurityProfile),
 		Base64Sha256Password:   toNullableText(csAuth.Base64SHA256Password),
 		InvalidUsernameAllowed: csAuth.InvalidUsernameAllowed,
+		OrgID:                  orgId,
 	}
 
-	_, err := s.writeQueries().SetChargeStationAuth(ctx, params)
+	_, err = s.writeQueries().SetChargeStationAuth(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to set charge station auth: %w", err)
 	}
@@ -48,6 +56,7 @@ func (s *Store) LookupChargeStationAuth(ctx context.Context, csId string) (*stor
 		SecurityProfile:        securityProfile,
 		Base64SHA256Password:   fromNullableText(cs.Base64Sha256Password),
 		InvalidUsernameAllowed: cs.InvalidUsernameAllowed,
+		OrgId:                  uuidString(cs.OrgID),
 	}, nil
 }
 

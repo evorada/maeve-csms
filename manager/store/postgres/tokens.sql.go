@@ -15,11 +15,11 @@ const CreateToken = `-- name: CreateToken :one
 INSERT INTO tokens (
     country_code, party_id, type, uid, contract_id,
     visual_number, issuer, group_id, valid, language_code,
-    cache_mode, last_updated, expires_at
+    cache_mode, last_updated, expires_at, org_id
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
 )
-RETURNING id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at
+RETURNING id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at, org_id
 `
 
 type CreateTokenParams struct {
@@ -36,6 +36,7 @@ type CreateTokenParams struct {
 	CacheMode    string             `db:"cache_mode" json:"cache_mode"`
 	LastUpdated  pgtype.Timestamp   `db:"last_updated" json:"last_updated"`
 	ExpiresAt    pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
+	OrgID        pgtype.UUID        `db:"org_id" json:"org_id"`
 }
 
 func (q *Queries) CreateToken(ctx context.Context, arg CreateTokenParams) (Token, error) {
@@ -53,6 +54,7 @@ func (q *Queries) CreateToken(ctx context.Context, arg CreateTokenParams) (Token
 		arg.CacheMode,
 		arg.LastUpdated,
 		arg.ExpiresAt,
+		arg.OrgID,
 	)
 	var i Token
 	err := row.Scan(
@@ -72,6 +74,7 @@ func (q *Queries) CreateToken(ctx context.Context, arg CreateTokenParams) (Token
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ExpiresAt,
+		&i.OrgID,
 	)
 	return i, err
 }
@@ -86,7 +89,7 @@ func (q *Queries) DeleteToken(ctx context.Context, uid string) error {
 }
 
 const GetToken = `-- name: GetToken :one
-SELECT id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at FROM tokens
+SELECT id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at, org_id FROM tokens
 WHERE uid = $1 LIMIT 1
 `
 
@@ -110,12 +113,13 @@ func (q *Queries) GetToken(ctx context.Context, uid string) (Token, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ExpiresAt,
+		&i.OrgID,
 	)
 	return i, err
 }
 
 const ListTokens = `-- name: ListTokens :many
-SELECT id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at FROM tokens
+SELECT id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at, org_id FROM tokens
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -151,6 +155,7 @@ func (q *Queries) ListTokens(ctx context.Context, arg ListTokensParams) ([]Token
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.ExpiresAt,
+			&i.OrgID,
 		); err != nil {
 			return nil, err
 		}
@@ -177,9 +182,10 @@ SET
     cache_mode = $11,
     last_updated = $12,
     expires_at = $13,
+    org_id = $14,
     updated_at = NOW()
 WHERE uid = $1
-RETURNING id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at
+RETURNING id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at, org_id
 `
 
 type UpdateTokenParams struct {
@@ -196,6 +202,7 @@ type UpdateTokenParams struct {
 	CacheMode    string             `db:"cache_mode" json:"cache_mode"`
 	LastUpdated  pgtype.Timestamp   `db:"last_updated" json:"last_updated"`
 	ExpiresAt    pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
+	OrgID        pgtype.UUID        `db:"org_id" json:"org_id"`
 }
 
 func (q *Queries) UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token, error) {
@@ -213,6 +220,7 @@ func (q *Queries) UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token
 		arg.CacheMode,
 		arg.LastUpdated,
 		arg.ExpiresAt,
+		arg.OrgID,
 	)
 	var i Token
 	err := row.Scan(
@@ -232,6 +240,7 @@ func (q *Queries) UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ExpiresAt,
+		&i.OrgID,
 	)
 	return i, err
 }

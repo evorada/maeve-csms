@@ -15,12 +15,17 @@ LIMIT 1;
 
 -- CreateTransaction returns no row when the transaction already exists, instead of
 -- raising a unique violation that would abort an enclosing database transaction.
+-- The transaction belongs to the org of its charge station, or to the legacy org when
+-- the charge station is not registered.
 
 -- name: CreateTransaction :one
 INSERT INTO transactions (
     id, charge_station_id, token_uid, token_type,
-    meter_start, start_timestamp, offline
-) VALUES ($1, $2, $3, $4, $5, $6, $7)
+    meter_start, start_timestamp, offline, org_id
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7,
+    COALESCE((SELECT cs.org_id FROM charge_stations cs WHERE cs.charge_station_id = $2::varchar), '00000000-0000-0000-0000-000000000000'::uuid)
+)
 ON CONFLICT (charge_station_id, id) DO NOTHING
 RETURNING *;
 

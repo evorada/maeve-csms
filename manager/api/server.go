@@ -14,17 +14,26 @@ type Server struct {
 	clock   clock.PassiveClock
 	swagger *openapi3.T
 	ocpi    ocpi.Api
+	// defaultOrgId is the org that owns what is created through this API
+	defaultOrgId string
 }
 
-func NewServer(engine store.Engine, clock clock.PassiveClock, ocpi ocpi.Api) (*Server, error) {
+// NewServer creates the API server. The charge stations, tokens and locations that are
+// created through the API belong to defaultOrgId; an empty defaultOrgId is the legacy
+// org (store.LegacyOrgId).
+func NewServer(engine store.Engine, clock clock.PassiveClock, ocpi ocpi.Api, defaultOrgId string) (*Server, error) {
 	swagger, err := GetSwagger()
 	if err != nil {
 		return nil, err
 	}
+	if defaultOrgId == "" {
+		defaultOrgId = store.LegacyOrgId
+	}
 	return &Server{
-		store:   engine,
-		clock:   clock,
-		ocpi:    ocpi,
-		swagger: swagger,
+		store:        engine,
+		clock:        clock,
+		ocpi:         ocpi,
+		swagger:      swagger,
+		defaultOrgId: defaultOrgId,
 	}, nil
 }

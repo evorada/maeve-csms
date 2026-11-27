@@ -36,6 +36,7 @@ func (s *Server) RegisterParty(w http.ResponseWriter, r *http.Request) {
 
 		err := s.store.SetRegistrationDetails(r.Context(), req.Token, &store.OcpiRegistration{
 			Status: status,
+			OrgId:  s.defaultOrgId,
 		})
 		if err != nil {
 			_ = render.Render(w, r, ErrInternalError(err))

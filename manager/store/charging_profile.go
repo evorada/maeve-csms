@@ -70,6 +70,11 @@ type ChargingProfile struct {
 	ValidFrom              *time.Time             `json:"validFrom,omitempty" firestore:"validFrom,omitempty"`
 	ValidTo                *time.Time             `json:"validTo,omitempty" firestore:"validTo,omitempty"`
 	ChargingSchedule       ChargingSchedule       `json:"chargingSchedule" firestore:"chargingSchedule"`
+	// OrgId is the org (UUID) that owns the charging profile. It is read-only: the
+	// store takes it from the charge station when the profile is set (LegacyOrgId when
+	// the charge station is not registered). Firestore does not store it: it always
+	// reads as "".
+	OrgId string `json:"-" firestore:"-"`
 }
 
 // ChargingProfileStore provides methods for managing charging profiles.

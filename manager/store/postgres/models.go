@@ -22,6 +22,7 @@ type ChargeStation struct {
 	InvalidUsernameAllowed bool             `db:"invalid_username_allowed" json:"invalid_username_allowed"`
 	CreatedAt              pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt              pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	OrgID                  pgtype.UUID      `db:"org_id" json:"org_id"`
 }
 
 type ChargeStationCertificate struct {
@@ -158,6 +159,7 @@ type ChargingProfile struct {
 	ChargingSchedulePeriods []byte           `db:"charging_schedule_periods" json:"charging_schedule_periods"`
 	CreatedAt               pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt               pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	OrgID                   pgtype.UUID      `db:"org_id" json:"org_id"`
 }
 
 type ConnectorStatus struct {
@@ -260,6 +262,7 @@ type Location struct {
 	LocationData []byte           `db:"location_data" json:"location_data"`
 	CreatedAt    pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt    pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	OrgID        pgtype.UUID      `db:"org_id" json:"org_id"`
 }
 
 type LogRequest struct {
@@ -301,6 +304,7 @@ type OcpiParty struct {
 	Token       string           `db:"token" json:"token"`
 	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	OrgID       pgtype.UUID      `db:"org_id" json:"org_id"`
 }
 
 type OcpiRegistration struct {
@@ -308,6 +312,7 @@ type OcpiRegistration struct {
 	Status    string           `db:"status" json:"status"`
 	CreatedAt pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	OrgID     pgtype.UUID      `db:"org_id" json:"org_id"`
 }
 
 type PublishFirmwareStatus struct {
@@ -348,6 +353,7 @@ type Reservation struct {
 	ExpiryDate      pgtype.Timestamptz `db:"expiry_date" json:"expiry_date"`
 	Status          string             `db:"status" json:"status"`
 	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	OrgID           pgtype.UUID        `db:"org_id" json:"org_id"`
 }
 
 type ResetRequest struct {
@@ -396,6 +402,7 @@ type Token struct {
 	CreatedAt    pgtype.Timestamp   `db:"created_at" json:"created_at"`
 	UpdatedAt    pgtype.Timestamp   `db:"updated_at" json:"updated_at"`
 	ExpiresAt    pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
+	OrgID        pgtype.UUID        `db:"org_id" json:"org_id"`
 }
 
 type Transaction struct {
@@ -418,6 +425,7 @@ type Transaction struct {
 	EnergyWh        pgtype.Int8      `db:"energy_wh" json:"energy_wh"`
 	IDTokenGroup    pgtype.Text      `db:"id_token_group" json:"id_token_group"`
 	ReservationID   pgtype.Int4      `db:"reservation_id" json:"reservation_id"`
+	OrgID           pgtype.UUID      `db:"org_id" json:"org_id"`
 }
 
 type TransactionMeterValue struct {

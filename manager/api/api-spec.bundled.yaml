@@ -26,7 +26,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -57,7 +57,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -86,7 +86,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: certificateType
           in: query
           description: Optional filter by certificate type
@@ -121,7 +121,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -150,7 +150,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -183,7 +183,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       responses:
         '200':
           description: Charge station auth response
@@ -212,7 +212,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -242,7 +242,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -271,7 +271,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       responses:
         '200':
           description: Firmware status response
@@ -305,7 +305,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -334,7 +334,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       responses:
         '200':
           description: Diagnostics status response
@@ -361,7 +361,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -390,7 +390,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: requestId
           in: query
           required: false
@@ -424,7 +424,7 @@ paths:
           required: true
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -466,7 +466,7 @@ paths:
           required: true
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: reservationId
           in: path
           description: The reservation identifier
@@ -503,7 +503,7 @@ paths:
           required: true
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: status
           in: query
           description: 'Filter by reservation status (default: active)'
@@ -548,7 +548,7 @@ paths:
           required: true
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: status
           in: query
           description: 'Filter by transaction status (default: all)'
@@ -624,7 +624,7 @@ paths:
           required: true
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: transactionId
           in: path
           description: The transaction identifier
@@ -665,7 +665,7 @@ paths:
           required: true
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       responses:
         '200':
           description: Charge station status
@@ -699,7 +699,7 @@ paths:
           required: true
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       responses:
         '200':
           description: Connector statuses
@@ -734,7 +734,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -763,7 +763,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -1013,7 +1013,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -1046,7 +1046,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       responses:
         '202':
           description: Accepted - cache clear request submitted
@@ -1070,7 +1070,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -1099,7 +1099,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: connectorId
           in: query
           description: Filter by connector ID
@@ -1176,7 +1176,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       responses:
         '200':
           description: Local list version response
@@ -1208,7 +1208,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       responses:
         '200':
           description: Local authorization list response
@@ -1240,7 +1240,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -1276,7 +1276,7 @@ paths:
           required: true
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: key
           in: query
           description: Comma-separated list of configuration keys to retrieve
@@ -1315,7 +1315,7 @@ paths:
           required: true
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -1355,7 +1355,7 @@ paths:
           required: true
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: component
           in: query
           description: Filter by component name
@@ -1400,7 +1400,7 @@ paths:
           required: true
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -1440,7 +1440,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -1475,7 +1475,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: messageId
           in: path
           description: The message identifier to clear
@@ -1511,7 +1511,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: state
           in: query
           description: Filter messages by charging state
@@ -1783,7 +1783,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -1822,7 +1822,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: monitorId
           in: path
           required: true
@@ -1857,7 +1857,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -1893,7 +1893,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -1929,7 +1929,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -1965,7 +1965,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: eventType
           in: query
           description: Filter by event type
@@ -2031,7 +2031,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: reportType
           in: query
           description: Filter by report type
@@ -2459,6 +2459,11 @@ components:
           type: string
           format: date-time
           description: After this instant the token is rejected with status Expired. A token without it does not expire
+        orgId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: The org that owns the token (set by the server, absent when the storage does not keep it)
     RemoteStartTransactionRequest:
       type: object
       description: Request to remotely start a charging transaction

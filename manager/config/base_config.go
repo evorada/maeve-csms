@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/pelletier/go-toml/v2"
+	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
 // BaseConfig provides the data structures that represent the configuration
@@ -24,6 +25,7 @@ type BaseConfig struct {
 	ChargeStationCertProvider ChargeStationCertProviderConfig `mapstructure:"charge_station_cert_provider" toml:"charge_station_cert_provider" validate:"required"`
 	TariffService             TariffServiceConfig             `mapstructure:"tariff_service" toml:"tariff_service" validate:"required"`
 	Jobs                      JobsConfig                      `mapstructure:"jobs" toml:"jobs"`
+	Tenancy                   TenancyConfig                   `mapstructure:"tenancy" toml:"tenancy"`
 	Ocpi                      *OcpiConfig                     `mapstructure:"ocpi,omitempty" toml:"ocpi,omitempty"`
 }
 
@@ -82,6 +84,9 @@ var DefaultConfig = BaseConfig{
 	},
 	Jobs: JobsConfig{
 		ReservationExpiryInterval: "1m",
+	},
+	Tenancy: TenancyConfig{
+		DefaultOrgId: store.LegacyOrgId,
 	},
 }
 

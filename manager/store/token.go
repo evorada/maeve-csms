@@ -30,6 +30,10 @@ type Token struct {
 	// ExpiresAt is the instant from which the token is no longer accepted:
 	// authorisation returns Expired. nil means that the token does not expire.
 	ExpiresAt *time.Time
+	// OrgId is the org (UUID) that owns the token. PostgreSQL stores a token that is
+	// set without an org in LegacyOrgId. Firestore does not store the org: it always
+	// reads as "".
+	OrgId string
 }
 
 type TokenStore interface {

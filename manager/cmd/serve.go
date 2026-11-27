@@ -50,7 +50,7 @@ the gateway and send appropriate responses.`,
 		}()
 
 		apiServer := server.New("api", cfg.Api.Addr, nil,
-			server.NewApiHandler(settings.Api, settings.Storage, settings.OcpiApi, settings.ChargeStationCertProviderService))
+			server.NewApiHandler(settings.Api, settings.Storage, settings.OcpiApi, settings.ChargeStationCertProviderService, settings.DefaultOrgId))
 
 		sync.Sync(settings.Storage, clock.RealClock{}, settings.Tracer, settings.MsgEmitter)
 

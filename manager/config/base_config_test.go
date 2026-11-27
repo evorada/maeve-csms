@@ -100,6 +100,9 @@ func TestParseConfig(t *testing.T) {
 		Jobs: config.JobsConfig{
 			ReservationExpiryInterval: "30s",
 		},
+		Tenancy: config.TenancyConfig{
+			DefaultOrgId: "0193b2c4-0000-7000-8000-00000000000a",
+		},
 	}
 
 	assert.Equal(t, want, cfg)

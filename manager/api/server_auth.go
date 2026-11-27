@@ -36,6 +36,7 @@ func (s *Server) RegisterChargeStation(w http.ResponseWriter, r *http.Request, c
 		SecurityProfile:        store.SecurityProfile(req.SecurityProfile),
 		Base64SHA256Password:   pwd,
 		InvalidUsernameAllowed: invalidUsernameAllowed,
+		OrgId:                  s.defaultOrgId,
 	})
 	if err != nil {
 		_ = render.Render(w, r, ErrInternalError(err))

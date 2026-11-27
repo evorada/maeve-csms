@@ -423,5 +423,6 @@ func (s *Store) toStoreTransaction(ctx context.Context, txn *Transaction) (*stor
 		StopReason:        stringFromText(txn.StoppedReason),
 		IdTokenGroup:      stringFromText(txn.IDTokenGroup),
 		ReservationId:     fromNullInt32(txn.ReservationID),
+		OrgId:             uuidString(txn.OrgID),
 	}, nil
 }

@@ -18,7 +18,7 @@ paths:
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       requestBody:
         required: true
         content:
@@ -50,7 +50,7 @@ paths:
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       responses:
         '200':
           description: Firmware status response

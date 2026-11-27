@@ -21,7 +21,7 @@ paths:
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       requestBody:
         required: true
         content:
@@ -54,7 +54,7 @@ paths:
         required: true
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       - name: key
         in: query
         description: Comma-separated list of configuration keys to retrieve
@@ -95,7 +95,7 @@ paths:
         required: true
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       requestBody:
         required: true
         content:
@@ -137,7 +137,7 @@ paths:
         required: true
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       - name: component
         in: query
         description: Filter by component name
@@ -184,7 +184,7 @@ paths:
         required: true
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       requestBody:
         required: true
         content:

@@ -16,7 +16,7 @@ paths:
         required: true
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       - name: status
         in: query
         description: 'Filter by transaction status (default: all)'
@@ -95,7 +95,7 @@ paths:
         required: true
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       - name: transactionId
         in: path
         description: The transaction identifier
@@ -138,7 +138,7 @@ paths:
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       requestBody:
         required: true
         content:
@@ -170,7 +170,7 @@ paths:
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       requestBody:
         required: true
         content:

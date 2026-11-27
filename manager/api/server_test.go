@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/api"
@@ -37,7 +38,7 @@ import (
 )
 
 func TestRegisterChargeStation(t *testing.T) {
-	server, r, _, _ := setupServer(t)
+	server, r, engine, _ := setupServer(t)
 	defer server.Close()
 
 	req := httptest.NewRequest(http.MethodPost, "/cs/cs001", strings.NewReader(`{"securityProfile":0}`))
@@ -49,6 +50,54 @@ func TestRegisterChargeStation(t *testing.T) {
 	b, err := io.ReadAll(rr.Result().Body)
 	require.NoError(t, err)
 	assert.Equal(t, "", string(b))
+
+	// the charge station belongs to the default org of the server
+	got, err := engine.LookupChargeStationAuth(context.Background(), "cs001")
+	require.NoError(t, err)
+	assert.Equal(t, &store.ChargeStationAuth{
+		SecurityProfile: store.UnsecuredTransportWithBasicAuth,
+		OrgId:           testOrgId,
+	}, got)
+}
+
+// A charge station id is a station key: "{org_key}.{station id}" with up to 80 characters.
+func TestRegisterChargeStationWithStationKey(t *testing.T) {
+	register := func(t *testing.T, csId string) (int, store.Engine) {
+		t.Helper()
+		server, r, engine, _ := setupServer(t)
+		defer server.Close()
+
+		req := httptest.NewRequest(http.MethodPost, "/cs/"+csId, strings.NewReader(`{"securityProfile":0}`))
+		req.Header.Set("content-type", "application/json")
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		return rr.Result().StatusCode, engine
+	}
+
+	t.Run("org key and a station id of 48 characters", func(t *testing.T) {
+		csId := "abcd1234." + strings.Repeat("A", 48)
+		require.Len(t, csId, 57)
+
+		status, engine := register(t, csId)
+		assert.Equal(t, http.StatusCreated, status)
+		got, err := engine.LookupChargeStationAuth(context.Background(), csId)
+		require.NoError(t, err)
+		assert.NotNil(t, got)
+	})
+
+	t.Run("80 characters", func(t *testing.T) {
+		status, _ := register(t, strings.Repeat("A", 80))
+		assert.Equal(t, http.StatusCreated, status)
+	})
+
+	t.Run("81 characters", func(t *testing.T) {
+		csId := strings.Repeat("A", 81)
+		status, engine := register(t, csId)
+		assert.Equal(t, http.StatusBadRequest, status)
+		got, err := engine.LookupChargeStationAuth(context.Background(), csId)
+		require.NoError(t, err)
+		assert.Nil(t, got)
+	})
 }
 
 func TestLookupChargeStationAuth(t *testing.T) {
@@ -122,6 +171,7 @@ func TestSetToken(t *testing.T) {
 	assert.Equal(t, "", string(b))
 
 	want := &store.Token{
+		OrgId:       testOrgId, // the default org of the server
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -156,6 +206,7 @@ func TestLookupToken(t *testing.T) {
 		Valid:       true,
 		CacheMode:   "ALWAYS",
 		LastUpdated: now.Format(time.RFC3339),
+		OrgId:       testOrgId,
 	})
 	require.NoError(t, err)
 
@@ -173,12 +224,14 @@ func TestLookupToken(t *testing.T) {
 	lastUpdatedStr := now.Format(time.RFC3339)
 	lastUpdated, err := time.Parse(time.RFC3339, lastUpdatedStr)
 	require.NoError(t, err)
+	orgId := uuid.MustParse(testOrgId)
 	want := api.Token{
 		CacheMode:   "ALWAYS",
 		ContractId:  "GBTWK012345678V",
 		CountryCode: "GB",
 		Issuer:      "Thoughtworks",
 		LastUpdated: &lastUpdated,
+		OrgId:       &orgId,
 		PartyId:     "TWK",
 		Type:        "RFID",
 		Uid:         "012345678",
@@ -406,6 +459,7 @@ func TestRegisterLocation(t *testing.T) {
 	assert.Equal(t, "", string(b))
 
 	want := &store.Location{
+		OrgId:   testOrgId, // the default org of the server
 		Address: "F.Rooseveltlaan 3A",
 		City:    "Gent",
 		Coordinates: store.GeoLocation{
@@ -424,13 +478,36 @@ func TestRegisterLocation(t *testing.T) {
 	assert.Equal(t, want, got)
 }
 
+func TestRegisterPartyStoresRegistrationInDefaultOrg(t *testing.T) {
+	server, r, engine, _ := setupServer(t)
+	defer server.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"token":"abcdef123456","status":"REGISTERED"}`))
+	req.Header.Set("content-type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusCreated, rr.Result().StatusCode)
+
+	got, err := engine.GetRegistrationDetails(context.Background(), "abcdef123456")
+	require.NoError(t, err)
+	assert.Equal(t, &store.OcpiRegistration{
+		Status: store.OcpiRegistrationStatusRegistered,
+		OrgId:  testOrgId,
+	}, got)
+}
+
+// testOrgId is the default org of the API server under test: the org that owns what is
+// created through the API.
+const testOrgId = "0193b2c4-0000-7000-8000-00000000000a"
+
 func setupServer(t *testing.T) (*httptest.Server, *chi.Mux, store.Engine, clock.PassiveClock) {
 	now := time.Now().UTC()
 	c := clockTest.NewFakePassiveClock(now)
 	engine := inmemory.NewStore(c)
 	ocpiApi := ocpi.NewOCPI(engine, nil, "GB", "TWK")
 
-	srv, err := api.NewServer(engine, c, ocpiApi)
+	srv, err := api.NewServer(engine, c, ocpiApi, testOrgId)
 	require.NoError(t, err)
 
 	r := chi.NewRouter()
@@ -1428,7 +1505,7 @@ func TestListReservationsRendersEveryReservationStatus(t *testing.T) {
 		})
 	}
 
-	srv, err := api.NewServer(engine, c, ocpi.NewOCPI(engine, nil, "GB", "TWK"))
+	srv, err := api.NewServer(engine, c, ocpi.NewOCPI(engine, nil, "GB", "TWK"), testOrgId)
 	require.NoError(t, err)
 	r := chi.NewRouter()
 	r.Use(api.ValidationMiddleware)
@@ -1548,7 +1625,7 @@ func (s uncategorisedEventStore) ListChargeStationEvents(ctx context.Context, ch
 func TestChargeStationEventsLeaveOutUnknownCategory(t *testing.T) {
 	c := clockTest.NewFakePassiveClock(time.Now().UTC())
 	engine := uncategorisedEventStore{Engine: inmemory.NewStore(c)}
-	srv, err := api.NewServer(engine, c, ocpi.NewOCPI(engine, nil, "GB", "TWK"))
+	srv, err := api.NewServer(engine, c, ocpi.NewOCPI(engine, nil, "GB", "TWK"), testOrgId)
 	require.NoError(t, err)
 	r := chi.NewRouter()
 	r.Use(api.ValidationMiddleware)

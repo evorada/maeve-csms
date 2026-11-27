@@ -15,7 +15,7 @@ paths:
         required: true
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       requestBody:
         required: true
         content:
@@ -59,7 +59,7 @@ paths:
         required: true
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       - name: reservationId
         in: path
         description: The reservation identifier
@@ -98,7 +98,7 @@ paths:
         required: true
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       - name: status
         in: query
         description: 'Filter by reservation status (default: active)'

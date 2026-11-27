@@ -22,6 +22,11 @@ func (s *Store) SetToken(ctx context.Context, token *store.Token) error {
 		return fmt.Errorf("invalid last_updated timestamp: %w", err)
 	}
 
+	orgId, err := orgIdOrLegacy(token.OrgId)
+	if err != nil {
+		return fmt.Errorf("failed to set token: %w", err)
+	}
+
 	// Try to update first
 	updateParams := UpdateTokenParams{
 		Uid:          token.Uid,
@@ -37,6 +42,7 @@ func (s *Store) SetToken(ctx context.Context, token *store.Token) error {
 		CacheMode:    token.CacheMode,
 		LastUpdated:  timestampFromTime(lastUpdated),
 		ExpiresAt:    toNullTimestamptz(token.ExpiresAt),
+		OrgID:        orgId,
 	}
 
 	_, err = s.writeQueries().UpdateToken(ctx, updateParams)
@@ -57,6 +63,7 @@ func (s *Store) SetToken(ctx context.Context, token *store.Token) error {
 				CacheMode:    token.CacheMode,
 				LastUpdated:  timestampFromTime(lastUpdated),
 				ExpiresAt:    toNullTimestamptz(token.ExpiresAt),
+				OrgID:        orgId,
 			}
 
 			_, err = s.writeQueries().CreateToken(ctx, createParams)
@@ -135,5 +142,6 @@ func toStoreToken(t *Token) *store.Token {
 		CacheMode:    t.CacheMode,
 		LastUpdated:  timeFromTimestamp(t.LastUpdated).Format(time.RFC3339),
 		ExpiresAt:    fromNullTimestamptz(t.ExpiresAt),
+		OrgId:        uuidString(t.OrgID),
 	}
 }

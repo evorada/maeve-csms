@@ -235,3 +235,25 @@ func uuidString(u pgtype.UUID) string {
 	}
 	return uuid.UUID(u.Bytes).String()
 }
+
+// optionalOrgId converts the text form of an org id to pgtype.UUID. An empty org id
+// (not known) is NULL.
+func optionalOrgId(orgId string) (pgtype.UUID, error) {
+	if orgId == "" {
+		return pgtype.UUID{}, nil
+	}
+	id, err := pgUUID(orgId)
+	if err != nil {
+		return pgtype.UUID{}, fmt.Errorf("invalid org id %q: %w", orgId, err)
+	}
+	return id, nil
+}
+
+// orgIdOrLegacy converts the text form of an org id to pgtype.UUID. An empty org id
+// (not known) is the legacy org.
+func orgIdOrLegacy(orgId string) (pgtype.UUID, error) {
+	if orgId == "" {
+		orgId = store.LegacyOrgId
+	}
+	return optionalOrgId(orgId)
+}

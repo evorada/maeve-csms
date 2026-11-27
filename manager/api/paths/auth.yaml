@@ -18,7 +18,7 @@ paths:
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       requestBody:
         required: true
         content:
@@ -50,7 +50,7 @@ paths:
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       responses:
         '200':
           description: Charge station auth response
@@ -83,7 +83,7 @@ paths:
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       responses:
         '202':
           description: Accepted - cache clear request submitted
@@ -107,7 +107,7 @@ paths:
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       responses:
         '200':
           description: Local authorization list response
@@ -141,7 +141,7 @@ paths:
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       requestBody:
         required: true
         content:

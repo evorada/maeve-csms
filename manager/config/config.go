@@ -63,6 +63,32 @@ type Config struct {
 	OcpiApi                          ocpi.Api
 	JobRunner                        jobs.Runner
 	ReservationExpiryInterval        time.Duration
+	// DefaultOrgId is the org that owns the rows from before orgs and everything that
+	// is created without a tenant.
+	DefaultOrgId string
+}
+
+// legacyOrgAssigner is implemented by the storage engines that store the org of a row.
+type legacyOrgAssigner interface {
+	AssignLegacyOrg(ctx context.Context, orgId string) (int64, error)
+}
+
+// assignLegacyOrg gives the rows of the legacy org to the default org, when another org
+// than the legacy one is configured and the storage engine stores the org of a row.
+func assignLegacyOrg(ctx context.Context, engine store.Engine, defaultOrgId string) error {
+	if defaultOrgId == store.LegacyOrgId {
+		return nil
+	}
+	assigner, ok := engine.(legacyOrgAssigner)
+	if !ok {
+		return nil
+	}
+	rows, err := assigner.AssignLegacyOrg(ctx, defaultOrgId)
+	if err != nil {
+		return fmt.Errorf("failed to assign the legacy org rows to the default org: %w", err)
+	}
+	slog.Info("assigned the rows of the legacy org to the default org", "org_id", defaultOrgId, "rows", rows)
+	return nil
 }
 
 func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
@@ -93,6 +119,7 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 			OrgName: cfg.Api.OrgName,
 		},
 		ReservationExpiryInterval: reservationExpiryInterval,
+		DefaultOrgId:              cfg.Tenancy.DefaultOrgId,
 	}
 
 	switch cfg.Observability.LogFormat {
@@ -119,6 +146,11 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 	c.JobRunner = &jobs.LocalRunner{Clock: clock.RealClock{}, Tracer: c.Tracer}
 
 	c.Storage, err = getStorage(ctx, &cfg.Storage)
+	if err != nil {
+		return nil, err
+	}
+
+	err = assignLegacyOrg(ctx, c.Storage, c.DefaultOrgId)
 	if err != nil {
 		return nil, err
 	}

@@ -172,6 +172,7 @@ func TestStopTransactionHandler(t *testing.T) {
 	energy := int64(150)
 	stopReason := "EVDisconnected"
 	expected := &store.Transaction{
+		OrgId:           store.LegacyOrgId, // the charge station is not registered
 		ChargeStationId: stopTransactionChargeStationId,
 		TransactionId:   handlers.ConvertToUUID(transactionId),
 		IdToken:         stopTransactionIdTag,
@@ -535,6 +536,7 @@ func TestStopTransactionHandlerForUnknownTransaction(t *testing.T) {
 	meterStop := int64(200)
 	stopReason := "PowerLoss"
 	expected := &store.Transaction{
+		OrgId:           store.LegacyOrgId, // the charge station is not registered
 		ChargeStationId: stopTransactionChargeStationId,
 		TransactionId:   handlers.ConvertToUUID(4711),
 		IdToken:         stopTransactionIdTag,

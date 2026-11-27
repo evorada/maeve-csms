@@ -16,7 +16,7 @@ paths:
         required: true
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       responses:
         '200':
           description: Charge station status
@@ -53,7 +53,7 @@ paths:
         required: true
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       responses:
         '200':
           description: Connector statuses

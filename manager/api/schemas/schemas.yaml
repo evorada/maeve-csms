@@ -403,6 +403,11 @@ components:
           type: string
           format: date-time
           description: After this instant the token is rejected with status Expired. A token without it does not expire
+        orgId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: The org that owns the token (set by the server, absent when the storage does not keep it)
     RemoteStartTransactionRequest:
       type: object
       description: Request to remotely start a charging transaction

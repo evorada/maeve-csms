@@ -67,6 +67,7 @@ func (s *Server) RegisterLocation(w http.ResponseWriter, r *http.Request, locati
 		Name:        *req.Name,
 		ParkingType: string(*req.ParkingType),
 		PostalCode:  *req.PostalCode,
+		OrgId:       s.defaultOrgId,
 	})
 	if err != nil {
 		_ = render.Render(w, r, ErrInternalError(err))

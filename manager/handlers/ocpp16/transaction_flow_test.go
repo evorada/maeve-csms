@@ -179,6 +179,7 @@ func TestOcpp16TransactionFlow(t *testing.T) {
 	stopReason := "EVDisconnected"
 	reservation := reservationId
 	wantTransaction := &store.Transaction{
+		OrgId:           store.LegacyOrgId, // the charge station is not registered
 		ChargeStationId: chargeStationId,
 		TransactionId:   transactionUuid,
 		IdToken:         idTag,

@@ -171,6 +171,7 @@ func TestStartTransaction(t *testing.T) {
 	meterStart := int64(100)
 	groupId := startTransactionGroupId
 	expected := &store.Transaction{
+		OrgId:           store.LegacyOrgId, // the charge station is not registered
 		ChargeStationId: startTransactionChargeStationId,
 		TransactionId:   transactionId,
 		IdToken:         startTransactionIdTag,
@@ -674,6 +675,7 @@ func TestStartTransactionWithStoreWithoutIdSequenceAndDetails(t *testing.T) {
 	found, err := engine.FindTransaction(ctx, startTransactionChargeStationId, transactionId)
 	require.NoError(t, err)
 	expected := &store.Transaction{
+		OrgId:           store.LegacyOrgId, // the charge station is not registered
 		ChargeStationId: startTransactionChargeStationId,
 		TransactionId:   transactionId,
 		IdToken:         startTransactionIdTag,

@@ -12,7 +12,7 @@ paths:
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       - name: connectorId
         in: query
         description: Filter by connector ID

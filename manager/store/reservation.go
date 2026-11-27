@@ -29,6 +29,11 @@ type Reservation struct {
 	ExpiryDate      time.Time         `firestore:"expiryDate" json:"expiry_date"`
 	Status          ReservationStatus `firestore:"status" json:"status"`
 	CreatedAt       time.Time         `firestore:"createdAt" json:"created_at"`
+	// OrgId is the org (UUID) that owns the reservation. It is read-only: the store
+	// takes it from the charge station when the reservation is created (LegacyOrgId
+	// when the charge station is not registered). Firestore does not store it: it
+	// always reads as "".
+	OrgId string `firestore:"-" json:"-"`
 }
 
 type ReservationStore interface {

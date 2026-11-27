@@ -19,6 +19,7 @@ func TestLocation_SetAndLookup(t *testing.T) {
 
 	loc := &store.Location{
 		Id:      "LOC001",
+		OrgId:   testOrgA,
 		Name:    "Test Location",
 		Address: "123 Test St",
 		City:    "TestCity",
@@ -58,6 +59,7 @@ func TestLocation_List(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		err := testStore.SetLocation(ctx, &store.Location{
 			Id:          "LOC00" + string(rune('1'+i)),
+			OrgId:       testOrgA,
 			Name:        "Location " + string(rune('1'+i)),
 			Address:     "Addr",
 			City:        "City",

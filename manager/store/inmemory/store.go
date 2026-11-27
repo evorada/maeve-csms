@@ -228,8 +228,25 @@ func (s *Store) ListFirmwareUpdateRequests(_ context.Context, pageSize int, prev
 func (s *Store) SetChargeStationAuth(_ context.Context, chargeStationId string, auth *store.ChargeStationAuth) error {
 	s.Lock()
 	defer s.Unlock()
+	if auth.OrgId == "" {
+		// setting the auth details without an org keeps the org of the charge station
+		if current := s.chargeStationAuth[chargeStationId]; current != nil && current.OrgId != "" {
+			withOrg := *auth
+			withOrg.OrgId = current.OrgId
+			auth = &withOrg
+		}
+	}
 	s.chargeStationAuth[chargeStationId] = auth
 	return nil
+}
+
+// orgIdForStation returns the org that owns a charge station: the org it was registered
+// with, or the legacy org when it has none or is not registered. The caller holds the lock.
+func (s *Store) orgIdForStation(chargeStationId string) string {
+	if auth := s.chargeStationAuth[chargeStationId]; auth != nil && auth.OrgId != "" {
+		return auth.OrgId
+	}
+	return store.LegacyOrgId
 }
 
 func (s *Store) LookupChargeStationAuth(_ context.Context, chargeStationId string) (*store.ChargeStationAuth, error) {
@@ -447,8 +464,10 @@ func (s *Store) getTransaction(chargeStationId, transactionId string) *store.Tra
 	return transaction
 }
 
+// updateTransaction stores a new transaction, which belongs to the org of its charge station.
 func (s *Store) updateTransaction(transaction *store.Transaction) {
 	key := transactionKey(transaction.ChargeStationId, transaction.TransactionId)
+	transaction.OrgId = s.orgIdForStation(transaction.ChargeStationId)
 	s.transactions[key] = transaction
 }
 
@@ -864,6 +883,14 @@ func (s *Store) SetLocation(_ context.Context, location *store.Location) error {
 	s.Lock()
 	defer s.Unlock()
 
+	if location.OrgId == "" {
+		return fmt.Errorf("location org id is required")
+	}
+	// location ids are global: a location of another org is not replaced
+	if current := s.locations[location.Id]; current != nil && current.OrgId != location.OrgId {
+		return fmt.Errorf("location %s is used by another org: %w", location.Id, store.ErrAlreadyExists)
+	}
+
 	s.locations[location.Id] = location
 
 	return nil
@@ -945,6 +972,7 @@ func (s *Store) CreateReservation(_ context.Context, reservation *store.Reservat
 	s.Lock()
 	defer s.Unlock()
 	r := *reservation
+	r.OrgId = s.orgIdForStation(r.ChargeStationId)
 	s.reservations[reservation.ReservationId] = &r
 	return nil
 }

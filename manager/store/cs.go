@@ -19,6 +19,11 @@ type ChargeStationAuth struct {
 	SecurityProfile        SecurityProfile
 	Base64SHA256Password   string
 	InvalidUsernameAllowed bool
+	// OrgId is the org (UUID) that owns the charge station. Setting the auth details
+	// without an org registers a new charge station in LegacyOrgId and leaves the org
+	// of a charge station that is already registered as it is. Firestore does not
+	// store the org: it always reads as "".
+	OrgId string
 }
 
 type ChargeStationAuthStore interface {

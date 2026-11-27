@@ -32,6 +32,12 @@ type Transaction struct {
 	StopReason    *string    `firestore:"stopReason,omitempty"`    // OCPP stop reason (1.6 Reason / 2.0.1 StoppedReason)
 	IdTokenGroup  *string    `firestore:"idTokenGroup,omitempty"`  // token group id (1.6 parentIdTag) at start
 	ReservationId *int       `firestore:"reservationId,omitempty"` // reservation consumed by this transaction
+
+	// OrgId is the org (UUID) that owns the transaction. It is read-only: the store
+	// takes it from the charge station when the transaction is created (LegacyOrgId
+	// when the charge station is not registered). Firestore does not store it: it
+	// always reads as "".
+	OrgId string `firestore:"-"`
 }
 
 // TransactionDetails is a partial update: only non-nil fields are written.

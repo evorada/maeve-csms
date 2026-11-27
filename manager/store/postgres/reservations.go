@@ -105,6 +105,7 @@ func toStoreReservation(r *Reservation) *store.Reservation {
 		ExpiryDate:      r.ExpiryDate.Time,
 		Status:          store.ReservationStatus(r.Status),
 		CreatedAt:       r.CreatedAt.Time,
+		OrgId:           uuidString(r.OrgID),
 	}
 	if r.ParentIDTag.Valid {
 		res.ParentIdTag = &r.ParentIDTag.String

@@ -15,6 +15,10 @@ var (
 
 type OcpiRegistration struct {
 	Status OcpiRegistrationStatusType
+	// OrgId is the org (UUID) that owns the registration. PostgreSQL stores a
+	// registration that is set without an org in LegacyOrgId. Firestore does not store
+	// the org: it always reads as "".
+	OrgId string `firestore:"-"`
 }
 
 type OcpiParty struct {
@@ -23,6 +27,10 @@ type OcpiParty struct {
 	Role        string
 	Url         string
 	Token       string
+	// OrgId is the org (UUID) that owns the party details. PostgreSQL stores party
+	// details that are set without an org in LegacyOrgId. Firestore does not store the
+	// org: it always reads as "".
+	OrgId string `firestore:"-"`
 }
 
 type OcpiStore interface {

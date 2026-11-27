@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/config"
+	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
 	"k8s.io/utils/clock"
 
@@ -19,7 +20,7 @@ import (
 )
 
 func TestHealthHandler(t *testing.T) {
-	handler := server.NewApiHandler(config.ApiSettings{}, inmemory.NewStore(clock.RealClock{}), nil, nil)
+	handler := server.NewApiHandler(config.ApiSettings{}, inmemory.NewStore(clock.RealClock{}), nil, nil, store.LegacyOrgId)
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	w := httptest.NewRecorder()
@@ -38,7 +39,7 @@ func TestHealthHandler(t *testing.T) {
 }
 
 func TestMetricsHandler(t *testing.T) {
-	handler := server.NewApiHandler(config.ApiSettings{}, inmemory.NewStore(clock.RealClock{}), nil, nil)
+	handler := server.NewApiHandler(config.ApiSettings{}, inmemory.NewStore(clock.RealClock{}), nil, nil, store.LegacyOrgId)
 
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	w := httptest.NewRecorder()
@@ -62,7 +63,7 @@ func TestMetricsHandler(t *testing.T) {
 }
 
 func TestSwaggerHandler(t *testing.T) {
-	handler := server.NewApiHandler(config.ApiSettings{}, inmemory.NewStore(clock.RealClock{}), nil, nil)
+	handler := server.NewApiHandler(config.ApiSettings{}, inmemory.NewStore(clock.RealClock{}), nil, nil, store.LegacyOrgId)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/openapi.json", nil)
 	w := httptest.NewRecorder()

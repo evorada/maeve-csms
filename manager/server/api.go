@@ -23,8 +23,10 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/templates"
 )
 
-func NewApiHandler(settings config.ApiSettings, engine store.Engine, ocpi ocpi.Api, csCertProvider services.ChargeStationCertificateProvider) http.Handler {
-	apiServer, err := api.NewServer(engine, clock.RealClock{}, ocpi)
+// NewApiHandler creates the handler of the manager API. What is created through the API
+// belongs to defaultOrgId (see api.NewServer).
+func NewApiHandler(settings config.ApiSettings, engine store.Engine, ocpi ocpi.Api, csCertProvider services.ChargeStationCertificateProvider, defaultOrgId string) http.Handler {
+	apiServer, err := api.NewServer(engine, clock.RealClock{}, ocpi, defaultOrgId)
 	if err != nil {
 		panic(err)
 	}

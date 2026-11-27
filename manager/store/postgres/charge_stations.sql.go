@@ -122,7 +122,7 @@ func (q *Queries) DeleteChargeStationTrigger(ctx context.Context, chargeStationI
 }
 
 const GetChargeStationAuth = `-- name: GetChargeStationAuth :one
-SELECT charge_station_id, security_profile, base64_sha256_password, invalid_username_allowed, created_at, updated_at FROM charge_stations WHERE charge_station_id = $1
+SELECT charge_station_id, security_profile, base64_sha256_password, invalid_username_allowed, created_at, updated_at, org_id FROM charge_stations WHERE charge_station_id = $1
 `
 
 // Auth
@@ -136,6 +136,7 @@ func (q *Queries) GetChargeStationAuth(ctx context.Context, chargeStationID stri
 		&i.InvalidUsernameAllowed,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.OrgID,
 	)
 	return i, err
 }
@@ -665,15 +666,20 @@ func (q *Queries) LookupChargeStationCertificateQuery(ctx context.Context, charg
 }
 
 const SetChargeStationAuth = `-- name: SetChargeStationAuth :one
+
 INSERT INTO charge_stations (
-    charge_station_id, security_profile, base64_sha256_password, invalid_username_allowed
-) VALUES ($1, $2, $3, $4)
+    charge_station_id, security_profile, base64_sha256_password, invalid_username_allowed, org_id
+) VALUES (
+    $1, $2, $3, $4,
+    COALESCE($5::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+)
 ON CONFLICT (charge_station_id) DO UPDATE
 SET security_profile = EXCLUDED.security_profile,
     base64_sha256_password = EXCLUDED.base64_sha256_password,
     invalid_username_allowed = EXCLUDED.invalid_username_allowed,
+    org_id = COALESCE($5::uuid, charge_stations.org_id),
     updated_at = NOW()
-RETURNING charge_station_id, security_profile, base64_sha256_password, invalid_username_allowed, created_at, updated_at
+RETURNING charge_station_id, security_profile, base64_sha256_password, invalid_username_allowed, created_at, updated_at, org_id
 `
 
 type SetChargeStationAuthParams struct {
@@ -681,14 +687,18 @@ type SetChargeStationAuthParams struct {
 	SecurityProfile        int32       `db:"security_profile" json:"security_profile"`
 	Base64Sha256Password   pgtype.Text `db:"base64_sha256_password" json:"base64_sha256_password"`
 	InvalidUsernameAllowed bool        `db:"invalid_username_allowed" json:"invalid_username_allowed"`
+	OrgID                  pgtype.UUID `db:"org_id" json:"org_id"`
 }
 
+// SetChargeStationAuth without an org (NULL) registers a new charge station in the
+// legacy org and leaves the org of a charge station that is already there as it is.
 func (q *Queries) SetChargeStationAuth(ctx context.Context, arg SetChargeStationAuthParams) (ChargeStation, error) {
 	row := q.db.QueryRow(ctx, SetChargeStationAuth,
 		arg.ChargeStationID,
 		arg.SecurityProfile,
 		arg.Base64Sha256Password,
 		arg.InvalidUsernameAllowed,
+		arg.OrgID,
 	)
 	var i ChargeStation
 	err := row.Scan(
@@ -698,6 +708,7 @@ func (q *Queries) SetChargeStationAuth(ctx context.Context, arg SetChargeStation
 		&i.InvalidUsernameAllowed,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.OrgID,
 	)
 	return i, err
 }

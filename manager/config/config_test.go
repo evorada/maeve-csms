@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/config"
 	"github.com/thoughtworks/maeve-csms/manager/jobs"
+	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
 func TestConfigure(t *testing.T) {
@@ -294,6 +295,47 @@ func TestConfigureReservationExpiryInterval(t *testing.T) {
 			cfg := clone.Clone(&config.DefaultConfig)
 			cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
 			cfg.Jobs.ReservationExpiryInterval = interval
+
+			settings, err := config.Configure(context.TODO(), cfg)
+			require.Error(t, err)
+			assert.Nil(t, settings)
+		})
+	}
+}
+
+func TestConfigureDefaultOrgId(t *testing.T) {
+	t.Run("default is the legacy org", func(t *testing.T) {
+		cfg := clone.Clone(&config.DefaultConfig)
+		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
+
+		settings, err := config.Configure(context.TODO(), cfg)
+		require.NoError(t, err)
+		assert.Equal(t, "00000000-0000-0000-0000-000000000000", settings.DefaultOrgId)
+		assert.Equal(t, store.LegacyOrgId, settings.DefaultOrgId)
+	})
+
+	t.Run("overridden", func(t *testing.T) {
+		cfg := clone.Clone(&config.DefaultConfig)
+		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
+		err := cfg.Load(strings.NewReader("[tenancy]\ndefault_org_id = \"0193b2c4-0000-7000-8000-00000000000a\"\n"))
+		require.NoError(t, err)
+
+		settings, err := config.Configure(context.TODO(), cfg)
+		require.NoError(t, err)
+		assert.Equal(t, "0193b2c4-0000-7000-8000-00000000000a", settings.DefaultOrgId)
+	})
+
+	for name, orgId := range map[string]string{
+		"not a uuid": "evorada",
+		"too short":  "0193b2c4-0000-7000-8000",
+		"empty":      "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := clone.Clone(&config.DefaultConfig)
+			cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
+			cfg.Tenancy.DefaultOrgId = orgId
+
+			require.Error(t, cfg.Validate())
 
 			settings, err := config.Configure(context.TODO(), cfg)
 			require.Error(t, err)

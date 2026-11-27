@@ -19,10 +19,14 @@ type Querier interface {
 	CountMeterValues(ctx context.Context, arg CountMeterValuesParams) (int64, error)
 	CountTransactionsFiltered(ctx context.Context, arg CountTransactionsFilteredParams) (int64, error)
 	CreateOrUpdateDisplayMessage(ctx context.Context, arg CreateOrUpdateDisplayMessageParams) error
+	// The reservation belongs to the org of its charge station, or to the legacy org when
+	// the charge station is not registered.
 	CreateReservation(ctx context.Context, arg CreateReservationParams) error
 	CreateToken(ctx context.Context, arg CreateTokenParams) (Token, error)
 	// CreateTransaction returns no row when the transaction already exists, instead of
 	// raising a unique violation that would abort an enclosing database transaction.
+	// The transaction belongs to the org of its charge station, or to the legacy org when
+	// the charge station is not registered.
 	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
 	DeleteAllDisplayMessages(ctx context.Context, chargeStationID string) error
 	DeleteAllLocalAuthListEntries(ctx context.Context, chargeStationID string) error
@@ -153,6 +157,8 @@ type Querier interface {
 	// The optional filters are nullable parameters: NULL means "no filter".
 	QueryMeterValues(ctx context.Context, arg QueryMeterValuesParams) ([]MeterValue, error)
 	SetCertificate(ctx context.Context, arg SetCertificateParams) (Certificate, error)
+	// SetChargeStationAuth without an org (NULL) registers a new charge station in the
+	// legacy org and leaves the org of a charge station that is already there as it is.
 	SetChargeStationAuth(ctx context.Context, arg SetChargeStationAuthParams) (ChargeStation, error)
 	SetChargeStationCertificateDeletion(ctx context.Context, arg SetChargeStationCertificateDeletionParams) (ChargeStationCertificateDeletion, error)
 	SetChargeStationCertificateQuery(ctx context.Context, arg SetChargeStationCertificateQueryParams) (ChargeStationCertificateQuery, error)
@@ -162,6 +168,8 @@ type Querier interface {
 	SetChargeStationRuntime(ctx context.Context, arg SetChargeStationRuntimeParams) (ChargeStationRuntime, error)
 	SetChargeStationSettings(ctx context.Context, arg SetChargeStationSettingsParams) (ChargeStationSetting, error)
 	SetChargeStationTrigger(ctx context.Context, arg SetChargeStationTriggerParams) (ChargeStationTrigger, error)
+	// Location ids are global. SetLocation returns no row, and changes nothing, when the
+	// id is already used by a location of another org.
 	SetLocation(ctx context.Context, arg SetLocationParams) (Location, error)
 	SetOcpiParty(ctx context.Context, arg SetOcpiPartyParams) (OcpiParty, error)
 	SetOcpiRegistration(ctx context.Context, arg SetOcpiRegistrationParams) (OcpiRegistration, error)
@@ -183,6 +191,8 @@ type Querier interface {
 	UpdateTransaction(ctx context.Context, arg UpdateTransactionParams) (Transaction, error)
 	UpdateTransactionDetails(ctx context.Context, arg UpdateTransactionDetailsParams) (int64, error)
 	UpsertChargeStationStatus(ctx context.Context, arg UpsertChargeStationStatusParams) error
+	// The charging profile belongs to the org of its charge station, or to the legacy org
+	// when the charge station is not registered.
 	UpsertChargingProfile(ctx context.Context, arg UpsertChargingProfileParams) error
 	UpsertConnectorStatus(ctx context.Context, arg UpsertConnectorStatusParams) error
 	UpsertDiagnosticsRequest(ctx context.Context, arg UpsertDiagnosticsRequestParams) error

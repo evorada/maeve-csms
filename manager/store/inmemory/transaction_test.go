@@ -63,6 +63,7 @@ func TestCreateAndFindTransaction(t *testing.T) {
 	assert.NoError(t, err)
 
 	want := &store.Transaction{
+		OrgId:           store.LegacyOrgId, // the charge station is not registered
 		ChargeStationId: "cs001",
 		TransactionId:   "1234",
 		IdToken:         idToken,
@@ -93,6 +94,7 @@ func TestCreateTransactionWithExistingTransaction(t *testing.T) {
 	assert.NoError(t, err)
 
 	want := &store.Transaction{
+		OrgId:           store.LegacyOrgId, // the charge station is not registered
 		ChargeStationId: "cs002",
 		TransactionId:   "1234",
 		IdToken:         idToken,
@@ -123,6 +125,7 @@ func TestTransactionStoreUpdateCreatedTransaction(t *testing.T) {
 	assert.NoError(t, err)
 
 	want := &store.Transaction{
+		OrgId:             store.LegacyOrgId, // the charge station is not registered
 		ChargeStationId:   "cs003",
 		TransactionId:     "1234",
 		IdToken:           idToken,
@@ -155,6 +158,7 @@ func TestTransactionStoreEndTransaction(t *testing.T) {
 	assert.NoError(t, err)
 
 	want := &store.Transaction{
+		OrgId:             store.LegacyOrgId, // the charge station is not registered
 		ChargeStationId:   "cs004",
 		TransactionId:     "1234",
 		IdToken:           idToken,
@@ -182,6 +186,7 @@ func TestTransactionStoreEndNonExistingTransaction(t *testing.T) {
 	assert.NoError(t, err)
 
 	want := &store.Transaction{
+		OrgId:             store.LegacyOrgId, // the charge station is not registered
 		ChargeStationId:   "cs005",
 		TransactionId:     "1234",
 		IdToken:           idToken,

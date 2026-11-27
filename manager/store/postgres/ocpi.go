@@ -12,12 +12,18 @@ import (
 
 // SetRegistrationDetails creates or updates an OCPI registration by token
 func (s *Store) SetRegistrationDetails(ctx context.Context, token string, registration *store.OcpiRegistration) error {
+	orgId, err := orgIdOrLegacy(registration.OrgId)
+	if err != nil {
+		return fmt.Errorf("failed to set registration details: %w", err)
+	}
+
 	params := SetOcpiRegistrationParams{
 		Token:  token,
 		Status: string(registration.Status),
+		OrgID:  orgId,
 	}
 
-	_, err := s.writeQueries().SetOcpiRegistration(ctx, params)
+	_, err = s.writeQueries().SetOcpiRegistration(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to set registration details: %w", err)
 	}
@@ -37,6 +43,7 @@ func (s *Store) GetRegistrationDetails(ctx context.Context, token string) (*stor
 
 	return &store.OcpiRegistration{
 		Status: store.OcpiRegistrationStatusType(reg.Status),
+		OrgId:  uuidString(reg.OrgID),
 	}, nil
 }
 
@@ -52,15 +59,21 @@ func (s *Store) DeleteRegistrationDetails(ctx context.Context, token string) err
 
 // SetPartyDetails creates or updates OCPI party details
 func (s *Store) SetPartyDetails(ctx context.Context, partyDetails *store.OcpiParty) error {
+	orgId, err := orgIdOrLegacy(partyDetails.OrgId)
+	if err != nil {
+		return fmt.Errorf("failed to set party details: %w", err)
+	}
+
 	params := SetOcpiPartyParams{
 		Role:        partyDetails.Role,
 		CountryCode: partyDetails.CountryCode,
 		PartyID:     partyDetails.PartyId,
 		Url:         partyDetails.Url,
 		Token:       partyDetails.Token,
+		OrgID:       orgId,
 	}
 
-	_, err := s.writeQueries().SetOcpiParty(ctx, params)
+	_, err = s.writeQueries().SetOcpiParty(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to set party details: %w", err)
 	}
@@ -90,6 +103,7 @@ func (s *Store) GetPartyDetails(ctx context.Context, role, countryCode, partyId 
 		Role:        party.Role,
 		Url:         party.Url,
 		Token:       party.Token,
+		OrgId:       uuidString(party.OrgID),
 	}, nil
 }
 
@@ -108,6 +122,7 @@ func (s *Store) ListPartyDetailsForRole(ctx context.Context, role string) ([]*st
 			Role:        p.Role,
 			Url:         p.Url,
 			Token:       p.Token,
+			OrgId:       uuidString(p.OrgID),
 		}
 	}
 

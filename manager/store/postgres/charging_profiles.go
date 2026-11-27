@@ -232,6 +232,7 @@ func toStoreChargingProfile(row *ChargingProfile) (*store.ChargingProfile, error
 			ChargingRateUnit:       store.ChargingRateUnit(row.ChargingRateUnit),
 			ChargingSchedulePeriod: periods,
 		},
+		OrgId: uuidString(row.OrgID),
 	}
 
 	if row.TransactionID.Valid {

@@ -3,10 +3,13 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/render"
+	"github.com/google/uuid"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
@@ -38,6 +41,7 @@ func (s *Server) SetToken(w http.ResponseWriter, r *http.Request) {
 		CacheMode:    string(req.CacheMode),
 		LastUpdated:  s.clock.Now().Format(time.RFC3339),
 		ExpiresAt:    req.ExpiresAt,
+		OrgId:        s.defaultOrgId,
 	})
 	if err != nil {
 		_ = render.Render(w, r, ErrInternalError(err))
@@ -104,6 +108,16 @@ func newToken(tok *store.Token) (*Token, error) {
 		return nil, err
 	}
 
+	// the org is not known to every storage backend
+	var orgId *openapi_types.UUID
+	if tok.OrgId != "" {
+		id, err := uuid.Parse(tok.OrgId)
+		if err != nil {
+			return nil, fmt.Errorf("token org id: %w", err)
+		}
+		orgId = &id
+	}
+
 	return &Token{
 		CountryCode:  tok.CountryCode,
 		PartyId:      tok.PartyId,
@@ -118,6 +132,7 @@ func newToken(tok *store.Token) (*Token, error) {
 		CacheMode:    TokenCacheMode(tok.CacheMode),
 		LastUpdated:  &lastUpdated,
 		ExpiresAt:    tok.ExpiresAt,
+		OrgId:        orgId,
 	}, nil
 }
 

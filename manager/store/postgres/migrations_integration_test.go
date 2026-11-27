@@ -133,8 +133,10 @@ func TestMigration_EnrichTransactions_KeepsExistingData(t *testing.T) {
 	}
 
 	meterValueStations := func() map[string][]string {
+		// the cast keeps the result type of the query the same when a later migration
+		// changes the width of the column
 		rows, err := pool.Query(ctx, `
-			SELECT transaction_id, charge_station_id FROM transaction_meter_values ORDER BY transaction_id, timestamp`)
+			SELECT transaction_id, charge_station_id::text FROM transaction_meter_values ORDER BY transaction_id, timestamp`)
 		require.NoError(t, err)
 		defer rows.Close()
 		stations := make(map[string][]string)
@@ -485,4 +487,200 @@ func TestMigration_CreateTenants(t *testing.T) {
 	var hostnames int
 	require.NoError(t, pool.QueryRow(ctx, `SELECT COUNT(*) FROM tenant_hostnames`).Scan(&hostnames))
 	assert.Equal(t, 0, hostnames)
+}
+
+// Migration 000035 widens the charge station id columns to 80 characters and adds the
+// org of a row to eight tables. The rows that are there before the migration belong to
+// the legacy org, a new row must name its org, and the migration is reversible as long
+// as no station key is longer than the old width.
+func TestMigration_TenancyOrgColumns(t *testing.T) {
+	ctx := context.Background()
+
+	const (
+		versionBefore = 34
+		versionAfter  = 35
+		legacyOrgId   = "00000000-0000-0000-0000-000000000000"
+		otherOrgId    = "0193b2c4-0000-7000-8000-0000000000a1"
+	)
+
+	migrationConnString, pool := migrationTestDatabase(t, "maeve_migration_000035")
+
+	// the widths before the migration
+	oldWidths := map[string]int{
+		"charge_stations":                      48,
+		"charge_station_settings":              48,
+		"charge_station_runtime":               48,
+		"charge_station_certificates":          48,
+		"charge_station_triggers":              48,
+		"transactions":                         48,
+		"transaction_meter_values":             48,
+		"variable_monitoring":                  48,
+		"charge_station_event":                 48,
+		"device_report":                        48,
+		"charge_station_status":                36,
+		"connector_status":                     36,
+		"remote_start_transaction_requests":    28,
+		"remote_stop_transaction_requests":     28,
+		"charge_station_certificate_queries":   28,
+		"charge_station_certificate_deletions": 28,
+	}
+	newWidths := map[string]int{}
+	for table := range oldWidths {
+		newWidths[table] = 80
+	}
+	orgTables := []string{
+		"charge_stations", "locations", "tokens", "transactions",
+		"reservations", "charging_profiles", "ocpi_registrations", "ocpi_parties",
+	}
+	orgIndexes := []string{
+		"idx_charge_stations_org", "idx_locations_org", "idx_transactions_org",
+		"idx_reservations_org", "idx_charging_profiles_org",
+	}
+
+	// stationIdWidths returns the width of every charge_station_id column that has one
+	// (the TEXT columns have none).
+	stationIdWidths := func() map[string]int {
+		rows, err := pool.Query(ctx, `
+			SELECT table_name, character_maximum_length FROM information_schema.columns
+			WHERE table_schema = 'public' AND column_name = 'charge_station_id'
+			  AND character_maximum_length IS NOT NULL AND character_maximum_length < 255`)
+		require.NoError(t, err)
+		defer rows.Close()
+		widths := map[string]int{}
+		for rows.Next() {
+			var table string
+			var width int
+			require.NoError(t, rows.Scan(&table, &width))
+			widths[table] = width
+		}
+		require.NoError(t, rows.Err())
+		return widths
+	}
+	// orgColumns returns the tables that have an org_id column of type UUID that is
+	// NOT NULL and has no default.
+	orgColumns := func() []string {
+		rows, err := pool.Query(ctx, `
+			SELECT table_name FROM information_schema.columns
+			WHERE table_schema = 'public' AND column_name = 'org_id' AND table_name <> 'tenants'
+			  AND table_name <> 'tenant_hostnames'
+			  AND data_type = 'uuid' AND is_nullable = 'NO' AND column_default IS NULL`)
+		require.NoError(t, err)
+		defer rows.Close()
+		tables := []string{}
+		for rows.Next() {
+			var table string
+			require.NoError(t, rows.Scan(&table))
+			tables = append(tables, table)
+		}
+		require.NoError(t, rows.Err())
+		return tables
+	}
+	orgIndexCount := func() int {
+		var count int
+		require.NoError(t, pool.QueryRow(ctx, `SELECT COUNT(*) FROM pg_indexes WHERE indexname = ANY($1)`, orgIndexes).Scan(&count))
+		return count
+	}
+	// rowsByOrg returns how many rows of a table each org owns.
+	rowsByOrg := func(table string) map[string]int {
+		rows, err := pool.Query(ctx, `SELECT org_id::text, COUNT(*) FROM `+table+` GROUP BY org_id`)
+		require.NoError(t, err)
+		defer rows.Close()
+		counts := map[string]int{}
+		for rows.Next() {
+			var orgId string
+			var count int
+			require.NoError(t, rows.Scan(&orgId, &count))
+			counts[orgId] = count
+		}
+		require.NoError(t, rows.Err())
+		return counts
+	}
+	rowCount := func(table string) int {
+		var count int
+		require.NoError(t, pool.QueryRow(ctx, `SELECT COUNT(*) FROM `+table).Scan(&count))
+		return count
+	}
+
+	migrateTo(t, migrationConnString, versionBefore)
+	require.Equal(t, oldWidths, stationIdWidths())
+	require.Empty(t, orgColumns())
+
+	// one row in each table that gets an org, and in tables of each old width, with
+	// the foreign keys to the charge station and to the transaction in use
+	for _, statement := range []string{
+		`INSERT INTO charge_stations (charge_station_id, security_profile) VALUES ('cs001', 0)`,
+		`INSERT INTO charge_station_settings (charge_station_id, settings) VALUES ('cs001', '{}')`,
+		`INSERT INTO charge_station_event (charge_station_id, timestamp, event_type) VALUES ('cs001', '2026-11-27T08:30:00Z', 'OldEvent')`,
+		`INSERT INTO transactions (id, charge_station_id, token_uid, token_type, start_timestamp)
+		 VALUES ('tx001', 'cs001', 'OLDTOKEN', 'ISO14443', '2026-11-27T08:30:00')`,
+		`INSERT INTO transaction_meter_values (charge_station_id, transaction_id, timestamp, sampled_values)
+		 VALUES ('cs001', 'tx001', '2026-11-27T08:31:00', '[]')`,
+		`INSERT INTO charge_station_status (charge_station_id) VALUES ('cs001')`,
+		`INSERT INTO remote_stop_transaction_requests (charge_station_id, transaction_id, status, request_type)
+		 VALUES ('cs001', 'tx001', 'Pending', 'Stop')`,
+		`INSERT INTO locations (id, country_code, party_id, location_data) VALUES ('loc001', 'BE', 'EVO', '{}')`,
+		`INSERT INTO tokens (country_code, party_id, type, uid, contract_id, issuer, valid, cache_mode, last_updated)
+		 VALUES ('GB', 'TWK', 'RFID', 'OLDTOKEN', 'GBTWK001', 'TestIssuer', true, 'ALWAYS', NOW())`,
+		`INSERT INTO reservations (reservation_id, charge_station_id, connector_id, id_tag, expiry_date)
+		 VALUES (1, 'cs001', 1, 'OLDTOKEN', '2026-11-28T08:30:00Z')`,
+		`INSERT INTO charging_profiles (charge_station_id, charging_profile_id, charging_profile_purpose, charging_profile_kind, charging_rate_unit)
+		 VALUES ('cs001', 1, 'TxDefaultProfile', 'Absolute', 'A')`,
+		`INSERT INTO ocpi_registrations (token, status) VALUES ('token001', 'registered')`,
+		`INSERT INTO ocpi_parties (role, country_code, party_id, url, token) VALUES ('EMSP', 'GB', 'TWK', 'https://example.com', 'token001')`,
+	} {
+		_, err := pool.Exec(ctx, statement)
+		require.NoError(t, err, statement)
+	}
+
+	// up: wide station ids, and the rows that were there belong to the legacy org
+	migrateTo(t, migrationConnString, versionAfter)
+	assert.Equal(t, newWidths, stationIdWidths())
+	assert.ElementsMatch(t, orgTables, orgColumns())
+	assert.Equal(t, len(orgIndexes), orgIndexCount())
+	for _, table := range orgTables {
+		assert.Equal(t, map[string]int{legacyOrgId: 1}, rowsByOrg(table), table)
+	}
+
+	// a new row must name its org
+	_, err := pool.Exec(ctx, `INSERT INTO charge_stations (charge_station_id, security_profile) VALUES ('cs002', 0)`)
+	require.Error(t, err, "org_id has no default")
+	_, err = pool.Exec(ctx, `INSERT INTO charge_stations (charge_station_id, security_profile, org_id) VALUES ('cs002', 0, $1)`, otherOrgId)
+	require.NoError(t, err)
+
+	// down: the old widths, no orgs, and every row is still there
+	migrateTo(t, migrationConnString, versionBefore)
+	assert.Equal(t, oldWidths, stationIdWidths())
+	assert.Empty(t, orgColumns())
+	assert.Equal(t, 0, orgIndexCount())
+	assert.Equal(t, 2, rowCount("charge_stations"))
+	for _, table := range []string{
+		"charge_station_settings", "charge_station_event", "transactions", "transaction_meter_values",
+		"charge_station_status", "remote_stop_transaction_requests", "locations", "tokens",
+		"reservations", "charging_profiles", "ocpi_registrations", "ocpi_parties",
+	} {
+		assert.Equal(t, 1, rowCount(table), table)
+	}
+
+	// up again with rows in the tables: the org that a row had is not restored
+	migrateUp(t, migrationConnString)
+	assert.Equal(t, newWidths, stationIdWidths())
+	assert.ElementsMatch(t, orgTables, orgColumns())
+	assert.Equal(t, map[string]int{legacyOrgId: 2}, rowsByOrg("charge_stations"))
+
+	// down with a station key that is longer than the old width fails and changes nothing
+	longKey := "abcd1234.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" // 57 characters
+	_, err = pool.Exec(ctx, `INSERT INTO charge_stations (charge_station_id, security_profile, org_id) VALUES ($1, 0, $2)`, longKey, otherOrgId)
+	require.NoError(t, err)
+
+	m, err := migrate.New("file://./migrations", migrationConnString)
+	require.NoError(t, err)
+	err = m.Migrate(versionBefore)
+	sourceErr, dbErr := m.Close()
+	require.NoError(t, sourceErr)
+	require.NoError(t, dbErr)
+	require.Error(t, err, "the long station key does not fit the old width")
+
+	assert.Equal(t, newWidths, stationIdWidths())
+	assert.ElementsMatch(t, orgTables, orgColumns())
+	assert.Equal(t, map[string]int{legacyOrgId: 2, otherOrgId: 1}, rowsByOrg("charge_stations"))
 }

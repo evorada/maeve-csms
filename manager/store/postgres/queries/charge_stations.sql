@@ -2,14 +2,21 @@
 -- name: GetChargeStationAuth :one
 SELECT * FROM charge_stations WHERE charge_station_id = $1;
 
+-- SetChargeStationAuth without an org (NULL) registers a new charge station in the
+-- legacy org and leaves the org of a charge station that is already there as it is.
+
 -- name: SetChargeStationAuth :one
 INSERT INTO charge_stations (
-    charge_station_id, security_profile, base64_sha256_password, invalid_username_allowed
-) VALUES ($1, $2, $3, $4)
+    charge_station_id, security_profile, base64_sha256_password, invalid_username_allowed, org_id
+) VALUES (
+    $1, $2, $3, $4,
+    COALESCE(sqlc.narg('org_id')::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+)
 ON CONFLICT (charge_station_id) DO UPDATE
 SET security_profile = EXCLUDED.security_profile,
     base64_sha256_password = EXCLUDED.base64_sha256_password,
     invalid_username_allowed = EXCLUDED.invalid_username_allowed,
+    org_id = COALESCE(sqlc.narg('org_id')::uuid, charge_stations.org_id),
     updated_at = NOW()
 RETURNING *;
 

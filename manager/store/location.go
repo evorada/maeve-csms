@@ -36,6 +36,12 @@ type Location struct {
 	Name        string
 	ParkingType string
 	PostalCode  string
+	// OrgId is the org (UUID) that owns the location. It is required by SetLocation
+	// (PostgreSQL and in-memory), which refuses to replace a location of another org
+	// with an error wrapping ErrAlreadyExists: location ids are global. The org is a
+	// column of its own, not part of the stored location document. Firestore does not
+	// store it: it always reads as "".
+	OrgId string `json:"-" firestore:"-"`
 }
 
 type LocationStore interface {
