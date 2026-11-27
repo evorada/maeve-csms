@@ -4,13 +4,16 @@ package config_test
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	clone "github.com/huandu/go-clone/generic"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/config"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 )
 
 func TestParseConfig(t *testing.T) {
@@ -189,4 +192,21 @@ func TestLegacyPagesAreOffUnlessEnabled(t *testing.T) {
 			assert.Equal(t, tc.wantAdminUI, settings.Api.EnableAdminUI)
 		})
 	}
+}
+
+// The schema of the tenant config tells the console which heartbeat interval a tenant
+// has when it sets none: the default of this configuration.
+func TestTenantConfigSchemaShowsTheDefaultHeartbeatInterval(t *testing.T) {
+	var schema struct {
+		Properties struct {
+			HeartbeatIntervalS struct {
+				Default int `json:"default"`
+			} `json:"heartbeat_interval_s"`
+		} `json:"properties"`
+	}
+	require.NoError(t, json.Unmarshal(tenancy.ConfigSchema(), &schema))
+
+	global, err := time.ParseDuration(config.DefaultConfig.Ocpp.HeartbeatInterval)
+	require.NoError(t, err)
+	assert.Equal(t, int(global.Seconds()), schema.Properties.HeartbeatIntervalS.Default)
 }

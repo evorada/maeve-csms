@@ -54,6 +54,9 @@ type stationAuthResponse struct {
 	SecurityProfile        *int   `json:"securityProfile"`
 	Base64SHA256Password   string `json:"base64SHA256Password"`
 	InvalidUsernameAllowed bool   `json:"invalidUsernameAllowed"`
+	// AcceptedCertOrgNames is nil when the manager has no list of a tenant for the
+	// station, which is not the same as an empty list.
+	AcceptedCertOrgNames *[]string `json:"acceptedCertOrgNames"`
 }
 
 type statusResponse struct {
@@ -114,7 +117,7 @@ func chargeStationFromResponse(clientId string, body []byte) (*ChargeStation, er
 		return nil, fmt.Errorf("station auth has the station key %q, want %q", resp.StationKey, wantKey)
 	}
 
-	return &ChargeStation{
+	cs := &ChargeStation{
 		ClientId:               clientId,
 		StationKey:             resp.StationKey,
 		OrgId:                  resp.OrgId,
@@ -122,7 +125,12 @@ func chargeStationFromResponse(clientId string, body []byte) (*ChargeStation, er
 		SecurityProfile:        SecurityProfile(*resp.SecurityProfile),
 		Base64SHA256Password:   resp.Base64SHA256Password,
 		InvalidUsernameAllowed: resp.InvalidUsernameAllowed,
-	}, nil
+	}
+	if resp.AcceptedCertOrgNames != nil {
+		cs.HasTenantOrgNames = true
+		cs.AcceptedCertOrgNames = append([]string{}, *resp.AcceptedCertOrgNames...)
+	}
+	return cs, nil
 }
 
 // validOrgKey reports whether the org key is 4 to 8 characters of a-z and 0-9.

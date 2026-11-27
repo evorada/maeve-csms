@@ -33,7 +33,9 @@ var (
 // NewServer creates the admin pages. The charge stations and tokens that are registered
 // there belong to defaultOrgId; an empty defaultOrgId is the legacy org
 // (store.LegacyOrgId).
-func NewServer(host string, wsPort, wssPort int, orgName string, engine store.Engine, certificateProvider services.ChargeStationCertificateProvider, defaultOrgId string) chi.Router {
+// NewServer creates the admin pages. orgNameFor returns the organisation name of the
+// client certificate that is issued for a charge station.
+func NewServer(host string, wsPort, wssPort int, orgNameFor func(ctx context.Context, csId string) string, engine store.Engine, certificateProvider services.ChargeStationCertificateProvider, defaultOrgId string) chi.Router {
 	if defaultOrgId == "" {
 		defaultOrgId = store.LegacyOrgId
 	}
@@ -130,7 +132,7 @@ func NewServer(host string, wsPort, wssPort int, orgName string, engine store.En
 				"invalidUsername": invalidUsername,
 			}
 		case "mtls":
-			clientKey, clientCert, err := createSignedKeyPair(r.Context(), csId, orgName, certificateProvider)
+			clientKey, clientCert, err := createSignedKeyPair(r.Context(), csId, orgNameFor(r.Context(), csId), certificateProvider)
 			if err != nil {
 				slog.Error("creating signed key pair", "err", err)
 				_ = templates.ExecuteTemplate(w, "error.gohtml", nil)

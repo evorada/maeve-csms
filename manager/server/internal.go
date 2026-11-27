@@ -3,6 +3,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"text/template"
 
@@ -86,10 +87,30 @@ func NewInternalHandler(d InternalDeps) http.Handler {
 		}
 		if d.Settings.EnableAdminUI {
 			slog.Warn("legacy route enabled on internal listener", "route", "/adminui")
-			r.With(logger).Mount("/adminui", adminui.NewServer(d.Settings.Host, d.Settings.WsPort, d.Settings.WssPort, d.Settings.OrgName, d.Engine, d.CSCertProvider, d.DefaultOrgId))
+			r.With(logger).Mount("/adminui", adminui.NewServer(d.Settings.Host, d.Settings.WsPort, d.Settings.WssPort,
+				certOrgNameFor(&tenancy.ConfigProvider{Resolver: d.Resolver}, d.Settings.OrgName), d.Engine, d.CSCertProvider, d.DefaultOrgId))
 		}
 	})
 	return r
+}
+
+// certOrgNameFor returns what gives the organisation name of the client certificate that
+// the admin pages issue for a charge station: the first organisation name that the
+// tenant of the charge station accepts in a certificate, and fallback for a charge
+// station without such a tenant (always so in single mode).
+func certOrgNameFor(tenantConfig *tenancy.ConfigProvider, fallback string) func(ctx context.Context, csId string) string {
+	return func(ctx context.Context, csId string) string {
+		cfg, err := tenantConfig.ConfigForStation(ctx, csId)
+		if err != nil {
+			slog.Warn("looking up the tenant config of a charge station, using the configured organisation name",
+				"chargeStationId", csId, "err", err)
+			return fallback
+		}
+		if len(cfg.AcceptedCertOrgNames) > 0 {
+			return cfg.AcceptedCertOrgNames[0]
+		}
+		return fallback
+	}
 }
 
 func getApiSwaggerJson(w http.ResponseWriter, r *http.Request) {

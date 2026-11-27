@@ -38,6 +38,7 @@ const (
 	fieldOrgId  = "org_id"
 	fieldPath   = "path"
 	fieldParent = "parent_id"
+	fieldConfig = "config"
 )
 
 var (
@@ -309,9 +310,15 @@ func tenantFromDocument(orgId string, doc *TenantDocument) (*store.Tenant, *inva
 			}
 		}
 	}
-	configVersion, config, problem := versionedDocument("config", doc.Config)
+	configVersion, config, problem := versionedDocument(fieldConfig, doc.Config)
 	if problem != nil {
 		return nil, problem
+	}
+	if config != nil {
+		// also a config that is older than the stored one, which the store will ignore
+		if err := tenancy.ValidateConfig(config); err != nil {
+			return nil, invalidConfig(err)
+		}
 	}
 
 	return &store.Tenant{
@@ -327,6 +334,25 @@ func tenantFromDocument(orgId string, doc *TenantDocument) (*store.Tenant, *inva
 		ConfigVersion:       configVersion,
 		Config:              config,
 	}, nil
+}
+
+// invalidConfig turns what the schema of the tenant config refused into the answer:
+// every setting that is wrong, below "config".
+func invalidConfig(err error) *invalidField {
+	problem := &invalidField{field: fieldConfig, message: "does not fit the schema of the tenant config", code: codeInvalidConfig}
+	var configError *tenancy.ConfigError
+	if !errors.As(err, &configError) || len(configError.Problems) == 0 {
+		return problem
+	}
+	for _, p := range configError.Problems {
+		field := fieldConfig
+		if p.Field != "" {
+			field += "." + p.Field
+		}
+		problem.details = append(problem.details, ErrorDetail{Field: field, Message: p.Message})
+	}
+	problem.field, problem.message = problem.details[0].Field, problem.details[0].Message
+	return problem
 }
 
 // versionedDocument checks a document that is stored as the console sent it: it must be

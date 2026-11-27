@@ -87,7 +87,8 @@ func TestStationAuthOfTwoTenantsWithTheSameStationId(t *testing.T) {
 		"tenantStatus": "active",
 		"securityProfile": 1,
 		"base64SHA256Password": "`+passwordA+`",
-		"invalidUsernameAllowed": false
+		"invalidUsernameAllowed": false,
+		"acceptedCertOrgNames": []
 	}`, body)
 
 	status, body = get(t, handler, stationAuthUrl("b.example", "CP001"))
@@ -99,7 +100,8 @@ func TestStationAuthOfTwoTenantsWithTheSameStationId(t *testing.T) {
 		"tenantStatus": "active",
 		"securityProfile": 2,
 		"base64SHA256Password": "`+passwordB+`",
-		"invalidUsernameAllowed": true
+		"invalidUsernameAllowed": true,
+		"acceptedCertOrgNames": []
 	}`, body)
 
 	t.Run("the host is taken as the gateway received it", func(t *testing.T) {
@@ -217,9 +219,15 @@ func TestStationAuthInSingleMode(t *testing.T) {
 		SecurityProfile: store.TLSWithClientSideCertificates,
 		OrgId:           orgC,
 	}))
-	// a tenant in the store changes nothing in single mode
+	// a tenant in the store changes nothing in single mode, whatever its config: the
+	// gateway is not given a list of organisation names, so it checks against its own
 	require.NoError(t, engine.PutTenant(ctx, &store.Tenant{
 		OrgId: orgA, Path: store.OrgPathLabel(orgA), Slug: "tenant-a", OrgKey: "aaaa", Hostnames: []string{"a.example"},
+		ConfigVersion: 1, Config: json.RawMessage(`{"version":1,"accepted_cert_org_names":[]}`),
+	}))
+	require.NoError(t, engine.PutTenant(ctx, &store.Tenant{
+		OrgId: orgC, Path: store.OrgPathLabel(orgC), Slug: "tenant-c", OrgKey: "cccc", Hostnames: []string{"c.example"},
+		ConfigVersion: 1, Config: json.RawMessage(`{"version":1,"accepted_cert_org_names":["Charge Co"]}`),
 	}))
 
 	for name, mode := range map[string]tenancy.Mode{"single": tenancy.ModeSingle, "not set": ""} {
@@ -280,6 +288,99 @@ func TestStationAuthOrgIsTheOrgThatOwnsTheStation(t *testing.T) {
 			assert.Equal(t, "aaaa."+stationId, resp.StationKey)
 		})
 	}
+}
+
+func TestStationAuthAcceptedCertOrgNames(t *testing.T) {
+	ctx := context.Background()
+	handler, engine := multiTenantHandler(t)
+
+	putConfig := func(orgId, config string) {
+		tenant, err := engine.GetTenant(ctx, orgId)
+		require.NoError(t, err)
+		tenant.ConfigVersion++
+		tenant.Config = json.RawMessage(config)
+		require.NoError(t, engine.PutTenant(ctx, tenant))
+		// a new handler: the resolver keeps a tenant and its config for a while
+		handler = internalapi.NewHandler(&tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine, DefaultOrgId: defaultOrg}, engine)
+	}
+	// names returns the member of the answer as it was sent, nil when it was left out
+	names := func(host, stationId string) *[]string {
+		status, body := get(t, handler, stationAuthUrl(host, stationId))
+		require.Equal(t, http.StatusOK, status, body)
+		var raw map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal([]byte(body), &raw))
+		member, sent := raw["acceptedCertOrgNames"]
+		if !sent {
+			return nil
+		}
+		// never null: the gateway would take that for no list
+		require.NotEqual(t, "null", string(member))
+		var list []string
+		require.NoError(t, json.Unmarshal(member, &list))
+		return &list
+	}
+	list := func(names ...string) *[]string {
+		l := append([]string{}, names...)
+		return &l
+	}
+
+	// a tenant that was never given a config
+	assert.Equal(t, list(), names("b.example", "CP001"))
+
+	putConfig(orgA, `{"version":1,"accepted_cert_org_names":["Charge Co","Charge Co Services"]}`)
+	assert.Equal(t, list("Charge Co", "Charge Co Services"), names("a.example", "CP001"))
+	// the names of the other tenant are its own
+	assert.Equal(t, list(), names("b.example", "CP001"))
+
+	t.Run("a config that sets no names", func(t *testing.T) {
+		putConfig(orgB, `{"version":1,"heartbeat_interval_s":120}`)
+		assert.Equal(t, list(), names("b.example", "CP001"))
+		putConfig(orgB, `{"version":2,"accepted_cert_org_names":[]}`)
+		assert.Equal(t, list(), names("b.example", "CP001"))
+	})
+
+	t.Run("the names are those of the tenant that owns the station", func(t *testing.T) {
+		putConfig(orgB, `{"version":3,"accepted_cert_org_names":["Other"]}`)
+		require.NoError(t, engine.SetChargeStationAuth(ctx, "aaaa.moved", &store.ChargeStationAuth{
+			SecurityProfile: store.TLSWithClientSideCertificates, OrgId: orgB,
+		}))
+		assert.Equal(t, list("Other"), names("a.example", "moved"))
+	})
+
+	t.Run("no list for a station whose org is not a tenant", func(t *testing.T) {
+		require.NoError(t, engine.SetChargeStationAuth(ctx, "aaaa.no-tenant", &store.ChargeStationAuth{
+			SecurityProfile: store.TLSWithClientSideCertificates, OrgId: orgC,
+		}))
+		assert.Nil(t, names("a.example", "no-tenant"))
+	})
+
+	t.Run("no list when the stored config cannot be read", func(t *testing.T) {
+		// not an empty list, which would switch the check of the organisation off
+		putConfig(orgA, `{"version":2,"accepted_cert_org_names":["Charge Co"],"session_rules":{}}`)
+		assert.Nil(t, names("a.example", "CP001"))
+	})
+}
+
+// failingTenantByOrg is an engine that cannot read a tenant by its org.
+type failingTenantByOrg struct {
+	store.Engine
+}
+
+func (failingTenantByOrg) GetTenant(context.Context, string) (*store.Tenant, error) {
+	return nil, errors.New("pq: connection refused to db.internal")
+}
+
+func TestStationAuthFailsWhenTheConfigOfTheTenantCannotBeLookedUp(t *testing.T) {
+	_, engine := multiTenantHandler(t)
+	failing := failingTenantByOrg{Engine: engine}
+	resolver := &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: failing, Stations: failing}
+	handler := internalapi.NewHandler(resolver, failing)
+
+	// not an answer without a list or with an empty one: the gateway must not let a
+	// station in on a guess
+	status, body := get(t, handler, stationAuthUrl("b.example", "CP001"))
+	assert.Equal(t, http.StatusInternalServerError, status)
+	assert.JSONEq(t, `{"status":"Internal Server Error"}`, body)
 }
 
 func TestStationAuthOfASuspendedTenantIsStillReturned(t *testing.T) {

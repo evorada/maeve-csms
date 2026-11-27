@@ -122,6 +122,36 @@ func TestCachingRegistryKeepsAChargeStationForTheTTL(t *testing.T) {
 	assert.Equal(t, 2, inner.count())
 }
 
+func TestCachingRegistryKeepsTheCertOrgNamesOfTheTenant(t *testing.T) {
+	ctx := context.Background()
+	inner := newCountingRegistry()
+	inner.Add("a.example", &ChargeStation{ClientId: "CP001", OrgKey: "aaaa", HasTenantOrgNames: true, AcceptedCertOrgNames: []string{"Charge Co"}})
+	inner.Add("a.example", &ChargeStation{ClientId: "CP002", OrgKey: "aaaa", HasTenantOrgNames: true, AcceptedCertOrgNames: []string{}})
+	inner.Add("a.example", &ChargeStation{ClientId: "CP003", OrgKey: "aaaa"})
+	reg := newCachingRegistry(inner, newFakeClock())
+
+	for i := 0; i < 2; i++ {
+		withNames, err := reg.LookupChargeStation(ctx, "a.example", "CP001")
+		require.NoError(t, err)
+		assert.True(t, withNames.HasTenantOrgNames)
+		assert.Equal(t, []string{"Charge Co"}, withNames.AcceptedCertOrgNames)
+		// what the caller does with the answer does not change what is kept
+		withNames.AcceptedCertOrgNames[0] = "changed"
+
+		// an empty list of a tenant stays a list of a tenant
+		withoutNames, err := reg.LookupChargeStation(ctx, "a.example", "CP002")
+		require.NoError(t, err)
+		assert.True(t, withoutNames.HasTenantOrgNames)
+		assert.Empty(t, withoutNames.AcceptedCertOrgNames)
+
+		withoutList, err := reg.LookupChargeStation(ctx, "a.example", "CP003")
+		require.NoError(t, err)
+		assert.False(t, withoutList.HasTenantOrgNames)
+		assert.Nil(t, withoutList.AcceptedCertOrgNames)
+	}
+	assert.Equal(t, 3, inner.count())
+}
+
 func TestCachingRegistryKeepsAnUnknownChargeStationForTheNegativeTTL(t *testing.T) {
 	ctx := context.Background()
 	clock := newFakeClock()

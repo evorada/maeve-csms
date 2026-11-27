@@ -230,7 +230,12 @@ func TestManifest(t *testing.T) {
 	// empty lists, not null
 	assert.JSONEq(t, `[]`, string(manifest.Events))
 	assert.JSONEq(t, `[]`, string(manifest.Meters))
-	assert.Equal(t, map[string]any{"type": "object"}, manifest.ConfigSchema)
+	// the schema of the tenant config, as the manager itself applies it
+	var schema map[string]any
+	require.NoError(t, json.Unmarshal(tenancy.ConfigSchema(), &schema))
+	assert.Equal(t, schema, manifest.ConfigSchema)
+	assert.Equal(t, "http://json-schema.org/draft-07/schema#", manifest.ConfigSchema["$schema"])
+	assert.Contains(t, manifest.ConfigSchema["properties"], "default_security_profile")
 
 	t.Run("the version of the build", func(t *testing.T) {
 		previous := controlplane.Version
@@ -316,7 +321,7 @@ func TestPutTenantCreatesAndUpdates(t *testing.T) {
 			{"id": "party-2", "role": "EMSP", "country_code": "XX", "party_id": "A1B"},
 		},
 		"entitlements": map[string]any{"org_id": orgA, "version": 3, "status": "active", "features": map[string]bool{"ocpi": true}},
-		"config":       map[string]any{"version": 7, "heartbeat_interval": 60},
+		"config":       map[string]any{"version": 7, "heartbeat_interval_s": 60},
 		"added_later":  "a field that this version does not know",
 	})
 
@@ -343,7 +348,7 @@ func TestPutTenantCreatesAndUpdates(t *testing.T) {
 		{Id: "party-2", Role: "EMSP", CountryCode: "XX", PartyId: "A1B"},
 	}, tenant.Parties)
 	assert.JSONEq(t, `{"org_id":"`+orgA+`","version":3,"status":"active","features":{"ocpi":true}}`, string(tenant.Entitlements))
-	assert.JSONEq(t, `{"version":7,"heartbeat_interval":60}`, string(tenant.Config))
+	assert.JSONEq(t, `{"version":7,"heartbeat_interval_s":60}`, string(tenant.Config))
 
 	t.Run("the same document again changes nothing", func(t *testing.T) {
 		rr := f.put(orgA, document)
@@ -557,7 +562,7 @@ func TestPutTenantRefusesWhatIsNotValid(t *testing.T) {
 	assert.Empty(t, tenants)
 
 	t.Run("a text with an escaped backslash before u0000 is not the character U+0000", func(t *testing.T) {
-		rr := f.put(orgA, tenantDocument(t, orgA, map[string]any{"config": map[string]any{"version": 1, "pattern": `\u0000`}}))
+		rr := f.put(orgA, tenantDocument(t, orgA, map[string]any{"config": map[string]any{"version": 1, "default_tariff_ref": `\u0000`}}))
 		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
 	})
 
@@ -566,6 +571,123 @@ func TestPutTenantRefusesWhatIsNotValid(t *testing.T) {
 		require.Equal(t, http.StatusRequestEntityTooLarge, rr.Code)
 		assert.JSONEq(t, `{"status":"Request Entity Too Large","error":"too_large"}`, rr.Body.String())
 		assert.Nil(t, f.tenant(t, orgB))
+	})
+}
+
+func TestPutTenantRefusesAConfigThatDoesNotFitTheSchema(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+
+	cases := []struct {
+		name    string
+		config  map[string]any
+		field   string
+		details []string // the fields of the details; only field when empty
+	}{
+		{name: "a security profile that does not exist", config: map[string]any{"version": 1, "default_security_profile": "SP4"}, field: "config.default_security_profile"},
+		{name: "a security profile as a number", config: map[string]any{"version": 1, "default_security_profile": 0}, field: "config.default_security_profile"},
+		{name: "a heartbeat interval that is too short", config: map[string]any{"version": 1, "heartbeat_interval_s": 30}, field: "config.heartbeat_interval_s"},
+		{name: "a setting that does not exist", config: map[string]any{"version": 1, "heartbeat_interval": 120}, field: "config.heartbeat_interval"},
+		{name: "session rules", config: map[string]any{"version": 1, "session_rules": map[string]any{}}, field: "config.session_rules"},
+		{name: "an onboarding mode that does not exist", config: map[string]any{"version": 1, "onboarding_mode": "open"}, field: "config.onboarding_mode"},
+		{name: "an organisation name that is empty", config: map[string]any{"version": 1, "accepted_cert_org_names": []string{"Charge Co", ""}}, field: "config.accepted_cert_org_names[1]"},
+		{name: "organisation names that are not a list", config: map[string]any{"version": 1, "accepted_cert_org_names": "Charge Co"}, field: "config.accepted_cert_org_names"},
+		{
+			name:    "more than one setting",
+			config:  map[string]any{"version": 1, "onboarding_mode": "open", "heartbeat_interval_s": 30},
+			field:   "config.heartbeat_interval_s",
+			details: []string{"config.heartbeat_interval_s", "config.onboarding_mode"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := f.put(orgA, tenantDocument(t, orgA, map[string]any{"config": tc.config}))
+			require.Equal(t, http.StatusBadRequest, rr.Code, rr.Body.String())
+
+			var answer struct {
+				Status  string `json:"status"`
+				Error   string `json:"error"`
+				Field   string `json:"field"`
+				Message string `json:"message"`
+				Details []struct {
+					Field   string `json:"field"`
+					Message string `json:"message"`
+				} `json:"details"`
+			}
+			require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &answer))
+			assert.Equal(t, "Bad Request", answer.Status)
+			assert.Equal(t, "invalid_config", answer.Error)
+			assert.Equal(t, tc.field, answer.Field, rr.Body.String())
+			assert.NotEmpty(t, answer.Message)
+
+			want := tc.details
+			if want == nil {
+				want = []string{tc.field}
+			}
+			var got []string
+			for _, detail := range answer.Details {
+				got = append(got, detail.Field)
+				assert.NotEmpty(t, detail.Message)
+			}
+			assert.Equal(t, want, got, rr.Body.String())
+
+			// nothing of the request was stored: there is no tenant
+			assert.Nil(t, f.tenant(t, orgA))
+		})
+	}
+
+	t.Run("the stored tenant is not touched", func(t *testing.T) {
+		valid := map[string]any{"version": 5, "default_security_profile": "SP3", "accepted_cert_org_names": []string{"Charge Co"}}
+		require.Equal(t, http.StatusOK, f.put(orgA, tenantDocument(t, orgA, map[string]any{"config": valid})).Code)
+		before := f.tenant(t, orgA)
+		// the resolver keeps the tenant and its config from now on
+		provider := &tenancy.ConfigProvider{Resolver: f.resolver}
+		cfg, err := provider.ConfigForOrg(ctx, orgA)
+		require.NoError(t, err)
+		require.Equal(t, store.TLSWithClientSideCertificates, cfg.SecurityProfile())
+
+		for name, config := range map[string]map[string]any{
+			"a newer config":                 {"version": 6, "default_security_profile": "SP0", "accepted_cert_org_names": []string{}},
+			"a config that would be ignored": {"version": 4, "default_security_profile": "SP0"},
+		} {
+			rr := f.put(orgA, tenantDocument(t, orgA, map[string]any{
+				"hostnames": []string{"other.example.com"},
+				"config":    config,
+			}))
+			require.Equal(t, http.StatusBadRequest, rr.Code, name)
+			assert.Equal(t, "invalid_config", decode(t, rr)["error"], name)
+		}
+
+		after := f.tenant(t, orgA)
+		assert.EqualValues(t, 5, after.ConfigVersion)
+		assert.JSONEq(t, string(before.Config), string(after.Config))
+		assert.Equal(t, []string{"acme.example.com"}, after.Hostnames)
+
+		cfg, err = provider.ConfigForOrg(ctx, orgA)
+		require.NoError(t, err)
+		assert.Equal(t, store.TLSWithClientSideCertificates, cfg.SecurityProfile())
+		names, known, err := provider.AcceptedCertOrgNames(ctx, orgA)
+		require.NoError(t, err)
+		assert.True(t, known)
+		assert.Equal(t, []string{"Charge Co"}, names)
+	})
+
+	t.Run("a valid config takes effect at once", func(t *testing.T) {
+		provider := &tenancy.ConfigProvider{Resolver: f.resolver}
+		_, err := provider.ConfigForOrg(ctx, orgA)
+		require.NoError(t, err)
+
+		rr := f.put(orgA, tenantDocument(t, orgA, map[string]any{
+			"config": map[string]any{"version": 6, "default_security_profile": "SP2", "heartbeat_interval_s": 120},
+		}))
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+
+		cfg, err := provider.ConfigForOrg(ctx, orgA)
+		require.NoError(t, err)
+		assert.EqualValues(t, 6, cfg.Version)
+		assert.Equal(t, store.TLSWithBasicAuth, cfg.SecurityProfile())
+		assert.Equal(t, 2*time.Minute, cfg.HeartbeatInterval(5*time.Minute))
+		assert.Empty(t, cfg.AcceptedCertOrgNames)
 	})
 }
 

@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Tenant config",
+  "description": "The settings of a tenant of the charge point management system.",
+  "type": "object",
+  "required": ["version"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "title": "Version",
+      "description": "The version of the config. A stored config is only replaced by a config of the same or a higher version.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "default_security_profile": {
+      "title": "Default security profile",
+      "description": "The OCPP security profile of a charge station that is registered without one. SP1 is basic authentication without TLS, SP2 is basic authentication over TLS, SP3 is TLS with a client certificate.",
+      "type": "string",
+      "enum": ["SP1", "SP2", "SP3"],
+      "default": "SP2"
+    },
+    "accepted_cert_org_names": {
+      "title": "Accepted certificate organisations",
+      "description": "The organisation names (O) that are accepted in the client certificate of a charge station. With an empty list the organisation of a certificate is not checked.",
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "default": []
+    },
+    "heartbeat_interval_s": {
+      "title": "Heartbeat interval",
+      "description": "The seconds between two heartbeats of a charge station. Without it the interval of the deployment applies, which is 300 unless the deployment changed it.",
+      "type": "integer",
+      "minimum": 60,
+      "maximum": 86400,
+      "default": 300
+    },
+    "default_tariff_ref": {
+      "title": "Default tariff",
+      "description": "The tariff that applies where no other tariff is set.",
+      "type": "string"
+    },
+    "onboarding_mode": {
+      "title": "Onboarding of charge stations",
+      "description": "What happens to a charge station that connects without being registered: pending_approval keeps it until somebody approves it, preregistered_only refuses it.",
+      "type": "string",
+      "enum": ["pending_approval", "preregistered_only"],
+      "default": "pending_approval"
+    }
+  }
+}

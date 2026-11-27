@@ -2963,13 +2963,12 @@ components:
     ChargeStationAuth:
       type: object
       description: Connection details for a charge station
-      required:
-        - securityProfile
       properties:
         securityProfile:
           type: integer
           description: |
             The security profile to use for the charge station: * `0` - unsecured transport with basic auth * `1` - TLS with basic auth * `2` - TLS with client certificate
+            When a charge station is registered without it, it defaults to the `default_security_profile` of the config of the tenant that owns the charge station, and to `1` when the tenant has not set one. It is always present in a response.
         base64SHA256Password:
           type: string
           maxLength: 64

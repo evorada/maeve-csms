@@ -78,7 +78,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/TenantState'
         '400':
-          description: The document is not valid; `field` names what is wrong
+          description: |
+            The document is not valid; `field` names what is wrong. The error is
+            `invalid_config` when the config does not fit the `config_schema` of the
+            manifest: `details` then lists every setting that is wrong, and `field` and
+            `message` repeat the first one. Nothing of the document is stored.
           content:
             application/json:
               schema:
@@ -346,7 +350,9 @@ components:
           format: uuid
     TenantConfigDocument:
       type: object
-      description: The config of a tenant, kept as the console sent it.
+      description: |
+        The config of a tenant, kept as the console sent it. It must be valid against
+        the `config_schema` of the manifest, which allows no settings but its own.
       required:
         - version
       additionalProperties: true
@@ -424,7 +430,10 @@ components:
             additionalProperties: true
         config_schema:
           type: object
-          description: The JSON Schema of the tenant config
+          description: |
+            The JSON Schema (draft-07) of the tenant config, with a title, a description
+            and, where there is one, the default of every setting. Its source is
+            `manager/tenancy/config_schema.json`.
           additionalProperties: true
           x-go-type: json.RawMessage
     Health:
@@ -482,6 +491,23 @@ components:
         message:
           type: string
           description: Why the field is not valid
+        details:
+          type: array
+          description: Every setting of a tenant config that is not valid (`invalid_config`)
+          items:
+            $ref: '#/components/schemas/ErrorDetail'
+    ErrorDetail:
+      type: object
+      required:
+        - field
+        - message
+      properties:
+        field:
+          type: string
+          description: The setting that is not valid, like `config.heartbeat_interval_s`
+        message:
+          type: string
+          description: Why the setting is not valid
   securitySchemes:
     consoleToken:
       type: http

@@ -318,6 +318,7 @@ func TestDataTransferRoutesHas2beSignCertificate(t *testing.T) {
 		engine,
 		&tenancy.Resolver{Stations: engine},
 		nil,
+		nil,
 		certProvider,
 		nil,
 		time.Minute,

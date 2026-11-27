@@ -29,8 +29,8 @@ func (s *Server) RegisterChargeStation(w http.ResponseWriter, r *http.Request, c
 	}
 
 	// Validate SecurityProfile is within valid range for int8
-	if req.SecurityProfile < 0 || req.SecurityProfile > 127 {
-		_ = render.Render(w, r, ErrInvalidRequest(fmt.Errorf("security profile value %d is out of valid range", req.SecurityProfile)))
+	if req.SecurityProfile != nil && (*req.SecurityProfile < 0 || *req.SecurityProfile > 127) {
+		_ = render.Render(w, r, ErrInvalidRequest(fmt.Errorf("security profile value %d is out of valid range", *req.SecurityProfile)))
 		return
 	}
 
@@ -44,8 +44,24 @@ func (s *Server) RegisterChargeStation(w http.ResponseWriter, r *http.Request, c
 		return
 	}
 
+	var securityProfile store.SecurityProfile
+	if req.SecurityProfile != nil {
+		securityProfile = store.SecurityProfile(*req.SecurityProfile)
+	} else {
+		// A charge station that is registered without a security profile gets the default
+		// of its tenant. When the config of the tenant cannot be looked up nothing is
+		// registered: a guess could be a weaker profile than the tenant asked for.
+		cfg, err := s.tenantConfig.ConfigForOrg(r.Context(), orgId)
+		if err != nil {
+			slog.Error("looking up the default security profile of a charge station", "chargeStationId", csId, "org", orgId, "err", err)
+			_ = render.Render(w, r, errInternal)
+			return
+		}
+		securityProfile = cfg.SecurityProfile()
+	}
+
 	err := s.store.SetChargeStationAuth(r.Context(), csId, &store.ChargeStationAuth{
-		SecurityProfile:        store.SecurityProfile(req.SecurityProfile),
+		SecurityProfile:        securityProfile,
 		Base64SHA256Password:   pwd,
 		InvalidUsernameAllowed: invalidUsernameAllowed,
 		OrgId:                  orgId,
@@ -69,8 +85,9 @@ func (s *Server) LookupChargeStationAuth(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
+	securityProfile := int(auth.SecurityProfile)
 	resp := &ChargeStationAuth{
-		SecurityProfile: int(auth.SecurityProfile),
+		SecurityProfile: &securityProfile,
 	}
 	if auth.Base64SHA256Password != "" {
 		resp.Base64SHA256Password = &auth.Base64SHA256Password

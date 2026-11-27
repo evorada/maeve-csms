@@ -50,7 +50,8 @@ GET /_internal/v1/station-auth?host=acme.ocpp.example.com%3A443&stationId=CP001
   "tenantStatus": "active",
   "securityProfile": 1,
   "base64SHA256Password": "XohImNooBHFR0OVvjcYpJ3NgPQ1qq73WKhHvch0VQtg=",
-  "invalidUsernameAllowed": false
+  "invalidUsernameAllowed": false,
+  "acceptedCertOrgNames": ["Acme Charging"]
 }
 ```
 
@@ -63,6 +64,7 @@ GET /_internal/v1/station-auth?host=acme.ocpp.example.com%3A443&stationId=CP001
 | securityProfile        | `0` unsecured transport with basic auth, `1` TLS with basic auth, `2` TLS with client certificate |
 | base64SHA256Password   | The base64 encoded SHA-256 hash of the password of the station. Left out when the station has none |
 | invalidUsernameAllowed | Whether a basic auth username that is not the station id is accepted |
+| acceptedCertOrgNames   | The organisation names (`O`) that are accepted in the client certificate of the station (security profile `2`): the `accepted_cert_org_names` of the config of the tenant that owns the station. An empty list (`[]`, also for a tenant without a config) means that the organisation is not checked. Left out when there is no list of a tenant, and the gateway then checks against its own list (`--org-name`): in single-tenant mode, for a station whose org is not a tenant, and when the stored config of the tenant cannot be read |
 
 The same station in single-tenant mode:
 

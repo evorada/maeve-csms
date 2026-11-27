@@ -204,6 +204,53 @@ func TestControlPlaneChangesWhatTheGatewayLookupsAnswer(t *testing.T) {
 	assert.Equal(t, internalapi.ErrorUnknownHost, lookup("a.example.com"), "the host that the tenant gave up must not be answered from the cache")
 }
 
+func TestTenantConfigFromTheControlPlaneReachesTheGatewayLookupAtOnce(t *testing.T) {
+	handler, console, engine := newMultiTenantInternalHandler(t)
+	token := serviceToken(console, "svc:provisioner", tenancy.PermTenantManage)
+	require.NoError(t, engine.SetChargeStationAuth(context.Background(), "aaaa.CP001", &store.ChargeStationAuth{
+		SecurityProfile: store.TLSWithClientSideCertificates,
+		OrgId:           orgA,
+	}))
+
+	putConfig := func(config string) *httptest.ResponseRecorder {
+		body := `{"path":"` + store.OrgPathLabel(orgA) + `","slug":"tenant-aaaa","org_key":"aaaa","hostnames":["a.example.com"],"config":` + config + `}`
+		req := httptest.NewRequest(http.MethodPut, controlplane.BasePath+"/tenants/"+orgA, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		return rr
+	}
+	// the organisation names that the gateway is told to accept in a client certificate
+	names := func() []string {
+		rr := get(handler, "/_internal/v1/station-auth?host=a.example.com&stationId=CP001", "")
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		var answer internalapi.StationAuthResponse
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &answer))
+		require.NotNil(t, answer.AcceptedCertOrgNames, rr.Body.String())
+		return *answer.AcceptedCertOrgNames
+	}
+
+	// the lookup keeps the tenant and its config from now on
+	require.Empty(t, names())
+
+	rr := putConfig(`{"version":1,"accepted_cert_org_names":["Charge Co"]}`)
+	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+	assert.Equal(t, []string{"Charge Co"}, names())
+
+	// a config that is refused changes nothing: not the stored names, and never to no check
+	for _, config := range []string{
+		`{"version":2,"accepted_cert_org_names":[""]}`,
+		`{"version":2,"accepted_cert_org_names":[],"session_rules":{}}`,
+		`{"version":2,"accepted_cert_org_names":null}`,
+	} {
+		rr = putConfig(config)
+		require.Equal(t, http.StatusBadRequest, rr.Code, config)
+		assert.Contains(t, rr.Body.String(), `"error":"invalid_config"`, config)
+		assert.Equal(t, []string{"Charge Co"}, names(), config)
+	}
+}
+
 func TestInternalListenerOnlyAuthenticatesTheControlPlane(t *testing.T) {
 	handler, console, engine := newMultiTenantInternalHandler(t)
 	require.NoError(t, engine.SetChargeStationAuth(context.Background(), "aaaa.CP001", &store.ChargeStationAuth{

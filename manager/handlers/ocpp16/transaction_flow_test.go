@@ -76,6 +76,7 @@ func TestOcpp16TransactionFlow(t *testing.T) {
 		nil,
 		nil,
 		nil,
+		nil,
 		time.Minute,
 		schemas.OcppSchemas)
 

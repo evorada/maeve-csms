@@ -61,6 +61,7 @@ func TestUnlockConnectorResultIsRouted(t *testing.T) {
 		clock.RealClock{},
 		engine,
 		&tenancy.Resolver{Stations: engine},
+		nil,
 		&fakeTariffService{},
 		&fakeCertValidationService{},
 		&fakeChargeStationCertProvider{},

@@ -428,6 +428,9 @@ func checkAuthorization(ctx context.Context, r *http.Request, cs *registry.Charg
 	return result
 }
 
+// checkCertificate reports whether the client certificate of the connection is accepted
+// for the charge station. orgNames are the organisation names that the gateway accepts
+// for a charge station whose tenant has no list of its own.
 func checkCertificate(ctx context.Context, r *http.Request, orgNames []string, cs *registry.ChargeStation) bool {
 	span := trace.SpanFromContext(ctx)
 
@@ -438,11 +441,21 @@ func checkCertificate(ctx context.Context, r *http.Request, orgNames []string, c
 
 	leafCertificate := r.TLS.PeerCertificates[0]
 
-	foundOrg := false
-
 	span.SetAttributes(
 		attribute.StringSlice("auth.organization", leafCertificate.Subject.Organization),
 		attribute.String("auth.common_name", leafCertificate.Subject.CommonName))
+
+	// The list of the tenant takes the place of the list of the gateway. Only a list of a
+	// tenant can be empty on purpose: such a tenant does not want the organisation checked.
+	if cs.HasTenantOrgNames {
+		if len(cs.AcceptedCertOrgNames) == 0 {
+			span.SetAttributes(attribute.Bool("auth.organization_checked", false))
+			return true
+		}
+		orgNames = cs.AcceptedCertOrgNames
+	}
+
+	foundOrg := false
 
 	for _, org := range leafCertificate.Subject.Organization {
 

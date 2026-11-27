@@ -35,8 +35,8 @@ Configuration is defined in TOML.
 | api.auth.dev  | org_id                      | string | "dev" mode: org (UUID) of the caller. Default: `default_org_id` of `[tenancy]` |
 | api.auth.dev  | org_scope                   | string | "dev" mode: "self" or "subtree" (default)                             |
 | api.auth.dev  | perms                       | array of strings | "dev" mode: permissions of the caller. Default: all permissions |
-| api           | org_name                    | string | The organization name to use when issuing client certificates        |
-| ocpp          | heartbeat_interval          | string | Frequency to request charge station heartbeat messages at, e.g. "5m" |
+| api           | org_name                    | string | Deprecated, single-tenant mode only: the organization name in the client certificates that the admin pages issue. With `[tenancy] mode = "multi"` the first `accepted_cert_org_names` of the tenant config is used, and this value only for a charge station whose tenant has none |
+| ocpp          | heartbeat_interval          | string | Frequency to request charge station heartbeat messages at, e.g. "5m". A tenant can set its own with `heartbeat_interval_s` of its config (see below) |
 | ocpp          | ocpp16_enabled              | bool   | Is OCPP 1.6 support enabled, e.g. "true"?                            |
 | ocpp          | ocpp201_enabled             | bool   | Is OCPP 2.0.1 support enabled, e.g. "true"?                          |
 | jobs          | reservation_expiry_interval | string | How often reservations past their expiry date are expired, e.g. "1m" |
@@ -80,6 +80,36 @@ that do not only read) are answered with `403` and the error `tenant_suspended`.
 charge stations (`cpms.connector.command`) stay possible, and the charge stations of the tenant connect,
 authorize and charge as before. The instance of the manager that the console called applies a suspension or a
 resumption at once, any other instance within `[tenancy] cache_ttl`.
+
+#### Tenant config
+
+With `mode = "multi"` the console sends a config document with each tenant. Its JSON Schema is
+[`tenancy/config_schema.json`](../tenancy/config_schema.json), published as `config_schema` in the manifest
+of the control plane; a document that does not fit it is refused (`400`, error `invalid_config`) and nothing
+of the request is stored. The settings apply without a restart: at once on the instance of the manager that
+the console called, within `[tenancy] cache_ttl` on any other instance, and for the gateway after its own
+`--registry-cache-ttl` on top of that.
+
+| Setting                    | Applies to | Default |
+|----------------------------|------------|---------|
+| `default_security_profile` | A charge station that is registered through the API without `securityProfile`: `SP1`, `SP2` or `SP3` (stored as `0`, `1`, `2`). A `securityProfile` in the request always wins | `SP2` (TLS with basic auth) |
+| `accepted_cert_org_names`  | The organisation names (`O`) that the gateway accepts in the client certificate of a charge station of the tenant (OCPP security profile 3, `securityProfile` `2`), instead of its `--org-name`. The first name is the organization of the client certificates that the admin pages issue | empty: the organisation is not checked |
+| `heartbeat_interval_s`     | The interval in the answer to a BootNotification of a charge station of the tenant, 60 to 86400 seconds | `[ocpp] heartbeat_interval` |
+| `default_tariff_ref`       | Stored for the tariffs; not applied yet | none |
+| `onboarding_mode`          | Stored for the onboarding of charge stations that are not registered (`pending_approval` or `preregistered_only`); not applied yet | `pending_approval` |
+
+A tenant that was never sent a config has the defaults, and so has an org that is not a tenant and every org
+in `mode = "single"`.
+
+What that means for client certificates: for a charge station of a tenant the `--org-name` of the gateway no
+longer applies, and a tenant whose `accepted_cert_org_names` is empty or missing (also a tenant without a
+config) has no check of the organisation. Until the certificate of a charge station is bound to its station
+id and to the certificate authority of its tenant, such a tenant accepts, for each of its charge stations with
+OCPP security profile 3, every client certificate that the gateway trusts: a tenant that uses client certificates
+should list its organisation names. The gateway keeps checking against its own `--org-name` list where there
+is no tenant config to follow: in `mode = "single"`, for a charge station whose org is not a tenant, and for a
+tenant whose stored config cannot be read (which is logged as an error; such a tenant has the defaults for
+the other settings).
 
 ```toml
 [api.auth]

@@ -71,7 +71,3 @@ func TestManifestPermissionsAreAllPermissionsButTheOneOfTheControlPlane(t *testi
 	assert.Equal(t, withoutTenantManage, tenancy.ManifestPermissions)
 	assert.Contains(t, tenancy.AllPermissions, tenancy.PermTenantManage)
 }
-
-func TestConfigSchemaIsAJSONSchemaOfAnObject(t *testing.T) {
-	assert.JSONEq(t, `{"type":"object"}`, string(tenancy.ConfigSchema()))
-}

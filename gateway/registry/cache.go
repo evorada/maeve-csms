@@ -163,5 +163,8 @@ func copyOf(cs *ChargeStation) *ChargeStation {
 		return nil
 	}
 	cp := *cs
+	if cs.AcceptedCertOrgNames != nil {
+		cp.AcceptedCertOrgNames = append([]string{}, cs.AcceptedCertOrgNames...)
+	}
 	return &cp
 }

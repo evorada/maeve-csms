@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"golang.org/x/exp/slog"
 	"k8s.io/utils/clock"
 )
 
@@ -51,7 +52,10 @@ type Resolver struct {
 }
 
 type cachedTenant struct {
-	tenant  *store.Tenant
+	tenant *store.Tenant
+	// config is the config document of the tenant as it was read when the tenant was
+	// loaded; nil when the document cannot be read. It goes when the tenant goes.
+	config  *TenantConfig
 	expires time.Time
 }
 
@@ -134,20 +138,27 @@ func (r *Resolver) TenantForStationKey(ctx context.Context, stationKey string) (
 // by org key, so its status can be as old as CacheTTL unless Invalidate was called for
 // the org. The tenant is shared with the cache of the resolver and must not be changed.
 func (r *Resolver) TenantByOrgId(ctx context.Context, orgId string) (*store.Tenant, error) {
+	entry, err := r.entryByOrgId(ctx, orgId)
+	return entry.tenant, err
+}
+
+// entryByOrgId is TenantByOrgId with what is kept next to the tenant. The entry has no
+// tenant where TenantByOrgId returns nil.
+func (r *Resolver) entryByOrgId(ctx context.Context, orgId string) (cachedTenant, error) {
 	if !r.multi() {
-		return nil, nil
+		return cachedTenant{}, nil
 	}
 	orgId = normalizeOrgId(orgId)
 	if orgId == "" {
-		return nil, nil
+		return cachedTenant{}, nil
 	}
-	tenant, err := r.lookupTenant("org:"+orgId, func(tenants store.TenantStore) (*store.Tenant, error) {
+	entry, err := r.lookupEntry("org:"+orgId, func(tenants store.TenantStore) (*store.Tenant, error) {
 		return tenants.GetTenant(ctx, orgId)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("lookup tenant of org %s: %w", orgId, err)
+		return cachedTenant{}, fmt.Errorf("lookup tenant of org %s: %w", orgId, err)
 	}
-	return tenant, nil
+	return entry, nil
 }
 
 // Invalidate drops what the resolver has cached for an org, so that the next lookup
@@ -223,8 +234,15 @@ func (r *Resolver) cacheTTL() time.Duration {
 // lookupTenant returns the tenant that is cached under cacheKey, or loads it from the
 // tenant store and caches it when there is one.
 func (r *Resolver) lookupTenant(cacheKey string, load func(store.TenantStore) (*store.Tenant, error)) (*store.Tenant, error) {
+	entry, err := r.lookupEntry(cacheKey, load)
+	return entry.tenant, err
+}
+
+// lookupEntry is lookupTenant with what is kept next to the tenant: its config is read
+// once, when the tenant is loaded. The entry has no tenant when there is none.
+func (r *Resolver) lookupEntry(cacheKey string, load func(store.TenantStore) (*store.Tenant, error)) (cachedTenant, error) {
 	if r.Tenants == nil {
-		return nil, errors.New("no tenant store")
+		return cachedTenant{}, errors.New("no tenant store")
 	}
 	now := r.now()
 
@@ -237,13 +255,14 @@ func (r *Resolver) lookupTenant(cacheKey string, load func(store.TenantStore) (*
 	}
 	r.mu.Unlock()
 	if found {
-		return entry.tenant, nil
+		return entry, nil
 	}
 
 	tenant, err := load(r.Tenants)
 	if err != nil || tenant == nil {
-		return nil, err
+		return cachedTenant{}, err
 	}
+	entry = cachedTenant{tenant: tenant, config: storedConfig(tenant), expires: now.Add(r.cacheTTL())}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -251,7 +270,20 @@ func (r *Resolver) lookupTenant(cacheKey string, load func(store.TenantStore) (*
 		if r.cache == nil {
 			r.cache = make(map[string]cachedTenant)
 		}
-		r.cache[cacheKey] = cachedTenant{tenant: tenant, expires: now.Add(r.cacheTTL())}
+		r.cache[cacheKey] = entry
 	}
-	return tenant, nil
+	return entry, nil
+}
+
+// storedConfig reads the config document of a tenant. The control plane only stores a
+// document that is valid, so one that cannot be read is an error of the stored data: it
+// is logged and nil is returned, which makes the tenant fall back to the defaults.
+func storedConfig(tenant *store.Tenant) *TenantConfig {
+	cfg, err := ParseConfig(tenant.Config)
+	if err != nil {
+		slog.Error("tenant config cannot be read, falling back to the defaults",
+			"org", tenant.OrgId, "configVersion", tenant.ConfigVersion, "err", err)
+		return nil
+	}
+	return cfg
 }

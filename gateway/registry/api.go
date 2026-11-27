@@ -30,6 +30,13 @@ type ChargeStation struct {
 	SecurityProfile        SecurityProfile
 	Base64SHA256Password   string
 	InvalidUsernameAllowed bool
+	// HasTenantOrgNames says that AcceptedCertOrgNames is the list of the tenant of the
+	// station. Without it the tenant has no list and the list of the gateway applies.
+	HasTenantOrgNames bool
+	// AcceptedCertOrgNames are the organisation names that the tenant of the station
+	// accepts in a client certificate. An empty list of a tenant (HasTenantOrgNames)
+	// means that the organisation of a certificate is not checked.
+	AcceptedCertOrgNames []string
 }
 
 type DeviceRegistry interface {

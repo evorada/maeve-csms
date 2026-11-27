@@ -41,6 +41,12 @@ type StationAuthResponse struct {
 	SecurityProfile        int    `json:"securityProfile"`
 	Base64SHA256Password   string `json:"base64SHA256Password,omitempty"`
 	InvalidUsernameAllowed bool   `json:"invalidUsernameAllowed"`
+	// AcceptedCertOrgNames are the organisation names that the tenant that owns the
+	// station accepts in the client certificate of a station. An empty list means that
+	// the organisation is not checked. It is left out when there is no such list, and
+	// the gateway then checks against its own list: in single mode, for a station whose
+	// org is not a tenant, and when the stored config of the tenant cannot be read.
+	AcceptedCertOrgNames *[]string `json:"acceptedCertOrgNames,omitempty"`
 }
 
 // CertificateResponse is the body of a successful certificate lookup.
@@ -57,6 +63,7 @@ type StatusResponse struct {
 
 type handler struct {
 	resolver *tenancy.Resolver
+	config   *tenancy.ConfigProvider
 	engine   store.Engine
 }
 
@@ -65,7 +72,7 @@ type handler struct {
 //	GET /station-auth?host={host}&stationId={id}
 //	GET /certificates/{certificateHash}
 func NewHandler(resolver *tenancy.Resolver, engine store.Engine) http.Handler {
-	h := &handler{resolver: resolver, engine: engine}
+	h := &handler{resolver: resolver, config: &tenancy.ConfigProvider{Resolver: resolver}, engine: engine}
 
 	r := chi.NewRouter()
 	r.Get("/station-auth", h.stationAuth)
@@ -123,6 +130,16 @@ func (h *handler) stationAuth(w http.ResponseWriter, r *http.Request) {
 	}
 	if res.Tenant != nil {
 		resp.TenantStatus = string(res.Tenant.Status)
+	}
+	// A list that is not known must not be sent as an empty one, which would switch the
+	// check of the organisation off; a list that cannot be looked up fails the request.
+	names, known, err := h.config.AcceptedCertOrgNames(r.Context(), resp.OrgId)
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	if known {
+		resp.AcceptedCertOrgNames = &names
 	}
 	writeJSON(w, http.StatusOK, resp)
 }

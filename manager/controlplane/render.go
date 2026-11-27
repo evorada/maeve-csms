@@ -15,6 +15,7 @@ const (
 	codeUnauthenticated  = "unauthenticated"
 	codeForbidden        = "forbidden"
 	codeInvalidField     = "invalid_field"
+	codeInvalidConfig    = "invalid_config"
 	codeTooLarge         = "too_large"
 	codeNotFound         = "not_found"
 	codeMethodNotAllowed = "method_not_allowed"
@@ -30,6 +31,10 @@ const (
 type invalidField struct {
 	field   string
 	message string
+	// code is the error of the answer; codeInvalidField when empty
+	code string
+	// details are all the fields that are not valid, when there can be more than one
+	details []ErrorDetail
 }
 
 func invalid(field, message string) *invalidField {
@@ -55,12 +60,19 @@ func writeError(w http.ResponseWriter, status int, code string) {
 
 func writeInvalid(w http.ResponseWriter, problem *invalidField) {
 	code := codeInvalidField
-	writeJSON(w, http.StatusBadRequest, Error{
+	if problem.code != "" {
+		code = problem.code
+	}
+	answer := Error{
 		Status:  http.StatusText(http.StatusBadRequest),
 		Error:   &code,
 		Field:   &problem.field,
 		Message: &problem.message,
-	})
+	}
+	if len(problem.details) > 0 {
+		answer.Details = &problem.details
+	}
+	writeJSON(w, http.StatusBadRequest, answer)
 }
 
 // parameterError answers a request whose parameters the generated router could not

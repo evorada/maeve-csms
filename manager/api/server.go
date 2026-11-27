@@ -17,6 +17,8 @@ type Server struct {
 	ocpi    ocpi.Api
 	// scoper says which orgs the caller of a request may reach
 	scoper *tenancy.Scoper
+	// tenantConfig gives the config of the tenant that something is created for
+	tenantConfig *tenancy.ConfigProvider
 }
 
 // ServerOption changes how NewServer sets up the API server.
@@ -57,5 +59,7 @@ func NewServer(engine store.Engine, clock clock.PassiveClock, ocpi ocpi.Api, opt
 	for _, opt := range opts {
 		opt(s)
 	}
+	// the tenants of the scoper, so that both agree on which org is a tenant
+	s.tenantConfig = &tenancy.ConfigProvider{Resolver: s.scoper.Resolver}
 	return s, nil
 }

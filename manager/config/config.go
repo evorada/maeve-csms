@@ -80,6 +80,8 @@ type Config struct {
 	TenantResolver *tenancy.Resolver
 	// TenantScoper says which orgs a caller of the API may reach.
 	TenantScoper *tenancy.Scoper
+	// TenantConfig gives the config of a tenant to the code that applies it.
+	TenantConfig *tenancy.ConfigProvider
 	// AuthVerifier says who the caller of an API request is.
 	AuthVerifier tenancy.Verifier
 }
@@ -311,6 +313,7 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		Clock:        clock.RealClock{},
 		CacheTTL:     tenantCacheTTL,
 	}
+	c.TenantConfig = &tenancy.ConfigProvider{Resolver: c.TenantResolver}
 	c.TenantScoper = &tenancy.Scoper{
 		Mode:         c.Tenancy,
 		Tenants:      c.Storage,
@@ -353,6 +356,7 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 			clock.RealClock{},
 			c.Storage,
 			c.TenantResolver,
+			c.TenantConfig,
 			c.ContractCertValidationService,
 			c.ChargeStationCertProviderService,
 			c.ContractCertProviderService,
@@ -364,6 +368,7 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 			clock.RealClock{},
 			c.Storage,
 			c.TenantResolver,
+			c.TenantConfig,
 			c.TariffService,
 			c.ContractCertValidationService,
 			c.ChargeStationCertProviderService,

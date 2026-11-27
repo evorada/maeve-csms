@@ -689,14 +689,32 @@ func startBroker(t *testing.T, hooks ...mqtt.Hook) (*mqtt.Server, *url.URL) {
 // server, and only when its handler has returned has the gateway left the broker.
 func startGateway(t *testing.T, opts ...server.WebsocketOpt) *httptest.Server {
 	t.Helper()
+	return serveGateway(t, nil, opts...)
+}
+
+// startGatewayTLS is startGateway with TLS. A charge station may connect without a
+// client certificate; one that it sends must be signed by one of clientCAs.
+func startGatewayTLS(t *testing.T, clientCAs *x509.CertPool, opts ...server.WebsocketOpt) *httptest.Server {
+	t.Helper()
+	return serveGateway(t, &tls.Config{ClientCAs: clientCAs, ClientAuth: tls.VerifyClientCertIfGiven}, opts...)
+}
+
+func serveGateway(t *testing.T, tlsConfig *tls.Config, opts ...server.WebsocketOpt) *httptest.Server {
+	t.Helper()
 
 	handler := server.NewWebsocketHandler(opts...)
 	var handling atomic.Int64
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handling.Add(1)
 		defer handling.Add(-1)
 		handler.ServeHTTP(w, r)
 	}))
+	if tlsConfig != nil {
+		srv.TLS = tlsConfig
+		srv.StartTLS()
+	} else {
+		srv.Start()
+	}
 	t.Cleanup(func() {
 		srv.Close()
 		assert.Eventually(t, func() bool { return handling.Load() == 0 }, teardownTimeout, time.Millisecond,
@@ -1191,6 +1209,145 @@ func TestSingleTenantStationKeepsItsTopics(t *testing.T) {
 	assert.Equal(t, brokerEvent{clientId: "cs.1", topic: "cs/in/ocpp2.0.1/cs.1"}, await(hook.published))
 }
 
+// The organisation names that the tenant of a charge station accepts in a client
+// certificate take the place of the list of the gateway (--org-name).
+func TestCertificateOrganizationOfTheTenant(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	const clientId = "CP001"
+	caCert, _, clientCert, clientKey := createTestKeyPairsForOrg(t, clientId, "Charge Co")
+	clientCAs := x509.NewCertPool()
+	clientCAs.AddCert(caCert)
+	certificate := &tls.Certificate{Certificate: [][]byte{clientCert.Raw, caCert.Raw}, PrivateKey: clientKey}
+
+	// the charge station as a manager in multi-tenant mode answers it: with the list of
+	// its tenant, which may be empty
+	ofTenant := func(names ...string) *registry.ChargeStation {
+		return &registry.ChargeStation{
+			ClientId:             clientId,
+			StationKey:           "aaaa." + clientId,
+			OrgKey:               "aaaa",
+			SecurityProfile:      registry.TLSWithClientSideCertificates,
+			HasTenantOrgNames:    true,
+			AcceptedCertOrgNames: names,
+		}
+	}
+	// the charge station as a manager in single-tenant mode answers it: without a list
+	withoutTenant := &registry.ChargeStation{
+		ClientId:        clientId,
+		StationKey:      clientId,
+		SecurityProfile: registry.TLSWithClientSideCertificates,
+	}
+
+	cases := []struct {
+		name            string
+		station         *registry.ChargeStation
+		gatewayOrgNames []string
+		certificate     *tls.Certificate
+		want            int
+	}{
+		{
+			name:            "the tenant accepts the organisation",
+			station:         ofTenant("Charge Co"),
+			gatewayOrgNames: []string{"Thoughtworks"},
+			certificate:     certificate,
+			want:            http.StatusSwitchingProtocols,
+		},
+		{
+			name:            "the tenant accepts it among others",
+			station:         ofTenant("Other", "Charge Co"),
+			gatewayOrgNames: []string{"Thoughtworks"},
+			certificate:     certificate,
+			want:            http.StatusSwitchingProtocols,
+		},
+		{
+			name:            "the tenant accepts another organisation",
+			station:         ofTenant("Other"),
+			gatewayOrgNames: []string{"Thoughtworks"},
+			certificate:     certificate,
+			want:            http.StatusUnauthorized,
+		},
+		{
+			name:            "the list of the gateway adds nothing to the list of the tenant",
+			station:         ofTenant("Other"),
+			gatewayOrgNames: []string{"Charge Co"},
+			certificate:     certificate,
+			want:            http.StatusUnauthorized,
+		},
+		{
+			name:            "a tenant without names has no check of the organisation",
+			station:         ofTenant(),
+			gatewayOrgNames: []string{"Thoughtworks"},
+			certificate:     certificate,
+			want:            http.StatusSwitchingProtocols,
+		},
+		{
+			name:            "a tenant without names still needs a client certificate",
+			station:         ofTenant(),
+			gatewayOrgNames: []string{"Thoughtworks"},
+			certificate:     nil,
+			want:            http.StatusUnauthorized,
+		},
+		{
+			name:            "without a list of a tenant the list of the gateway accepts the organisation",
+			station:         withoutTenant,
+			gatewayOrgNames: []string{"Thoughtworks", "Charge Co"},
+			certificate:     certificate,
+			want:            http.StatusSwitchingProtocols,
+		},
+		{
+			name:            "without a list of a tenant the list of the gateway refuses the organisation",
+			station:         withoutTenant,
+			gatewayOrgNames: []string{"Thoughtworks"},
+			certificate:     certificate,
+			want:            http.StatusUnauthorized,
+		},
+		{
+			name:            "without a list of a tenant an empty list of the gateway accepts nothing",
+			station:         withoutTenant,
+			gatewayOrgNames: nil,
+			certificate:     certificate,
+			want:            http.StatusUnauthorized,
+		},
+	}
+
+	_, addr := startBroker(t)
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			reg := registry.NewMockRegistry()
+			reg.Add(testHost, tc.station)
+			srv := startGatewayTLS(t, clientCAs,
+				server.WithMqttBrokerUrl(addr),
+				server.WithMqttTopicPrefix("cs"),
+				server.WithDeviceRegistry(reg),
+				server.WithOrgNames(tc.gatewayOrgNames))
+
+			rootCAs := x509.NewCertPool()
+			rootCAs.AddCert(srv.Certificate())
+			tlsConfig := &tls.Config{RootCAs: rootCAs}
+			if tc.certificate != nil {
+				tlsConfig.Certificates = []tls.Certificate{*tc.certificate}
+			}
+			transport := &http.Transport{TLSClientConfig: tlsConfig}
+			t.Cleanup(transport.CloseIdleConnections)
+
+			conn, resp, err := websocket.Dial(ctx, fmt.Sprintf("%s/ws/%s", srv.URL, clientId), &websocket.DialOptions{
+				HTTPClient:   &http.Client{Transport: transport},
+				Subprotocols: []string{"ocpp2.0.1"},
+			})
+			if err == nil {
+				defer func() {
+					_ = conn.Close(websocket.StatusNormalClosure, "OK")
+				}()
+			}
+			require.NotNil(t, resp, "no answer from the gateway: %v", err)
+			assert.Equal(t, tc.want, resp.StatusCode)
+		})
+	}
+}
+
 //func TestTlsConnectionWithCertificateAuthMismatchedName(t *testing.T) {
 //	//defer goleak.VerifyNone(t)
 //
@@ -1513,6 +1670,12 @@ func TestSingleTenantStationKeepsItsTopics(t *testing.T) {
 //		_ = conn.Close(websocket.StatusNormalClosure, "Something went wrong")
 //	}
 func createTestKeyPairs(t *testing.T, clientId string) (*x509.Certificate, *ecdsa.PrivateKey, *x509.Certificate, *ecdsa.PrivateKey) {
+	return createTestKeyPairsForOrg(t, clientId, "Thoughtworks")
+}
+
+// createTestKeyPairsForOrg returns a CA and a client certificate of the organisation
+// for the charge station, with their keys.
+func createTestKeyPairsForOrg(t *testing.T, clientId, organization string) (*x509.Certificate, *ecdsa.PrivateKey, *x509.Certificate, *ecdsa.PrivateKey) {
 	caKeyPair, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatalf("generating CA key pair: %v", err)
@@ -1560,7 +1723,7 @@ func createTestKeyPairs(t *testing.T, clientId string) (*x509.Certificate, *ecds
 		SerialNumber: clientSerialNumber,
 		Subject: pkix.Name{
 			CommonName:   clientId,
-			Organization: []string{"Thoughtworks"},
+			Organization: []string{organization},
 		},
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},

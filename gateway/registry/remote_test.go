@@ -113,6 +113,51 @@ func TestLookupChargeStationInSingleTenantMode(t *testing.T) {
 	assert.Equal(t, "/_internal/v1/station-auth", path)
 }
 
+// The organisation names of the tenant are only taken from an answer that has them: an
+// answer without the list, or with null, leaves the check to the list of the gateway.
+func TestLookupChargeStationReadsTheCertOrgNamesOfTheTenant(t *testing.T) {
+	const prefix = `{"orgId":"0193b2c4-0000-7000-8000-000000000001","orgKey":"aaaa","stationKey":"aaaa.cs001","securityProfile":2,"invalidUsernameAllowed":false`
+
+	for name, tc := range map[string]struct {
+		body      string
+		wantList  bool
+		wantNames []string
+	}{
+		"names":          {body: prefix + `,"acceptedCertOrgNames":["Charge Co","Other"]}`, wantList: true, wantNames: []string{"Charge Co", "Other"}},
+		"an empty list":  {body: prefix + `,"acceptedCertOrgNames":[]}`, wantList: true, wantNames: []string{}},
+		"no list":        {body: prefix + `}`},
+		"null":           {body: prefix + `,"acceptedCertOrgNames":null}`},
+		"in single mode": {body: `{"orgId":"0193b2c4-0000-7000-8000-000000000001","stationKey":"cs001","securityProfile":2,"invalidUsernameAllowed":false}`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			stub := newManagerStub(t, http.StatusOK, tc.body)
+			reg := registry.RemoteRegistry{ManagerApiAddr: stub.URL}
+
+			got, err := reg.LookupChargeStation(context.Background(), "a.example", "cs001")
+			require.NoError(t, err)
+			require.NotNil(t, got)
+			assert.Equal(t, tc.wantList, got.HasTenantOrgNames)
+			assert.Equal(t, tc.wantNames, got.AcceptedCertOrgNames)
+		})
+	}
+
+	// a list that cannot be read is not taken for an empty one
+	for name, member := range map[string]string{
+		"a text":           `"Charge Co"`,
+		"a name of a kind": `["Charge Co",7]`,
+		"an object":        `{}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			stub := newManagerStub(t, http.StatusOK, prefix+`,"acceptedCertOrgNames":`+member+`}`)
+			reg := registry.RemoteRegistry{ManagerApiAddr: stub.URL}
+
+			got, err := reg.LookupChargeStation(context.Background(), "a.example", "cs001")
+			assert.Error(t, err)
+			assert.Nil(t, got)
+		})
+	}
+}
+
 func TestLookupChargeStationEscapesTheQueryParameters(t *testing.T) {
 	stub := newManagerStub(t, http.StatusNotFound, `{"status":"Not Found","error":"unknown_station"}`)
 

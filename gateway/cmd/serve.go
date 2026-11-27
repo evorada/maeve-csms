@@ -234,7 +234,8 @@ func init() {
 	serveCmd.Flags().StringArrayVarP(&tlsTrustCert, "tls-trust-cert", "t", []string{},
 		"A file that contains a PEM encoded certificate to add to the TLS trust store")
 	serveCmd.Flags().StringSliceVarP(&orgNames, "org-name", "o", []string{"Thoughtworks"},
-		"A comma-separated list of organisation names that are valid in client certificates")
+		"A comma-separated list of organisation names that are valid in client certificates. "+
+			"Deprecated: single-tenant mode only. It is only used for a charge station whose tenant has no list of its own (accepted_cert_org_names of the tenant config)")
 	serveCmd.Flags().StringVarP(&managerApiAddr, "manager-api-addr", "r", "http://127.0.0.1:9412",
 		"The internal address of the CSMS manager (its [api] internal_addr, not the public API), e.g. http://127.0.0.1:9412")
 	serveCmd.Flags().DurationVar(&registryCacheTTL, "registry-cache-ttl", 10*time.Second,

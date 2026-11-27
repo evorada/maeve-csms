@@ -73,6 +73,7 @@ func TestAllRouteSchemasExist(t *testing.T) {
 		nil,
 		nil,
 		nil,
+		nil,
 		time.Minute,
 		schemas.OcppSchemas).(*handlers.Router)
 	require.True(t, ok, "expected NewRouter to return a *handlers.Router")
@@ -136,6 +137,7 @@ func TestMeterValuesCallIsStoredThroughTheRouter(t *testing.T) {
 		clock.RealClock{},
 		engine,
 		&tenancy.Resolver{Stations: engine},
+		nil,
 		nil,
 		nil,
 		nil,
@@ -229,6 +231,7 @@ func TestChangeConfigurationCallErrorRejectsSettingThroughTheRouter(t *testing.T
 		nil,
 		nil,
 		nil,
+		nil,
 		time.Minute,
 		schemas.OcppSchemas)
 
@@ -269,6 +272,7 @@ func TestTriggerMessageCallErrorStoresStatusThroughTheRouter(t *testing.T) {
 		clock.RealClock{},
 		engine,
 		&tenancy.Resolver{Stations: engine},
+		nil,
 		nil,
 		nil,
 		nil,

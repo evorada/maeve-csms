@@ -19,7 +19,11 @@ type ApiSettingsConfig struct {
 	Host          string `mapstructure:"host,omitempty" toml:"host,omitempty"`
 	WsPort        int    `mapstructure:"ws_port,omitempty" toml:"ws_port,omitempty"`
 	WssPort       int    `mapstructure:"wss_port,omitempty" toml:"wss_port,omitempty"`
-	OrgName       string `mapstructure:"org_name,omitempty" toml:"org_name,omitempty"`
+	// OrgName is the organization name of the client certificates that the admin pages
+	// issue. It is deprecated and for single-tenant mode only: in multi mode the
+	// accepted certificate organisation names of the tenant config are used, and this
+	// is only the fallback for a charge station whose tenant has none.
+	OrgName string `mapstructure:"org_name,omitempty" toml:"org_name,omitempty"`
 	// Auth says how the callers of /api/v0 are authenticated.
 	Auth AuthConfig `mapstructure:"auth" toml:"auth"`
 }
