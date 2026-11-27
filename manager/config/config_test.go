@@ -5,12 +5,15 @@ package config_test
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	clone "github.com/huandu/go-clone/generic"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/config"
+	"github.com/thoughtworks/maeve-csms/manager/jobs"
 )
 
 func TestConfigure(t *testing.T) {
@@ -256,4 +259,45 @@ func TestConfigureKwHTariffService(t *testing.T) {
 	settings, err := config.Configure(context.TODO(), cfg)
 	require.NoError(t, err)
 	require.NotNil(t, settings.ContractCertProviderService)
+}
+
+func TestConfigureReservationExpiryInterval(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		cfg := clone.Clone(&config.DefaultConfig)
+		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
+
+		settings, err := config.Configure(context.TODO(), cfg)
+		require.NoError(t, err)
+		assert.Equal(t, time.Minute, settings.ReservationExpiryInterval)
+		assert.IsType(t, &jobs.LocalRunner{}, settings.JobRunner)
+	})
+
+	t.Run("overridden", func(t *testing.T) {
+		cfg := clone.Clone(&config.DefaultConfig)
+		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
+		err := cfg.Load(strings.NewReader("[jobs]\nreservation_expiry_interval = \"90s\"\n"))
+		require.NoError(t, err)
+
+		settings, err := config.Configure(context.TODO(), cfg)
+		require.NoError(t, err)
+		assert.Equal(t, 90*time.Second, settings.ReservationExpiryInterval)
+	})
+
+	for name, interval := range map[string]string{
+		"not a duration": "every minute",
+		"no unit":        "60",
+		"zero":           "0s",
+		"negative":       "-1m",
+		"empty":          "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := clone.Clone(&config.DefaultConfig)
+			cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
+			cfg.Jobs.ReservationExpiryInterval = interval
+
+			settings, err := config.Configure(context.TODO(), cfg)
+			require.Error(t, err)
+			assert.Nil(t, settings)
+		})
+	}
 }

@@ -167,6 +167,10 @@ func (s *Store) AddChargeStationEvent(ctx context.Context, chargeStationId strin
 	if event.VariableId != nil {
 		variableId = pgtype.Text{String: *event.VariableId, Valid: true}
 	}
+	category := event.Category
+	if category == "" {
+		category = store.ChargeStationEventCategoryDevice
+	}
 
 	id, err := s.writeQueries().InsertChargeStationEvent(ctx, InsertChargeStationEventParams{
 		ChargeStationID: chargeStationId,
@@ -178,6 +182,7 @@ func (s *Store) AddChargeStationEvent(ctx context.Context, chargeStationId strin
 		ComponentID:     componentId,
 		VariableID:      variableId,
 		Cleared:         event.Cleared,
+		Category:        string(category),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to insert charge station event: %w", err)
@@ -208,6 +213,7 @@ func (s *Store) ListChargeStationEvents(ctx context.Context, chargeStationId str
 			ChargeStationId: row.ChargeStationID,
 			EventType:       row.EventType,
 			Cleared:         row.Cleared,
+			Category:        store.ChargeStationEventCategory(row.Category),
 		}
 		if row.Timestamp.Valid {
 			result.Timestamp = row.Timestamp.Time

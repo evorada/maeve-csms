@@ -23,7 +23,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SetDisplayMessageRequest'
+              $ref: '../schemas/schemas.yaml#/components/schemas/SetDisplayMessageRequest'
       responses:
         '202':
           description: Accepted - message request queued
@@ -32,13 +32,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/display-message/{messageId}:
     delete:
       summary: Clear display message from charge station
@@ -69,13 +69,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/display-messages:
     get:
       summary: Get display messages from charge station
@@ -99,12 +99,12 @@ paths:
         in: query
         description: Filter messages by charging state
         schema:
-          $ref: '#/components/schemas/MessageStateEnum'
+          $ref: '../schemas/schemas.yaml#/components/schemas/MessageStateEnum'
       - name: priority
         in: query
         description: Filter messages by priority
         schema:
-          $ref: '#/components/schemas/MessagePriorityEnum'
+          $ref: '../schemas/schemas.yaml#/components/schemas/MessagePriorityEnum'
       responses:
         '202':
           description: Accepted - get request queued
@@ -113,10 +113,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'

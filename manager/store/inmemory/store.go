@@ -41,6 +41,7 @@ type Store struct {
 	remoteStopTransactionRequests    map[string]*store.RemoteStopTransactionRequest
 	tokens                           map[string]*store.Token
 	transactions                     map[string]*store.Transaction
+	ocpp16TransactionSeq             int
 	certificates                     map[string]string
 	registrations                    map[string]*store.OcpiRegistration
 	partyDetails                     map[string]*store.OcpiParty
@@ -560,6 +561,72 @@ func (s *Store) EndTransaction(_ context.Context, chargeStationId, transactionId
 		transaction.EndedSeqNo = seqNo
 	}
 	return nil
+}
+
+// UpdateTransactionDetails merges the non-nil fields of details into the stored
+// transaction. It returns an error wrapping store.ErrNotFound if the transaction does
+// not exist.
+func (s *Store) UpdateTransactionDetails(_ context.Context, chargeStationId, transactionId string, details *store.TransactionDetails) error {
+	s.Lock()
+	defer s.Unlock()
+	transaction := s.getTransaction(chargeStationId, transactionId)
+	if transaction == nil {
+		return fmt.Errorf("transaction %s/%s: %w", chargeStationId, transactionId, store.ErrNotFound)
+	}
+	if details == nil {
+		return nil
+	}
+
+	// the values are copied so that the stored transaction does not alias the caller's pointers
+	if details.EvseId != nil {
+		transaction.EvseId = copyOf(details.EvseId)
+	}
+	if details.ConnectorId != nil {
+		transaction.ConnectorId = copyOf(details.ConnectorId)
+	}
+	if details.StartedAt != nil {
+		transaction.StartedAt = copyOf(details.StartedAt)
+	}
+	if details.StoppedAt != nil {
+		transaction.StoppedAt = copyOf(details.StoppedAt)
+	}
+	if details.MeterStartWh != nil {
+		transaction.MeterStartWh = copyOf(details.MeterStartWh)
+	}
+	if details.MeterStopWh != nil {
+		transaction.MeterStopWh = copyOf(details.MeterStopWh)
+	}
+	if details.EnergyWh != nil {
+		transaction.EnergyWh = copyOf(details.EnergyWh)
+	}
+	if details.StopReason != nil {
+		transaction.StopReason = copyOf(details.StopReason)
+	}
+	if details.IdTokenGroup != nil {
+		transaction.IdTokenGroup = copyOf(details.IdTokenGroup)
+	}
+	if details.ReservationId != nil {
+		transaction.ReservationId = copyOf(details.ReservationId)
+	}
+	return nil
+}
+
+// copyOf returns a pointer to a copy of the value that p points to.
+func copyOf[T any](p *T) *T {
+	v := *p
+	return &v
+}
+
+// NextOcpp16TransactionId returns the next CSMS-assigned OCPP 1.6 transaction id
+// (1..2147483647, wrapping).
+func (s *Store) NextOcpp16TransactionId(_ context.Context) (int, error) {
+	s.Lock()
+	defer s.Unlock()
+	if s.ocpp16TransactionSeq >= math.MaxInt32 {
+		s.ocpp16TransactionSeq = 0
+	}
+	s.ocpp16TransactionSeq++
+	return s.ocpp16TransactionSeq, nil
 }
 
 func (s *Store) ListTransactionsForChargeStation(_ context.Context, chargeStationId, status string, startDate, endDate *time.Time, limit, offset int) ([]*store.Transaction, int64, error) {
@@ -1592,6 +1659,9 @@ func (s *Store) AddChargeStationEvent(_ context.Context, chargeStationId string,
 	event.CreatedAt = s.clock.Now()
 
 	eventCopy := *event
+	if eventCopy.Category == "" {
+		eventCopy.Category = store.ChargeStationEventCategoryDevice
+	}
 	s.chargeStationEvents[chargeStationId] = append(s.chargeStationEvents[chargeStationId], &eventCopy)
 	return nil
 }

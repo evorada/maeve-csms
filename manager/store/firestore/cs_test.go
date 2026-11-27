@@ -120,6 +120,75 @@ func TestUpdateAndLookupChargeStationSettingsWithUpdatedSettings(t *testing.T) {
 	assert.Equal(t, store.ChargeStationSettingStatusAccepted, got.Settings["baz"].Status)
 }
 
+func TestUpdateAndLookupChargeStationSettingsKeepsSendAfter(t *testing.T) {
+	defer cleanupAllCollections(t, "myproject")
+
+	ctx := context.Background()
+
+	settingsStore, err := firestore.NewStore(ctx, "myproject", clock.RealClock{})
+	require.NoError(t, err)
+
+	// Firestore timestamps have microsecond precision
+	sendAfter := time.Date(2026, 11, 26, 10, 0, 0, 123456000, time.UTC)
+
+	err = settingsStore.UpdateChargeStationSettings(ctx, "cs001", &store.ChargeStationSettings{
+		Settings: map[string]*store.ChargeStationSetting{
+			"foo": {Value: "bar", Status: store.ChargeStationSettingStatusPending, SendAfter: sendAfter},
+		},
+	})
+	require.NoError(t, err)
+
+	got, err := settingsStore.LookupChargeStationSettings(ctx, "cs001")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Contains(t, got.Settings, "foo")
+	assert.True(t, sendAfter.Equal(got.Settings["foo"].SendAfter), "got %s", got.Settings["foo"].SendAfter)
+
+	listed, err := settingsStore.ListChargeStationSettings(ctx, 10, "")
+	require.NoError(t, err)
+	require.Len(t, listed, 1)
+	require.Contains(t, listed[0].Settings, "foo")
+	assert.True(t, sendAfter.Equal(listed[0].Settings["foo"].SendAfter), "got %s", listed[0].Settings["foo"].SendAfter)
+}
+
+func TestUpdateChargeStationSettingsMergesKeys(t *testing.T) {
+	defer cleanupAllCollections(t, "myproject")
+
+	ctx := context.Background()
+
+	settingsStore, err := firestore.NewStore(ctx, "myproject", clock.RealClock{})
+	require.NoError(t, err)
+
+	sendAfter := time.Date(2026, 11, 26, 10, 0, 0, 0, time.UTC)
+	retryAfter := sendAfter.Add(5 * time.Minute)
+
+	err = settingsStore.UpdateChargeStationSettings(ctx, "cs001", &store.ChargeStationSettings{
+		Settings: map[string]*store.ChargeStationSetting{
+			"A": {Value: "1", Status: store.ChargeStationSettingStatusPending, SendAfter: sendAfter},
+			"B": {Value: "2", Status: store.ChargeStationSettingStatusPending, SendAfter: sendAfter},
+		},
+	})
+	require.NoError(t, err)
+
+	// update only A: B must be kept
+	err = settingsStore.UpdateChargeStationSettings(ctx, "cs001", &store.ChargeStationSettings{
+		Settings: map[string]*store.ChargeStationSetting{
+			"A": {Value: "1", Status: store.ChargeStationSettingStatusAccepted, SendAfter: retryAfter},
+		},
+	})
+	require.NoError(t, err)
+
+	got, err := settingsStore.LookupChargeStationSettings(ctx, "cs001")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Len(t, got.Settings, 2)
+	assert.Equal(t, store.ChargeStationSettingStatusAccepted, got.Settings["A"].Status)
+	assert.True(t, retryAfter.Equal(got.Settings["A"].SendAfter), "got %s", got.Settings["A"].SendAfter)
+	assert.Equal(t, store.ChargeStationSettingStatusPending, got.Settings["B"].Status)
+	assert.Equal(t, "2", got.Settings["B"].Value)
+	assert.True(t, sendAfter.Equal(got.Settings["B"].SendAfter), "got %s", got.Settings["B"].SendAfter)
+}
+
 func TestListChargeStationSettings(t *testing.T) {
 	defer cleanupAllCollections(t, "myproject")
 

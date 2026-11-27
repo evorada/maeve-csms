@@ -19,6 +19,8 @@ type Querier interface {
 	CreateOrUpdateDisplayMessage(ctx context.Context, arg CreateOrUpdateDisplayMessageParams) error
 	CreateReservation(ctx context.Context, arg CreateReservationParams) error
 	CreateToken(ctx context.Context, arg CreateTokenParams) (Token, error)
+	// CreateTransaction returns no row when the transaction already exists, instead of
+	// raising a unique violation that would abort an enclosing database transaction.
 	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
 	DeleteAllDisplayMessages(ctx context.Context, chargeStationID string) error
 	DeleteAllLocalAuthListEntries(ctx context.Context, chargeStationID string) error
@@ -84,7 +86,7 @@ type Querier interface {
 	GetLocation(ctx context.Context, id string) (Location, error)
 	GetLogRequest(ctx context.Context, chargeStationID string) (LogRequest, error)
 	GetLogStatus(ctx context.Context, chargeStationID string) (LogStatus, error)
-	GetMeterValues(ctx context.Context, transactionID string) ([]TransactionMeterValue, error)
+	GetMeterValues(ctx context.Context, arg GetMeterValuesParams) ([]TransactionMeterValue, error)
 	GetMeterValuesByStationAndEvse(ctx context.Context, arg GetMeterValuesByStationAndEvseParams) ([]MeterValue, error)
 	// Party Details (by role + country_code + party_id)
 	GetOcpiParty(ctx context.Context, arg GetOcpiPartyParams) (OcpiParty, error)
@@ -97,7 +99,8 @@ type Querier interface {
 	GetReservationByConnector(ctx context.Context, arg GetReservationByConnectorParams) (Reservation, error)
 	GetResetRequest(ctx context.Context, chargeStationID string) (ResetRequest, error)
 	GetToken(ctx context.Context, uid string) (Token, error)
-	GetTransaction(ctx context.Context, id string) (Transaction, error)
+	// Transactions are identified by (charge_station_id, id): ids are only unique per station.
+	GetTransaction(ctx context.Context, arg GetTransactionParams) (Transaction, error)
 	GetUnlockConnectorRequest(ctx context.Context, chargeStationID string) (UnlockConnectorRequest, error)
 	GetVariableMonitoring(ctx context.Context, arg GetVariableMonitoringParams) (VariableMonitoring, error)
 	InsertChargeStationEvent(ctx context.Context, arg InsertChargeStationEventParams) (int32, error)
@@ -132,6 +135,8 @@ type Querier interface {
 	ListVariableMonitoring(ctx context.Context, arg ListVariableMonitoringParams) ([]VariableMonitoring, error)
 	LookupChargeStationCertificateDeletion(ctx context.Context, chargeStationID string) (ChargeStationCertificateDeletion, error)
 	LookupChargeStationCertificateQuery(ctx context.Context, chargeStationID string) (ChargeStationCertificateQuery, error)
+	NextOcpp16TransactionId(ctx context.Context) (int32, error)
+	// The optional filters are nullable parameters: NULL means "no filter".
 	QueryMeterValues(ctx context.Context, arg QueryMeterValuesParams) ([]MeterValue, error)
 	SetCertificate(ctx context.Context, arg SetCertificateParams) (Certificate, error)
 	SetChargeStationAuth(ctx context.Context, arg SetChargeStationAuthParams) (ChargeStation, error)
@@ -158,6 +163,7 @@ type Querier interface {
 	UpdateReservationStatus(ctx context.Context, arg UpdateReservationStatusParams) error
 	UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token, error)
 	UpdateTransaction(ctx context.Context, arg UpdateTransactionParams) (Transaction, error)
+	UpdateTransactionDetails(ctx context.Context, arg UpdateTransactionDetailsParams) (int64, error)
 	UpsertChargeStationStatus(ctx context.Context, arg UpsertChargeStationStatusParams) error
 	UpsertChargingProfile(ctx context.Context, arg UpsertChargingProfileParams) error
 	UpsertConnectorStatus(ctx context.Context, arg UpsertConnectorStatusParams) error

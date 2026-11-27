@@ -12,7 +12,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Registration'
+              $ref: '../schemas/schemas.yaml#/components/schemas/Registration'
       responses:
         '201':
           description: Created
@@ -21,4 +21,4 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'

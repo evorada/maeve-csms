@@ -97,6 +97,9 @@ func TestParseConfig(t *testing.T) {
 		TariffService: config.TariffServiceConfig{
 			Type: "kwh",
 		},
+		Jobs: config.JobsConfig{
+			ReservationExpiryInterval: "30s",
+		},
 	}
 
 	assert.Equal(t, want, cfg)

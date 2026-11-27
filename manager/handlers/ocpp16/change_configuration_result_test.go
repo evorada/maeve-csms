@@ -9,10 +9,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	basehandlers "github.com/thoughtworks/maeve-csms/manager/handlers"
 	handlers "github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"github.com/thoughtworks/maeve-csms/manager/transport"
+	"k8s.io/utils/clock"
 )
 
 // Mock for ChargeStationSettingsStore
@@ -379,4 +383,107 @@ func TestChangeConfigurationHandlerStoreLookupError(t *testing.T) {
 
 	mockStore.AssertExpectations(t)
 	mockCallMaker.AssertExpectations(t)
+}
+
+func changeConfigurationCallError() *basehandlers.CallError {
+	return &basehandlers.CallError{
+		MessageId:        "msg-001",
+		Action:           "ChangeConfiguration",
+		ErrorCode:        transport.ErrorNotSupported,
+		ErrorDescription: "configuration key is not supported",
+	}
+}
+
+func TestChangeConfigurationHandlerCallErrorRejectsSetting(t *testing.T) {
+	ctx := context.Background()
+	engine := inmemory.NewStore(clock.RealClock{})
+	mockCallMaker := new(MockCallMaker)
+
+	handler := handlers.ChangeConfigurationResultHandler{
+		SettingsStore: engine,
+		CallMaker:     mockCallMaker,
+	}
+
+	err := engine.UpdateChargeStationSettings(ctx, "cs001", &store.ChargeStationSettings{
+		Settings: map[string]*store.ChargeStationSetting{
+			"UnknownKey":        {Value: "value", Status: store.ChargeStationSettingStatusPending},
+			"HeartbeatInterval": {Value: "300", Status: store.ChargeStationSettingStatusPending},
+		},
+	})
+	require.NoError(t, err)
+
+	request := &types.ChangeConfigurationJson{
+		Key:   "UnknownKey",
+		Value: "value",
+	}
+
+	err = handler.HandleCallError(ctx, "cs001", request, changeConfigurationCallError(), nil)
+	require.NoError(t, err)
+
+	settings, err := engine.LookupChargeStationSettings(ctx, "cs001")
+	require.NoError(t, err)
+	require.Len(t, settings.Settings, 2)
+	assert.Equal(t, store.ChargeStationSettingStatusRejected, settings.Settings["UnknownKey"].Status)
+	assert.Equal(t, "value", settings.Settings["UnknownKey"].Value)
+	// the other setting is still waiting for its own answer
+	assert.Equal(t, store.ChargeStationSettingStatusPending, settings.Settings["HeartbeatInterval"].Status)
+
+	mockCallMaker.AssertNotCalled(t, "Send", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestChangeConfigurationHandlerCallErrorTriggersBootWhenAllDone(t *testing.T) {
+	ctx := context.Background()
+	engine := inmemory.NewStore(clock.RealClock{})
+	mockCallMaker := new(MockCallMaker)
+
+	handler := handlers.ChangeConfigurationResultHandler{
+		SettingsStore: engine,
+		CallMaker:     mockCallMaker,
+	}
+
+	err := engine.UpdateChargeStationSettings(ctx, "cs001", &store.ChargeStationSettings{
+		Settings: map[string]*store.ChargeStationSetting{
+			"UnknownKey":            {Value: "value", Status: store.ChargeStationSettingStatusPending},
+			"WebSocketPingInterval": {Value: "60", Status: store.ChargeStationSettingStatusRebootRequired},
+		},
+	})
+	require.NoError(t, err)
+
+	// the refused setting was the last one waiting for an answer, so the reboot
+	// that the other setting needs is triggered just like for a rejected result
+	mockCallMaker.On("Send", mock.Anything, "cs001", mock.MatchedBy(func(req *types.TriggerMessageJson) bool {
+		return req.RequestedMessage == types.TriggerMessageJsonRequestedMessageBootNotification
+	})).Return(nil)
+
+	request := &types.ChangeConfigurationJson{
+		Key:   "UnknownKey",
+		Value: "value",
+	}
+
+	err = handler.HandleCallError(ctx, "cs001", request, changeConfigurationCallError(), nil)
+	require.NoError(t, err)
+
+	settings, err := engine.LookupChargeStationSettings(ctx, "cs001")
+	require.NoError(t, err)
+	assert.Equal(t, store.ChargeStationSettingStatusRejected, settings.Settings["UnknownKey"].Status)
+
+	mockCallMaker.AssertExpectations(t)
+}
+
+func TestChangeConfigurationHandlerCallErrorWithoutRequest(t *testing.T) {
+	mockStore := new(MockSettingsStore)
+	mockCallMaker := new(MockCallMaker)
+
+	handler := handlers.ChangeConfigurationResultHandler{
+		SettingsStore: mockStore,
+		CallMaker:     mockCallMaker,
+	}
+
+	// the router passes a nil request when the payload of the original call cannot be decoded
+	err := handler.HandleCallError(context.Background(), "cs001", nil, changeConfigurationCallError(), nil)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "ChangeConfiguration msg-001: NotSupported: configuration key is not supported")
+
+	mockStore.AssertNotCalled(t, "UpdateChargeStationSettings", mock.Anything, mock.Anything, mock.Anything)
+	mockCallMaker.AssertNotCalled(t, "Send", mock.Anything, mock.Anything, mock.Anything)
 }

@@ -23,7 +23,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DiagnosticsRequest'
+              $ref: '../schemas/schemas.yaml#/components/schemas/DiagnosticsRequest'
       responses:
         '202':
           description: Accepted - diagnostics request initiated
@@ -32,7 +32,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/diagnostics/status:
     get:
       summary: Get diagnostics upload status
@@ -55,13 +55,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DiagnosticsStatus'
+                $ref: '../schemas/schemas.yaml#/components/schemas/DiagnosticsStatus'
         '404':
           description: Unknown charge station
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/logs:
     post:
       summary: Request log upload from charge station
@@ -83,7 +83,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LogRequest'
+              $ref: '../schemas/schemas.yaml#/components/schemas/LogRequest'
       responses:
         '202':
           description: Accepted - log request initiated
@@ -92,7 +92,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/logs/status:
     get:
       summary: Get log upload status
@@ -121,10 +121,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LogStatus'
+                $ref: '../schemas/schemas.yaml#/components/schemas/LogStatus'
         '404':
           description: Unknown charge station
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'

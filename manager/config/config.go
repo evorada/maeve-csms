@@ -14,6 +14,7 @@ import (
 	"github.com/subnova/slog-exporter/slogtrace"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp201"
+	"github.com/thoughtworks/maeve-csms/manager/jobs"
 	"github.com/thoughtworks/maeve-csms/manager/ocpi"
 	"github.com/thoughtworks/maeve-csms/manager/schemas"
 	"github.com/thoughtworks/maeve-csms/manager/services"
@@ -60,6 +61,8 @@ type Config struct {
 	ChargeStationCertProviderService services.ChargeStationCertificateProvider
 	TariffService                    services.TariffService
 	OcpiApi                          ocpi.Api
+	JobRunner                        jobs.Runner
+	ReservationExpiryInterval        time.Duration
 }
 
 func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
@@ -73,6 +76,14 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		return nil, fmt.Errorf("failed to parse heartbeat interval: %s", err)
 	}
 
+	reservationExpiryInterval, err := time.ParseDuration(cfg.Jobs.ReservationExpiryInterval)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse reservation expiry interval: %s", err)
+	}
+	if reservationExpiryInterval <= 0 {
+		return nil, fmt.Errorf("reservation expiry interval must be positive: %s", cfg.Jobs.ReservationExpiryInterval)
+	}
+
 	c = &Config{
 		Api: ApiSettings{
 			Addr:    cfg.Api.Addr,
@@ -81,6 +92,7 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 			WssPort: cfg.Api.WssPort,
 			OrgName: cfg.Api.OrgName,
 		},
+		ReservationExpiryInterval: reservationExpiryInterval,
 	}
 
 	switch cfg.Observability.LogFormat {
@@ -103,6 +115,8 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 	}
 
 	c.Tracer = c.TracerProvider.Tracer("manager")
+
+	c.JobRunner = &jobs.LocalRunner{Clock: clock.RealClock{}, Tracer: c.Tracer}
 
 	c.Storage, err = getStorage(ctx, &cfg.Storage)
 	if err != nil {

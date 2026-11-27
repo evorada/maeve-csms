@@ -23,26 +23,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SetVariableMonitoringRequest'
+              $ref: '../schemas/schemas.yaml#/components/schemas/SetVariableMonitoringRequest'
       responses:
         '202':
           description: Accepted - monitoring configuration initiated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SetVariableMonitoringResponse'
+                $ref: '../schemas/schemas.yaml#/components/schemas/SetVariableMonitoringResponse'
         '404':
           description: Unknown charge station
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/monitoring/{monitorId}:
     delete:
       summary: Clear variable monitoring
@@ -73,13 +73,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/monitoring/base:
     post:
       summary: Set monitoring base
@@ -101,7 +101,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SetMonitoringBaseRequest'
+              $ref: '../schemas/schemas.yaml#/components/schemas/SetMonitoringBaseRequest'
       responses:
         '202':
           description: Accepted - monitoring base configuration initiated
@@ -110,13 +110,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/monitoring/level:
     post:
       summary: Set monitoring level
@@ -140,7 +140,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SetMonitoringLevelRequest'
+              $ref: '../schemas/schemas.yaml#/components/schemas/SetMonitoringLevelRequest'
       responses:
         '202':
           description: Accepted - monitoring level configuration initiated
@@ -149,13 +149,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/monitoring/report:
     post:
       summary: Get monitoring report
@@ -179,7 +179,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GetMonitoringReportRequest'
+              $ref: '../schemas/schemas.yaml#/components/schemas/GetMonitoringReportRequest'
       responses:
         '202':
           description: Accepted - monitoring report request initiated
@@ -188,13 +188,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/events:
     get:
       summary: Get charge station events
@@ -251,19 +251,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EventsResponse'
+                $ref: '../schemas/schemas.yaml#/components/schemas/EventsResponse'
         '404':
           description: Unknown charge station
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/reports:
     get:
       summary: Get device reports
@@ -314,16 +314,16 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReportsResponse'
+                $ref: '../schemas/schemas.yaml#/components/schemas/ReportsResponse'
         '404':
           description: Unknown charge station
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'

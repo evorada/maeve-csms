@@ -24,7 +24,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ChargeStationAuth'
+              $ref: '../schemas/schemas.yaml#/components/schemas/ChargeStationAuth'
       responses:
         '201':
           description: Created
@@ -33,7 +33,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/auth:
     get:
       summary: Returns the authentication details
@@ -57,19 +57,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChargeStationAuth'
+                $ref: '../schemas/schemas.yaml#/components/schemas/ChargeStationAuth'
         '404':
           description: Unknown charge station
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/cache/clear:
     post:
       summary: Clear authorization cache on charge station
@@ -92,7 +92,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/local-list:
     get:
       summary: Get local authorization list
@@ -114,16 +114,52 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocalAuthorizationListResponse'
+                $ref: '../schemas/schemas.yaml#/components/schemas/LocalAuthorizationListResponse'
         '404':
           description: Unknown charge station or no local list
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+    post:
+      summary: Update local authorization list
+      description: 'Updates the local authorization list on the specified charge station.
+
+        Supports both full replacement and differential updates.
+
+        '
+      operationId: updateLocalAuthorizationList
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/schemas.yaml#/components/schemas/UpdateLocalListRequest'
+      responses:
+        '202':
+          description: Accepted - operation queued
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'

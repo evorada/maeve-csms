@@ -123,6 +123,58 @@ func fromNullInt32(i pgtype.Int4) *int {
 	return &val
 }
 
+// toNullInt64 converts *int64 to pgtype.Int8
+func toNullInt64(i *int64) pgtype.Int8 {
+	if i == nil {
+		return pgtype.Int8{Valid: false}
+	}
+	return pgtype.Int8{Int64: *i, Valid: true}
+}
+
+// fromNullInt64 converts pgtype.Int8 to *int64
+func fromNullInt64(i pgtype.Int8) *int64 {
+	if !i.Valid {
+		return nil
+	}
+	val := i.Int64
+	return &val
+}
+
+// toNullTimestamp converts *time.Time to pgtype.Timestamp. The time is stored as UTC
+// because the TIMESTAMP columns have no time zone.
+func toNullTimestamp(t *time.Time) pgtype.Timestamp {
+	if t == nil {
+		return pgtype.Timestamp{Valid: false}
+	}
+	return pgtype.Timestamp{Time: t.UTC(), Valid: true}
+}
+
+// fromNullTimestamp converts pgtype.Timestamp to *time.Time in UTC (returns nil for NULL)
+func fromNullTimestamp(ts pgtype.Timestamp) *time.Time {
+	if !ts.Valid {
+		return nil
+	}
+	t := ts.Time.UTC()
+	return &t
+}
+
+// toNullTimestamptz converts *time.Time to pgtype.Timestamptz (nil is NULL)
+func toNullTimestamptz(t *time.Time) pgtype.Timestamptz {
+	if t == nil {
+		return pgtype.Timestamptz{Valid: false}
+	}
+	return pgtype.Timestamptz{Time: *t, Valid: true}
+}
+
+// fromNullTimestamptz converts pgtype.Timestamptz to *time.Time in UTC (returns nil for NULL)
+func fromNullTimestamptz(ts pgtype.Timestamptz) *time.Time {
+	if !ts.Valid {
+		return nil
+	}
+	t := ts.Time.UTC()
+	return &t
+}
+
 // toNullableInt32 is an alias for toNullInt32
 func toNullableInt32(i *int) pgtype.Int4 {
 	return toNullInt32(i)

@@ -12,18 +12,24 @@ import (
 )
 
 const AddMeterValues = `-- name: AddMeterValues :exec
-INSERT INTO transaction_meter_values (transaction_id, timestamp, sampled_values)
-VALUES ($1, $2, $3)
+INSERT INTO transaction_meter_values (charge_station_id, transaction_id, timestamp, sampled_values)
+VALUES ($1, $2, $3, $4)
 `
 
 type AddMeterValuesParams struct {
-	TransactionID string           `db:"transaction_id" json:"transaction_id"`
-	Timestamp     pgtype.Timestamp `db:"timestamp" json:"timestamp"`
-	SampledValues []byte           `db:"sampled_values" json:"sampled_values"`
+	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
+	TransactionID   string           `db:"transaction_id" json:"transaction_id"`
+	Timestamp       pgtype.Timestamp `db:"timestamp" json:"timestamp"`
+	SampledValues   []byte           `db:"sampled_values" json:"sampled_values"`
 }
 
 func (q *Queries) AddMeterValues(ctx context.Context, arg AddMeterValuesParams) error {
-	_, err := q.db.Exec(ctx, AddMeterValues, arg.TransactionID, arg.Timestamp, arg.SampledValues)
+	_, err := q.db.Exec(ctx, AddMeterValues,
+		arg.ChargeStationID,
+		arg.TransactionID,
+		arg.Timestamp,
+		arg.SampledValues,
+	)
 	return err
 }
 
@@ -58,11 +64,13 @@ func (q *Queries) CountTransactionsFiltered(ctx context.Context, arg CountTransa
 }
 
 const CreateTransaction = `-- name: CreateTransaction :one
+
 INSERT INTO transactions (
     id, charge_station_id, token_uid, token_type,
     meter_start, start_timestamp, offline
 ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost
+ON CONFLICT (charge_station_id, id) DO NOTHING
+RETURNING id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id
 `
 
 type CreateTransactionParams struct {
@@ -70,11 +78,13 @@ type CreateTransactionParams struct {
 	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
 	TokenUid        string           `db:"token_uid" json:"token_uid"`
 	TokenType       string           `db:"token_type" json:"token_type"`
-	MeterStart      int32            `db:"meter_start" json:"meter_start"`
+	MeterStart      pgtype.Int8      `db:"meter_start" json:"meter_start"`
 	StartTimestamp  pgtype.Timestamp `db:"start_timestamp" json:"start_timestamp"`
 	Offline         bool             `db:"offline" json:"offline"`
 }
 
+// CreateTransaction returns no row when the transaction already exists, instead of
+// raising a unique violation that would abort an enclosing database transaction.
 func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error) {
 	row := q.db.QueryRow(ctx, CreateTransaction,
 		arg.ID,
@@ -101,12 +111,17 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastCost,
+		&i.EvseID,
+		&i.ConnectorID,
+		&i.EnergyWh,
+		&i.IDTokenGroup,
+		&i.ReservationID,
 	)
 	return i, err
 }
 
 const FindActiveTransaction = `-- name: FindActiveTransaction :one
-SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost FROM transactions 
+SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id FROM transactions 
 WHERE charge_station_id = $1 AND stop_timestamp IS NULL
 ORDER BY start_timestamp DESC
 LIMIT 1
@@ -130,18 +145,28 @@ func (q *Queries) FindActiveTransaction(ctx context.Context, chargeStationID str
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastCost,
+		&i.EvseID,
+		&i.ConnectorID,
+		&i.EnergyWh,
+		&i.IDTokenGroup,
+		&i.ReservationID,
 	)
 	return i, err
 }
 
 const GetMeterValues = `-- name: GetMeterValues :many
-SELECT id, transaction_id, timestamp, sampled_values, created_at FROM transaction_meter_values
-WHERE transaction_id = $1
+SELECT id, transaction_id, timestamp, sampled_values, created_at, charge_station_id FROM transaction_meter_values
+WHERE charge_station_id = $1 AND transaction_id = $2
 ORDER BY timestamp ASC
 `
 
-func (q *Queries) GetMeterValues(ctx context.Context, transactionID string) ([]TransactionMeterValue, error) {
-	rows, err := q.db.Query(ctx, GetMeterValues, transactionID)
+type GetMeterValuesParams struct {
+	ChargeStationID string `db:"charge_station_id" json:"charge_station_id"`
+	TransactionID   string `db:"transaction_id" json:"transaction_id"`
+}
+
+func (q *Queries) GetMeterValues(ctx context.Context, arg GetMeterValuesParams) ([]TransactionMeterValue, error) {
+	rows, err := q.db.Query(ctx, GetMeterValues, arg.ChargeStationID, arg.TransactionID)
 	if err != nil {
 		return nil, err
 	}
@@ -155,6 +180,7 @@ func (q *Queries) GetMeterValues(ctx context.Context, transactionID string) ([]T
 			&i.Timestamp,
 			&i.SampledValues,
 			&i.CreatedAt,
+			&i.ChargeStationID,
 		); err != nil {
 			return nil, err
 		}
@@ -167,11 +193,18 @@ func (q *Queries) GetMeterValues(ctx context.Context, transactionID string) ([]T
 }
 
 const GetTransaction = `-- name: GetTransaction :one
-SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost FROM transactions WHERE id = $1
+
+SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id FROM transactions WHERE charge_station_id = $1 AND id = $2
 `
 
-func (q *Queries) GetTransaction(ctx context.Context, id string) (Transaction, error) {
-	row := q.db.QueryRow(ctx, GetTransaction, id)
+type GetTransactionParams struct {
+	ChargeStationID string `db:"charge_station_id" json:"charge_station_id"`
+	ID              string `db:"id" json:"id"`
+}
+
+// Transactions are identified by (charge_station_id, id): ids are only unique per station.
+func (q *Queries) GetTransaction(ctx context.Context, arg GetTransactionParams) (Transaction, error) {
+	row := q.db.QueryRow(ctx, GetTransaction, arg.ChargeStationID, arg.ID)
 	var i Transaction
 	err := row.Scan(
 		&i.ID,
@@ -188,12 +221,17 @@ func (q *Queries) GetTransaction(ctx context.Context, id string) (Transaction, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastCost,
+		&i.EvseID,
+		&i.ConnectorID,
+		&i.EnergyWh,
+		&i.IDTokenGroup,
+		&i.ReservationID,
 	)
 	return i, err
 }
 
 const ListTransactions = `-- name: ListTransactions :many
-SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost FROM transactions
+SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id FROM transactions
 ORDER BY start_timestamp DESC
 `
 
@@ -221,6 +259,11 @@ func (q *Queries) ListTransactions(ctx context.Context) ([]Transaction, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.LastCost,
+			&i.EvseID,
+			&i.ConnectorID,
+			&i.EnergyWh,
+			&i.IDTokenGroup,
+			&i.ReservationID,
 		); err != nil {
 			return nil, err
 		}
@@ -233,7 +276,7 @@ func (q *Queries) ListTransactions(ctx context.Context) ([]Transaction, error) {
 }
 
 const ListTransactionsFiltered = `-- name: ListTransactionsFiltered :many
-SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost FROM transactions
+SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id FROM transactions
 WHERE charge_station_id = $1
     AND ($4::text IS NULL 
         OR ($4::text = 'active' AND stop_timestamp IS NULL)
@@ -285,6 +328,11 @@ func (q *Queries) ListTransactionsFiltered(ctx context.Context, arg ListTransact
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.LastCost,
+			&i.EvseID,
+			&i.ConnectorID,
+			&i.EnergyWh,
+			&i.IDTokenGroup,
+			&i.ReservationID,
 		); err != nil {
 			return nil, err
 		}
@@ -296,27 +344,40 @@ func (q *Queries) ListTransactionsFiltered(ctx context.Context, arg ListTransact
 	return items, nil
 }
 
+const NextOcpp16TransactionId = `-- name: NextOcpp16TransactionId :one
+SELECT nextval('ocpp16_transaction_id_seq')::integer AS id
+`
+
+func (q *Queries) NextOcpp16TransactionId(ctx context.Context) (int32, error) {
+	row := q.db.QueryRow(ctx, NextOcpp16TransactionId)
+	var id int32
+	err := row.Scan(&id)
+	return id, err
+}
+
 const UpdateTransaction = `-- name: UpdateTransaction :one
 UPDATE transactions
-SET meter_stop = $2,
-    stop_timestamp = $3,
-    stopped_reason = $4,
-    updated_seq_no = $5,
+SET meter_stop = $3,
+    stop_timestamp = $4,
+    stopped_reason = $5,
+    updated_seq_no = $6,
     updated_at = NOW()
-WHERE id = $1
-RETURNING id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost
+WHERE charge_station_id = $1 AND id = $2
+RETURNING id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id
 `
 
 type UpdateTransactionParams struct {
-	ID            string           `db:"id" json:"id"`
-	MeterStop     pgtype.Int4      `db:"meter_stop" json:"meter_stop"`
-	StopTimestamp pgtype.Timestamp `db:"stop_timestamp" json:"stop_timestamp"`
-	StoppedReason pgtype.Text      `db:"stopped_reason" json:"stopped_reason"`
-	UpdatedSeqNo  int32            `db:"updated_seq_no" json:"updated_seq_no"`
+	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
+	ID              string           `db:"id" json:"id"`
+	MeterStop       pgtype.Int8      `db:"meter_stop" json:"meter_stop"`
+	StopTimestamp   pgtype.Timestamp `db:"stop_timestamp" json:"stop_timestamp"`
+	StoppedReason   pgtype.Text      `db:"stopped_reason" json:"stopped_reason"`
+	UpdatedSeqNo    int32            `db:"updated_seq_no" json:"updated_seq_no"`
 }
 
 func (q *Queries) UpdateTransaction(ctx context.Context, arg UpdateTransactionParams) (Transaction, error) {
 	row := q.db.QueryRow(ctx, UpdateTransaction,
+		arg.ChargeStationID,
 		arg.ID,
 		arg.MeterStop,
 		arg.StopTimestamp,
@@ -339,6 +400,63 @@ func (q *Queries) UpdateTransaction(ctx context.Context, arg UpdateTransactionPa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastCost,
+		&i.EvseID,
+		&i.ConnectorID,
+		&i.EnergyWh,
+		&i.IDTokenGroup,
+		&i.ReservationID,
 	)
 	return i, err
+}
+
+const UpdateTransactionDetails = `-- name: UpdateTransactionDetails :execrows
+UPDATE transactions SET
+    evse_id         = COALESCE($1, evse_id),
+    connector_id    = COALESCE($2, connector_id),
+    start_timestamp = COALESCE($3, start_timestamp),
+    stop_timestamp  = COALESCE($4, stop_timestamp),
+    meter_start     = COALESCE($5, meter_start),
+    meter_stop      = COALESCE($6, meter_stop),
+    energy_wh       = COALESCE($7, energy_wh),
+    stopped_reason  = COALESCE($8, stopped_reason),
+    id_token_group  = COALESCE($9, id_token_group),
+    reservation_id  = COALESCE($10, reservation_id),
+    updated_at      = NOW()
+WHERE charge_station_id = $11 AND id = $12
+`
+
+type UpdateTransactionDetailsParams struct {
+	EvseID          pgtype.Int4      `db:"evse_id" json:"evse_id"`
+	ConnectorID     pgtype.Int4      `db:"connector_id" json:"connector_id"`
+	StartedAt       pgtype.Timestamp `db:"started_at" json:"started_at"`
+	StoppedAt       pgtype.Timestamp `db:"stopped_at" json:"stopped_at"`
+	MeterStartWh    pgtype.Int8      `db:"meter_start_wh" json:"meter_start_wh"`
+	MeterStopWh     pgtype.Int8      `db:"meter_stop_wh" json:"meter_stop_wh"`
+	EnergyWh        pgtype.Int8      `db:"energy_wh" json:"energy_wh"`
+	StopReason      pgtype.Text      `db:"stop_reason" json:"stop_reason"`
+	IDTokenGroup    pgtype.Text      `db:"id_token_group" json:"id_token_group"`
+	ReservationID   pgtype.Int4      `db:"reservation_id" json:"reservation_id"`
+	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
+	ID              string           `db:"id" json:"id"`
+}
+
+func (q *Queries) UpdateTransactionDetails(ctx context.Context, arg UpdateTransactionDetailsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, UpdateTransactionDetails,
+		arg.EvseID,
+		arg.ConnectorID,
+		arg.StartedAt,
+		arg.StoppedAt,
+		arg.MeterStartWh,
+		arg.MeterStopWh,
+		arg.EnergyWh,
+		arg.StopReason,
+		arg.IDTokenGroup,
+		arg.ReservationID,
+		arg.ChargeStationID,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

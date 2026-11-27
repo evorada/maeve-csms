@@ -4,17 +4,31 @@ package ocpp16_test
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/handlers"
 	handlers16 "github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
+	"github.com/thoughtworks/maeve-csms/manager/ocpp/has2be"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/schemas"
+	"github.com/thoughtworks/maeve-csms/manager/services"
+	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"github.com/thoughtworks/maeve-csms/manager/transport"
+	"k8s.io/utils/clock"
 )
 
 func TestDataTransferHandlerRoutesCall(t *testing.T) {
@@ -258,4 +272,100 @@ func (*noMarshalResponse) IsResponse() {}
 
 func (*noMarshalResponse) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("expected to fail")
+}
+
+// recordingCertProvider records the CSRs it is asked to sign and returns a certificate.
+type recordingCertProvider struct {
+	csrs []string
+}
+
+func (r *recordingCertProvider) ProvideCertificate(_ context.Context, _ services.CertificateType, pemEncodedCSR string, _ string) (string, error) {
+	r.csrs = append(r.csrs, pemEncodedCSR)
+	return string(pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: []byte("signed-certificate"),
+	})), nil
+}
+
+func newPemEncodedCsr(t *testing.T, commonName string) string {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	der, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{
+		Subject: pkix.Name{CommonName: commonName},
+	}, key)
+	require.NoError(t, err)
+
+	return string(pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE REQUEST",
+		Bytes: der,
+	}))
+}
+
+// TestDataTransferRoutesHas2beSignCertificate sends a has2be SignCertificate request
+// (ISO 15118 over an OCPP 1.6 DataTransfer) through the router: the wrapped payload must
+// pass schema validation and reach the SignCertificate handler.
+func TestDataTransferRoutesHas2beSignCertificate(t *testing.T) {
+	engine := inmemory.NewStore(clock.RealClock{})
+	emitter := &FakeEmitter{}
+	certProvider := &recordingCertProvider{}
+
+	router := handlers16.NewRouter(emitter,
+		clock.RealClock{},
+		engine,
+		nil,
+		certProvider,
+		nil,
+		time.Minute,
+		schemas.OcppSchemas)
+
+	csr := newPemEncodedCsr(t, "cs001")
+	typeOfCertificate := has2be.CertificateSigningUseEnumTypeV2GCertificate
+	signCertificateData, err := json.Marshal(&has2be.SignCertificateRequestJson{
+		Csr:               csr,
+		TypeOfCertificate: &typeOfCertificate,
+	})
+	require.NoError(t, err)
+
+	messageId := "SignCertificate"
+	data := string(signCertificateData)
+	requestPayload, err := json.Marshal(&ocpp16.DataTransferJson{
+		VendorId:  "iso15118",
+		MessageId: &messageId,
+		Data:      &data,
+	})
+	require.NoError(t, err)
+
+	router.Handle(context.Background(), "cs001", &transport.Message{
+		MessageType:    transport.MessageTypeCall,
+		Action:         "DataTransfer",
+		MessageId:      "19223201",
+		RequestPayload: requestPayload,
+	})
+
+	// the charge station receives a call result, not a call error
+	require.NotNil(t, emitter.got)
+	require.Equal(t, transport.MessageTypeCallResult, emitter.got.MessageType,
+		"error %s: %s", emitter.got.ErrorCode, emitter.got.ErrorDescription)
+	assert.Equal(t, "DataTransfer", emitter.got.Action)
+	assert.Equal(t, "19223201", emitter.got.MessageId)
+
+	var response ocpp16.DataTransferResponseJson
+	require.NoError(t, json.Unmarshal(emitter.got.ResponsePayload, &response))
+	assert.Equal(t, ocpp16.DataTransferResponseJsonStatusAccepted, response.Status)
+	require.NotNil(t, response.Data)
+	assert.JSONEq(t, `{"status":"Accepted"}`, *response.Data)
+
+	// the SignCertificate handler was reached: the CSR was signed and the certificate
+	// is waiting to be installed on the charge station
+	assert.Equal(t, []string{csr}, certProvider.csrs)
+
+	certs, err := engine.LookupChargeStationInstallCertificates(context.Background(), "cs001")
+	require.NoError(t, err)
+	require.NotNil(t, certs)
+	require.Len(t, certs.Certificates, 1)
+	assert.Equal(t, store.CertificateTypeEVCC, certs.Certificates[0].CertificateType)
+	assert.Equal(t, store.CertificateInstallationPending, certs.Certificates[0].CertificateInstallationStatus)
 }

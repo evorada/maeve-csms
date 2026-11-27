@@ -57,16 +57,25 @@ func (o *OcppTokenAuthService) Authorize(ctx context.Context, token ocpp201.IdTo
 			}
 		} else {
 			status := ocpp201.AuthorizationStatusEnumTypeInvalid
+			now := o.Clock.Now()
 
 			if foundToken.Valid {
 				status = ocpp201.AuthorizationStatusEnumTypeAccepted
+				// the token is no longer accepted once its expiry time is reached
+				if foundToken.ExpiresAt != nil && !now.Before(*foundToken.ExpiresAt) {
+					status = ocpp201.AuthorizationStatusEnumTypeExpired
+				}
 			}
 
 			// if the cache mode is never, prevent the charge station
 			// from caching the token by setting its expiry time to now
 			var cacheExpiryTime *string
 			if foundToken.CacheMode == "NEVER" {
-				expiryTime := o.Clock.Now().Format(time.RFC3339)
+				expiryTime := now.Format(time.RFC3339)
+				cacheExpiryTime = &expiryTime
+			} else if status == ocpp201.AuthorizationStatusEnumTypeAccepted && foundToken.ExpiresAt != nil {
+				// an accepted token must leave the authorisation cache when it expires
+				expiryTime := foundToken.ExpiresAt.UTC().Format(time.RFC3339)
 				cacheExpiryTime = &expiryTime
 			}
 

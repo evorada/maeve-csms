@@ -21,7 +21,7 @@ SELECT * FROM charge_station_settings WHERE charge_station_id = $1;
 INSERT INTO charge_station_settings (charge_station_id, settings)
 VALUES ($1, $2)
 ON CONFLICT (charge_station_id) DO UPDATE
-SET settings = EXCLUDED.settings, updated_at = NOW()
+SET settings = charge_station_settings.settings || EXCLUDED.settings, updated_at = NOW()
 RETURNING *;
 
 -- name: ListChargeStationSettings :many

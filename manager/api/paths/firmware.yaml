@@ -24,7 +24,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/FirmwareUpdateRequest'
+              $ref: '../schemas/schemas.yaml#/components/schemas/FirmwareUpdateRequest'
       responses:
         '202':
           description: Accepted - firmware update initiated
@@ -33,7 +33,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/firmware/status:
     get:
       summary: Get firmware update status
@@ -57,16 +57,16 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FirmwareStatus'
+                $ref: '../schemas/schemas.yaml#/components/schemas/FirmwareStatus'
         '404':
           description: Unknown charge station
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'

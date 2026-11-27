@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"google.golang.org/api/iterator"
 	"k8s.io/utils/clock"
@@ -79,6 +80,51 @@ func TestSetAndLookupToken(t *testing.T) {
 	got.LastUpdated = ""
 
 	assert.Equal(t, want, got)
+}
+
+func TestSetAndLookupTokenWithExpiryTime(t *testing.T) {
+	defer cleanupAllCollections(t, "myproject")
+
+	ctx := context.Background()
+
+	tokenStore, err := firestore.NewStore(ctx, "myproject", clock.RealClock{})
+	require.NoError(t, err)
+
+	// an offset: the instant is kept
+	expiresAt := time.Date(2027, 1, 31, 9, 30, 15, 0, time.FixedZone("CET", 3600))
+	token := &store.Token{
+		CountryCode: "GB",
+		PartyId:     "TWK",
+		Type:        "RFID",
+		Uid:         "12345678",
+		ContractId:  "GBTWKC12345678V",
+		Issuer:      "TWK",
+		Valid:       true,
+		CacheMode:   store.CacheModeAllowed,
+		ExpiresAt:   &expiresAt,
+	}
+	require.NoError(t, tokenStore.SetToken(ctx, token))
+
+	got, err := tokenStore.LookupToken(ctx, "12345678")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.NotNil(t, got.ExpiresAt)
+	assert.True(t, expiresAt.Equal(*got.ExpiresAt), "expires at %s, want %s", got.ExpiresAt, expiresAt)
+
+	listed, err := tokenStore.ListTokens(ctx, 0, 10)
+	require.NoError(t, err)
+	require.Len(t, listed, 1)
+	require.NotNil(t, listed[0].ExpiresAt)
+	assert.True(t, expiresAt.Equal(*listed[0].ExpiresAt), "listed token expires at %s, want %s", listed[0].ExpiresAt, expiresAt)
+
+	// setting the token without an expiry time clears it
+	token.ExpiresAt = nil
+	require.NoError(t, tokenStore.SetToken(ctx, token))
+
+	got, err = tokenStore.LookupToken(ctx, "12345678")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Nil(t, got.ExpiresAt)
 }
 
 func TestLookupTokenThatDoesNotExist(t *testing.T) {

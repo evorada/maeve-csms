@@ -2,7 +2,10 @@
 
 package store
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 const (
 	CacheModeAlways         = "ALWAYS"
@@ -24,6 +27,9 @@ type Token struct {
 	LanguageCode *string
 	CacheMode    string
 	LastUpdated  string
+	// ExpiresAt is the instant from which the token is no longer accepted:
+	// authorisation returns Expired. nil means that the token does not expire.
+	ExpiresAt *time.Time
 }
 
 type TokenStore interface {

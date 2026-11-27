@@ -77,14 +77,15 @@ INSERT INTO charge_station_event (
     component_id,
     variable_id,
     cleared,
+    category,
     created_at
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
 RETURNING id;
 
 -- name: ListChargeStationEvents :many
 SELECT id, charge_station_id, timestamp, event_type, tech_code, tech_info,
-       event_data, component_id, variable_id, cleared, created_at
+       event_data, component_id, variable_id, cleared, created_at, category
 FROM charge_station_event
 WHERE charge_station_id = $1
 ORDER BY timestamp DESC

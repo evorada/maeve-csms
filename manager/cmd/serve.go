@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/thoughtworks/maeve-csms/manager/config"
+	"github.com/thoughtworks/maeve-csms/manager/jobs"
 	"github.com/thoughtworks/maeve-csms/manager/server"
 	"github.com/thoughtworks/maeve-csms/manager/sync"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
@@ -25,6 +26,10 @@ var serveCmd = &cobra.Command{
 	Long: `Starts the server which will subscribe to messages from
 the gateway and send appropriate responses.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// cancelled when the command returns: stops the background jobs
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
 		cfg := config.DefaultConfig
 		if configFile != "" {
 			err := cfg.LoadFromFile(configFile)
@@ -48,6 +53,15 @@ the gateway and send appropriate responses.`,
 			server.NewApiHandler(settings.Api, settings.Storage, settings.OcpiApi, settings.ChargeStationCertProviderService))
 
 		sync.Sync(settings.Storage, clock.RealClock{}, settings.Tracer, settings.MsgEmitter)
+
+		jobList := []jobs.Job{
+			jobs.ReservationExpiryJob(settings.Storage, settings.ReservationExpiryInterval),
+		}
+		go func() {
+			if err := settings.JobRunner.Run(ctx, jobList); err != nil {
+				slog.Error("running background jobs", "err", err)
+			}
+		}()
 
 		errCh := make(chan error, 1)
 		apiServer.Start(errCh)

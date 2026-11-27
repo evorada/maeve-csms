@@ -18,17 +18,18 @@ Configuration is defined in TOML.
 
 ## General settings
 
-| Section       | Key                 | Type   | Description                                                          |
-|---------------|---------------------|--------|----------------------------------------------------------------------|
-| api           | addr                | string | Address that API server will listen on, e.g. localhost:9410          |
-| api           | external_addr       | string | The Externally visible URL that the server is available on           |
-| api           | org_name            | string | The organization name to use when issuing client certificates        |
-| ocpp          | heartbeat_interval  | string | Frequency to request charge station heartbeat messages at, e.g. "5m" |
-| ocpp          | ocpp16_enabled      | bool   | Is OCPP 1.6 support enabled, e.g. "true"?                            |
-| ocpp          | ocpp201_enabled     | bool   | Is OCPP 2.0.1 support enabled, e.g. "true"?                          |
-| observability | log_format          | string | Either "json" or "text"                                              |
-| observability | otel_collector_addr | string | Address of the OpenTelemetry collector, e.g. "localhost:4317"        |
-| observability | tls_keylog_file     | string | File where TLS session keys will be written for use with Wireshark   |
+| Section       | Key                         | Type   | Description                                                          |
+|---------------|-----------------------------|--------|----------------------------------------------------------------------|
+| api           | addr                        | string | Address that API server will listen on, e.g. localhost:9410          |
+| api           | external_addr               | string | The Externally visible URL that the server is available on           |
+| api           | org_name                    | string | The organization name to use when issuing client certificates        |
+| ocpp          | heartbeat_interval          | string | Frequency to request charge station heartbeat messages at, e.g. "5m" |
+| ocpp          | ocpp16_enabled              | bool   | Is OCPP 1.6 support enabled, e.g. "true"?                            |
+| ocpp          | ocpp201_enabled             | bool   | Is OCPP 2.0.1 support enabled, e.g. "true"?                          |
+| jobs          | reservation_expiry_interval | string | How often reservations past their expiry date are expired, e.g. "1m" |
+| observability | log_format                  | string | Either "json" or "text"                                              |
+| observability | otel_collector_addr         | string | Address of the OpenTelemetry collector, e.g. "localhost:4317"        |
+| observability | tls_keylog_file             | string | File where TLS session keys will be written for use with Wireshark   |
 
 ## Transport settings
 

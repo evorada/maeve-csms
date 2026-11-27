@@ -209,6 +209,10 @@ func (s *Server) GetChargeStationEvents(w http.ResponseWriter, r *http.Request, 
 			TechInfo:  e.TechInfo,
 			EventData: e.EventData,
 		}
+		if e.Category != "" {
+			category := ChargeStationEventCategory(e.Category)
+			apiEvents[i].Category = &category
+		}
 	}
 
 	resp := EventsResponse{

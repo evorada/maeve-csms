@@ -35,13 +35,38 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OperationResponse'
+                $ref: '../schemas/schemas.yaml#/components/schemas/OperationResponse'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+    post:
+      summary: Install certificates on the charge station
+      operationId: installChargeStationCertificates
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 28
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/schemas.yaml#/components/schemas/ChargeStationInstallCertificates'
+      responses:
+        '200':
+          description: OK
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/certificate:
     delete:
       summary: Delete a certificate from the charge station
@@ -64,20 +89,20 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CertificateHashDataRequest'
+              $ref: '../schemas/schemas.yaml#/components/schemas/CertificateHashDataRequest'
       responses:
         '202':
           description: Request accepted, will delete certificate asynchronously
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OperationResponse'
+                $ref: '../schemas/schemas.yaml#/components/schemas/OperationResponse'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /certificate:
     post:
       summary: Upload a certificate
@@ -94,7 +119,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Certificate'
+              $ref: '../schemas/schemas.yaml#/components/schemas/Certificate'
       responses:
         '201':
           description: Created
@@ -103,7 +128,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /certificate/{certificateHash}:
     get:
       summary: Lookup a certificate
@@ -127,16 +152,46 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Certificate'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Certificate'
         '404':
           description: Not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+    delete:
+      summary: Delete a certificate
+      description: 'Deletes a client certificate that has been uploaded to the CSMS using a base64 encoded SHA-256 hash
+
+        of the DER bytes.
+
+        '
+      operationId: deleteCertificate
+      parameters:
+      - required: true
+        in: path
+        name: certificateHash
+        schema:
+          type: string
+          maxLength: 64
+      responses:
+        '204':
+          description: No content
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'

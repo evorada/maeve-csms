@@ -97,6 +97,7 @@ type ChargeStationEvent struct {
 	VariableID      pgtype.Text        `db:"variable_id" json:"variable_id"`
 	Cleared         bool               `db:"cleared" json:"cleared"`
 	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	Category        string             `db:"category" json:"category"`
 }
 
 type ChargeStationRuntime struct {
@@ -358,21 +359,22 @@ type ResetRequest struct {
 }
 
 type Token struct {
-	ID           int64            `db:"id" json:"id"`
-	CountryCode  string           `db:"country_code" json:"country_code"`
-	PartyID      string           `db:"party_id" json:"party_id"`
-	Type         string           `db:"type" json:"type"`
-	Uid          string           `db:"uid" json:"uid"`
-	ContractID   string           `db:"contract_id" json:"contract_id"`
-	VisualNumber pgtype.Text      `db:"visual_number" json:"visual_number"`
-	Issuer       string           `db:"issuer" json:"issuer"`
-	GroupID      pgtype.Text      `db:"group_id" json:"group_id"`
-	Valid        bool             `db:"valid" json:"valid"`
-	LanguageCode pgtype.Text      `db:"language_code" json:"language_code"`
-	CacheMode    string           `db:"cache_mode" json:"cache_mode"`
-	LastUpdated  pgtype.Timestamp `db:"last_updated" json:"last_updated"`
-	CreatedAt    pgtype.Timestamp `db:"created_at" json:"created_at"`
-	UpdatedAt    pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ID           int64              `db:"id" json:"id"`
+	CountryCode  string             `db:"country_code" json:"country_code"`
+	PartyID      string             `db:"party_id" json:"party_id"`
+	Type         string             `db:"type" json:"type"`
+	Uid          string             `db:"uid" json:"uid"`
+	ContractID   string             `db:"contract_id" json:"contract_id"`
+	VisualNumber pgtype.Text        `db:"visual_number" json:"visual_number"`
+	Issuer       string             `db:"issuer" json:"issuer"`
+	GroupID      pgtype.Text        `db:"group_id" json:"group_id"`
+	Valid        bool               `db:"valid" json:"valid"`
+	LanguageCode pgtype.Text        `db:"language_code" json:"language_code"`
+	CacheMode    string             `db:"cache_mode" json:"cache_mode"`
+	LastUpdated  pgtype.Timestamp   `db:"last_updated" json:"last_updated"`
+	CreatedAt    pgtype.Timestamp   `db:"created_at" json:"created_at"`
+	UpdatedAt    pgtype.Timestamp   `db:"updated_at" json:"updated_at"`
+	ExpiresAt    pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
 }
 
 type Transaction struct {
@@ -380,8 +382,8 @@ type Transaction struct {
 	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
 	TokenUid        string           `db:"token_uid" json:"token_uid"`
 	TokenType       string           `db:"token_type" json:"token_type"`
-	MeterStart      int32            `db:"meter_start" json:"meter_start"`
-	MeterStop       pgtype.Int4      `db:"meter_stop" json:"meter_stop"`
+	MeterStart      pgtype.Int8      `db:"meter_start" json:"meter_start"`
+	MeterStop       pgtype.Int8      `db:"meter_stop" json:"meter_stop"`
 	StartTimestamp  pgtype.Timestamp `db:"start_timestamp" json:"start_timestamp"`
 	StopTimestamp   pgtype.Timestamp `db:"stop_timestamp" json:"stop_timestamp"`
 	StoppedReason   pgtype.Text      `db:"stopped_reason" json:"stopped_reason"`
@@ -390,14 +392,20 @@ type Transaction struct {
 	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
 	LastCost        pgtype.Numeric   `db:"last_cost" json:"last_cost"`
+	EvseID          pgtype.Int4      `db:"evse_id" json:"evse_id"`
+	ConnectorID     pgtype.Int4      `db:"connector_id" json:"connector_id"`
+	EnergyWh        pgtype.Int8      `db:"energy_wh" json:"energy_wh"`
+	IDTokenGroup    pgtype.Text      `db:"id_token_group" json:"id_token_group"`
+	ReservationID   pgtype.Int4      `db:"reservation_id" json:"reservation_id"`
 }
 
 type TransactionMeterValue struct {
-	ID            int64            `db:"id" json:"id"`
-	TransactionID string           `db:"transaction_id" json:"transaction_id"`
-	Timestamp     pgtype.Timestamp `db:"timestamp" json:"timestamp"`
-	SampledValues []byte           `db:"sampled_values" json:"sampled_values"`
-	CreatedAt     pgtype.Timestamp `db:"created_at" json:"created_at"`
+	ID              int64            `db:"id" json:"id"`
+	TransactionID   string           `db:"transaction_id" json:"transaction_id"`
+	Timestamp       pgtype.Timestamp `db:"timestamp" json:"timestamp"`
+	SampledValues   []byte           `db:"sampled_values" json:"sampled_values"`
+	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
+	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
 }
 
 type UnlockConnectorRequest struct {

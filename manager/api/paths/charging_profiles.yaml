@@ -20,7 +20,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SetChargingProfileRequest'
+              $ref: '../schemas/schemas.yaml#/components/schemas/SetChargingProfileRequest'
       responses:
         '202':
           description: Accepted - charging profile request queued
@@ -29,13 +29,62 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+    get:
+      summary: Get charging profiles
+      operationId: getChargingProfiles
+      parameters:
+      - name: csId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: connectorId
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+      - name: chargingProfilePurpose
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - TxProfile
+          - TxDefaultProfile
+          - ChargePointMaxProfile
+      - name: stackLevel
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+      responses:
+        '200':
+          description: List of charging profiles
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/ChargingProfileList'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/charging-profile/{profileId}:
     delete:
       summary: Clear charging profile
@@ -81,13 +130,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/composite-schedule:
     get:
       summary: Get composite schedule
@@ -126,16 +175,16 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CompositeSchedule'
+                $ref: '../schemas/schemas.yaml#/components/schemas/CompositeSchedule'
         '404':
           description: Unknown charge station
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'

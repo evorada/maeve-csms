@@ -35,6 +35,15 @@ func NewRouter(emitter transport.Emitter,
 
 	standardCallMaker := NewCallMaker(emitter)
 
+	// these handlers process both the result and the error returned for their call
+	changeConfigurationResultHandler := ChangeConfigurationResultHandler{
+		SettingsStore: engine,
+		CallMaker:     standardCallMaker,
+	}
+	triggerMessageResultHandler := TriggerMessageResultHandler{
+		Store: engine,
+	}
+
 	return &handlers.Router{
 		Emitter:     emitter,
 		SchemaFS:    schemaFS,
@@ -75,6 +84,7 @@ func NewRouter(emitter transport.Emitter,
 				ResponseSchema: "ocpp16/AuthorizeResponse.json",
 				Handler: AuthorizeHandler{
 					TokenStore: engine,
+					Clock:      clk,
 				},
 			},
 			"StartTransaction": {
@@ -85,6 +95,7 @@ func NewRouter(emitter transport.Emitter,
 					Clock:            clk,
 					TokenStore:       engine,
 					TransactionStore: engine,
+					ReservationStore: engine,
 				},
 			},
 			"StopTransaction": {
@@ -103,13 +114,17 @@ func NewRouter(emitter transport.Emitter,
 				ResponseSchema: "ocpp16/MeterValuesResponse.json",
 				Handler: MeterValuesHandler{
 					TransactionStore: engine,
+					MeterValuesStore: engine,
 				},
 			},
 			"SecurityEventNotification": {
 				NewRequest:     func() ocpp.Request { return new(ocpp16.SecurityEventNotificationJson) },
 				RequestSchema:  "ocpp16/SecurityEventNotification.json",
 				ResponseSchema: "ocpp16/SecurityEventNotificationResponse.json",
-				Handler:        SecurityEventNotificationHandler{},
+				Handler: SecurityEventNotificationHandler{
+					Clock:      clk,
+					EventStore: engine,
+				},
 			},
 			"DiagnosticsStatusNotification": {
 				NewRequest:     func() ocpp.Request { return new(ocpp16.DiagnosticsStatusNotificationJson) },
@@ -139,7 +154,11 @@ func NewRouter(emitter transport.Emitter,
 				NewRequest:     func() ocpp.Request { return new(ocpp16.LogStatusNotificationJson) },
 				RequestSchema:  "ocpp16/LogStatusNotification.json",
 				ResponseSchema: "ocpp16/LogStatusNotificationResponse.json",
-				Handler:        LogStatusNotificationHandler{},
+				Handler: LogStatusNotificationHandler{
+					Clock:         clk,
+					FirmwareStore: engine,
+					EventStore:    engine,
+				},
 			},
 			"DataTransfer": {
 				NewRequest:     func() ocpp.Request { return new(ocpp16.DataTransferJson) },
@@ -224,8 +243,8 @@ func NewRouter(emitter transport.Emitter,
 							},
 							"SignCertificate": {
 								NewRequest:     func() ocpp.Request { return new(has2be.SignCertificateRequestJson) },
-								RequestSchema:  "has2be/SignCertificateRequestJson.json",
-								ResponseSchema: "has2be/SignCertificateRequestJson.json",
+								RequestSchema:  "has2be/SignCertificateRequest.json",
+								ResponseSchema: "has2be/SignCertificateResponse.json",
 								Handler: handlersHasToBe.SignCertificateHandler{
 									Handler201: handlers201.SignCertificateHandler{
 										ChargeStationCertificateProvider: chargeStationCertProvider,
@@ -321,17 +340,16 @@ func NewRouter(emitter transport.Emitter,
 				NewResponse:    func() ocpp.Response { return new(ocpp16.ChangeConfigurationResponseJson) },
 				RequestSchema:  "ocpp16/ChangeConfiguration.json",
 				ResponseSchema: "ocpp16/ChangeConfigurationResponse.json",
-				Handler: ChangeConfigurationResultHandler{
-					SettingsStore: engine,
-					CallMaker:     standardCallMaker,
-				},
+				Handler:        changeConfigurationResultHandler,
+				ErrorHandler:   changeConfigurationResultHandler,
 			},
 			"TriggerMessage": {
 				NewRequest:     func() ocpp.Request { return new(ocpp16.TriggerMessageJson) },
 				NewResponse:    func() ocpp.Response { return new(ocpp16.TriggerMessageResponseJson) },
 				RequestSchema:  "ocpp16/TriggerMessage.json",
 				ResponseSchema: "ocpp16/TriggerMessageResponse.json",
-				Handler:        TriggerMessageResultHandler{},
+				Handler:        triggerMessageResultHandler,
+				ErrorHandler:   triggerMessageResultHandler,
 			},
 			"ExtendedTriggerMessage": {
 				NewRequest:     func() ocpp.Request { return new(ocpp16.ExtendedTriggerMessageJson) },

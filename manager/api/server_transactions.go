@@ -54,36 +54,11 @@ func (s *Server) ListTransactions(w http.ResponseWriter, r *http.Request, csId s
 	}
 
 	for _, txn := range transactions {
-		startTime, _ := time.Parse(time.RFC3339, txn.MeterValues[0].Timestamp)
+		startTime, stopTime, meterStart, meterStop := transactionView(txn)
 
-		var stopTime *time.Time
-		var meterStop *int
 		txnStatus := TransactionSummaryStatusActive
-
 		if txn.EndedSeqNo > 0 {
 			txnStatus = TransactionSummaryStatusCompleted
-			if len(txn.MeterValues) > 0 {
-				stopTimeValue, _ := time.Parse(time.RFC3339, txn.MeterValues[len(txn.MeterValues)-1].Timestamp)
-				stopTime = &stopTimeValue
-
-				for _, sv := range txn.MeterValues[len(txn.MeterValues)-1].SampledValues {
-					if sv.Measurand != nil && *sv.Measurand == "Energy.Active.Import.Register" {
-						meterStopValue := int(sv.Value)
-						meterStop = &meterStopValue
-						break
-					}
-				}
-			}
-		}
-
-		meterStart := 0
-		if len(txn.MeterValues) > 0 {
-			for _, sv := range txn.MeterValues[0].SampledValues {
-				if sv.Measurand != nil && *sv.Measurand == "Energy.Active.Import.Register" {
-					meterStart = int(sv.Value)
-					break
-				}
-			}
 		}
 
 		summary := TransactionSummary{
@@ -94,6 +69,10 @@ func (s *Server) ListTransactions(w http.ResponseWriter, r *http.Request, csId s
 			MeterStart:    meterStart,
 			MeterStop:     meterStop,
 			Status:        txnStatus,
+			ConnectorId:   txn.ConnectorId,
+			EvseId:        txn.EvseId,
+			StopReason:    txn.StopReason,
+			EnergyWh:      txn.EnergyWh,
 		}
 		response.Transactions = append(response.Transactions, summary)
 	}
@@ -118,37 +97,7 @@ func (s *Server) GetTransactionDetails(w http.ResponseWriter, r *http.Request, c
 		return
 	}
 
-	var startTime, stopTime *time.Time
-	if len(txn.MeterValues) > 0 {
-		startTimeValue, _ := time.Parse(time.RFC3339, txn.MeterValues[0].Timestamp)
-		startTime = &startTimeValue
-
-		if txn.EndedSeqNo > 0 && len(txn.MeterValues) > 0 {
-			stopTimeValue, _ := time.Parse(time.RFC3339, txn.MeterValues[len(txn.MeterValues)-1].Timestamp)
-			stopTime = &stopTimeValue
-		}
-	}
-
-	meterStart := 0
-	var meterStop *int
-	if len(txn.MeterValues) > 0 {
-		for _, sv := range txn.MeterValues[0].SampledValues {
-			if sv.Measurand != nil && *sv.Measurand == "Energy.Active.Import.Register" {
-				meterStart = int(sv.Value)
-				break
-			}
-		}
-
-		if txn.EndedSeqNo > 0 {
-			for _, sv := range txn.MeterValues[len(txn.MeterValues)-1].SampledValues {
-				if sv.Measurand != nil && *sv.Measurand == "Energy.Active.Import.Register" {
-					meterStopValue := int(sv.Value)
-					meterStop = &meterStopValue
-					break
-				}
-			}
-		}
-	}
+	startTime, stopTime, meterStart, meterStop := transactionView(txn)
 
 	txnStatus := TransactionDetailStatusActive
 	if txn.EndedSeqNo > 0 {
@@ -186,15 +135,95 @@ func (s *Server) GetTransactionDetails(w http.ResponseWriter, r *http.Request, c
 		TransactionId: txn.TransactionId,
 		IdTag:         txn.IdToken,
 		TokenType:     &txn.TokenType,
-		StartTime:     *startTime,
+		StartTime:     startTime,
 		StopTime:      stopTime,
 		MeterStart:    meterStart,
 		MeterStop:     meterStop,
 		Status:        txnStatus,
 		MeterValues:   apiMeterValues,
+		ConnectorId:   txn.ConnectorId,
+		EvseId:        txn.EvseId,
+		StopReason:    txn.StopReason,
+		EnergyWh:      txn.EnergyWh,
 	}
 
 	_ = render.Render(w, r, response)
+}
+
+// energyRegisterMeasurand is the measurand of the energy meter reading that the meter
+// start and stop values are read from when the store does not have them.
+const energyRegisterMeasurand = "Energy.Active.Import.Register"
+
+// transactionView derives the API fields, preferring the enriched store fields and
+// falling back to the first/last sample for transactions that do not have them
+// (older records, or a store that does not keep the details).
+func transactionView(txn *store.Transaction) (start time.Time, stop *time.Time, meterStart int, meterStop *int) {
+	completed := txn.EndedSeqNo > 0
+
+	// a timestamp that cannot be parsed is the zero time, as for a transaction without samples
+	sampleTime := func(mv store.MeterValue) time.Time {
+		t, _ := time.Parse(time.RFC3339, mv.Timestamp)
+		return t
+	}
+
+	switch {
+	case txn.StartedAt != nil:
+		start = *txn.StartedAt
+	case len(txn.MeterValues) > 0:
+		start = sampleTime(txn.MeterValues[0])
+	}
+
+	switch {
+	case txn.StoppedAt != nil:
+		stoppedAt := *txn.StoppedAt
+		stop = &stoppedAt
+	case completed && len(txn.MeterValues) > 0:
+		stoppedAt := sampleTime(txn.MeterValues[len(txn.MeterValues)-1])
+		stop = &stoppedAt
+	}
+
+	if txn.MeterStartWh != nil {
+		meterStart = int(*txn.MeterStartWh)
+	} else if reading, ok := firstEnergyRegisterReading(txn.MeterValues); ok {
+		meterStart = reading
+	}
+
+	if txn.MeterStopWh != nil {
+		reading := int(*txn.MeterStopWh)
+		meterStop = &reading
+	} else if completed {
+		if reading, ok := lastEnergyRegisterReading(txn.MeterValues); ok {
+			meterStop = &reading
+		}
+	}
+
+	return start, stop, meterStart, meterStop
+}
+
+// firstEnergyRegisterReading returns the first energy register sample of the meter values.
+func firstEnergyRegisterReading(meterValues []store.MeterValue) (int, bool) {
+	for _, mv := range meterValues {
+		for _, sv := range mv.SampledValues {
+			if sv.Measurand != nil && *sv.Measurand == energyRegisterMeasurand {
+				return int(sv.Value), true
+			}
+		}
+	}
+	return 0, false
+}
+
+// lastEnergyRegisterReading returns the last energy register sample of the meter values.
+func lastEnergyRegisterReading(meterValues []store.MeterValue) (int, bool) {
+	for i := len(meterValues) - 1; i >= 0; i-- {
+		sampledValues := meterValues[i].SampledValues
+		for j := len(sampledValues) - 1; j >= 0; j-- {
+			sv := sampledValues[j]
+			if sv.Measurand != nil && *sv.Measurand == energyRegisterMeasurand {
+				return int(sv.Value), true
+			}
+		}
+	}
+	return 0, false
 }
 
 func (s *Server) RemoteStartTransaction(w http.ResponseWriter, r *http.Request, csId string) {

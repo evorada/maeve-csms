@@ -231,3 +231,48 @@ func TestExpireReservations_NoneExpired(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0, count)
 }
+
+// TestUsedReservationIsNoLongerActive checks that a reservation that was consumed by a
+// transaction is kept, but is not listed as active and is not expired later.
+func TestUsedReservationIsNoLongerActive(t *testing.T) {
+	now := time.Now()
+	clk := clocktesting.NewFakeClock(now)
+	s := inmemory.NewStore(clk)
+	ctx := context.Background()
+
+	err := s.CreateReservation(ctx, &store.Reservation{
+		ReservationId:   1,
+		ChargeStationId: "cs001",
+		ConnectorId:     1,
+		IdTag:           "tag001",
+		ExpiryDate:      now.Add(-1 * time.Hour), // past its expiry date
+		Status:          store.ReservationStatusAccepted,
+		CreatedAt:       now.Add(-2 * time.Hour),
+	})
+	require.NoError(t, err)
+
+	err = s.UpdateReservationStatus(ctx, 1, store.ReservationStatusUsed)
+	require.NoError(t, err)
+
+	got, err := s.GetReservation(ctx, 1)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, store.ReservationStatusUsed, got.Status)
+
+	active, err := s.GetActiveReservations(ctx, "cs001")
+	require.NoError(t, err)
+	assert.Empty(t, active)
+
+	byConnector, err := s.GetReservationByConnector(ctx, "cs001", 1)
+	require.NoError(t, err)
+	assert.Nil(t, byConnector)
+
+	count, err := s.ExpireReservations(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count)
+
+	got, err = s.GetReservation(ctx, 1)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, store.ReservationStatusUsed, got.Status)
+}

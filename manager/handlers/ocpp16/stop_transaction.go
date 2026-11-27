@@ -5,7 +5,6 @@ package ocpp16
 import (
 	"context"
 	"errors"
-	"strconv"
 	"time"
 
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
@@ -15,6 +14,9 @@ import (
 	"k8s.io/utils/clock"
 )
 
+// StopTransactionHandler records the end of a transaction. A StopTransaction.req is
+// always acknowledged, also for a transaction that the CSMS does not know: the station
+// retries a StopTransaction.req that fails.
 type StopTransactionHandler struct {
 	Clock            clock.PassiveClock
 	TokenStore       store.TokenStore
@@ -24,35 +26,32 @@ type StopTransactionHandler struct {
 func (s StopTransactionHandler) HandleCall(ctx context.Context, chargeStationId string, request ocpp.Request) (response ocpp.Response, err error) {
 	req := request.(*types.StopTransactionJson)
 
-	reason := "*unknown*"
+	// OCPP 1.6: the reason may only be omitted when it is Local
+	reason := string(types.StopTransactionJsonReasonLocal)
 	if req.Reason != nil {
 		reason = string(*req.Reason)
 	}
 	transactionId := ConvertToUUID(req.TransactionId)
 	slog.Info("stopping transaction", slog.String("transactionId", transactionId), slog.String("reason", reason))
 
+	stoppedAt, err := time.Parse(time.RFC3339, req.Timestamp)
+	if err != nil {
+		stoppedAt = s.Clock.Now()
+		slog.Warn("invalid stop transaction timestamp, using the current time",
+			slog.String("chargeStationId", chargeStationId), slog.String("timestamp", req.Timestamp), "err", err)
+	}
+
 	var idTagInfo *types.StopTransactionResponseJsonIdTagInfo
 	if req.IdTag != nil {
-		status := types.StopTransactionResponseJsonIdTagInfoStatusInvalid
-		tok, err := s.TokenStore.LookupToken(ctx, *req.IdTag)
+		auth, err := authorizeIdTag(ctx, s.TokenStore, s.Clock, *req.IdTag)
 		if err != nil {
 			return nil, err
 		}
-		if tok != nil {
-			status = types.StopTransactionResponseJsonIdTagInfoStatusAccepted
-		}
 		idTagInfo = &types.StopTransactionResponseJsonIdTagInfo{
-			Status: status,
+			Status:      types.StopTransactionResponseJsonIdTagInfoStatus(auth.Status),
+			ExpiryDate:  auth.ExpiryDate,
+			ParentIdTag: auth.ParentIdTag,
 		}
-	}
-
-	transaction, err := s.TransactionStore.FindTransaction(ctx, chargeStationId, transactionId)
-	if err != nil {
-		return nil, err
-	}
-	seqNo := -1
-	if transaction != nil {
-		seqNo = transaction.StartSeqNo + transaction.UpdatedSeqNoCount + 1
 	}
 
 	var idToken, tokenType string
@@ -61,19 +60,58 @@ func (s StopTransactionHandler) HandleCall(ctx context.Context, chargeStationId 
 		tokenType = "ISO14443"
 	}
 
-	meterValues, err := convertMeterValues(req.TransactionData)
+	transaction, err := s.TransactionStore.FindTransaction(ctx, chargeStationId, transactionId)
+	if err != nil {
+		return nil, err
+	}
+	if transaction == nil {
+		// a station that restarted can stop a transaction that the CSMS never saw:
+		// it is created so that the stop is recorded
+		slog.Warn("stopping a transaction that is not known, recording it",
+			slog.String("chargeStationId", chargeStationId), slog.String("transactionId", transactionId))
+		err = s.TransactionStore.CreateTransaction(ctx, chargeStationId, transactionId, idToken, tokenType, nil, 0, false)
+		if err != nil {
+			return nil, err
+		}
+		transaction = &store.Transaction{
+			ChargeStationId: chargeStationId,
+			TransactionId:   transactionId,
+			IdToken:         idToken,
+			TokenType:       tokenType,
+		}
+	}
+	seqNo := transaction.StartSeqNo + transaction.UpdatedSeqNoCount + 1
+
+	meterValues := convertTransactionData(req.TransactionData)
+	if !hasTransactionEndEnergyRegister(meterValues) {
+		// meterStop is the reading of the register, not the energy of the transaction
+		meterValues = append(meterValues, energyRegisterMeterValue(stoppedAt, sampledValueContextTransactionEnd, req.MeterStop))
+	}
+
+	err = s.TransactionStore.EndTransaction(ctx, chargeStationId, transactionId, idToken, tokenType, meterValues, seqNo)
 	if err != nil {
 		return nil, err
 	}
 
-	var previousMeterValues []store.MeterValue
-	if transaction != nil {
-		previousMeterValues = transaction.MeterValues
+	meterStop := int64(req.MeterStop)
+	details := &store.TransactionDetails{
+		StoppedAt:   &stoppedAt,
+		MeterStopWh: &meterStop,
+		StopReason:  &reason,
 	}
-	meterValues = calculateTransactionEndOutletEnergy(s.Clock, meterValues, previousMeterValues, req.MeterStop)
-
-	err = s.TransactionStore.EndTransaction(ctx, chargeStationId, transactionId, idToken, tokenType, meterValues, seqNo)
-	if err != nil {
+	if meterStart, ok := transactionMeterStartWh(transaction); ok {
+		if meterStop >= meterStart {
+			energy := meterStop - meterStart
+			details.EnergyWh = &energy
+		} else {
+			// the meter was replaced or reset during the transaction
+			slog.Warn("meter stop is lower than meter start, the energy of the transaction is not known",
+				slog.String("chargeStationId", chargeStationId), slog.String("transactionId", transactionId),
+				slog.Int64("meterStart", meterStart), slog.Int64("meterStop", meterStop))
+		}
+	}
+	err = s.TransactionStore.UpdateTransactionDetails(ctx, chargeStationId, transactionId, details)
+	if err != nil && !errors.Is(err, store.ErrNotImplemented) {
 		return nil, err
 	}
 
@@ -82,39 +120,33 @@ func (s StopTransactionHandler) HandleCall(ctx context.Context, chargeStationId 
 	}, nil
 }
 
-func calculateTransactionEndOutletEnergy(clock clock.PassiveClock, transactionValues []store.MeterValue, previousValues []store.MeterValue, meterStop int) []store.MeterValue {
-	if findOutletEnergyReading(transactionValues) {
-		return transactionValues
+// transactionMeterStartWh returns the energy register (Wh) at the start of the
+// transaction: the stored meter start or, when the store does not have it, the
+// Transaction.Begin sample. ok=false when it is not known.
+func transactionMeterStartWh(transaction *store.Transaction) (wh int64, ok bool) {
+	if transaction.MeterStartWh != nil {
+		return *transaction.MeterStartWh, true
 	}
-
-	if meterStart, ok := findTransactionBeginMeterValues(previousValues); ok {
-		energyUsed := meterStop - meterStart
-		transactionEndContext := "Transaction.End"
-		outletLocation := "Outlet"
-		energyRegisteredMeasurand := "Energy.Active.Import.Register"
-
-		transactionValues = append(transactionValues, store.MeterValue{
-			SampledValues: []store.SampledValue{
-				{
-					Context:   &transactionEndContext,
-					Location:  &outletLocation,
-					Measurand: &energyRegisteredMeasurand,
-					Value:     float64(energyUsed),
-				},
-			},
-			Timestamp: clock.Now().Format(time.RFC3339),
-		})
+	for _, value := range transaction.MeterValues {
+		for _, sv := range value.SampledValues {
+			if sv.Context == nil || *sv.Context != sampledValueContextTransactionBegin {
+				continue
+			}
+			if wh, ok := energyRegisterWh(sv); ok {
+				return wh, true
+			}
+		}
 	}
-
-	return transactionValues
+	return 0, false
 }
 
-func findOutletEnergyReading(values []store.MeterValue) bool {
+// hasTransactionEndEnergyRegister reports whether the values have the reading of the
+// energy register at the end of the transaction.
+func hasTransactionEndEnergyRegister(values []store.MeterValue) bool {
 	for _, value := range values {
 		for _, sv := range value.SampledValues {
-			if sv.Context != nil && *sv.Context == "Transaction.End" &&
-				sv.Measurand != nil && *sv.Measurand == "Energy.Active.Import.Register" &&
-				sv.Location != nil && *sv.Location == "Outlet" {
+			if sv.Context != nil && *sv.Context == sampledValueContextTransactionEnd &&
+				sv.Measurand != nil && *sv.Measurand == sampledValueDefaultMeasurand {
 				return true
 			}
 		}
@@ -122,85 +154,15 @@ func findOutletEnergyReading(values []store.MeterValue) bool {
 	return false
 }
 
-func findTransactionBeginMeterValues(values []store.MeterValue) (int, bool) {
-	for _, value := range values {
-		for _, sv := range value.SampledValues {
-			if sv.Context != nil && *sv.Context == "Transaction.Begin" &&
-				sv.Measurand != nil && *sv.Measurand == "MeterValue" &&
-				sv.Location != nil && *sv.Location == "Outlet" {
-				return int(sv.Value), true
-			}
-		}
-	}
-
-	return 0, false
-}
-
-func convertMeterValues(meterValues []types.StopTransactionJsonTransactionDataElem) ([]store.MeterValue, error) {
+// convertTransactionData converts the transactionData of a StopTransaction.req.
+// Meter values and samples that cannot be stored are skipped (see convertMeterValue),
+// so that they do not fail the message: the station retries a failed StopTransaction forever.
+func convertTransactionData(transactionData []types.StopTransactionJsonTransactionDataElem) []store.MeterValue {
 	var converted []store.MeterValue
-	for _, meterValue := range meterValues {
-		convertedMeterValue, err := convertMeterValue(meterValue)
-		if err != nil {
-			return nil, err
+	for _, meterValue := range transactionData {
+		if mv, ok := convertMeterValue(meterValue.Timestamp, rawTransactionDataSamples(meterValue.SampledValue)); ok {
+			converted = append(converted, mv)
 		}
-		converted = append(converted, convertedMeterValue)
 	}
-	return converted, nil
-}
-
-func convertMeterValue(meterValue types.StopTransactionJsonTransactionDataElem) (store.MeterValue, error) {
-	sampledValues, err := convertSampledValues(meterValue.SampledValue)
-	if err != nil {
-		return store.MeterValue{}, err
-	}
-	return store.MeterValue{
-		SampledValues: sampledValues,
-		Timestamp:     meterValue.Timestamp,
-	}, nil
-}
-
-func convertSampledValues(sampledValues []types.StopTransactionJsonTransactionDataElemSampledValueElem) ([]store.SampledValue, error) {
-	var converted []store.SampledValue
-	for _, sampleValue := range sampledValues {
-		convertedSampleValue, err := convertSampleValue(sampleValue)
-		if err != nil {
-			return nil, err
-		}
-		converted = append(converted, convertedSampleValue)
-	}
-	return converted, nil
-}
-
-func convertSampleValue(sampleValue types.StopTransactionJsonTransactionDataElemSampledValueElem) (store.SampledValue, error) {
-	value, err := convertValue(sampleValue.Format, sampleValue.Value)
-	if err != nil {
-		return store.SampledValue{}, err
-	}
-	return store.SampledValue{
-		Context:       (*string)(sampleValue.Context),
-		Location:      (*string)(sampleValue.Location),
-		Measurand:     (*string)(sampleValue.Measurand),
-		Phase:         (*string)(sampleValue.Phase),
-		UnitOfMeasure: convertUnitOfMeasure(sampleValue.Unit),
-		Value:         value,
-	}, nil
-}
-
-func convertValue(format *types.StopTransactionJsonTransactionDataElemSampledValueElemFormat, value string) (float64, error) {
-	if format != nil && *format != types.StopTransactionJsonTransactionDataElemSampledValueElemFormatRaw {
-		return 0, errors.New("conversion from signed data not implemented")
-	}
-
-	return strconv.ParseFloat(value, 64)
-}
-
-func convertUnitOfMeasure(unit *types.StopTransactionJsonTransactionDataElemSampledValueElemUnit) *store.UnitOfMeasure {
-	if unit == nil {
-		return nil
-	}
-
-	return &store.UnitOfMeasure{
-		Unit:      string(*unit),
-		Multipler: 1,
-	}
+	return converted
 }

@@ -6,12 +6,14 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"io/fs"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/thoughtworks/maeve-csms/manager/handlers"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
@@ -781,5 +783,63 @@ func TestCallMaker(t *testing.T) {
 			assert.Equal(t, "cs001", emitter.ChargeStationId)
 			assert.Equal(t, action, emitter.Message.Action)
 		})
+	}
+}
+
+// TestAllRouteSchemasExist fails when a route refers to a schema file that is missing
+// or does not compile. The router validates every message before calling the handler,
+// so a wrong schema name silently breaks the whole action.
+func TestAllRouteSchemasExist(t *testing.T) {
+	now, err := time.Parse(time.RFC3339, "2023-06-15T15:05:00+01:00")
+	require.NoError(t, err)
+	clock := clockTest.NewFakePassiveClock(now)
+
+	engine := inmemory.NewStore(clock)
+
+	router, ok := ocpp201.NewRouter(&fakeEmitter{},
+		clock,
+		engine,
+		&fakeTariffService{},
+		&fakeCertValidationService{},
+		&fakeChargeStationCertProvider{},
+		&fakeContractCertProvider{},
+		5*time.Minute,
+		schemas.OcppSchemas,
+	).(*handlers.Router)
+	require.True(t, ok, "expected NewRouter to return a *handlers.Router")
+
+	// schema path indexed by a description of the route that uses it
+	routeSchemas := make(map[string]string)
+
+	for action, route := range router.CallRoutes {
+		routeSchemas["call "+action+" request"] = route.RequestSchema
+		routeSchemas["call "+action+" response"] = route.ResponseSchema
+
+		// vendor-specific DataTransfer routes (none are registered by default)
+		if dataTransfer, ok := route.Handler.(ocpp201.DataTransferHandler); ok {
+			for vendorId, vendorRoutes := range dataTransfer.CallRoutes {
+				for messageId, vendorRoute := range vendorRoutes {
+					routeSchemas["call "+action+" "+vendorId+":"+messageId+" request"] = vendorRoute.RequestSchema
+					routeSchemas["call "+action+" "+vendorId+":"+messageId+" response"] = vendorRoute.ResponseSchema
+				}
+			}
+		}
+	}
+
+	for action, route := range router.CallResultRoutes {
+		routeSchemas["call result "+action+" request"] = route.RequestSchema
+		routeSchemas["call result "+action+" response"] = route.ResponseSchema
+	}
+
+	require.NotEmpty(t, router.CallRoutes)
+	require.NotEmpty(t, router.CallResultRoutes)
+
+	for route, schemaFile := range routeSchemas {
+		_, err := fs.Stat(schemas.OcppSchemas, schemaFile)
+		if !assert.NoErrorf(t, err, "%s: schema file %q is missing", route, schemaFile) {
+			continue
+		}
+		_, err = schemas.Compile(schemas.OcppSchemas, schemaFile)
+		assert.NoErrorf(t, err, "%s: schema file %q does not compile", route, schemaFile)
 	}
 }

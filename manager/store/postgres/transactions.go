@@ -5,6 +5,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -32,19 +33,23 @@ func (s *Store) Transactions(ctx context.Context) ([]*store.Transaction, error) 
 	return result, nil
 }
 
-// FindTransaction retrieves a transaction by charge station ID and transaction ID
+// energyRegisterMeasurand is the measurand of the energy meter reading that is used to
+// derive the meter start and stop values of a transaction.
+const energyRegisterMeasurand = "Energy.Active.Import.Register"
+
+// FindTransaction retrieves a transaction by charge station ID and transaction ID.
+// Transaction ids are only unique per charge station: a transaction with the same id
+// on another charge station is not found.
 func (s *Store) FindTransaction(ctx context.Context, chargeStationId, transactionId string) (*store.Transaction, error) {
-	txn, err := s.readQueries().GetTransaction(ctx, transactionId)
+	txn, err := s.readQueries().GetTransaction(ctx, GetTransactionParams{
+		ChargeStationID: chargeStationId,
+		ID:              transactionId,
+	})
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to find transaction: %w", err)
-	}
-
-	// Verify charge station ID matches
-	if txn.ChargeStationID != chargeStationId {
-		return nil, nil
 	}
 
 	return s.toStoreTransaction(ctx, &txn)
@@ -62,10 +67,22 @@ func (s *Store) FindActiveTransaction(ctx context.Context, chargeStationId strin
 	return s.toStoreTransaction(ctx, &txn)
 }
 
-// CreateTransaction creates a new transaction with initial meter values
+// energyRegisterValue returns the energy meter reading (Wh) of a meter value, if it has one.
+func energyRegisterValue(mv *store.MeterValue) pgtype.Int8 {
+	for _, sv := range mv.SampledValues {
+		if sv.Measurand != nil && *sv.Measurand == energyRegisterMeasurand {
+			return pgtype.Int8{Int64: int64(sv.Value), Valid: true}
+		}
+	}
+	return pgtype.Int8{}
+}
+
+// CreateTransaction creates a new transaction with initial meter values. It returns an
+// error wrapping store.ErrAlreadyExists if the charge station already has a transaction
+// with this id.
 func (s *Store) CreateTransaction(ctx context.Context, chargeStationId, transactionId, idToken, tokenType string, meterValues []store.MeterValue, seqNo int, offline bool) error {
-	// Extract meter start from first meter value if available
-	meterStart := int32(0)
+	// Extract meter start from first meter value if available (NULL when not known)
+	var meterStart pgtype.Int8
 	startTimestamp := time.Now()
 
 	if len(meterValues) > 0 {
@@ -77,12 +94,7 @@ func (s *Store) CreateTransaction(ctx context.Context, chargeStationId, transact
 		startTimestamp = parsedTime
 
 		// Try to find energy meter reading for meter_start
-		for _, sv := range meterValues[0].SampledValues {
-			if sv.Measurand != nil && *sv.Measurand == "Energy.Active.Import.Register" {
-				meterStart = int32(sv.Value)
-				break
-			}
-		}
+		meterStart = energyRegisterValue(&meterValues[0])
 	}
 
 	// Create transaction record
@@ -92,18 +104,22 @@ func (s *Store) CreateTransaction(ctx context.Context, chargeStationId, transact
 		TokenUid:        idToken,
 		TokenType:       tokenType,
 		MeterStart:      meterStart,
-		StartTimestamp:  timestampFromTime(startTimestamp),
+		StartTimestamp:  timestampFromTime(startTimestamp.UTC()),
 		Offline:         offline,
 	}
 
 	_, err := s.writeQueries().CreateTransaction(ctx, params)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// the insert does nothing when the transaction exists (ON CONFLICT DO NOTHING)
+			return fmt.Errorf("transaction %s/%s: %w", chargeStationId, transactionId, store.ErrAlreadyExists)
+		}
 		return fmt.Errorf("failed to create transaction: %w", err)
 	}
 
 	// Store meter values
 	for _, mv := range meterValues {
-		if err := s.addMeterValue(ctx, transactionId, &mv); err != nil {
+		if err := s.addMeterValue(ctx, chargeStationId, transactionId, &mv); err != nil {
 			return fmt.Errorf("failed to add meter value: %w", err)
 		}
 	}
@@ -111,35 +127,45 @@ func (s *Store) CreateTransaction(ctx context.Context, chargeStationId, transact
 	return nil
 }
 
+// getTransactionForUpdate retrieves the transaction of a charge station that is about to
+// be updated. It returns an error wrapping store.ErrNotFound if it does not exist.
+func (s *Store) getTransactionForUpdate(ctx context.Context, chargeStationId, transactionId string) (*Transaction, error) {
+	txn, err := s.readQueries().GetTransaction(ctx, GetTransactionParams{
+		ChargeStationID: chargeStationId,
+		ID:              transactionId,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("transaction not found: %s/%s: %w", chargeStationId, transactionId, store.ErrNotFound)
+		}
+		return nil, fmt.Errorf("failed to get transaction: %w", err)
+	}
+	return &txn, nil
+}
+
 // UpdateTransaction updates a transaction with additional meter values
 func (s *Store) UpdateTransaction(ctx context.Context, chargeStationId, transactionId string, meterValues []store.MeterValue) error {
-	// Verify transaction exists and belongs to charge station
-	txn, err := s.readQueries().GetTransaction(ctx, transactionId)
+	// Verify transaction exists for this charge station
+	txn, err := s.getTransactionForUpdate(ctx, chargeStationId, transactionId)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return fmt.Errorf("transaction not found")
-		}
-		return fmt.Errorf("failed to get transaction: %w", err)
-	}
-
-	if txn.ChargeStationID != chargeStationId {
-		return fmt.Errorf("transaction does not belong to charge station")
+		return err
 	}
 
 	// Add meter values
 	for _, mv := range meterValues {
-		if err := s.addMeterValue(ctx, transactionId, &mv); err != nil {
+		if err := s.addMeterValue(ctx, chargeStationId, transactionId, &mv); err != nil {
 			return fmt.Errorf("failed to add meter value: %w", err)
 		}
 	}
 
 	// Update sequence number
 	updateParams := UpdateTransactionParams{
-		ID:            transactionId,
-		MeterStop:     txn.MeterStop,
-		StopTimestamp: txn.StopTimestamp,
-		StoppedReason: txn.StoppedReason,
-		UpdatedSeqNo:  txn.UpdatedSeqNo + 1,
+		ChargeStationID: chargeStationId,
+		ID:              transactionId,
+		MeterStop:       txn.MeterStop,
+		StopTimestamp:   txn.StopTimestamp,
+		StoppedReason:   txn.StoppedReason,
+		UpdatedSeqNo:    txn.UpdatedSeqNo + 1,
 	}
 
 	_, err = s.writeQueries().UpdateTransaction(ctx, updateParams)
@@ -150,23 +176,17 @@ func (s *Store) UpdateTransaction(ctx context.Context, chargeStationId, transact
 	return nil
 }
 
-// EndTransaction ends a transaction with final meter values
+// EndTransaction ends a transaction with final meter values. The stop reason is not
+// changed: it is written with UpdateTransactionDetails.
 func (s *Store) EndTransaction(ctx context.Context, chargeStationId, transactionId, idToken, tokenType string, meterValues []store.MeterValue, seqNo int) error {
-	// Verify transaction exists and belongs to charge station
-	txn, err := s.readQueries().GetTransaction(ctx, transactionId)
+	// Verify transaction exists for this charge station
+	txn, err := s.getTransactionForUpdate(ctx, chargeStationId, transactionId)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return fmt.Errorf("transaction not found")
-		}
-		return fmt.Errorf("failed to get transaction: %w", err)
+		return err
 	}
 
-	if txn.ChargeStationID != chargeStationId {
-		return fmt.Errorf("transaction does not belong to charge station")
-	}
-
-	// Extract meter stop from last meter value if available
-	meterStop := int32(0)
+	// Extract meter stop from last meter value if available, otherwise keep what is stored
+	meterStop := txn.MeterStop
 	stopTimestamp := time.Now()
 
 	if len(meterValues) > 0 {
@@ -180,28 +200,26 @@ func (s *Store) EndTransaction(ctx context.Context, chargeStationId, transaction
 		stopTimestamp = parsedTime
 
 		// Try to find energy meter reading for meter_stop
-		for _, sv := range lastMV.SampledValues {
-			if sv.Measurand != nil && *sv.Measurand == "Energy.Active.Import.Register" {
-				meterStop = int32(sv.Value)
-				break
-			}
+		if reading := energyRegisterValue(&lastMV); reading.Valid {
+			meterStop = reading
 		}
 	}
 
 	// Add final meter values
 	for _, mv := range meterValues {
-		if err := s.addMeterValue(ctx, transactionId, &mv); err != nil {
+		if err := s.addMeterValue(ctx, chargeStationId, transactionId, &mv); err != nil {
 			return fmt.Errorf("failed to add meter value: %w", err)
 		}
 	}
 
 	// Update transaction to mark as ended
 	updateParams := UpdateTransactionParams{
-		ID:            transactionId,
-		MeterStop:     pgtype.Int4{Int32: meterStop, Valid: true},
-		StopTimestamp: pgtype.Timestamp{Time: stopTimestamp, Valid: true},
-		StoppedReason: pgtype.Text{String: "Remote", Valid: true},
-		UpdatedSeqNo:  txn.UpdatedSeqNo + 1,
+		ChargeStationID: chargeStationId,
+		ID:              transactionId,
+		MeterStop:       meterStop,
+		StopTimestamp:   timestampFromTime(stopTimestamp.UTC()),
+		StoppedReason:   txn.StoppedReason,
+		UpdatedSeqNo:    txn.UpdatedSeqNo + 1,
 	}
 
 	_, err = s.writeQueries().UpdateTransaction(ctx, updateParams)
@@ -212,8 +230,50 @@ func (s *Store) EndTransaction(ctx context.Context, chargeStationId, transaction
 	return nil
 }
 
+// UpdateTransactionDetails merges the non-nil fields of details into the stored
+// transaction. It returns an error wrapping store.ErrNotFound if the transaction does
+// not exist.
+func (s *Store) UpdateTransactionDetails(ctx context.Context, chargeStationId, transactionId string, details *store.TransactionDetails) error {
+	if details == nil {
+		details = &store.TransactionDetails{}
+	}
+
+	rows, err := s.writeQueries().UpdateTransactionDetails(ctx, UpdateTransactionDetailsParams{
+		ChargeStationID: chargeStationId,
+		ID:              transactionId,
+		EvseID:          toNullInt32(details.EvseId),
+		ConnectorID:     toNullInt32(details.ConnectorId),
+		StartedAt:       toNullTimestamp(details.StartedAt),
+		StoppedAt:       toNullTimestamp(details.StoppedAt),
+		MeterStartWh:    toNullInt64(details.MeterStartWh),
+		MeterStopWh:     toNullInt64(details.MeterStopWh),
+		EnergyWh:        toNullInt64(details.EnergyWh),
+		StopReason:      textFromString(details.StopReason),
+		IDTokenGroup:    textFromString(details.IdTokenGroup),
+		ReservationID:   toNullInt32(details.ReservationId),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update transaction details for %s/%s: %w", chargeStationId, transactionId, err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("transaction %s/%s: %w", chargeStationId, transactionId, store.ErrNotFound)
+	}
+
+	return nil
+}
+
+// NextOcpp16TransactionId returns the next CSMS-assigned OCPP 1.6 transaction id
+// (1..2147483647, wrapping).
+func (s *Store) NextOcpp16TransactionId(ctx context.Context) (int, error) {
+	id, err := s.writeQueries().NextOcpp16TransactionId(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to allocate OCPP 1.6 transaction id: %w", err)
+	}
+	return int(id), nil
+}
+
 // Helper function to add a meter value to the database
-func (s *Store) addMeterValue(ctx context.Context, transactionId string, mv *store.MeterValue) error {
+func (s *Store) addMeterValue(ctx context.Context, chargeStationId, transactionId string, mv *store.MeterValue) error {
 	// Parse timestamp
 	parsedTime, err := time.Parse(time.RFC3339, mv.Timestamp)
 	if err != nil {
@@ -226,10 +286,13 @@ func (s *Store) addMeterValue(ctx context.Context, transactionId string, mv *sto
 		return fmt.Errorf("failed to marshal sampled values: %w", err)
 	}
 
+	// The column has no time zone and pgx drops the zone of the value it is given,
+	// so the instant is stored in UTC.
 	params := AddMeterValuesParams{
-		TransactionID: transactionId,
-		Timestamp:     timestampFromTime(parsedTime),
-		SampledValues: sampledValuesJSON,
+		ChargeStationID: chargeStationId,
+		TransactionID:   transactionId,
+		Timestamp:       timestampFromTime(parsedTime.UTC()),
+		SampledValues:   sampledValuesJSON,
 	}
 
 	return s.writeQueries().AddMeterValues(ctx, params)
@@ -302,7 +365,10 @@ func (s *Store) ListTransactionsForChargeStation(ctx context.Context, chargeStat
 // Helper function to convert PostgreSQL Transaction to store.Transaction
 func (s *Store) toStoreTransaction(ctx context.Context, txn *Transaction) (*store.Transaction, error) {
 	// Retrieve meter values for this transaction
-	meterValueRecords, err := s.readQueries().GetMeterValues(ctx, txn.ID)
+	meterValueRecords, err := s.readQueries().GetMeterValues(ctx, GetMeterValuesParams{
+		ChargeStationID: txn.ChargeStationID,
+		TransactionID:   txn.ID,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get meter values: %w", err)
 	}
@@ -347,5 +413,15 @@ func (s *Store) toStoreTransaction(ctx context.Context, txn *Transaction) (*stor
 		UpdatedSeqNoCount: int(txn.UpdatedSeqNo),
 		Offline:           txn.Offline,
 		LastCost:          lastCost,
+		EvseId:            fromNullInt32(txn.EvseID),
+		ConnectorId:       fromNullInt32(txn.ConnectorID),
+		StartedAt:         fromNullTimestamp(txn.StartTimestamp),
+		StoppedAt:         fromNullTimestamp(txn.StopTimestamp),
+		MeterStartWh:      fromNullInt64(txn.MeterStart),
+		MeterStopWh:       fromNullInt64(txn.MeterStop),
+		EnergyWh:          fromNullInt64(txn.EnergyWh),
+		StopReason:        stringFromText(txn.StoppedReason),
+		IdTokenGroup:      stringFromText(txn.IDTokenGroup),
+		ReservationId:     fromNullInt32(txn.ReservationID),
 	}, nil
 }

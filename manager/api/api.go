@@ -2,5 +2,5 @@
 
 package api
 
-//go:generate oapi-codegen -config cfg.yaml api-spec.yaml
-//go:generate widdershins api-spec.yaml -o API.md -c true
+//go:generate sh -c "cd .. && make api-generate"
+//go:generate widdershins api-spec.bundled.yaml -o API.md -c true
