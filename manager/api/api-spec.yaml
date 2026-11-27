@@ -212,6 +212,8 @@ components:
       $ref: 'schemas/schemas.yaml#/components/schemas/ConfigurationChangeRequest'
     ConfigurationChangeResponse:
       $ref: 'schemas/schemas.yaml#/components/schemas/ConfigurationChangeResponse'
+    ConfigurationChangeResult:
+      $ref: 'schemas/schemas.yaml#/components/schemas/ConfigurationChangeResult'
     VariablesResponse:
       $ref: 'schemas/schemas.yaml#/components/schemas/VariablesResponse'
     VariablesChangeRequest:

@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/commands"
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/transport"
 )
 
 func newCommand(action, payload string) *store.Command {
@@ -292,5 +293,21 @@ func TestEnqueueWithoutADispatcherOnlyStores(t *testing.T) {
 	f.service.Dispatcher = nil
 	cmd := f.enqueue("Reset", `{"type":"Soft"}`)
 	assert.Equal(t, store.CommandStatusQueued, cmd.Status)
+	assert.Empty(t, f.emitter.sent())
+}
+
+func TestCheckPayloadChecksAsEnqueueDoes(t *testing.T) {
+	f := newFixture(t)
+
+	assert.NoError(t, f.service.CheckPayload(transport.OcppVersion16, "ChangeConfiguration", json.RawMessage(`{"key":"HeartbeatInterval","value":"600"}`)))
+	assert.ErrorIs(t, f.service.CheckPayload(transport.OcppVersion16, "ChangeConfiguration", json.RawMessage(`{"key":"HeartbeatInterval"}`)),
+		commands.ErrInvalidPayload)
+	assert.ErrorIs(t, f.service.CheckPayload(transport.OcppVersion16, "SetVariables", json.RawMessage(`{}`)), commands.ErrUnknownAction)
+	assert.ErrorIs(t, f.service.CheckPayload(transport.OcppVersion201, "Reset", json.RawMessage(`{"type":"Soft"}`)), commands.ErrUnknownAction)
+
+	// nothing is stored or sent
+	_, total, err := f.store.ListCommands(context.Background(), store.CommandFilter{})
+	require.NoError(t, err)
+	assert.Zero(t, total)
 	assert.Empty(t, f.emitter.sent())
 }

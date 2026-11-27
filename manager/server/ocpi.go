@@ -19,9 +19,11 @@ import (
 	"k8s.io/utils/clock"
 )
 
-func NewOcpiHandler(engine store.Engine, clock clock.PassiveClock, ocpiApi ocpi.Api, emitter transport.Emitter) http.Handler {
+// NewOcpiHandler creates the handler of the OCPI listener. The options set up the OCPI
+// server (ocpi.WithCommands has the commands to the charge stations queued).
+func NewOcpiHandler(engine store.Engine, clock clock.PassiveClock, ocpiApi ocpi.Api, emitter transport.Emitter, opts ...ocpi.ServerOption) http.Handler {
 	v16CallMaker := ocpp16.NewCallMaker(emitter)
-	ocpiServer, err := ocpi.NewServer(ocpiApi, clock, v16CallMaker)
+	ocpiServer, err := ocpi.NewServer(ocpiApi, clock, v16CallMaker, opts...)
 	if err != nil {
 		panic(err)
 	}

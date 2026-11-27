@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
@@ -225,15 +224,8 @@ func (t StartTransactionHandler) consumeReservation(ctx context.Context, chargeS
 	}
 }
 
+// ConvertToUUID returns the stored id of the transaction that an OCPP 1.6 charge station
+// numbered transactionId (see ConvertToUUID of the OCPP 1.6 types).
 func ConvertToUUID(transactionId int) string {
-	uuidBytes := []byte{
-		0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00,
-		(byte)(transactionId >> 24),
-		(byte)(transactionId >> 16),
-		(byte)(transactionId >> 8),
-		(byte)(transactionId),
-	}
-	return uuid.Must(uuid.FromBytes(uuidBytes)).String()
+	return types.ConvertToUUID(transactionId)
 }

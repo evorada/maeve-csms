@@ -1,6 +1,15 @@
 paths:
   /cs/{csId}/trigger:
     post:
+      summary: Trigger a message from a charge station
+      description: |
+        Asks the charge station to send a message. For an OCPP 1.6 charge station the
+        request becomes a command of the command queue (`GET /commands/{commandId}`):
+        `BootNotification`, `DiagnosticsStatusNotification`, `FirmwareStatusNotification`,
+        `Heartbeat`, `MeterValues` and `StatusNotification` are sent as an OCPP 1.6
+        `TriggerMessage`, every other message as a `DataTransfer` of the vendor
+        `org.openchargealliance.iso15118pnc` with the OCPP 2.0.1 `TriggerMessage` request
+        as its data.
       operationId: triggerChargeStation
       x-permission: cpms.connector.command
       parameters:
@@ -17,8 +26,30 @@ paths:
             schema:
               $ref: '../schemas/schemas.yaml#/components/schemas/ChargeStationTrigger'
       responses:
-        '200':
-          description: OK
+        '201':
+          description: |
+            The message is requested.
+            For an OCPP 1.6 charge station the request is queued as a command, which is
+            the body, and `Location` names it. For other charge stations, and when the
+            storage engine of the manager does not keep commands, the body is empty.
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Command'
+        '400':
+          description: |
+            The request is not valid. For an OCPP 1.6 charge station the error starts with
+            `invalid_payload` (followed by the schema error) when the request does not make
+            a valid OCPP call.
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '401':
           description: Unauthorized
           content:
@@ -33,6 +64,14 @@ paths:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
           content:
             application/json:
               schema:

@@ -145,8 +145,7 @@ func (s *Server) EnqueueCommand(w http.ResponseWriter, r *http.Request, csId str
 			status = http.StatusOK
 		}
 	}
-	w.Header().Set("Location", BasePath+"/commands/"+queued.Id)
-	s.renderCommand(w, r, status, queued)
+	s.renderQueued(w, r, status, queued)
 }
 
 // commandActor names who creates a command: the subject of the caller, followed by

@@ -104,8 +104,8 @@ func (s *Service) Enqueue(ctx context.Context, cmd *store.Command) (*store.Comma
 		}
 	}
 
-	if err := schemas.Validate(c.Payload, s.SchemaFS, spec.RequestSchema); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidPayload, err)
+	if err := s.validate(spec, c.Payload); err != nil {
+		return nil, err
 	}
 
 	c.Status = store.CommandStatusQueued
@@ -137,6 +137,26 @@ func (s *Service) Enqueue(ctx context.Context, cmd *store.Command) (*store.Comma
 		return &c, nil
 	}
 	return stored, nil
+}
+
+// CheckPayload checks a payload of an action of an OCPP version as Enqueue does before
+// it stores a command, without the preprocessors: it returns ErrUnknownAction or
+// ErrInvalidPayload as Enqueue would. A caller that queues several commands together
+// checks them all first, so that it queues all of them or none.
+func (s *Service) CheckPayload(version transport.OcppVersion, action string, payload json.RawMessage) error {
+	spec, ok := Lookup(version, action)
+	if !ok {
+		return fmt.Errorf("%w: %s for %s", ErrUnknownAction, action, version)
+	}
+	return s.validate(spec, payload)
+}
+
+// validate checks a payload against the request schema of the action.
+func (s *Service) validate(spec ActionSpec, payload json.RawMessage) error {
+	if err := schemas.Validate(payload, s.SchemaFS, spec.RequestSchema); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidPayload, err)
+	}
+	return nil
 }
 
 // stationVersion returns the OCPP version of a station from its runtime details.

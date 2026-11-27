@@ -126,7 +126,7 @@ var (
 	TriggerMessageHeartbeat                         TriggerMessage = "Heartbeat"
 	TriggerMessageStatusNotification                TriggerMessage = "StatusNotification"
 	TriggerMessageFirmwareStatusNotification        TriggerMessage = "FirmwareStatusNotification"
-	TriggerMessageDiagnosticStatusNotification      TriggerMessage = "DiagnosticStatusNotification"
+	TriggerMessageDiagnosticStatusNotification      TriggerMessage = "DiagnosticsStatusNotification"
 	TriggerMessageMeterValues                       TriggerMessage = "MeterValues"
 	TriggerMessageSignChargingStationCertificate    TriggerMessage = "SignChargingStationCertificate"
 	TriggerMessageSignV2GCertificate                TriggerMessage = "SignV2GCertificate"

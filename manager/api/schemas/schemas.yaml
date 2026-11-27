@@ -872,10 +872,18 @@ components:
           - Rejected
           - UnknownMessageId
           - UnknownVendorId
-          description: Status of the data transfer
+          description: |
+            Status of the data transfer. Left out when the request is queued as a command:
+            the status is then known when the charge station answers.
         data:
           type: string
           description: Response data from the charge station (vendor-specific)
+        commandId:
+          type: string
+          format: uuid
+          description: |
+            The command that sends the data transfer (OCPP 1.6 charge stations), whose
+            result is the answer of the charge station
     ChangeAvailabilityRequest:
       type: object
       description: Request to change charge station or connector availability
@@ -1110,22 +1118,33 @@ components:
           type: array
           description: Per-key change results
           items:
-            type: object
-            required:
-            - key
-            - status
-            properties:
-              key:
-                type: string
-                description: Configuration key name
-              status:
-                type: string
-                enum:
-                - Accepted
-                - Rejected
-                - RebootRequired
-                - NotSupported
-                description: Result of the configuration change
+            $ref: '#/components/schemas/ConfigurationChangeResult'
+    ConfigurationChangeResult:
+      type: object
+      description: The result of the change of one configuration key
+      required:
+      - key
+      - status
+      properties:
+        key:
+          type: string
+          description: Configuration key name
+        status:
+          type: string
+          enum:
+          - Accepted
+          - Rejected
+          - RebootRequired
+          - NotSupported
+          - Pending
+          description: |
+            Result of the configuration change. `Pending` when the change is queued as a
+            command (OCPP 1.6 charge stations): the status that the charge station answers
+            is then the result of the command.
+        commandId:
+          type: string
+          format: uuid
+          description: The command that changes the key (OCPP 1.6 charge stations)
     VariablesResponse:
       type: object
       description: Variables response from GetVariables (OCPP 2.0.1)

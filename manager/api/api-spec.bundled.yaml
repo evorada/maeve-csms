@@ -315,6 +315,15 @@ paths:
                 $ref: '#/components/schemas/Status'
   /cs/{csId}/trigger:
     post:
+      summary: Trigger a message from a charge station
+      description: |
+        Asks the charge station to send a message. For an OCPP 1.6 charge station the
+        request becomes a command of the command queue (`GET /commands/{commandId}`):
+        `BootNotification`, `DiagnosticsStatusNotification`, `FirmwareStatusNotification`,
+        `Heartbeat`, `MeterValues` and `StatusNotification` are sent as an OCPP 1.6
+        `TriggerMessage`, every other message as a `DataTransfer` of the vendor
+        `org.openchargealliance.iso15118pnc` with the OCPP 2.0.1 `TriggerMessage` request
+        as its data.
       operationId: triggerChargeStation
       x-permission: cpms.connector.command
       parameters:
@@ -331,8 +340,30 @@ paths:
             schema:
               $ref: '#/components/schemas/ChargeStationTrigger'
       responses:
-        '200':
-          description: OK
+        '201':
+          description: |
+            The message is requested.
+            For an OCPP 1.6 charge station the request is queued as a command, which is
+            the body, and `Location` names it. For other charge stations, and when the
+            storage engine of the manager does not keep commands, the body is empty.
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Command'
+        '400':
+          description: |
+            The request is not valid. For an OCPP 1.6 charge station the error starts with
+            `invalid_payload` (followed by the schema error) when the request does not make
+            a valid OCPP call.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '401':
           description: Unauthorized
           content:
@@ -347,6 +378,14 @@ paths:
                 $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
           content:
             application/json:
               schema:
@@ -1037,6 +1076,7 @@ paths:
       description: |
         Remotely starts a charging transaction on the specified charge station.
         This is an async operation that returns immediately with 202 Accepted.
+        For an OCPP 1.6 charge station the request becomes a command of the command queue (`GET /commands/{commandId}`): it is sent when the charge station is connected, and the answer of the charge station is the result of the command.
       operationId: remoteStartTransaction
       x-permission: cpms.connector.command
       parameters:
@@ -1054,7 +1094,29 @@ paths:
               $ref: '#/components/schemas/RemoteStartTransactionRequest'
       responses:
         '202':
-          description: Accepted - remote start initiated
+          description: |
+            Accepted - remote start initiated.
+            For an OCPP 1.6 charge station the request is queued as a command, which is
+            the body, and `Location` names it. For other charge stations, and when the
+            storage engine of the manager does not keep commands, the body is empty.
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Command'
+        '400':
+          description: |
+            The request is not valid. For an OCPP 1.6 charge station the error starts with
+            `invalid_payload` (followed by the schema error) when the request does not make
+            a valid OCPP call.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '401':
           description: Unauthorized
           content:
@@ -1073,6 +1135,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -1085,6 +1155,7 @@ paths:
       description: |
         Remotely stops an active charging transaction on the specified charge station.
         This is an async operation that returns immediately with 202 Accepted.
+        For an OCPP 1.6 charge station the request becomes a command of the command queue (`GET /commands/{commandId}`): it is sent when the charge station is connected, and the answer of the charge station is the result of the command. `transactionId` is then the OCPP transaction id or the id of the transaction in the manager (the id that the transaction list shows); any other value is refused with 400.
       operationId: remoteStopTransaction
       x-permission: cpms.connector.command
       parameters:
@@ -1102,7 +1173,29 @@ paths:
               $ref: '#/components/schemas/RemoteStopTransactionRequest'
       responses:
         '202':
-          description: Accepted - remote stop initiated
+          description: |
+            Accepted - remote stop initiated.
+            For an OCPP 1.6 charge station the request is queued as a command, which is
+            the body, and `Location` names it. For other charge stations, and when the
+            storage engine of the manager does not keep commands, the body is empty.
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Command'
+        '400':
+          description: |
+            The request is not valid. For an OCPP 1.6 charge station the error starts with
+            `invalid_payload` (followed by the schema error) when the request does not make
+            a valid OCPP call.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '401':
           description: Unauthorized
           content:
@@ -1117,6 +1210,14 @@ paths:
                 $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
           content:
             application/json:
               schema:
@@ -1500,8 +1601,14 @@ paths:
     post:
       summary: Send data transfer to charge station
       description: |
-        Sends vendor-specific data to a charge station. The data format and semantics
-        are defined by the vendor. Supports both OCPP 1.6 and OCPP 2.0.1.
+        Sends vendor-specific data to a charge station. The data format and semantics are
+        defined by the vendor. Supports both OCPP 1.6 and OCPP 2.0.1.
+
+        For an OCPP 1.6 charge station the request becomes a command of the command
+        queue (`GET /commands/{commandId}`): it is sent when the charge station is
+        connected, and the answer of the charge station is the result of the command.
+        The answer then has the id of the command (`commandId`) and no `status`: the status
+        is known when the charge station answers.
       operationId: sendDataTransfer
       x-permission: cpms.connector.command
       parameters:
@@ -1520,10 +1627,24 @@ paths:
       responses:
         '202':
           description: Accepted - data transfer request submitted
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataTransferResponse'
+        '400':
+          description: |
+            The request is not valid. For an OCPP 1.6 charge station the error starts with
+            `invalid_payload` (followed by the schema error) when the request does not make
+            a valid OCPP call.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '401':
           description: Unauthorized
           content:
@@ -1538,6 +1659,14 @@ paths:
                 $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
           content:
             application/json:
               schema:
@@ -1552,8 +1681,13 @@ paths:
     post:
       summary: Clear authorization cache on charge station
       description: |
-        Requests the charge station to clear its local authorization cache. 
-        The next authorization request will query the CSMS. Supports both OCPP 1.6 and OCPP 2.0.1.
+        Requests the charge station to clear its local authorization cache.
+        The next authorization request will query the CSMS. Supports both OCPP 1.6 and
+        OCPP 2.0.1.
+
+        For an OCPP 1.6 charge station the request becomes a command of the command
+        queue (`GET /commands/{commandId}`): it is sent when the charge station is
+        connected, and the answer of the charge station is the result of the command.
       operationId: clearAuthorizationCache
       x-permission: cpms.connector.command
       parameters:
@@ -1565,7 +1699,20 @@ paths:
             maxLength: 80
       responses:
         '202':
-          description: Accepted - cache clear request submitted
+          description: |
+            Accepted - cache clear request submitted.
+            For an OCPP 1.6 charge station the request is queued as a command, which is
+            the body, and `Location` names it. For other charge stations, and when the
+            storage engine of the manager does not keep commands, the body is empty.
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Command'
         '401':
           description: Unauthorized
           content:
@@ -1580,6 +1727,14 @@ paths:
                 $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
           content:
             application/json:
               schema:
@@ -1596,7 +1751,12 @@ paths:
       description: |
         Changes the operational status of a charge station or specific connector.
         Used to take equipment out of service for maintenance or make it available again.
-        Supports both OCPP 1.6 and OCPP 2.0.1.
+        Supports both OCPP 1.6 and OCPP 2.0.1. For an OCPP 1.6 charge station `evseId` is
+        not used and a missing `connectorId` is 0 (the whole charge station).
+
+        For an OCPP 1.6 charge station the request becomes a command of the command
+        queue (`GET /commands/{commandId}`): it is sent when the charge station is
+        connected, and the answer of the charge station is the result of the command.
       operationId: changeAvailability
       x-permission: cpms.connector.command
       parameters:
@@ -1614,7 +1774,29 @@ paths:
               $ref: '#/components/schemas/ChangeAvailabilityRequest'
       responses:
         '202':
-          description: Accepted - availability change request submitted
+          description: |
+            Accepted - availability change request submitted.
+            For an OCPP 1.6 charge station the request is queued as a command, which is
+            the body, and `Location` names it. For other charge stations, and when the
+            storage engine of the manager does not keep commands, the body is empty.
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Command'
+        '400':
+          description: |
+            The request is not valid. For an OCPP 1.6 charge station the error starts with
+            `invalid_payload` (followed by the schema error) when the request does not make
+            a valid OCPP call.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '401':
           description: Unauthorized
           content:
@@ -1629,6 +1811,14 @@ paths:
                 $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
           content:
             application/json:
               schema:
@@ -1871,8 +2061,16 @@ paths:
     get:
       summary: Get charge station configuration (OCPP 1.6)
       description: |
-        Retrieves the current configuration of a charge station using OCPP 1.6 GetConfiguration.
-        Optionally filter by specific configuration keys.
+        Answers the configuration of a charge station that the manager knows, optionally
+        only the given keys.
+
+        With `refresh=true` an OCPP 1.6 charge station is asked for its configuration
+        instead: the request queues a `GetConfiguration` command for the given keys (all
+        keys without `key`) and answers 202 with the command; the configuration is the
+        result of the command, and the manager keeps the values that the charge station
+        answers. Refreshing needs the permission `cpms.connector.command` as well. Other
+        charge stations, and a manager whose storage engine does not keep commands, answer
+        what the manager knows.
       operationId: getChargeStationConfiguration
       x-permission: cpms.station.read
       parameters:
@@ -1889,6 +2087,13 @@ paths:
           required: false
           schema:
             type: string
+        - name: refresh
+          in: query
+          description: Ask an OCPP 1.6 charge station for its configuration
+          required: false
+          schema:
+            type: boolean
+            default: false
       responses:
         '200':
           description: Configuration response
@@ -1896,6 +2101,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConfigurationResponse'
+        '202':
+          description: |
+            With `refresh=true`, for an OCPP 1.6 charge station: the `GetConfiguration`
+            command that asks the charge station
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Command'
+        '400':
+          description: |
+            The request is not valid. For an OCPP 1.6 charge station the error starts with
+            `invalid_payload` (followed by the schema error) when the request does not make
+            a valid OCPP call.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '401':
           description: Unauthorized
           content:
@@ -1903,13 +2130,23 @@ paths:
               schema:
                 $ref: '#/components/schemas/Status'
         '403':
-          description: The caller does not have the permission of the operation
+          description: |
+            The caller does not have the permission of the operation, or asks for
+            `refresh=true` without the permission `cpms.connector.command`
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
           content:
             application/json:
               schema:
@@ -1925,6 +2162,12 @@ paths:
       description: |
         Changes configuration values on a charge station using OCPP 1.6 ChangeConfiguration.
         Returns 202 Accepted with per-key results. Some changes may require a reboot.
+
+        For an OCPP 1.6 charge station each key becomes a `ChangeConfiguration` command of
+        the command queue (`GET /commands/{commandId}`), sent once when the charge station
+        is connected: every result has the status `Pending` and the id of its command
+        (`commandId`), and the status that the charge station answers is the result of
+        the command.
       operationId: changeChargeStationConfiguration
       x-permission: cpms.station.write
       parameters:
@@ -1948,6 +2191,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConfigurationChangeResponse'
+        '400':
+          description: |
+            The request is not valid. For an OCPP 1.6 charge station the error starts with
+            `invalid_payload` (followed by the schema error) when the request does not make
+            a valid OCPP call.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '401':
           description: Unauthorized
           content:
@@ -1962,6 +2214,14 @@ paths:
                 $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
           content:
             application/json:
               schema:
@@ -2476,6 +2736,10 @@ paths:
       operationId: ResetChargeStation
       x-permission: cpms.connector.command
       summary: Request a charge station reset
+      description: |
+        For an OCPP 1.6 charge station the request becomes a command of the command
+        queue (`GET /commands/{commandId}`): it is sent when the charge station is
+        connected, and the answer of the charge station is the result of the command.
       parameters:
         - name: csId
           in: path
@@ -2490,9 +2754,29 @@ paths:
               $ref: '#/components/schemas/ResetRequest'
       responses:
         '202':
-          description: Reset request accepted
+          description: |
+            Reset request accepted.
+            For an OCPP 1.6 charge station the request is queued as a command, which is
+            the body, and `Location` names it. For other charge stations, and when the
+            storage engine of the manager does not keep commands, the body is empty.
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Command'
         '400':
-          description: Invalid request
+          description: |
+            The request is not valid. For an OCPP 1.6 charge station the error starts with
+            `invalid_payload` (followed by the schema error) when the request does not make
+            a valid OCPP call.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '401':
           description: Unauthorized
           content:
@@ -2511,6 +2795,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '500':
           description: Internal server error
   /cs/{csId}/unlock-connector:
@@ -2518,6 +2810,10 @@ paths:
       operationId: UnlockConnector
       x-permission: cpms.connector.command
       summary: Request to unlock a connector on a charge station
+      description: |
+        For an OCPP 1.6 charge station the request becomes a command of the command
+        queue (`GET /commands/{commandId}`): it is sent when the charge station is
+        connected, and the answer of the charge station is the result of the command.
       parameters:
         - name: csId
           in: path
@@ -2532,9 +2828,29 @@ paths:
               $ref: '#/components/schemas/UnlockConnectorRequest'
       responses:
         '202':
-          description: Unlock request accepted
+          description: |
+            Unlock request accepted.
+            For an OCPP 1.6 charge station the request is queued as a command, which is
+            the body, and `Location` names it. For other charge stations, and when the
+            storage engine of the manager does not keep commands, the body is empty.
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Command'
         '400':
-          description: Invalid request
+          description: |
+            The request is not valid. For an OCPP 1.6 charge station the error starts with
+            `invalid_payload` (followed by the schema error) when the request does not make
+            a valid OCPP call.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '401':
           description: Unauthorized
           content:
@@ -2549,6 +2865,14 @@ paths:
                 $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
           content:
             application/json:
               schema:
@@ -4130,10 +4454,18 @@ components:
             - Rejected
             - UnknownMessageId
             - UnknownVendorId
-          description: Status of the data transfer
+          description: |
+            Status of the data transfer. Left out when the request is queued as a command:
+            the status is then known when the charge station answers.
         data:
           type: string
           description: Response data from the charge station (vendor-specific)
+        commandId:
+          type: string
+          format: uuid
+          description: |
+            The command that sends the data transfer (OCPP 1.6 charge stations), whose
+            result is the answer of the charge station
     ChangeAvailabilityRequest:
       type: object
       description: Request to change charge station or connector availability
@@ -4365,22 +4697,33 @@ components:
           type: array
           description: Per-key change results
           items:
-            type: object
-            required:
-              - key
-              - status
-            properties:
-              key:
-                type: string
-                description: Configuration key name
-              status:
-                type: string
-                enum:
-                  - Accepted
-                  - Rejected
-                  - RebootRequired
-                  - NotSupported
-                description: Result of the configuration change
+            $ref: '#/components/schemas/ConfigurationChangeResult'
+    ConfigurationChangeResult:
+      type: object
+      description: The result of the change of one configuration key
+      required:
+        - key
+        - status
+      properties:
+        key:
+          type: string
+          description: Configuration key name
+        status:
+          type: string
+          enum:
+            - Accepted
+            - Rejected
+            - RebootRequired
+            - NotSupported
+            - Pending
+          description: |
+            Result of the configuration change. `Pending` when the change is queued as a
+            command (OCPP 1.6 charge stations): the status that the charge station answers
+            is then the result of the command.
+        commandId:
+          type: string
+          format: uuid
+          description: The command that changes the key (OCPP 1.6 charge stations)
     VariablesResponse:
       type: object
       description: Variables response from GetVariables (OCPP 2.0.1)

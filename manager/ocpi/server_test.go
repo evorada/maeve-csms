@@ -10,17 +10,22 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	gosync "sync"
 	"testing"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/thoughtworks/maeve-csms/manager/commands"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/handlers"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/ocpi"
+	"github.com/thoughtworks/maeve-csms/manager/schemas"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	"k8s.io/utils/clock"
 	fakeclock "k8s.io/utils/clock/testing"
@@ -296,6 +301,14 @@ func TestPostStartSession(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	assert.Equal(t, ocpi.CommandResponseResultACCEPTED, postStartSession(t, handler))
+}
+
+// postStartSession asks the server for a session on connector 2 of the charge station
+// 041503001 (EVSE BEBECE041503001) for the token DEADBEEF and returns the result of the
+// command.
+func postStartSession(t *testing.T, handler http.Handler) ocpi.CommandResponseResult {
+	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, "/ocpi/receiver/2.2/commands/START_SESSION",
 		strings.NewReader(`{
 			"response_url": "https://example.com/ocpi/receiver/2.2/commands/START_SESSION/12345",
@@ -330,11 +343,155 @@ func TestPostStartSession(t *testing.T) {
 	b, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	var ocpiResponseCommandResponse ocpi.OcpiResponseCommandResponse
-	json.Unmarshal(b, &ocpiResponseCommandResponse)
+	require.NoError(t, json.Unmarshal(b, &ocpiResponseCommandResponse), string(b))
 	assert.Equal(t, ocpi.StatusSuccess, ocpiResponseCommandResponse.StatusCode)
 	t.Logf("%s", string(b))
 	require.NotNilf(t, ocpiResponseCommandResponse.Data, "ocpiResponseCommandResponse.Data should not be nil")
-	assert.Equal(t, ocpi.CommandResponseResultACCEPTED, ocpiResponseCommandResponse.Data.Result)
+	return ocpiResponseCommandResponse.Data.Result
+}
+
+// startSessionStation is the charge station of the EVSE of postStartSession.
+const startSessionStation = "041503001"
+
+// stationOrg is the org that owns startSessionStation.
+const stationOrg = "0193b2c4-0000-7000-8000-0000000000a1"
+
+// recordedCalls records the calls that are sent to the charge stations.
+type recordedCalls struct {
+	mu    gosync.Mutex
+	calls []*transport.Message
+}
+
+func (c *recordedCalls) Emit(_ context.Context, _ transport.OcppVersion, _ string, msg *transport.Message) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.calls = append(c.calls, msg)
+	return nil
+}
+
+func (c *recordedCalls) sent() []*transport.Message {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]*transport.Message(nil), c.calls...)
+}
+
+// connectedStations says that the charge stations in it are connected.
+type connectedStations map[string]bool
+
+func (c connectedStations) IsConnected(_ context.Context, stationKey string) (bool, error) {
+	return c[stationKey], nil
+}
+
+// setupHandlerWithCommands is setupHandler with a command queue: the server queues its
+// commands, which the queue sends through queued; direct are the calls that the server
+// sends itself.
+func setupHandlerWithCommands(t *testing.T, connected connectedStations) (handler http.Handler, engine store.Engine, queued, direct *recordedCalls) {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	clk := fakeclock.NewFakeClock(now)
+	mem := inmemory.NewStore(clk)
+	require.NoError(t, mem.SetRegistrationDetails(ctx, "123", &store.OcpiRegistration{
+		Status: store.OcpiRegistrationStatusRegistered,
+	}))
+	require.NoError(t, mem.SetChargeStationAuth(ctx, startSessionStation, &store.ChargeStationAuth{
+		SecurityProfile: store.TLSWithBasicAuth, OrgId: stationOrg,
+	}))
+
+	queued, direct = &recordedCalls{}, &recordedCalls{}
+	config := commands.Config{
+		ResponseTimeout: 30 * time.Second,
+		SweepInterval:   5 * time.Second,
+		DefaultTTL:      time.Hour,
+		MaxTTL:          168 * time.Hour,
+		Retention:       90 * 24 * time.Hour,
+	}
+	dispatcher := &commands.Dispatcher{
+		Store:        mem,
+		Tx:           mem,
+		Events:       events.NopEmitter{},
+		Senders:      map[transport.OcppVersion]handlers.RawCallMaker{transport.OcppVersion16: ocpp16.NewCallMaker(queued)},
+		Connectivity: connected,
+		SchemaFS:     schemas.OcppSchemas,
+		Clock:        clk,
+		Config:       config,
+	}
+	service := &commands.Service{
+		Store:          mem,
+		Tx:             mem,
+		Events:         events.NopEmitter{},
+		RuntimeDetails: mem,
+		Dispatcher:     dispatcher,
+		SchemaFS:       schemas.OcppSchemas,
+		Clock:          clk,
+		Config:         config,
+	}
+
+	ocpiApi := ocpi.NewOCPI(mem, http.DefaultClient, "GB", "TWK", store.LegacyOrgId)
+	server, err := ocpi.NewServer(ocpiApi, clk, ocpp16.NewCallMaker(direct),
+		ocpi.WithCommands(service, &tenancy.Resolver{Stations: mem, DefaultOrgId: store.LegacyOrgId}))
+	require.NoError(t, err)
+	r := chi.NewRouter()
+	r.Mount("/", ocpi.Handler(server))
+	return r, mem, queued, direct
+}
+
+// commandsOf returns the commands of the charge station.
+func commandsOf(t *testing.T, engine store.Engine, stationKey string) []*store.Command {
+	t.Helper()
+	found, _, err := engine.ListCommands(context.Background(), store.CommandFilter{StationKey: stationKey})
+	require.NoError(t, err)
+	return found
+}
+
+func TestPostStartSessionQueuesARemoteStart(t *testing.T) {
+	handler, engine, queued, direct := setupHandlerWithCommands(t, connectedStations{startSessionStation: true})
+	require.NoError(t, engine.SetChargeStationRuntimeDetails(context.Background(), startSessionStation,
+		&store.ChargeStationRuntimeDetails{OcppVersion: "1.6"}))
+
+	assert.Equal(t, ocpi.CommandResponseResultACCEPTED, postStartSession(t, handler))
+
+	found := commandsOf(t, engine, startSessionStation)
+	require.Len(t, found, 1)
+	cmd := found[0]
+	assert.Equal(t, stationOrg, cmd.OrgId, "the org that owns the charge station")
+	assert.Equal(t, "RemoteStartTransaction", cmd.Action)
+	assert.JSONEq(t, `{"connectorId":2,"idTag":"DEADBEEF"}`, string(cmd.Payload))
+	require.NotNil(t, cmd.Actor)
+	assert.Equal(t, "svc:ocpi", *cmd.Actor)
+	assert.Nil(t, cmd.Jti)
+	assert.Equal(t, store.CommandStatusSent, cmd.Status)
+
+	// the queue sends it, with the command id as message id; the server sends nothing itself
+	sent := queued.sent()
+	require.Len(t, sent, 1)
+	assert.Equal(t, cmd.Id, sent[0].MessageId)
+	assert.Equal(t, "RemoteStartTransaction", sent[0].Action)
+	assert.Empty(t, direct.sent())
+}
+
+func TestPostStartSessionForAChargeStationThatIsNotConnectedIsAccepted(t *testing.T) {
+	handler, engine, queued, direct := setupHandlerWithCommands(t, connectedStations{})
+	require.NoError(t, engine.SetChargeStationRuntimeDetails(context.Background(), startSessionStation,
+		&store.ChargeStationRuntimeDetails{OcppVersion: "1.6"}))
+
+	// the command waits in the queue for the charge station to connect
+	assert.Equal(t, ocpi.CommandResponseResultACCEPTED, postStartSession(t, handler))
+	found := commandsOf(t, engine, startSessionStation)
+	require.Len(t, found, 1)
+	assert.Equal(t, store.CommandStatusQueued, found[0].Status)
+	assert.Empty(t, queued.sent())
+	assert.Empty(t, direct.sent())
+}
+
+func TestPostStartSessionIsRejectedWhenTheRemoteStartCannotBeQueued(t *testing.T) {
+	// a charge station that never booted: its OCPP version is not known
+	handler, engine, queued, direct := setupHandlerWithCommands(t, connectedStations{startSessionStation: true})
+
+	assert.Equal(t, ocpi.CommandResponseResultREJECTED, postStartSession(t, handler))
+	assert.Empty(t, commandsOf(t, engine, startSessionStation))
+	assert.Empty(t, queued.sent())
+	assert.Empty(t, direct.sent())
 }
 
 func newNoopV16CallMaker() *handlers.OcppCallMaker {

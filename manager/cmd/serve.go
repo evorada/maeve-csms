@@ -14,6 +14,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/config"
 	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/jobs"
+	"github.com/thoughtworks/maeve-csms/manager/ocpi"
 	"github.com/thoughtworks/maeve-csms/manager/server"
 	"github.com/thoughtworks/maeve-csms/manager/sync"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
@@ -136,7 +137,8 @@ the gateway and send appropriate responses.`,
 		}
 
 		if settings.OcpiApi != nil {
-			ocpiServer := server.New("ocpi", cfg.Ocpi.Addr, nil, server.NewOcpiHandler(settings.Storage, clock.RealClock{}, settings.OcpiApi, settings.MsgEmitter))
+			ocpiServer := server.New("ocpi", cfg.Ocpi.Addr, nil, server.NewOcpiHandler(settings.Storage, clock.RealClock{}, settings.OcpiApi, settings.MsgEmitter,
+				ocpi.WithCommands(settings.Commands, settings.TenantResolver)))
 			ocpiServer.Start(errCh)
 		}
 

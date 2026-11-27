@@ -154,3 +154,52 @@ func TestCommandOperationsWithoutACommandQueueThroughTheApiHandler(t *testing.T)
 		assert.Equal(t, http.StatusNotImplemented, rr.Code, "%s %s: %s", tc.method, tc.target, rr.Body.String())
 	}
 }
+
+// An operation that sends something to an OCPP 1.6 charge station queues a command with
+// the caller and the token of the platform, through the handler of the API listener.
+func TestTypedCommandOperationThroughTheApiHandler(t *testing.T) {
+	ctx := context.Background()
+	engine := inmemory.NewStore(clock.RealClock{})
+	require.NoError(t, engine.PutTenant(ctx, &store.Tenant{OrgId: orgA, Path: store.OrgPathLabel(orgA), Slug: "tenant-aaaa", OrgKey: "aaaa"}))
+	require.NoError(t, engine.SetChargeStationAuth(ctx, stationOfA, &store.ChargeStationAuth{SecurityProfile: store.TLSWithBasicAuth, OrgId: orgA}))
+	require.NoError(t, engine.SetChargeStationRuntimeDetails(ctx, stationOfA, &store.ChargeStationRuntimeDetails{OcppVersion: "1.6"}))
+	platform, verifier := newPlatformVerifier(t)
+	resolver := &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine, DefaultOrgId: store.LegacyOrgId}
+	domainEvents := eventsOf(engine, resolver)
+	service := &commands.Service{
+		Store:          engine,
+		Tx:             engine,
+		Events:         domainEvents,
+		RuntimeDetails: engine,
+		SchemaFS:       schemas.OcppSchemas,
+		Clock:          clock.RealClock{},
+	}
+	handler := server.NewApiHandler(server.ApiDeps{
+		Engine:   engine,
+		Verifier: verifier,
+		Scoper:   scoperOf(resolver),
+		Events:   domainEvents,
+		Commands: service,
+	})
+
+	rr := request(handler, http.MethodPost, "/api/v0/cs/"+stationOfA+"/reset", tokenOf(platform, orgA, tenancy.PermConnectorCommand), `{"type":"Soft"}`)
+	require.Equal(t, http.StatusAccepted, rr.Code, rr.Body.String())
+	var queued struct {
+		Id     string `json:"id"`
+		Action string `json:"action"`
+		Actor  string `json:"actor"`
+	}
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &queued))
+	assert.Equal(t, "/api/v0/commands/"+queued.Id, rr.Header().Get("Location"))
+	assert.Equal(t, "Reset", queued.Action)
+	assert.Equal(t, "user:alice", queued.Actor)
+	stored, err := engine.GetCommand(ctx, queued.Id)
+	require.NoError(t, err)
+	require.NotNil(t, stored)
+	require.NotNil(t, stored.Jti)
+	assert.Equal(t, "token-1", *stored.Jti)
+	assert.Equal(t, orgA, stored.OrgId)
+	reset, err := engine.GetResetRequest(ctx, stationOfA)
+	require.NoError(t, err)
+	assert.Nil(t, reset, "no reset request in the store")
+}
