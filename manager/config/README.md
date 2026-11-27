@@ -160,8 +160,22 @@ hostnames = ["acme.ocpp.example.com"]
 ## Transport settings
 
 This section consists of a `type` parameter and a set of parameters specific to that type prefixed by the type name.
+The type is `nats` (the default) or `mqtt`; the gateway must use the same transport (its `--transport` flag,
+see [docs/gateway.md](../../docs/gateway.md)).
 
 e.g.
+
+```toml
+[transport]
+type = "nats"
+
+[nats]
+urls = ["nats://nats.example.com:4222"]
+```
+
+To run with MQTT instead, select it here and start the gateway with `--transport mqtt`. The MQTT
+settings have defaults (broker `mqtt://localhost:1883`, prefix `cs`), so `type = "mqtt"` alone is
+enough for a local broker:
 
 ```toml
 [transport]
@@ -190,8 +204,8 @@ message is handled by one manager replica, and publishes to
 `<subject_prefix>.out.<ocpp16|ocpp201>.<org_key>.<station>`. A station key without an org
 part (single tenancy mode) uses `_` as `<org_key>`; the station id is one subject token in
 which every byte outside `[A-Za-z0-9_~:@=+-]` is written as `%XX`. The connection itself
-is configured in the [`[nats]`](#nats-connection) section, which is required with this
-transport. The default transport is still `mqtt`.
+is configured in the [`[nats]`](#nats-connection) section. This is the default transport.
+The gateway uses the same subjects; its `--nats-subject-prefix` must match `subject_prefix`.
 
 | Section | Key            | Type    | Description                                                                                          |
 |---------|----------------|---------|------------------------------------------------------------------------------------------------------|
@@ -221,7 +235,7 @@ meant for local development. Secrets are never logged.
 
 | Section | Key            | Type             | Description                                                                                 |
 |---------|----------------|------------------|---------------------------------------------------------------------------------------------|
-| nats    | urls           | array of strings | NATS server URLs, required, e.g. ["nats://localhost:4222"]                                  |
+| nats    | urls           | array of strings | NATS server URLs, default ["nats://localhost:4222"]                                         |
 | nats    | name           | string           | Client name shown in NATS monitoring, default "maeve-manager"                               |
 | nats    | creds_file     | string           | File with the user JWT and nkey seed (production)                                           |
 | nats    | nkey_seed_file | string           | File with an nkey seed, for servers that authenticate nkeys without JWTs                    |
@@ -430,8 +444,11 @@ projects/<project-number>/secrets/<secret-name>/[latest|<version>]
 [api]
 addr = ":9410"
 
-[mqtt]
-urls = ["mqtt://mqtt:1883"]
+[transport]
+type = "nats"
+
+[nats]
+urls = ["nats://nats:4222"]
 
 [observability]
 otel_collector_addr = "otel-collector:4317"

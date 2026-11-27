@@ -55,8 +55,10 @@ var DefaultConfig = BaseConfig{
 			},
 		},
 	},
+	// NATS is the default transport. The MQTT settings stay, so that type = "mqtt"
+	// works without further keys.
 	Transport: TransportConfig{
-		Type: "mqtt",
+		Type: "nats",
 		Mqtt: &MqttSettingsConfig{
 			Urls:              []string{"mqtt://localhost:1883"},
 			Prefix:            "cs",
@@ -108,6 +110,9 @@ var DefaultConfig = BaseConfig{
 	},
 	Events: EventsConfig{
 		Enabled: true,
+	},
+	Nats: &NatsConfig{
+		Urls: []string{"nats://localhost:4222"},
 	},
 }
 

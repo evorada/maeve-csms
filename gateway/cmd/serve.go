@@ -15,6 +15,9 @@ import (
 	"github.com/subnova/slog-exporter/slogtrace"
 	"github.com/thoughtworks/maeve-csms/gateway/registry"
 	"github.com/thoughtworks/maeve-csms/gateway/server"
+	"github.com/thoughtworks/maeve-csms/gateway/transport"
+	"github.com/thoughtworks/maeve-csms/gateway/transport/mqtt"
+	natstransport "github.com/thoughtworks/maeve-csms/gateway/transport/nats"
 	"go.opentelemetry.io/contrib/detectors/gcp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -22,13 +25,26 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+	oteltrace "go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/slog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// transportSettings are the flags that choose and configure the transport to the CSMS.
+type transportSettings struct {
+	kind              string
+	mqttAddr          string
+	mqttPrefix        string
+	natsUrls          []string
+	natsCreds         string
+	natsTlsCa         string
+	natsName          string
+	natsSubjectPrefix string
+}
+
 var (
-	mqttAddr                 string
+	transportFlags           transportSettings
 	wsAddr                   string
 	wssAddr                  string
 	statusAddr               string
@@ -112,6 +128,35 @@ func initProvider(collectorAddr string) (func(context.Context) error, error) {
 	return tracerProvider.Shutdown, nil
 }
 
+// newTransport builds the transport that the settings choose: "nats" (one shared
+// connection) or "mqtt" (one broker connection per station socket).
+func newTransport(settings transportSettings, tracer oteltrace.Tracer) (transport.Transport, error) {
+	switch settings.kind {
+	case "nats":
+		if err := natstransport.ValidatePrefix(settings.natsSubjectPrefix); err != nil {
+			return nil, err
+		}
+		conn, err := natstransport.Connect(settings.natsUrls, settings.natsName, settings.natsCreds, settings.natsTlsCa)
+		if err != nil {
+			return nil, err
+		}
+		return natstransport.New(conn,
+			natstransport.WithSubjectPrefix(settings.natsSubjectPrefix),
+			natstransport.WithTracer(tracer)), nil
+	case "mqtt":
+		brokerUrl, err := url.Parse(settings.mqttAddr)
+		if err != nil {
+			return nil, fmt.Errorf("parsing mqtt broker url: %v", err)
+		}
+		return mqtt.New(
+			mqtt.WithBrokerURLs(brokerUrl),
+			mqtt.WithTopicPrefix(settings.mqttPrefix),
+			mqtt.WithTracer(tracer)), nil
+	default:
+		return nil, fmt.Errorf("unknown transport %q: must be nats or mqtt", settings.kind)
+	}
+}
+
 // serveCmd represents the serve command
 var serveCmd = &cobra.Command{
 	Use:   "serve",
@@ -134,14 +179,20 @@ var serveCmd = &cobra.Command{
 
 		tracer := otel.Tracer("gateway")
 
-		brokerUrl, err := url.Parse(mqttAddr)
-		if err != nil {
-			return fmt.Errorf("parsing mqtt broker url: %v", err)
-		}
-
 		if registryCacheTTL < 0 || registryNegativeCacheTTL < 0 {
 			return fmt.Errorf("the registry cache TTLs must not be negative")
 		}
+
+		csmsTransport, err := newTransport(transportFlags, tracer)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			err := csmsTransport.Close()
+			if err != nil {
+				slog.Error("closing the transport", "error", err)
+			}
+		}()
 
 		deviceRegistry := &registry.CachingRegistry{
 			Inner: registry.RemoteRegistry{
@@ -152,8 +203,7 @@ var serveCmd = &cobra.Command{
 		}
 		statusServer := server.New("status", statusAddr, nil, server.NewStatusHandler())
 		websocketHandler := server.NewWebsocketHandler(
-			server.WithMqttBrokerUrl(brokerUrl),
-			server.WithMqttTopicPrefix("cs"),
+			server.WithTransport(csmsTransport),
 			server.WithDeviceRegistry(deviceRegistry),
 			server.WithOrgNames(orgNames),
 			server.WithTrustProxyHeaders(trustProxyHeaders),
@@ -219,8 +269,22 @@ var serveCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(serveCmd)
 
-	serveCmd.Flags().StringVarP(&mqttAddr, "mqtt-addr", "m", "mqtt://127.0.0.1:1883",
-		"The address of the MQTT broker, e.g. mqtt://127.0.0.1:1883")
+	serveCmd.Flags().StringVar(&transportFlags.kind, "transport", "nats",
+		"How the gateway exchanges messages with the CSMS manager, one of [nats, mqtt]; the manager must use the same (its [transport] type)")
+	serveCmd.Flags().StringSliceVar(&transportFlags.natsUrls, "nats-url", []string{natstransport.DefaultURL},
+		"A comma-separated list of NATS server URLs, e.g. nats://127.0.0.1:4222 (with --transport nats)")
+	serveCmd.Flags().StringVar(&transportFlags.natsCreds, "nats-creds", "",
+		"A file with the user JWT and nkey seed to authenticate to NATS (with --transport nats)")
+	serveCmd.Flags().StringVar(&transportFlags.natsTlsCa, "nats-tls-ca", "",
+		"A file with the PEM encoded CA certificates that sign the certificate of the NATS server (with --transport nats)")
+	serveCmd.Flags().StringVar(&transportFlags.natsName, "nats-name", natstransport.DefaultConnectionName,
+		"The client name of the gateway that NATS monitoring shows (with --transport nats)")
+	serveCmd.Flags().StringVar(&transportFlags.natsSubjectPrefix, "nats-subject-prefix", natstransport.DefaultSubjectPrefix,
+		"The first token of the NATS subjects; the manager must use the same (its transport.nats.subject_prefix) (with --transport nats)")
+	serveCmd.Flags().StringVarP(&transportFlags.mqttAddr, "mqtt-addr", "m", "mqtt://127.0.0.1:1883",
+		"The address of the MQTT broker, e.g. mqtt://127.0.0.1:1883 (with --transport mqtt)")
+	serveCmd.Flags().StringVar(&transportFlags.mqttPrefix, "mqtt-prefix", "cs",
+		"The first level of the MQTT topics; the manager must use the same (its transport.mqtt.prefix) (with --transport mqtt)")
 	serveCmd.Flags().StringVarP(&wsAddr, "ws-addr", "a", "127.0.0.1:9310",
 		"The address that the insecure websocket server will listen on for connections, e.g. 127.0.0.1:9310")
 	serveCmd.Flags().StringVarP(&wssAddr, "wss-addr", "w", "",

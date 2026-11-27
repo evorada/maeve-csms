@@ -29,6 +29,7 @@ import (
 	"github.com/eclipse/paho.golang/paho"
 	"github.com/mochi-co/mqtt/v2"
 	"github.com/mochi-co/mqtt/v2/packets"
+	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/gateway/ocpp"
@@ -36,6 +37,12 @@ import (
 	"github.com/thoughtworks/maeve-csms/gateway/registry"
 	"github.com/thoughtworks/maeve-csms/gateway/server"
 	"github.com/thoughtworks/maeve-csms/gateway/transport"
+	natstransport "github.com/thoughtworks/maeve-csms/gateway/transport/nats"
+	"github.com/thoughtworks/maeve-csms/gateway/transport/nats/natstest"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	tracesdk "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace"
 	"nhooyr.io/websocket"
 )
 
@@ -741,6 +748,12 @@ func tenantStation(orgKey, clientId string) *registry.ChargeStation {
 // its request (as if the charge station had resolved host to the address of the server).
 func dialStation(ctx context.Context, t *testing.T, srv *httptest.Server, host, clientId, username, password string, header http.Header) (*websocket.Conn, *http.Response, error) {
 	t.Helper()
+	return dialStationWithProtocol(ctx, t, srv, host, clientId, username, password, header, "ocpp2.0.1")
+}
+
+// dialStationWithProtocol is dialStation with the OCPP websocket subprotocol.
+func dialStationWithProtocol(ctx context.Context, t *testing.T, srv *httptest.Server, host, clientId, username, password string, header http.Header, protocol string) (*websocket.Conn, *http.Response, error) {
+	t.Helper()
 
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
@@ -757,7 +770,7 @@ func dialStation(ctx context.Context, t *testing.T, srv *httptest.Server, host, 
 
 	return websocket.Dial(ctx, fmt.Sprintf("ws://%s/ws/%s", host, clientId), &websocket.DialOptions{
 		HTTPClient:   &http.Client{Transport: transport},
-		Subprotocols: []string{"ocpp2.0.1"},
+		Subprotocols: []string{protocol},
 		HTTPHeader:   header,
 	})
 }
@@ -1491,6 +1504,86 @@ func TestWebsocketHandlerUsesTheTransport(t *testing.T) {
 	case <-session.closed:
 	case <-ctx.Done():
 		t.Fatal("timeout waiting for the gateway to close the session")
+	}
+}
+
+// A charge station talks to the CSMS through the NATS transport: its call arrives on
+// the in subject of its station key with the trace context in the headers, and the
+// answer that the CSMS publishes on the out subject reaches the charge station.
+func TestWebsocketRoundTripNats(t *testing.T) {
+	for protocol, ver := range map[string]string{"ocpp1.6": "ocpp16", "ocpp2.0.1": "ocpp201"} {
+		t.Run(protocol, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+
+			previous := otel.GetTextMapPropagator()
+			otel.SetTextMapPropagator(propagation.TraceContext{})
+			t.Cleanup(func() { otel.SetTextMapPropagator(previous) })
+
+			tracer := tracesdk.NewTracerProvider(tracesdk.WithSampler(tracesdk.AlwaysSample())).Tracer("test")
+
+			_, natsURL := natstest.RunServer(t)
+			gatewayConn, err := nats.Connect(natsURL)
+			require.NoError(t, err)
+			tr := natstransport.New(gatewayConn, natstransport.WithTracer(tracer))
+			t.Cleanup(func() { assert.NoError(t, tr.Close()) })
+
+			// the CSMS answers every call of the charge station with its payload
+			csms, err := nats.Connect(natsURL)
+			require.NoError(t, err)
+			t.Cleanup(csms.Close)
+			calls := make(chan *nats.Msg, 1)
+			sub, err := csms.Subscribe("ocpp.in."+ver+".k7f2.CP001", func(m *nats.Msg) {
+				calls <- m
+				var call pipe.GatewayMessage
+				if !assert.NoError(t, json.Unmarshal(m.Data, &call)) {
+					return
+				}
+				data, err := json.Marshal(pipe.GatewayMessage{
+					MessageType:     ocpp.MessageTypeCallResult,
+					MessageId:       call.MessageId,
+					ResponsePayload: json.RawMessage(`{"currentTime":"2026-11-27T12:00:00Z","interval":300,"status":"Accepted"}`),
+				})
+				if !assert.NoError(t, err) {
+					return
+				}
+				assert.NoError(t, csms.Publish("ocpp.out."+ver+".k7f2.CP001", data))
+			})
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = sub.Unsubscribe() })
+			require.NoError(t, csms.Flush())
+
+			reg := registry.NewMockRegistry()
+			reg.Add("a.example", tenantStation("k7f2", "CP001"))
+			srv := startGateway(t,
+				server.WithTransport(tr),
+				server.WithDeviceRegistry(reg),
+				server.WithOtelTracer(tracer))
+
+			conn, _, err := dialStationWithProtocol(ctx, t, srv, "a.example", "CP001", "CP001", "password", nil, protocol)
+			require.NoError(t, err)
+			defer func() {
+				_ = conn.Close(websocket.StatusNormalClosure, "OK")
+			}()
+			assert.Equal(t, protocol, conn.Subprotocol())
+
+			require.NoError(t, conn.Write(ctx, websocket.MessageText,
+				[]byte(`[2,"1","BootNotification",{"chargePointVendor":"Vendor","chargePointModel":"Model"}]`)))
+
+			select {
+			case m := <-calls:
+				assert.JSONEq(t, `{"type":2,"action":"BootNotification","id":"1","request":{"chargePointVendor":"Vendor","chargePointModel":"Model"}}`, string(m.Data))
+				callCtx := otel.GetTextMapPropagator().Extract(context.Background(),
+					propagation.MapCarrier{"traceparent": m.Header.Get("traceparent")})
+				assert.True(t, trace.SpanContextFromContext(callCtx).IsValid(), "headers: %v", m.Header)
+			case <-ctx.Done():
+				t.Fatal("timeout waiting for the call of the charge station")
+			}
+
+			_, data, err := conn.Read(ctx)
+			require.NoError(t, err)
+			assert.JSONEq(t, `[3,"1",{"currentTime":"2026-11-27T12:00:00Z","interval":300,"status":"Accepted"}]`, string(data))
+		})
 	}
 }
 

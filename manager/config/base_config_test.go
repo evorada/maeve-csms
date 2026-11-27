@@ -128,6 +128,10 @@ func TestParseConfig(t *testing.T) {
 		Events: config.EventsConfig{
 			Enabled: false,
 		},
+		// the default stays and is not used with the MQTT transport
+		Nats: &config.NatsConfig{
+			Urls: []string{"nats://localhost:4222"},
+		},
 	}
 
 	assert.Equal(t, want, cfg)
@@ -151,6 +155,7 @@ func TestValidateConfig(t *testing.T) {
 }
 
 // The configurations for local runs must stay configurations that the manager accepts.
+// They use the NATS server of docker-compose, as the gateway does.
 func TestExampleConfigsAreValid(t *testing.T) {
 	for _, file := range []string{"config.toml", "config-inmemory.toml", "config-multitenant.toml"} {
 		t.Run(file, func(t *testing.T) {
@@ -158,6 +163,8 @@ func TestExampleConfigsAreValid(t *testing.T) {
 			require.NoError(t, cfg.LoadFromFile("../../config/manager/"+file))
 			require.NoError(t, cfg.Validate())
 			assert.Equal(t, "dev", cfg.Api.Auth.Mode)
+			assert.Equal(t, "nats", cfg.Transport.Type)
+			assert.Equal(t, []string{"nats://nats:4222"}, cfg.Nats.Urls)
 		})
 	}
 }

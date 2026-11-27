@@ -28,8 +28,22 @@ import (
 )
 
 // newTestConfig returns the default configuration with API authentication in dev mode,
-// so that it can be configured without a platform.
+// so that it can be configured without a platform, and with the MQTT transport and no
+// [nats] section: the MQTT transport opens no connection in Configure, so the tests of
+// the other settings need no NATS server. TestConfigureNatsTransport covers the default
+// transport.
 func newTestConfig(t *testing.T) *config.BaseConfig {
+	t.Helper()
+
+	cfg := newDefaultTestConfig(t)
+	cfg.Transport.Type = "mqtt"
+	cfg.Nats = nil
+	return cfg
+}
+
+// newDefaultTestConfig returns the default configuration with API authentication in
+// dev mode.
+func newDefaultTestConfig(t *testing.T) *config.BaseConfig {
 	t.Helper()
 
 	t.Setenv("ENVIRONMENT", "dev")
@@ -866,10 +880,39 @@ func TestConfigureNatsTransport(t *testing.T) {
 		return settings
 	}
 
-	t.Run("mqtt stays the default and needs no nats", func(t *testing.T) {
-		cfg := newConfig(t, "")
+	newDefaultConfig := func(t *testing.T, toml string) *config.BaseConfig {
+		cfg := newDefaultTestConfig(t)
+		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
+		require.NoError(t, cfg.Load(strings.NewReader(toml)))
+		return cfg
+	}
+
+	t.Run("nats is the default", func(t *testing.T) {
+		cfg := newDefaultConfig(t, "")
+		assert.Equal(t, "nats", cfg.Transport.Type)
+		assert.Nil(t, cfg.Transport.Nats)
+		assert.Equal(t, &config.NatsConfig{Urls: []string{"nats://localhost:4222"}}, cfg.Nats)
+		require.NoError(t, cfg.Validate())
+
+		// the default settings, with the server of the test instead of localhost
+		_, url := natstest.RunServer(t, false)
+		cfg = newDefaultConfig(t, "[nats]\nurls = [\""+url+"\"]\n")
+		assert.Equal(t, []string{url}, cfg.Nats.Urls)
+
+		settings := configure(t, cfg)
+		require.NotNil(t, settings.NatsConn)
+		assert.Equal(t, "maeve-manager", settings.NatsConn.Opts.Name)
+		assert.IsType(t, &natstransport.Emitter{}, settings.MsgEmitter)
+		assert.IsType(t, &natstransport.Listener{}, settings.MsgListener)
+
+		assertHeartbeatRoundTrip(t, settings, url, "ocpp")
+	})
+
+	t.Run("mqtt needs no further keys and no nats", func(t *testing.T) {
+		cfg := newDefaultConfig(t, "[transport]\ntype = \"mqtt\"\n")
 		assert.Equal(t, "mqtt", cfg.Transport.Type)
-		assert.Nil(t, cfg.Nats)
+		assert.Equal(t, []string{"mqtt://localhost:1883"}, cfg.Transport.Mqtt.Urls)
+		require.NoError(t, cfg.Validate())
 
 		settings := configure(t, cfg)
 		assert.Nil(t, settings.NatsConn)

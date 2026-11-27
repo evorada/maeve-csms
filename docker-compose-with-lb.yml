@@ -8,21 +8,16 @@ networks:
           gateway: 2001:db8:a::1
 
 services:
-  mqtt:
-    image: eclipse-mosquitto:2
-    volumes:
-      - type: bind
-        source: ./config/mosquitto
-        target: /mosquitto/config
-        read_only: true
-    ports:
-      - "1883:1883"
-      - "9000:9000"
-    user: "10000:10000"
+  # The gateway and the manager exchange the OCPP messages through NATS (JetStream on).
+  # For MQTT, see docs/gateway.md.
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    ports: ["4222:4222", "8222:8222"]
     healthcheck:
-      test: ["CMD-SHELL", "timeout 5 mosquitto_sub -t '$$SYS/#' -C 1 | grep -v Error || exit 1"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]
       interval: 10s
-      timeout: 10s
+      timeout: 5s
       retries: 3
 
   lb:
@@ -48,7 +43,7 @@ services:
     build:
       context: gateway
     depends_on:
-      mqtt:
+      nats:
         condition: service_healthy
       manager:
         condition: service_healthy
@@ -66,8 +61,8 @@ services:
       - "/certificates/csms.key"
       - "--tls-trust-cert"
       - "/certificates/trust.pem"
-      - "--mqtt-addr"
-      - "mqtt://mqtt:1883"
+      - "--nats-url"
+      - "nats://nats:4222"
       - "--manager-api-addr"
       - "http://manager:9412"
     expose:
@@ -90,7 +85,7 @@ services:
     build:
       context: manager
     depends_on:
-      mqtt:
+      nats:
         condition: service_healthy
     environment:
       ENVIRONMENT: dev

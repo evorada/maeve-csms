@@ -32,9 +32,14 @@ slug = "dev2"
 org_key = "dev2"
 hostnames = ["127.0.0.1"]
 
+# The gateway and the manager exchange the OCPP messages through the NATS server of
+# docker-compose. For MQTT: type = "mqtt" and mqtt.urls = ["mqtt://mqtt:1883"], a
+# broker in docker-compose and --transport mqtt for the gateway.
 [transport]
-type = "mqtt"
-mqtt.urls = ["mqtt://mqtt:1883"]
+type = "nats"
+
+[nats]
+urls = ["nats://nats:4222"]
 
 [ocpi]
 addr = ":9411"
