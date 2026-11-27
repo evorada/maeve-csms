@@ -57,7 +57,7 @@ func controlPlaneRoutes(t *testing.T, orgId string) []controlPlaneRoute {
 	}
 	sort.Strings(specified)
 	require.Equal(t, specified, registered)
-	require.Len(t, registered, 6, "a new operation: check that the tests of the control plane cover it")
+	require.Len(t, registered, 7, "a new operation: check that the tests of the control plane cover it")
 
 	result := make([]controlPlaneRoute, 0, len(registered))
 	for _, route := range registered {
@@ -92,10 +92,12 @@ func newMultiTenantInternalHandler(t *testing.T) (http.Handler, *testutil.Platfo
 	}))
 
 	platform, verifier := newPlatformVerifier(t)
+	resolver := &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine, DefaultOrgId: store.LegacyOrgId}
 	handler := server.NewInternalHandler(server.InternalDeps{
-		Resolver: &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine, DefaultOrgId: store.LegacyOrgId},
+		Resolver: resolver,
 		Engine:   engine,
 		Verifier: verifier,
+		Scoper:   scoperOf(resolver),
 	})
 	return handler, platform, engine
 }
@@ -292,10 +294,12 @@ func TestInternalListenerOnlyAuthenticatesTheControlPlane(t *testing.T) {
 			Audience: testutil.PlatformAudience,
 		})
 		require.NoError(t, err)
+		resolver := &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine}
 		withoutKeys := server.NewInternalHandler(server.InternalDeps{
-			Resolver: &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine},
+			Resolver: resolver,
 			Engine:   engine,
 			Verifier: verifier,
+			Scoper:   scoperOf(resolver),
 		})
 		check(t, withoutKeys, http.StatusUnauthorized)
 
@@ -309,10 +313,12 @@ func TestInternalListenerOnlyAuthenticatesTheControlPlane(t *testing.T) {
 func TestControlPlaneIsClosedInDevMode(t *testing.T) {
 	// dev mode accepts every request, as a person with every permission
 	engine := inmemory.NewStore(clock.RealClock{})
+	resolver := &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine}
 	handler := server.NewInternalHandler(server.InternalDeps{
-		Resolver: &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine},
+		Resolver: resolver,
 		Engine:   engine,
 		Verifier: devVerifier,
+		Scoper:   scoperOf(resolver),
 	})
 
 	for _, route := range controlPlaneRoutes(t, orgA) {
@@ -385,10 +391,12 @@ func TestControlPlaneHealthChecksAStorageEngineThatHasAHealthCheck(t *testing.T)
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			engine := engineWithHealth{Engine: inmemory.NewStore(clock.RealClock{}), err: tc.err}
+			resolver := &tenancy.Resolver{Stations: engine}
 			handler := server.NewInternalHandler(server.InternalDeps{
-				Resolver: &tenancy.Resolver{Stations: engine},
+				Resolver: resolver,
 				Engine:   engine,
 				Verifier: verifier,
+				Scoper:   scoperOf(resolver),
 			})
 
 			rr := send(handler, controlPlaneRoute{http.MethodGet, controlplane.BasePath + "/health"}, token)
@@ -426,11 +434,12 @@ func TestSuspendingATenantStopsItsWritesThroughTheApiAtOnce(t *testing.T) {
 	// hour: only the control plane makes it read the tenant again.
 	resolver := &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine, DefaultOrgId: store.LegacyOrgId, CacheTTL: time.Hour}
 	platform, verifier := newPlatformVerifier(t)
-	internal := server.NewInternalHandler(server.InternalDeps{Resolver: resolver, Engine: engine, Verifier: verifier})
+	internal := server.NewInternalHandler(server.InternalDeps{Resolver: resolver, Engine: engine, Verifier: verifier, Scoper: scoperOf(resolver)})
 	apiHandler := server.NewApiHandler(server.ApiDeps{
 		Engine:   engine,
 		Verifier: verifier,
-		Scoper:   &tenancy.Scoper{Mode: tenancy.ModeMulti, Tenants: engine, Resolver: resolver, DefaultOrgId: store.LegacyOrgId},
+		Scoper:   scoperOf(resolver),
+		Events:   eventsOf(engine, resolver),
 	})
 
 	provisioner := serviceToken(platform, "svc:provisioner", tenancy.PermTenantManage)
@@ -506,12 +515,13 @@ func TestAConnectorLimitFromThePlatformAppliesToTheApiAtOnce(t *testing.T) {
 	// hour.
 	resolver := &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine, DefaultOrgId: store.LegacyOrgId, CacheTTL: time.Hour}
 	platform, verifier := newPlatformVerifier(t)
-	internal := server.NewInternalHandler(server.InternalDeps{Resolver: resolver, Engine: engine, Verifier: verifier})
+	internal := server.NewInternalHandler(server.InternalDeps{Resolver: resolver, Engine: engine, Verifier: verifier, Scoper: scoperOf(resolver)})
 	apiHandler := server.NewApiHandler(server.ApiDeps{
 		Engine:       engine,
 		Verifier:     verifier,
-		Scoper:       &tenancy.Scoper{Mode: tenancy.ModeMulti, Tenants: engine, Resolver: resolver, DefaultOrgId: store.LegacyOrgId},
+		Scoper:       scoperOf(resolver),
 		Entitlements: &entitlements.Enforcer{Tenants: engine, Counter: engine, Mode: tenancy.ModeMulti},
+		Events:       eventsOf(engine, resolver),
 	})
 
 	provisioner := serviceToken(platform, "svc:provisioner", tenancy.PermTenantManage)

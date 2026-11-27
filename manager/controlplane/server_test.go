@@ -37,6 +37,8 @@ type fixture struct {
 	// server can be changed by a test: the handler uses it for every request
 	server  *controlplane.Server
 	handler http.Handler
+	// eventCount numbers the events that a test stores
+	eventCount int
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -56,7 +58,13 @@ func newFixture(t *testing.T) *fixture {
 
 	engine := inmemory.NewStore(clock.RealClock{})
 	resolver := &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine}
-	srv := &controlplane.Server{Tenants: engine, Resolver: resolver, Mode: tenancy.ModeMulti}
+	srv := &controlplane.Server{
+		Tenants:  engine,
+		Resolver: resolver,
+		Mode:     tenancy.ModeMulti,
+		Outbox:   engine,
+		Scoper:   &tenancy.Scoper{Mode: tenancy.ModeMulti, Tenants: engine, Resolver: resolver},
+	}
 	return &fixture{
 		platform: platform,
 		engine:   engine,
@@ -227,8 +235,18 @@ func TestManifest(t *testing.T) {
 	assert.Equal(t, tenancy.ManifestPermissions, manifest.Permissions)
 	assert.NotContains(t, manifest.Permissions, tenancy.PermTenantManage)
 	assert.Contains(t, manifest.Permissions, tenancy.PermStationWrite)
-	// empty lists, not null
-	assert.JSONEq(t, `[]`, string(manifest.Events))
+	// the types of the domain events with the product, as the type of their CloudEvents
+	assert.JSONEq(t, `[
+		"cpms.station.registered",
+		"cpms.station.connected",
+		"cpms.station.disconnected",
+		"cpms.connector.status_changed",
+		"cpms.session.started",
+		"cpms.session.updated",
+		"cpms.session.completed",
+		"cpms.command.completed"
+	]`, string(manifest.Events))
+	// an empty list, not null
 	assert.JSONEq(t, `[]`, string(manifest.Meters))
 	// the schema of the tenant config, as the manager itself applies it
 	var schema map[string]any

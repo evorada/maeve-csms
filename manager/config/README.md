@@ -306,6 +306,14 @@ A second job (`outbox-purge`) deletes the events published more than `outbox_ret
 ago. The metrics `maeve_outbox_published_total` and `maeve_outbox_publish_errors_total`
 are served on `/metrics`.
 
+The platform can read the published events again from the outbox with
+`GET /_control/v1/events?after=<cursor>` on the internal listener: the same CloudEvents, in
+the order in which they were published, for the org of its token and, with the org scope
+`subtree`, the orgs below it that are tenants here. The cursor is `next_cursor` of the
+previous page (`0` for the oldest event that is kept). With Firestore storage it answers
+`501`. The actor of an event caused through `/api/v0` (or `/_control/v1`) is the subject
+of the token of the caller.
+
 ```toml
 [events]
 ensure_stream = true  # local development only

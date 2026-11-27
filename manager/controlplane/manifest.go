@@ -6,6 +6,7 @@ import (
 	"runtime/debug"
 	"slices"
 
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 )
 
@@ -29,17 +30,28 @@ func version() string {
 }
 
 // BuildManifest describes the manager to the platform: the product, the kinds of
-// resources, the permissions that the platform can give to the callers of the API, and
-// the schema of the tenant config. The permission to manage tenants is not part of it.
+// resources, the permissions that the platform can give to the callers of the API, the
+// types of the domain events (with the product, like "cpms.session.completed", the type
+// of their CloudEvents) and the schema of the tenant config. The permission to manage
+// tenants is not part of it.
 func BuildManifest() Manifest {
 	return Manifest{
-		Product:      "cpms",
+		Product:      events.Product,
 		Service:      "maeve",
 		Version:      version(),
 		Resources:    []string{"station", "connector", "location", "token", "session"},
 		Permissions:  slices.Clone(tenancy.ManifestPermissions),
-		Events:       []string{},
+		Events:       eventTypes(),
 		Meters:       []map[string]interface{}{},
 		ConfigSchema: tenancy.ConfigSchema(),
 	}
+}
+
+// eventTypes returns the full names of the types of the event catalogue.
+func eventTypes() []string {
+	types := make([]string, len(events.AllTypes))
+	for i, eventType := range events.AllTypes {
+		types[i] = events.Product + "." + eventType
+	}
+	return types
 }

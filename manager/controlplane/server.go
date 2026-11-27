@@ -38,6 +38,11 @@ type Server struct {
 	Mode tenancy.Mode
 	// Clock times the health checks. Nil is the real clock.
 	Clock clock.PassiveClock
+	// Outbox keeps the published domain events that ListEvents replays. Nil answers 501.
+	Outbox store.OutboxStore
+	// Scoper says which orgs a caller may read the domain events of: the org of its token
+	// and, with the org scope subtree, the orgs below it.
+	Scoper *tenancy.Scoper
 }
 
 var _ ServerInterface = (*Server)(nil)

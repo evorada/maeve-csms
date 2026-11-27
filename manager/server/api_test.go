@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/api"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
@@ -35,17 +36,26 @@ var devVerifier = tenancy.DevVerifier{Principal: tenancy.Principal{
 	Perms:    tenancy.AllPermissions,
 }}
 
+// scoperOf returns the scoper that the manager builds next to its resolver.
+func scoperOf(resolver *tenancy.Resolver) *tenancy.Scoper {
+	return &tenancy.Scoper{Mode: resolver.Mode, Tenants: resolver.Tenants, Resolver: resolver, DefaultOrgId: resolver.DefaultOrgId}
+}
+
+// eventsOf returns the emitter that the manager builds: the domain events go to the
+// outbox of the store, with the org that the resolver gives a charge station.
+func eventsOf(engine store.Engine, resolver *tenancy.Resolver) events.Emitter {
+	return &events.OutboxEmitter{Store: engine, Orgs: resolver, Product: events.Product}
+}
+
 // newApiHandler creates the handler of the API listener of a single-tenant manager
 // whose only org is the legacy org.
 func newApiHandler(engine store.Engine, verifier tenancy.Verifier) http.Handler {
+	resolver := &tenancy.Resolver{Stations: engine, DefaultOrgId: store.LegacyOrgId}
 	return server.NewApiHandler(server.ApiDeps{
 		Engine:   engine,
 		Verifier: verifier,
-		Scoper: &tenancy.Scoper{
-			Mode:         tenancy.ModeSingle,
-			Resolver:     &tenancy.Resolver{Stations: engine, DefaultOrgId: store.LegacyOrgId},
-			DefaultOrgId: store.LegacyOrgId,
-		},
+		Scoper:   scoperOf(resolver),
+		Events:   eventsOf(engine, resolver),
 	})
 }
 
@@ -233,15 +243,12 @@ func newMultiTenantApiHandler(t *testing.T) (http.Handler, *testutil.Platform, *
 	}
 
 	platform, verifier := newPlatformVerifier(t)
+	resolver := &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine, DefaultOrgId: store.LegacyOrgId}
 	handler := server.NewApiHandler(server.ApiDeps{
 		Engine:   engine,
 		Verifier: verifier,
-		Scoper: &tenancy.Scoper{
-			Mode:         tenancy.ModeMulti,
-			Tenants:      engine,
-			Resolver:     &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine, DefaultOrgId: store.LegacyOrgId},
-			DefaultOrgId: store.LegacyOrgId,
-		},
+		Scoper:   scoperOf(resolver),
+		Events:   eventsOf(engine, resolver),
 	})
 	return handler, platform, engine
 }

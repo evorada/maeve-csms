@@ -29,10 +29,12 @@ func TestInternalHandlerServesTheGatewayLookups(t *testing.T) {
 		SecurityProfile:      store.TLSWithBasicAuth,
 		Base64SHA256Password: "c2VjcmV0",
 	}))
+	resolver := &tenancy.Resolver{Stations: engine}
 	handler := server.NewInternalHandler(server.InternalDeps{
-		Resolver: &tenancy.Resolver{Stations: engine},
+		Resolver: resolver,
 		Engine:   engine,
 		Verifier: devVerifier,
+		Scoper:   scoperOf(resolver),
 	})
 
 	rr := httptest.NewRecorder()
@@ -71,7 +73,8 @@ func TestApiHandlerDoesNotServeTheInternalApi(t *testing.T) {
 
 func TestInternalHandlerServesHealthMetricsAndTheApiDocument(t *testing.T) {
 	engine := inmemory.NewStore(clock.RealClock{})
-	handler := server.NewInternalHandler(server.InternalDeps{Resolver: &tenancy.Resolver{Stations: engine}, Engine: engine, Verifier: devVerifier})
+	resolver := &tenancy.Resolver{Stations: engine}
+	handler := server.NewInternalHandler(server.InternalDeps{Resolver: resolver, Engine: engine, Verifier: devVerifier, Scoper: scoperOf(resolver)})
 
 	rr := get(handler, "/health", "")
 	require.Equal(t, http.StatusOK, rr.Code)
@@ -124,10 +127,12 @@ func TestInternalHandlerServesTheLegacyPagesOnlyWhenEnabled(t *testing.T) {
 			slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
 			defer slog.SetDefault(previous)
 
+			resolver := &tenancy.Resolver{Stations: engine}
 			handler := server.NewInternalHandler(server.InternalDeps{
-				Resolver:     &tenancy.Resolver{Stations: engine},
+				Resolver:     resolver,
 				Engine:       engine,
 				Verifier:     devVerifier,
+				Scoper:       scoperOf(resolver),
 				Settings:     tc.settings,
 				DefaultOrgId: orgA,
 			})

@@ -7,8 +7,9 @@ info:
     part of the administration API.
 
     Every request needs a token that the platform minted for one of its services: the
-    subject starts with `svc:` and the permissions contain `cpms.tenant.manage`. The org
-    of the token is not looked at.
+    subject starts with `svc:` and the permissions contain `cpms.tenant.manage`. Only
+    `GET /events` looks at the org of the token: it returns the events of that org and,
+    with the org scope `subtree`, of the orgs below it.
   version: 1.0.0
 servers:
   - url: /_control/v1
@@ -193,6 +194,64 @@ paths:
           $ref: '#/components/responses/TenantNotFound'
         '501':
           $ref: '#/components/responses/NotImplemented'
+  /events:
+    get:
+      operationId: listEvents
+      summary: Replay the domain events
+      description: |
+        Returns the domain events that the manager published, in the order in which it
+        published them, after a cursor. Each event is the CloudEvent that was published
+        on the stream `cpms.<event>.<org_id>`. Only the events of the org of the token are
+        returned and, with the org scope `subtree`, those of the orgs below it that are
+        tenants of the manager. A token whose org the manager does not serve gets no
+        events. An event that is not published yet is returned once it is.
+      parameters:
+        - name: after
+          in: query
+          description: The cursor, a decimal number - `next_cursor` of the previous page. `0`, the default, starts with the oldest event that the manager keeps.
+          schema:
+            type: string
+            default: '0'
+        - name: limit
+          in: query
+          description: The most events of the page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - name: type
+          in: query
+          description: Only the events of these types, each with its short (`session.completed`) or its full name (`cpms.session.completed`, as in the manifest). All types when not given.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        '200':
+          description: The page of events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventPage'
+        '400':
+          description: The cursor, the limit or a type is not valid; `field` names the parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '501':
+          description: The storage of the manager keeps no events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 components:
   parameters:
     OrgId:
@@ -475,6 +534,73 @@ components:
       enum:
         - ok
         - down
+    EventPage:
+      type: object
+      required:
+        - events
+        - next_cursor
+      properties:
+        events:
+          type: array
+          description: The events after the cursor, in the order in which they were published
+          items:
+            $ref: '#/components/schemas/CloudEvent'
+        next_cursor:
+          type: string
+          description: The cursor of the next page - the cursor after the last event of this page, or the cursor of the request when this page has no events
+    CloudEvent:
+      type: object
+      description: A domain event, the CloudEvents 1.0 JSON envelope that was published
+      required:
+        - specversion
+        - id
+        - source
+        - type
+        - subject
+        - time
+        - datacontenttype
+        - orgid
+        - actor
+        - data
+      properties:
+        specversion:
+          type: string
+          description: '`1.0`'
+        id:
+          type: string
+          description: The id of the event, also the `Nats-Msg-Id` of the published message
+        source:
+          type: string
+          description: '`urn:cpms`'
+        type:
+          type: string
+          description: The full name of the type, like `cpms.session.completed`
+        subject:
+          type: string
+          description: The URN of the resource, like `urn:cpms:<org_id>:session/<id>`
+        time:
+          type: string
+          format: date-time
+          description: When the change happened, in UTC
+        datacontenttype:
+          type: string
+          description: '`application/json`'
+        orgid:
+          type: string
+          description: The org that owns the resource
+        actor:
+          type: string
+          description: Who caused the change - `station:<key>`, `user:<sub>`, `machine:<sub>` or `svc:<name>`
+        traceparent:
+          type: string
+          description: The W3C trace context of the change, when there is one
+        data:
+          type: object
+          description: The payload of the type
+          additionalProperties: true
+      x-go-type: events.CloudEvent
+      x-go-type-import:
+        path: github.com/thoughtworks/maeve-csms/manager/events
     Error:
       type: object
       required:
