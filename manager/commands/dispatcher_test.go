@@ -13,7 +13,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/commands"
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
+	testingclock "k8s.io/utils/clock/testing"
 )
 
 func TestEnqueueSendsToAConnectedStationWithTheCommandIdAsMessageId(t *testing.T) {
@@ -581,4 +583,69 @@ func withoutSendAfter(settings map[string]*store.ChargeStationSetting) map[strin
 		out[key] = &store.ChargeStationSetting{Value: setting.Value, Status: setting.Status}
 	}
 	return out
+}
+
+func TestTheConnectDelayHoldsCommandsForAStationThatHasJustConnected(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	// the station's connectivity comes from its status, as in the manager
+	f.dispatcher.Connectivity = commands.StatusStoreConnectivity{Store: f.store}
+	applied, err := f.store.RecordStationConnected(ctx, testStation, "conn-1", f.clock.Now())
+	require.NoError(t, err)
+	require.True(t, applied)
+
+	cmd := f.enqueue("Reset", `{"type":"Soft"}`)
+	assert.Equal(t, store.CommandStatusQueued, cmd.Status, "a station that has just connected gets no command")
+
+	require.NoError(t, f.dispatcher.Sweep(ctx))
+	assert.Empty(t, f.emitter.sent(), "the sweep waits for the connect delay too")
+
+	f.clock.Step(5 * time.Second)
+	require.NoError(t, f.dispatcher.Sweep(ctx))
+	sent := f.waitSent(1)
+	assert.Equal(t, cmd.Id, sent[0].msg.MessageId)
+}
+
+func TestAStationThatTalkedAfterConnectingIsSettled(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	f.dispatcher.Connectivity = commands.StatusStoreConnectivity{Store: f.store}
+	_, err := f.store.RecordStationConnected(ctx, testStation, "conn-1", f.clock.Now())
+	require.NoError(t, err)
+	// a BootNotification or a Heartbeat on the new connection
+	f.clock.Step(time.Second)
+	require.NoError(t, f.store.UpdateHeartbeat(ctx, testStation, f.clock.Now()))
+
+	cmd := f.enqueue("Reset", `{"type":"Soft"}`)
+
+	sent := f.waitSent(1)
+	assert.Equal(t, cmd.Id, sent[0].msg.MessageId)
+}
+
+func TestStatusStoreConnectivityIsSettled(t *testing.T) {
+	ctx := context.Background()
+	clk := testingclock.NewFakeClock(testStart)
+	engine := inmemory.NewStore(clk)
+	conn := commands.StatusStoreConnectivity{Store: engine}
+	delay := 5 * time.Second
+
+	settled, err := conn.IsSettled(ctx, testStation, clk.Now(), delay)
+	require.NoError(t, err)
+	assert.False(t, settled, "a station that never connected")
+
+	_, err = engine.RecordStationConnected(ctx, testStation, "conn-1", clk.Now())
+	require.NoError(t, err)
+	settled, err = conn.IsSettled(ctx, testStation, clk.Now().Add(delay-time.Millisecond), delay)
+	require.NoError(t, err)
+	assert.False(t, settled, "connected for less than the delay")
+
+	settled, err = conn.IsSettled(ctx, testStation, clk.Now().Add(delay), delay)
+	require.NoError(t, err)
+	assert.True(t, settled, "connected for the delay")
+
+	_, err = engine.RecordStationDisconnected(ctx, testStation, "conn-1", clk.Now().Add(time.Minute))
+	require.NoError(t, err)
+	settled, err = conn.IsSettled(ctx, testStation, clk.Now().Add(time.Hour), delay)
+	require.NoError(t, err)
+	assert.False(t, settled, "a disconnected station")
 }

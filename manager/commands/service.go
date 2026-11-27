@@ -125,7 +125,7 @@ func (s *Service) Enqueue(ctx context.Context, cmd *store.Command) (*store.Comma
 	}
 
 	if s.Dispatcher != nil {
-		if err := s.Dispatcher.Kick(context.WithoutCancel(ctx), c.StationKey); err != nil {
+		if err := s.Dispatcher.kickSettled(context.WithoutCancel(ctx), c.StationKey); err != nil {
 			slog.Warn("sending a new command; the sweep tries again", "commandId", c.Id,
 				"stationKey", c.StationKey, "action", c.Action, "err", err)
 		}

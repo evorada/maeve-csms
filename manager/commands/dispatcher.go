@@ -72,6 +72,36 @@ func (c StatusStoreConnectivity) IsConnected(ctx context.Context, stationKey str
 	return status != nil && status.Connected, nil
 }
 
+// SettledConnectivity is a Connectivity that also knows whether a connected station is
+// ready for commands: it has been connected for at least the given delay, or it has
+// already talked to the CSMS on its current connection (a BootNotification or a
+// Heartbeat).
+type SettledConnectivity interface {
+	Connectivity
+	IsSettled(ctx context.Context, stationKey string, now time.Time, delay time.Duration) (bool, error)
+}
+
+func (c StatusStoreConnectivity) IsSettled(ctx context.Context, stationKey string, now time.Time, delay time.Duration) (bool, error) {
+	status, err := c.Store.GetChargeStationStatus(ctx, stationKey)
+	if errors.Is(err, store.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if status == nil || !status.Connected {
+		return false, nil
+	}
+	// a station whose connection is not tracked (no connection events) is settled
+	if status.LastConnectedAt == nil {
+		return true, nil
+	}
+	if now.Sub(*status.LastConnectedAt) >= delay {
+		return true, nil
+	}
+	return status.LastHeartbeat != nil && !status.LastHeartbeat.Before(*status.LastConnectedAt), nil
+}
+
 // PayloadResolver builds the payload that is sent for a command, at the moment it is
 // sent, from the payload that was stored. It must not change the command.
 type PayloadResolver interface {
@@ -124,8 +154,25 @@ type Dispatcher struct {
 
 var (
 	_ handlers.CallOutcomeObserver = (*Dispatcher)(nil)
-	_ Connectivity                 = StatusStoreConnectivity{}
+	_ SettledConnectivity          = StatusStoreConnectivity{}
 )
+
+// kickSettled is Kick for a station that may have connected only a moment ago: a station
+// that is not settled yet (see SettledConnectivity) is left alone, so that it can send
+// its BootNotification first. The kick after Config.ConnectDispatchDelay, the one after
+// its BootNotification, or the next sweep sends its commands then.
+func (d *Dispatcher) kickSettled(ctx context.Context, stationKey string) error {
+	if settled, ok := d.Connectivity.(SettledConnectivity); ok {
+		ready, err := settled.IsSettled(ctx, stationKey, d.Clock.Now(), d.Config.ConnectDispatchDelay)
+		if err != nil {
+			return fmt.Errorf("connectivity of %s: %w", stationKey, err)
+		}
+		if !ready {
+			return nil
+		}
+	}
+	return d.Kick(ctx, stationKey)
+}
 
 func (d *Dispatcher) completer() completer {
 	return completer{store: d.Store, tx: d.Tx, events: d.Events}
@@ -471,7 +518,7 @@ func (d *Dispatcher) kickQueuedStations(ctx context.Context) error {
 			return fmt.Errorf("listing stations with queued commands: %w", err)
 		}
 		for _, key := range keys {
-			if err := d.Kick(ctx, key); err != nil {
+			if err := d.kickSettled(ctx, key); err != nil {
 				slog.Warn("sending the next queued command", "stationKey", key, "err", err)
 			}
 		}
