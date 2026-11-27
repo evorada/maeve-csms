@@ -74,6 +74,8 @@ type Config struct {
 	// TenantResolver gives the identity of a charge station inside the manager and the
 	// org that owns it.
 	TenantResolver *tenancy.Resolver
+	// TenantScoper says which orgs a caller of the API may reach.
+	TenantScoper *tenancy.Scoper
 	// AuthVerifier says who the caller of an API request is.
 	AuthVerifier tenancy.Verifier
 }
@@ -301,6 +303,12 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		DefaultOrgId: c.DefaultOrgId,
 		Clock:        clock.RealClock{},
 		CacheTTL:     tenantCacheTTL,
+	}
+	c.TenantScoper = &tenancy.Scoper{
+		Mode:         c.Tenancy,
+		Tenants:      c.Storage,
+		Resolver:     c.TenantResolver,
+		DefaultOrgId: c.DefaultOrgId,
 	}
 
 	c.ContractCertValidationService, err = getContractCertValidator(&cfg.ContractCertValidator, httpClient)

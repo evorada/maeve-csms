@@ -47,7 +47,7 @@ type Store struct {
 	registrations                    map[string]*store.OcpiRegistration
 	partyDetails                     map[string]*store.OcpiParty
 	locations                        map[string]*store.Location
-	chargingProfiles                 map[int]*store.ChargingProfile
+	chargingProfiles                 map[chargingProfileKey]*store.ChargingProfile
 	firmwareUpdateStatus             map[string]*store.FirmwareUpdateStatus
 	firmwareUpdateRequests           map[string]*store.FirmwareUpdateRequest
 	diagnosticsStatus                map[string]*store.DiagnosticsStatus
@@ -97,7 +97,7 @@ func NewStore(clock clock.PassiveClock) *Store {
 		registrations:                    make(map[string]*store.OcpiRegistration),
 		partyDetails:                     make(map[string]*store.OcpiParty),
 		locations:                        make(map[string]*store.Location),
-		chargingProfiles:                 make(map[int]*store.ChargingProfile),
+		chargingProfiles:                 make(map[chargingProfileKey]*store.ChargingProfile),
 		firmwareUpdateStatus:             make(map[string]*store.FirmwareUpdateStatus),
 		firmwareUpdateRequests:           make(map[string]*store.FirmwareUpdateRequest),
 		diagnosticsStatus:                make(map[string]*store.DiagnosticsStatus),
@@ -970,7 +970,7 @@ func (s *Store) SetLocation(_ context.Context, location *store.Location) error {
 	}
 	// location ids are global: a location of another org is not replaced
 	if current := s.locations[location.Id]; current != nil && current.OrgId != location.OrgId {
-		return fmt.Errorf("location %s is used by another org: %w", location.Id, store.ErrAlreadyExists)
+		return fmt.Errorf("location %s: %w", location.Id, store.ErrLocationOwnedByAnotherOrg)
 	}
 
 	s.locations[location.Id] = location

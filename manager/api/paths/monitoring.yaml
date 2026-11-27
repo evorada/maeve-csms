@@ -10,6 +10,7 @@ paths:
 
         '
       operationId: setVariableMonitoring
+      x-permission: cpms.station.write
       parameters:
       - name: csId
         in: path
@@ -37,6 +38,12 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -57,6 +64,7 @@ paths:
 
         '
       operationId: clearVariableMonitoring
+      x-permission: cpms.station.write
       parameters:
       - name: csId
         in: path
@@ -76,6 +84,12 @@ paths:
           description: Accepted - monitoring clear initiated
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
           content:
             application/json:
               schema:
@@ -100,6 +114,7 @@ paths:
 
         '
       operationId: setMonitoringBase
+      x-permission: cpms.station.write
       parameters:
       - name: csId
         in: path
@@ -119,6 +134,12 @@ paths:
           description: Accepted - monitoring base configuration initiated
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
           content:
             application/json:
               schema:
@@ -145,6 +166,7 @@ paths:
 
         '
       operationId: setMonitoringLevel
+      x-permission: cpms.station.write
       parameters:
       - name: csId
         in: path
@@ -164,6 +186,12 @@ paths:
           description: Accepted - monitoring level configuration initiated
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
           content:
             application/json:
               schema:
@@ -190,6 +218,7 @@ paths:
 
         '
       operationId: getMonitoringReport
+      x-permission: cpms.connector.command
       parameters:
       - name: csId
         in: path
@@ -209,6 +238,12 @@ paths:
           description: Accepted - monitoring report request initiated
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
           content:
             application/json:
               schema:
@@ -235,6 +270,7 @@ paths:
 
         '
       operationId: getChargeStationEvents
+      x-permission: cpms.station.read
       parameters:
       - name: csId
         in: path
@@ -288,6 +324,12 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -311,6 +353,7 @@ paths:
 
         '
       operationId: getDeviceReports
+      x-permission: cpms.station.read
       parameters:
       - name: csId
         in: path
@@ -353,6 +396,12 @@ paths:
                 $ref: '../schemas/schemas.yaml#/components/schemas/ReportsResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
           content:
             application/json:
               schema:

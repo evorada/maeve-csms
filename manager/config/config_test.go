@@ -414,6 +414,17 @@ func TestConfigureTenancyMode(t *testing.T) {
 		require.NotNil(t, settings.TenantResolver)
 		assert.Equal(t, tenancy.ModeSingle, settings.TenantResolver.Mode)
 
+		// in single mode a caller of the default org reaches the default org, another
+		// caller nothing
+		require.NotNil(t, settings.TenantScoper)
+		assert.Same(t, settings.TenantResolver, settings.TenantScoper.Resolver)
+		orgIds, err := settings.TenantScoper.OrgIds(context.TODO(), &tenancy.Principal{OrgId: store.LegacyOrgId, OrgScope: tenancy.OrgScopeSubtree})
+		require.NoError(t, err)
+		assert.Equal(t, []string{store.LegacyOrgId}, orgIds)
+		orgIds, err = settings.TenantScoper.OrgIds(context.TODO(), &tenancy.Principal{OrgId: "0193b2c4-0000-7000-8000-0000000000a1", OrgScope: tenancy.OrgScopeSubtree})
+		require.NoError(t, err)
+		assert.Empty(t, orgIds)
+
 		res, err := settings.TenantResolver.ResolveStation(context.TODO(), "unknown.example", "CP001")
 		require.NoError(t, err)
 		assert.Equal(t, &tenancy.StationResolution{OrgId: store.LegacyOrgId, StationKey: "CP001"}, res)
@@ -442,6 +453,18 @@ func TestConfigureTenancyMode(t *testing.T) {
 		tenants, err := settings.Storage.ListTenants(context.TODO(), "", 10)
 		require.NoError(t, err)
 		require.Len(t, tenants, 2)
+
+		// the scoper asks the tenants of the storage: a caller with the scope subtree
+		// reaches the tenant that its org is, a caller of another org nothing
+		require.NotNil(t, settings.TenantScoper)
+		assert.Equal(t, tenancy.ModeMulti, settings.TenantScoper.Mode)
+		assert.Same(t, settings.TenantResolver, settings.TenantScoper.Resolver)
+		orgIds, err := settings.TenantScoper.OrgIds(context.TODO(), &tenancy.Principal{OrgId: tenants[0].OrgId, OrgScope: tenancy.OrgScopeSubtree})
+		require.NoError(t, err)
+		assert.Equal(t, []string{tenants[0].OrgId}, orgIds)
+		orgIds, err = settings.TenantScoper.OrgIds(context.TODO(), &tenancy.Principal{OrgId: store.LegacyOrgId, OrgScope: tenancy.OrgScopeSubtree})
+		require.NoError(t, err)
+		assert.Empty(t, orgIds)
 		assert.Equal(t, "dev1", tenants[0].OrgKey)
 		assert.Equal(t, store.OrgPathLabel("0193b2c4-0000-7000-8000-0000000000a1"), tenants[0].Path)
 		assert.Equal(t, []string{"127.0.0.1", "dev2.example"}, tenants[1].Hostnames)

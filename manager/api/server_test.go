@@ -318,7 +318,7 @@ func TestListTokens(t *testing.T) {
 	tokens := make([]*store.Token, 20)
 	for i := 0; i < 20; i++ {
 		tokens[i] = &store.Token{
-			OrgId:       store.LegacyOrgId,
+			OrgId:       testOrgId,
 			CountryCode: "GB",
 			PartyId:     "TWK",
 			Type:        "RFID",
@@ -346,7 +346,8 @@ func TestListTokens(t *testing.T) {
 	err := decoder.Decode(&got)
 	require.NoError(t, err)
 
-	t.Logf("got: %+v", got)
+	// the first page of the tokens of the org of the caller
+	assert.Len(t, got, 20)
 }
 
 func TestSetCertificate(t *testing.T) {
@@ -499,25 +500,82 @@ func TestRegisterPartyStoresRegistrationInDefaultOrg(t *testing.T) {
 	}, got)
 }
 
-// testOrgId is the default org of the API server under test: the org that owns what is
-// created through the API.
+// testOrgId is the default org of the API server under test, and the org of the caller
+// of its requests: the org that owns what is created through the API.
 const testOrgId = "0193b2c4-0000-7000-8000-00000000000a"
 
+// setupServer creates a single-tenant API server on an in-memory store. Every request
+// is made by a caller of the default org with every permission.
 func setupServer(t *testing.T) (*httptest.Server, *chi.Mux, store.Engine, clock.PassiveClock) {
 	now := time.Now().UTC()
 	c := clockTest.NewFakePassiveClock(now)
 	engine := inmemory.NewStore(c)
 	ocpiApi := ocpi.NewOCPI(engine, nil, "GB", "TWK", testOrgId)
 
-	srv, err := api.NewServer(engine, c, ocpiApi, testOrgId)
-	require.NoError(t, err)
-
-	r := chi.NewRouter()
-	r.Use(api.ValidationMiddleware)
-	r.Mount("/", api.Handler(srv))
+	r := newSingleTenantRouter(t, engine, c, ocpiApi)
 	server := httptest.NewServer(r)
 
 	return server, r, engine, c
+}
+
+// registerStation registers a charge station of the default org of the server: the API
+// answers 404 for a charge station that is not registered.
+func registerStation(t *testing.T, engine store.Engine, csId string) {
+	t.Helper()
+	require.NoError(t, engine.SetChargeStationAuth(context.Background(), csId, &store.ChargeStationAuth{
+		SecurityProfile: store.TLSWithBasicAuth,
+		OrgId:           testOrgId,
+	}))
+}
+
+// newSingleTenantRouter creates the router of a single-tenant API server: the default
+// org is testOrgId and every request is made by a caller of that org with every
+// permission.
+func newSingleTenantRouter(t *testing.T, engine store.Engine, c clock.PassiveClock, ocpiApi ocpi.Api) *chi.Mux {
+	t.Helper()
+
+	scoper := &tenancy.Scoper{
+		Mode:         tenancy.ModeSingle,
+		Resolver:     &tenancy.Resolver{Stations: engine, DefaultOrgId: testOrgId},
+		DefaultOrgId: testOrgId,
+	}
+	caller := &tenancy.Principal{
+		Subject:  "user:test",
+		OrgId:    testOrgId,
+		OrgScope: tenancy.OrgScopeSelf,
+		Perms:    tenancy.AllPermissions,
+	}
+	return newRouter(t, engine, c, ocpiApi, scoper, func(*http.Request) *tenancy.Principal { return caller }, api.ValidationMiddleware)
+}
+
+// newRouter creates the router of an API server as the manager mounts it: behind the
+// authorisation of every operation. callerOf gives the caller of a request, in place
+// of the token verification of the manager; nil is a request without a caller. The
+// middlewares run after the caller is known and before the operation is.
+func newRouter(t *testing.T, engine store.Engine, c clock.PassiveClock, ocpiApi ocpi.Api, scoper *tenancy.Scoper, callerOf func(*http.Request) *tenancy.Principal, middlewares ...func(http.Handler) http.Handler) *chi.Mux {
+	t.Helper()
+
+	srv, err := api.NewServer(engine, c, ocpiApi, api.WithScoper(scoper))
+	require.NoError(t, err)
+	swagger, err := api.GetSwagger()
+	require.NoError(t, err)
+	permissions, err := api.BuildPermissionIndex(swagger)
+	require.NoError(t, err)
+
+	r := chi.NewRouter()
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			if p := callerOf(req); p != nil {
+				req = req.WithContext(tenancy.WithPrincipal(req.Context(), p))
+			}
+			next.ServeHTTP(w, req)
+		})
+	})
+	r.Use(middlewares...)
+	r.Mount("/", api.HandlerWithOptions(srv, api.ChiServerOptions{
+		Middlewares: []api.MiddlewareFunc{api.AuthzMiddleware(scoper, permissions, "")},
+	}))
+	return r
 }
 
 func generateCertificate(t *testing.T) *x509.Certificate {
@@ -560,8 +618,9 @@ func getCertificateHash(cert *x509.Certificate) string {
 }
 
 func TestCreateReservation(t *testing.T) {
-	server, r, _, _ := setupServer(t)
+	server, r, engine, _ := setupServer(t)
 	defer server.Close()
+	registerStation(t, engine, "cs001")
 
 	expiryTime := time.Now().Add(1 * time.Hour).Format(time.RFC3339)
 	body := fmt.Sprintf(`{
@@ -580,8 +639,9 @@ func TestCreateReservation(t *testing.T) {
 }
 
 func TestCreateReservationWithParentIdTag(t *testing.T) {
-	server, r, _, _ := setupServer(t)
+	server, r, engine, _ := setupServer(t)
 	defer server.Close()
+	registerStation(t, engine, "cs001")
 
 	expiryTime := time.Now().Add(1 * time.Hour).Format(time.RFC3339)
 	body := fmt.Sprintf(`{
@@ -603,6 +663,7 @@ func TestCreateReservationWithParentIdTag(t *testing.T) {
 func TestCancelReservation(t *testing.T) {
 	server, r, engine, c := setupServer(t)
 	defer server.Close()
+	registerStation(t, engine, "cs001")
 
 	// First create a reservation
 	ctx := context.Background()
@@ -671,6 +732,7 @@ func TestCancelReservationWrongChargeStation(t *testing.T) {
 func TestListReservations(t *testing.T) {
 	server, r, engine, c := setupServer(t)
 	defer server.Close()
+	registerStation(t, engine, "cs001")
 
 	// Create some reservations
 	ctx := context.Background()
@@ -726,8 +788,9 @@ func TestListReservations(t *testing.T) {
 }
 
 func TestListReservationsEmpty(t *testing.T) {
-	server, r, _, _ := setupServer(t)
+	server, r, engine, _ := setupServer(t)
 	defer server.Close()
+	registerStation(t, engine, "cs001")
 
 	req := httptest.NewRequest(http.MethodGet, "/cs/cs001/reservations", nil)
 	rr := httptest.NewRecorder()
@@ -745,6 +808,7 @@ func TestListReservationsEmpty(t *testing.T) {
 func TestGetLocalListVersion(t *testing.T) {
 	server, r, engine, _ := setupServer(t)
 	defer server.Close()
+	registerStation(t, engine, "cs001")
 
 	// Set up some data
 	err := engine.UpdateLocalAuthList(context.Background(), "cs001", 5, store.LocalAuthListUpdateTypeFull, nil)
@@ -767,8 +831,9 @@ func TestGetLocalListVersion(t *testing.T) {
 }
 
 func TestGetLocalListVersionForNewChargeStation(t *testing.T) {
-	server, r, _, _ := setupServer(t)
+	server, r, engine, _ := setupServer(t)
 	defer server.Close()
+	registerStation(t, engine, "new-cs")
 
 	req := httptest.NewRequest(http.MethodGet, "/cs/new-cs/local-list/version", nil)
 	req.Header.Set("accept", "application/json")
@@ -789,6 +854,7 @@ func TestGetLocalListVersionForNewChargeStation(t *testing.T) {
 func TestGetLocalAuthorizationList(t *testing.T) {
 	server, r, engine, _ := setupServer(t)
 	defer server.Close()
+	registerStation(t, engine, "cs001")
 
 	// Set up test data
 	expiryDate := time.Now().Add(24 * time.Hour).Format(time.RFC3339)
@@ -841,6 +907,7 @@ func TestGetLocalAuthorizationList(t *testing.T) {
 func TestUpdateLocalAuthorizationListFull(t *testing.T) {
 	server, r, engine, _ := setupServer(t)
 	defer server.Close()
+	registerStation(t, engine, "cs001")
 
 	expiryDate := time.Now().Add(48 * time.Hour)
 	parentIdTag := "PARENT002"
@@ -883,6 +950,7 @@ func TestUpdateLocalAuthorizationListFull(t *testing.T) {
 func TestUpdateLocalAuthorizationListDifferential(t *testing.T) {
 	server, r, engine, _ := setupServer(t)
 	defer server.Close()
+	registerStation(t, engine, "cs001")
 
 	// Set up initial list
 	initialEntries := []*store.LocalAuthListEntry{
@@ -953,6 +1021,7 @@ func TestUpdateLocalAuthorizationListInvalidUpdateType(t *testing.T) {
 func TestGetChargeStationConfiguration(t *testing.T) {
 	server, r, engine, _ := setupServer(t)
 	defer server.Close()
+	registerStation(t, engine, "cs001")
 
 	// Setup test data
 	err := engine.UpdateChargeStationSettings(context.Background(), "cs001", &store.ChargeStationSettings{
@@ -998,6 +1067,7 @@ func TestGetChargeStationConfiguration(t *testing.T) {
 func TestGetChargeStationConfigurationWithFilter(t *testing.T) {
 	server, r, engine, _ := setupServer(t)
 	defer server.Close()
+	registerStation(t, engine, "cs001")
 
 	// Setup test data
 	err := engine.UpdateChargeStationSettings(context.Background(), "cs001", &store.ChargeStationSettings{
@@ -1037,6 +1107,7 @@ func TestGetChargeStationConfigurationWithFilter(t *testing.T) {
 func TestChangeChargeStationConfiguration(t *testing.T) {
 	server, r, engine, _ := setupServer(t)
 	defer server.Close()
+	registerStation(t, engine, "cs001")
 
 	reqBody := `{"HeartbeatInterval": "600", "MeterValueSampleInterval": "120"}`
 	req := httptest.NewRequest(http.MethodPatch, "/cs/cs001/configuration", strings.NewReader(reqBody))
@@ -1065,8 +1136,9 @@ func TestChangeChargeStationConfiguration(t *testing.T) {
 }
 
 func TestGetChargeStationVariables(t *testing.T) {
-	server, r, _, _ := setupServer(t)
+	server, r, engine, _ := setupServer(t)
 	defer server.Close()
+	registerStation(t, engine, "cs001")
 
 	req := httptest.NewRequest(http.MethodGet, "/cs/cs001/variables", nil)
 	req.Header.Set("accept", "application/json")
@@ -1086,8 +1158,9 @@ func TestGetChargeStationVariables(t *testing.T) {
 }
 
 func TestSetChargeStationVariables(t *testing.T) {
-	server, r, _, _ := setupServer(t)
+	server, r, engine, _ := setupServer(t)
 	defer server.Close()
+	registerStation(t, engine, "cs001")
 
 	reqBody := `{"variables": [{"component": {"name": "OCPPCommCtrlr"}, "variable": {"name": "HeartbeatInterval"}, "attributeValue": "600"}]}`
 	req := httptest.NewRequest(http.MethodPatch, "/cs/cs001/variables", strings.NewReader(reqBody))
@@ -1140,6 +1213,7 @@ func transactionSample(sampleContext, measurand string, value float64) store.Sam
 func TestTransactionsReturnOcpp16Transaction(t *testing.T) {
 	server, r, engine, c := setupServer(t)
 	defer server.Close()
+	registerStation(t, engine, "cs001")
 	ctx := context.Background()
 
 	require.NoError(t, engine.SetToken(ctx, &store.Token{
@@ -1276,6 +1350,7 @@ func TestTransactionsReturnOcpp16Transaction(t *testing.T) {
 func TestTransactionsPreferStoredDetailsOverSamples(t *testing.T) {
 	server, r, engine, _ := setupServer(t)
 	defer server.Close()
+	registerStation(t, engine, "cs001")
 	ctx := context.Background()
 
 	err := engine.CreateTransaction(ctx, "cs001", "tx001", "MYRFIDTAG", "ISO14443", []store.MeterValue{
@@ -1430,6 +1505,7 @@ func TestTransactionsFallBackToSamples(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server, r, engine, _ := setupServer(t)
 			defer server.Close()
+			registerStation(t, engine, "cs001")
 			ctx := context.Background()
 
 			require.NoError(t, engine.CreateTransaction(ctx, "cs001", "tx001", "MYRFIDTAG", "ISO14443", tt.meterValues, 0, false))
@@ -1510,11 +1586,8 @@ func TestListReservationsRendersEveryReservationStatus(t *testing.T) {
 		})
 	}
 
-	srv, err := api.NewServer(engine, c, ocpi.NewOCPI(engine, nil, "GB", "TWK", testOrgId), testOrgId)
-	require.NoError(t, err)
-	r := chi.NewRouter()
-	r.Use(api.ValidationMiddleware)
-	r.Mount("/", api.Handler(srv))
+	r := newSingleTenantRouter(t, engine, c, ocpi.NewOCPI(engine, nil, "GB", "TWK", testOrgId))
+	registerStation(t, engine, "cs001")
 
 	response := new(api.ReservationList)
 	getJson(t, r, "/cs/cs001/reservations", response)
@@ -1630,11 +1703,7 @@ func (s uncategorisedEventStore) ListChargeStationEvents(ctx context.Context, ch
 func TestChargeStationEventsLeaveOutUnknownCategory(t *testing.T) {
 	c := clockTest.NewFakePassiveClock(time.Now().UTC())
 	engine := uncategorisedEventStore{Engine: inmemory.NewStore(c)}
-	srv, err := api.NewServer(engine, c, ocpi.NewOCPI(engine, nil, "GB", "TWK", testOrgId), testOrgId)
-	require.NoError(t, err)
-	r := chi.NewRouter()
-	r.Use(api.ValidationMiddleware)
-	r.Mount("/", api.Handler(srv))
+	r := newSingleTenantRouter(t, engine, c, ocpi.NewOCPI(engine, nil, "GB", "TWK", testOrgId))
 	ctx := context.Background()
 
 	require.NoError(t, engine.SetChargeStationAuth(ctx, "cs001", &store.ChargeStationAuth{

@@ -9,6 +9,7 @@ paths:
 
         '
       operationId: setChargingProfile
+      x-permission: cpms.connector.command
       parameters:
       - name: csId
         in: path
@@ -30,6 +31,12 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -45,6 +52,7 @@ paths:
     get:
       summary: Get charging profiles
       operationId: getChargingProfiles
+      x-permission: cpms.station.read
       parameters:
       - name: csId
         in: path
@@ -85,6 +93,12 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -101,6 +115,7 @@ paths:
     delete:
       summary: Clear charging profile
       operationId: clearChargingProfile
+      x-permission: cpms.connector.command
       parameters:
       - name: csId
         in: path
@@ -143,6 +158,12 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -159,6 +180,7 @@ paths:
     get:
       summary: Get composite schedule
       operationId: getCompositeSchedule
+      x-permission: cpms.station.read
       parameters:
       - name: csId
         in: path
@@ -196,6 +218,12 @@ paths:
                 $ref: '../schemas/schemas.yaml#/components/schemas/CompositeSchedule'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
           content:
             application/json:
               schema:

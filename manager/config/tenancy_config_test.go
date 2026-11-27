@@ -76,4 +76,16 @@ func TestMultiTenantExampleConfig(t *testing.T) {
 		require.NoError(t, err, host)
 		assert.Equal(t, wantKey, res.StationKey)
 	}
+
+	// the caller of dev mode reaches one of the tenants: with the default org it would
+	// reach nothing
+	scoper := &tenancy.Scoper{Mode: tenancy.ModeMulti, Tenants: engine, Resolver: resolver}
+	devCaller := &tenancy.Principal{OrgId: cfg.Api.Auth.Dev.OrgId, OrgScope: tenancy.OrgScope(cfg.Api.Auth.Dev.OrgScope)}
+	orgIds, err := scoper.OrgIds(ctx, devCaller)
+	require.NoError(t, err)
+	assert.Equal(t, []string{cfg.Tenancy.BootstrapTenants[0].OrgId}, orgIds)
+	orgId, exists, err := scoper.StationOrg(ctx, "dev1.cs001")
+	require.NoError(t, err)
+	assert.False(t, exists)
+	assert.Equal(t, orgIds[0], orgId)
 }

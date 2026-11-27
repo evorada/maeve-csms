@@ -9,12 +9,14 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/thoughtworks/maeve-csms/manager/api"
 	"github.com/thoughtworks/maeve-csms/manager/config"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
@@ -34,12 +36,18 @@ var devVerifier = tenancy.DevVerifier{Principal: tenancy.Principal{
 	Perms:    tenancy.AllPermissions,
 }}
 
-// newApiHandler creates the handler of the API listener.
+// newApiHandler creates the handler of the API listener of a single-tenant manager
+// whose only org is the legacy org.
 func newApiHandler(engine store.Engine, verifier tenancy.Verifier) http.Handler {
 	return server.NewApiHandler(server.ApiDeps{
-		Settings:     config.ApiSettings{},
-		Engine:       engine,
-		Verifier:     verifier,
+		Settings: config.ApiSettings{},
+		Engine:   engine,
+		Verifier: verifier,
+		Scoper: &tenancy.Scoper{
+			Mode:         tenancy.ModeSingle,
+			Resolver:     &tenancy.Resolver{Stations: engine, DefaultOrgId: store.LegacyOrgId},
+			DefaultOrgId: store.LegacyOrgId,
+		},
 		DefaultOrgId: store.LegacyOrgId,
 	})
 }
@@ -167,6 +175,166 @@ func TestApiAnswersServiceUnavailableWithoutKeys(t *testing.T) {
 
 func TestApiHandlerNeedsAVerifier(t *testing.T) {
 	assert.Panics(t, func() { newApiHandler(inmemory.NewStore(clock.RealClock{}), nil) })
+}
+
+func TestApiHandlerNeedsAScoper(t *testing.T) {
+	assert.Panics(t, func() {
+		server.NewApiHandler(server.ApiDeps{Engine: inmemory.NewStore(clock.RealClock{}), Verifier: devVerifier})
+	})
+}
+
+// The tenants of the multi-tenant tests and their charge stations.
+const (
+	orgA       = "0193b2c4-0000-7000-8000-0000000000a1"
+	orgB       = "0193b2c4-0000-7000-8000-0000000000b2"
+	stationOfA = "aaaa.CP001"
+	stationOfB = "bbbb.CP001"
+)
+
+// newMultiTenantApiHandler creates the handler of the API listener of a multi-tenant
+// manager with the tenants A (org key aaaa) and B (org key bbbb), one connected charge
+// station each, and the console that mints the tokens of its callers.
+func newMultiTenantApiHandler(t *testing.T) (http.Handler, *testutil.Console, *inmemory.Store) {
+	t.Helper()
+	ctx := context.Background()
+	engine := inmemory.NewStore(clock.RealClock{})
+	for orgId, orgKey := range map[string]string{orgA: "aaaa", orgB: "bbbb"} {
+		require.NoError(t, engine.PutTenant(ctx, &store.Tenant{OrgId: orgId, Path: store.OrgPathLabel(orgId), Slug: "tenant-" + orgKey, OrgKey: orgKey}))
+		require.NoError(t, engine.SetChargeStationAuth(ctx, orgKey+".CP001", &store.ChargeStationAuth{SecurityProfile: store.TLSWithBasicAuth, OrgId: orgId}))
+		require.NoError(t, engine.SetChargeStationStatus(ctx, orgKey+".CP001", &store.ChargeStationStatus{Connected: true}))
+	}
+
+	console, verifier := newConsoleVerifier(t)
+	handler := server.NewApiHandler(server.ApiDeps{
+		Settings: config.ApiSettings{},
+		Engine:   engine,
+		Verifier: verifier,
+		Scoper: &tenancy.Scoper{
+			Mode:         tenancy.ModeMulti,
+			Tenants:      engine,
+			Resolver:     &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine, DefaultOrgId: store.LegacyOrgId},
+			DefaultOrgId: store.LegacyOrgId,
+		},
+		DefaultOrgId: store.LegacyOrgId,
+	})
+	return handler, console, engine
+}
+
+// tokenOf returns a token of the console for a person of the org with the scope self
+// and the given permissions.
+func tokenOf(console *testutil.Console, orgId string, perms ...string) string {
+	claims := console.Claims(time.Now())
+	claims["org"] = orgId
+	claims["org_scope"] = "self"
+	claims["perms"] = append([]string{}, perms...)
+	return console.Sign(claims)
+}
+
+func request(handler http.Handler, method, target, token, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, target, strings.NewReader(body))
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	return rr
+}
+
+func TestApiAnswersNotFoundForTheChargeStationOfAnotherTenant(t *testing.T) {
+	handler, console, _ := newMultiTenantApiHandler(t)
+	tokenOfA := tokenOf(console, orgA, tenancy.AllPermissions...)
+	tokenOfB := tokenOf(console, orgB, tenancy.AllPermissions...)
+
+	own := get(handler, "/api/v0/cs/"+stationOfA+"/status", tokenOfA)
+	require.Equal(t, http.StatusOK, own.Code, own.Body.String())
+	assert.JSONEq(t, `{"id":"aaaa.CP001","connected":true}`, own.Body.String())
+
+	other := get(handler, "/api/v0/cs/"+stationOfA+"/status", tokenOfB)
+	require.Equal(t, http.StatusNotFound, other.Code)
+	assert.JSONEq(t, `{"status":"Not Found"}`, other.Body.String())
+
+	// every operation on a charge station, with the prefix of the API and a query
+	// string: the charge station of another tenant is answered exactly like one that
+	// does not exist
+	swagger, err := api.GetSwagger()
+	require.NoError(t, err)
+	permissions, err := api.BuildPermissionIndex(swagger)
+	require.NoError(t, err)
+	walked := 0
+	for operation := range permissions {
+		method, path, _ := strings.Cut(operation, " ")
+		if !strings.Contains(path, "{csId}") || operation == "POST /cs/{csId}" {
+			continue
+		}
+		walked++
+		// every other path parameter is 1; the query has what the operations require
+		target := func(csId string) string {
+			path := strings.ReplaceAll(path, "{csId}", csId)
+			path = regexp.MustCompile(`\{[^}]+\}`).ReplaceAllString(path, "1")
+			return "/api/v0" + path + "?connectorId=1&duration=60&limit=1"
+		}
+
+		other := request(handler, method, target(stationOfA), tokenOfB, "")
+		unknown := request(handler, method, target("bbbb.UNKNOWN"), tokenOfB, "")
+		require.Equal(t, http.StatusNotFound, other.Code, "%s: %s", operation, other.Body.String())
+		assert.JSONEq(t, `{"status":"Not Found"}`, other.Body.String(), operation)
+		assert.Equal(t, unknown.Code, other.Code, operation)
+		assert.Equal(t, unknown.Body.String(), other.Body.String(), operation)
+		assert.Equal(t, unknown.Header(), other.Header(), operation)
+	}
+	assert.Greater(t, walked, 40)
+}
+
+func TestApiChecksThePermissionOfTheOperation(t *testing.T) {
+	handler, console, engine := newMultiTenantApiHandler(t)
+	const tokenBody = `{"countryCode":"GB","partyId":"TWK","type":"RFID","uid":"ABCDEF","contractId":"GBTWK012345678V","issuer":"TWK","valid":true,"cacheMode":"ALWAYS"}`
+
+	operations := []struct {
+		method, target, body string
+		permission           string
+		wantStatus           int // with the permission
+	}{
+		{http.MethodGet, "/api/v0/token", "", tenancy.PermTokenRead, http.StatusOK},
+		{http.MethodGet, "/api/v0/token?limit=5&offset=0", "", tenancy.PermTokenRead, http.StatusOK},
+		{http.MethodGet, "/api/v0/token/NOSUCHTOKEN?orgId=" + orgA, "", tenancy.PermTokenRead, http.StatusNotFound},
+		{http.MethodGet, "/api/v0/cs/" + stationOfA + "/status?x=1", "", tenancy.PermStationRead, http.StatusOK},
+		{http.MethodGet, "/api/v0/cs/" + stationOfA + "/auth", "", tenancy.PermStationWrite, http.StatusOK},
+		{http.MethodPost, "/api/v0/cs/aaaa.NEW?x=1", `{"securityProfile":0}`, tenancy.PermStationWrite, http.StatusCreated},
+		{http.MethodPost, "/api/v0/token?x=1", tokenBody, tenancy.PermTokenWrite, http.StatusCreated},
+	}
+	for _, tc := range operations {
+		name := tc.method + " " + tc.target
+
+		// every permission but the one of the operation
+		var others []string
+		for _, perm := range tenancy.AllPermissions {
+			if perm != tc.permission {
+				others = append(others, perm)
+			}
+		}
+		rr := request(handler, tc.method, tc.target, tokenOf(console, orgA, others...), tc.body)
+		require.Equal(t, http.StatusForbidden, rr.Code, name)
+		assert.JSONEq(t, `{"status":"Forbidden","error":"missing permission `+tc.permission+`"}`, rr.Body.String(), name)
+
+		// a token without permissions
+		rr = request(handler, tc.method, tc.target, tokenOf(console, orgA), tc.body)
+		require.Equal(t, http.StatusForbidden, rr.Code, name)
+	}
+
+	// nothing was written
+	tokens, err := engine.ListTokens(context.Background(), 0, 10)
+	require.NoError(t, err)
+	require.Empty(t, tokens)
+	created, err := engine.LookupChargeStationAuth(context.Background(), "aaaa.NEW")
+	require.NoError(t, err)
+	require.Nil(t, created)
+
+	// with the permission of the operation, and no other
+	for _, tc := range operations {
+		rr := request(handler, tc.method, tc.target, tokenOf(console, orgA, tc.permission), tc.body)
+		require.Equal(t, tc.wantStatus, rr.Code, "%s %s: %s", tc.method, tc.target, rr.Body.String())
+	}
 }
 
 func TestRequestLogNamesTheCaller(t *testing.T) {

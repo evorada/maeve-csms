@@ -9,6 +9,7 @@ paths:
 
         '
       operationId: listTransactions
+      x-permission: cpms.session.read
       parameters:
       - name: csId
         in: path
@@ -73,6 +74,12 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -94,6 +101,7 @@ paths:
 
         '
       operationId: getTransactionDetails
+      x-permission: cpms.session.read
       parameters:
       - name: csId
         in: path
@@ -122,6 +130,12 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Transaction not found
           content:
@@ -144,6 +158,7 @@ paths:
 
         '
       operationId: remoteStartTransaction
+      x-permission: cpms.connector.command
       parameters:
       - name: csId
         in: path
@@ -166,6 +181,18 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -182,6 +209,7 @@ paths:
 
         '
       operationId: remoteStopTransaction
+      x-permission: cpms.connector.command
       parameters:
       - name: csId
         in: path
@@ -200,6 +228,18 @@ paths:
           description: Accepted - remote stop initiated
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
           content:
             application/json:
               schema:

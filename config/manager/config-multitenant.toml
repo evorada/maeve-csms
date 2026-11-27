@@ -7,6 +7,12 @@ internal_addr = ":9412"
 [api.auth]
 mode = "dev"
 
+# A caller only reaches the tenants at and below its own org: the dev caller is a caller
+# of dev1 and manages the charge stations, tokens and locations of dev1. Use the org id
+# of dev2 to work on dev2.
+[api.auth.dev]
+org_id = "0193b2c4-0000-7000-8000-000000000001"
+
 # Two tenants for manual runs without a console. The tenant of a station is the one that
 # has the host of the URL that the station connects to: ws://localhost:<port>/ws/<id> is
 # a station of dev1, ws://127.0.0.1:<port>/ws/<id> a station of dev2. A station is

@@ -406,8 +406,7 @@ components:
         orgId:
           type: string
           format: uuid
-          readOnly: true
-          description: The org that owns the token (set by the server, absent when the storage does not keep it)
+          description: The org that owns the token. When a token is set it defaults to the org of the caller and must be an org that the caller may reach. Absent in a response when the storage does not keep it
     RemoteStartTransactionRequest:
       type: object
       description: Request to remotely start a charging transaction
@@ -525,6 +524,10 @@ components:
           items:
             $ref: '#/components/schemas/Evse'
           nullable: true
+        orgId:
+          type: string
+          format: uuid
+          description: The org that owns the location. It defaults to the org of the caller and must be an org that the caller may reach
     GeoLocation:
       required:
       - latitude

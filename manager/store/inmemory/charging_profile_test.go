@@ -79,6 +79,34 @@ func TestSetChargingProfileReplaces(t *testing.T) {
 	assert.Equal(t, 2, profiles[0].ConnectorId)
 }
 
+// The id of a charging profile is only unique on its charge station.
+func TestSetChargingProfileKeepsTheProfileOfAnotherChargeStation(t *testing.T) {
+	ctx := context.Background()
+	s := inmemory.NewStore(clocktesting.NewFakeClock(time.Now()))
+
+	require.NoError(t, s.SetChargingProfile(ctx, newTestProfile("cs001", 1, 100, 0, store.ChargingProfilePurposeTxDefaultProfile)))
+	require.NoError(t, s.SetChargingProfile(ctx, newTestProfile("cs002", 2, 100, 1, store.ChargingProfilePurposeTxProfile)))
+
+	profiles, err := s.GetChargingProfiles(ctx, "cs001", nil, nil, nil)
+	require.NoError(t, err)
+	require.Len(t, profiles, 1)
+	assert.Equal(t, 1, profiles[0].ConnectorId)
+
+	profiles, err = s.GetChargingProfiles(ctx, "cs002", nil, nil, nil)
+	require.NoError(t, err)
+	require.Len(t, profiles, 1)
+	assert.Equal(t, 2, profiles[0].ConnectorId)
+
+	// clearing the profile of one charge station leaves the other one
+	profileId := 100
+	cleared, err := s.ClearChargingProfile(ctx, "cs002", &profileId, nil, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 1, cleared)
+	profiles, err = s.GetChargingProfiles(ctx, "cs001", nil, nil, nil)
+	require.NoError(t, err)
+	assert.Len(t, profiles, 1)
+}
+
 func TestGetChargingProfilesFilterByConnector(t *testing.T) {
 	ctx := context.Background()
 	fakeClock := clocktesting.NewFakeClock(time.Now())

@@ -8,6 +8,8 @@ import (
 
 	"github.com/go-chi/render"
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
+	"golang.org/x/exp/slog"
 )
 
 func (s *Server) RegisterChargeStation(w http.ResponseWriter, r *http.Request, csId string) {
@@ -32,11 +34,21 @@ func (s *Server) RegisterChargeStation(w http.ResponseWriter, r *http.Request, c
 		return
 	}
 
+	// the org that owns the charge station was resolved, and checked against the scope
+	// of the caller, before the request got here: the org of the charge station when it
+	// exists (registering again never moves it), otherwise the org of its station key
+	orgId, ok := tenancy.StationOrgFromContext(r.Context())
+	if !ok {
+		slog.Error("registering a charge station without a resolved org", "chargeStationId", csId)
+		_ = render.Render(w, r, errInternal)
+		return
+	}
+
 	err := s.store.SetChargeStationAuth(r.Context(), csId, &store.ChargeStationAuth{
 		SecurityProfile:        store.SecurityProfile(req.SecurityProfile),
 		Base64SHA256Password:   pwd,
 		InvalidUsernameAllowed: invalidUsernameAllowed,
-		OrgId:                  s.defaultOrgId,
+		OrgId:                  orgId,
 	})
 	if err != nil {
 		_ = render.Render(w, r, ErrInternalError(err))

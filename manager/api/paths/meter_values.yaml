@@ -6,6 +6,7 @@ paths:
         \ voltage, etc.) \nreported by the charge station. Supports filtering and\
         \ pagination.\n"
       operationId: getMeterValues
+      x-permission: cpms.session.read
       parameters:
       - name: csId
         in: path
@@ -66,6 +67,12 @@ paths:
                 $ref: '../schemas/schemas.yaml#/components/schemas/MeterValuesResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
           content:
             application/json:
               schema:

@@ -56,6 +56,7 @@ the gateway and send appropriate responses.`,
 				Ocpi:           settings.OcpiApi,
 				CSCertProvider: settings.ChargeStationCertProviderService,
 				Verifier:       settings.AuthVerifier,
+				Scoper:         settings.TenantScoper,
 				DefaultOrgId:   settings.DefaultOrgId,
 			}))
 		internalServer := server.New("internal", cfg.Api.InternalAddr, nil,

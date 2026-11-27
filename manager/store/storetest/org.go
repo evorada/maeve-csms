@@ -221,6 +221,7 @@ func TestOrgOwnership(t *testing.T, newStore func(t *testing.T) store.Engine) {
 		require.NoError(t, s.SetLocation(ctx, testLocation("loc001", orgA, "Org A")))
 
 		err := s.SetLocation(ctx, testLocation("loc001", orgB, "Org B"))
+		require.ErrorIs(t, err, store.ErrLocationOwnedByAnotherOrg)
 		require.ErrorIs(t, err, store.ErrAlreadyExists)
 
 		got, err := s.LookupLocation(ctx, "loc001")

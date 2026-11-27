@@ -8,6 +8,7 @@ paths:
 
         '
       operationId: createReservation
+      x-permission: cpms.connector.command
       parameters:
       - name: csId
         in: path
@@ -37,8 +38,20 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: The reservation id is already in use
           content:
             application/json:
               schema:
@@ -58,6 +71,7 @@ paths:
 
         '
       operationId: cancelReservation
+      x-permission: cpms.connector.command
       parameters:
       - name: csId
         in: path
@@ -78,6 +92,12 @@ paths:
           description: Accepted - cancellation request initiated
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
           content:
             application/json:
               schema:
@@ -103,6 +123,7 @@ paths:
 
         '
       operationId: listReservations
+      x-permission: cpms.station.read
       parameters:
       - name: csId
         in: path
@@ -131,6 +152,12 @@ paths:
                 $ref: '../schemas/schemas.yaml#/components/schemas/ReservationList'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
           content:
             application/json:
               schema:

@@ -32,22 +32,43 @@ type ApiDeps struct {
 	CSCertProvider services.ChargeStationCertificateProvider
 	// Verifier authenticates the callers of /api/v0. It is required.
 	Verifier tenancy.Verifier
-	// DefaultOrgId is the org of what is created through the API and the admin pages
-	// (see api.NewServer).
+	// Scoper says which orgs a caller of /api/v0 may reach. It is required.
+	Scoper *tenancy.Scoper
+	// DefaultOrgId is the org of what is created through the admin pages.
 	DefaultOrgId string
 }
 
+// apiBasePath is where the API is mounted.
+const apiBasePath = "/api/v0"
+
 // NewApiHandler creates the handler of the manager API. Every request to /api/v0 must
-// be accepted by d.Verifier; the other routes are served without authentication.
+// be accepted by d.Verifier, and its caller needs the permission of the operation and
+// only reaches the orgs that d.Scoper gives it; the other routes are served without
+// authentication.
 func NewApiHandler(d ApiDeps) http.Handler {
 	if d.Verifier == nil {
 		panic("server: the api handler needs a verifier")
 	}
+	if d.Scoper == nil {
+		panic("server: the api handler needs a scoper")
+	}
 
-	apiServer, err := api.NewServer(d.Engine, clock.RealClock{}, d.Ocpi, d.DefaultOrgId)
+	apiServer, err := api.NewServer(d.Engine, clock.RealClock{}, d.Ocpi, api.WithScoper(d.Scoper))
 	if err != nil {
 		panic(err)
 	}
+	swagger, err := api.GetSwagger()
+	if err != nil {
+		panic(err)
+	}
+	// an operation without a permission in the spec stops the manager from starting
+	permissions, err := api.BuildPermissionIndex(swagger)
+	if err != nil {
+		panic(err)
+	}
+	apiHandler := api.HandlerWithOptions(apiServer, api.ChiServerOptions{
+		Middlewares: []api.MiddlewareFunc{api.AuthzMiddleware(d.Scoper, permissions, apiBasePath)},
+	})
 
 	var isDevelopment bool
 	if os.Getenv("ENVIRONMENT") == "dev" {
@@ -71,7 +92,7 @@ func NewApiHandler(d ApiDeps) http.Handler {
 	r.Handle("/metrics", promhttp.Handler())
 	r.Get("/api/openapi.json", getApiSwaggerJson)
 	// a request is authenticated before anything else looks at it
-	r.With(logger, tenancy.Middleware(d.Verifier), logPrincipal, api.ValidationMiddleware).Mount("/api/v0", api.Handler(apiServer))
+	r.With(logger, tenancy.Middleware(d.Verifier), logPrincipal, api.ValidationMiddleware).Mount(apiBasePath, apiHandler)
 	r.With(logger).Mount("/adminui", adminui.NewServer(d.Settings.Host, d.Settings.WsPort, d.Settings.WssPort, d.Settings.OrgName, d.Engine, d.CSCertProvider, d.DefaultOrgId))
 	return r
 }

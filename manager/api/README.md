@@ -29,7 +29,14 @@ The API is described by an OpenAPI spec that is split over several files:
    ```
 
    In the fragment of a path `$ref` every `/` of the path is written as `~1` (and `~` as `~0`).
-3. Run `make api-generate` in `manager/` and commit the changed source files together with
+3. Give every operation the permission that its caller needs, as `x-permission` next to `operationId`
+   (one of `tenancy.AllPermissions`), and a `403` response. The manager does not start, and
+   `TestEveryOperationHasPermission` fails, when an operation has none; the test also lists the permission of
+   every operation, so add the new one there. An operation on a charge station has the station key as the path
+   parameter `csId` (`/cs/{csId}/...`): `api.AuthzMiddleware` answers `404` for a charge station outside the
+   scope of the caller before the operation runs. Any other operation scopes what it reads and writes itself,
+   with the `tenancy.Scoper` of the server.
+4. Run `make api-generate` in `manager/` and commit the changed source files together with
    `api-spec.bundled.yaml` and `api.gen.go`. Never edit those two files by hand.
 
 ```shell

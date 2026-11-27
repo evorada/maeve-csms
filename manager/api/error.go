@@ -40,6 +40,36 @@ func ErrInternalError(err error) render.Renderer {
 	}
 }
 
+// ErrForbidden answers a caller that is known but may not do what it asked for.
+func ErrForbidden(msg string) render.Renderer {
+	return &ErrResponse{
+		HTTPStatusCode: http.StatusForbidden,
+		StatusText:     http.StatusText(http.StatusForbidden),
+		ErrorText:      msg,
+	}
+}
+
+// ErrConflict answers a request that clashes with something that exists.
+func ErrConflict(msg string) render.Renderer {
+	return &ErrResponse{
+		HTTPStatusCode: http.StatusConflict,
+		StatusText:     http.StatusText(http.StatusConflict),
+		ErrorText:      msg,
+	}
+}
+
+// ErrUnauthorized answers a request without a verified caller.
+var ErrUnauthorized = &ErrResponse{
+	HTTPStatusCode: http.StatusUnauthorized,
+	StatusText:     http.StatusText(http.StatusUnauthorized),
+}
+
+// errInternal answers a failure whose reason is not for the caller.
+var errInternal = &ErrResponse{
+	HTTPStatusCode: http.StatusInternalServerError,
+	StatusText:     http.StatusText(http.StatusInternalServerError),
+}
+
 var ErrNotFound = &ErrResponse{
 	HTTPStatusCode: http.StatusNotFound,
 	StatusText:     http.StatusText(http.StatusNotFound),

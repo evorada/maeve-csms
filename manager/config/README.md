@@ -62,6 +62,14 @@ caller `user:dev` of `[api.auth.dev]`. The manager refuses to start in this mode
 environment variable is `dev`, and logs the warning `API authentication disabled (dev mode)` at every startup.
 Never use it on a deployment that others can reach.
 
+A caller needs the permission of the operation (`x-permission` in the API spec), otherwise the answer is `403`,
+and only reaches the data of the orgs in its scope. With `[tenancy] mode = "single"` the only org is
+`default_org_id`: a caller of any other org reaches nothing. With `mode = "multi"` a caller with `org_scope`
+"self" reaches its own org and a caller with "subtree" the tenants at and below its org (its own org only when
+it is a tenant here). A charge station, a token or an org outside the scope is answered like one that does not
+exist (`404`). In "dev" mode with `mode = "multi"` set `[api.auth.dev] org_id` to the org of a tenant: the
+default org is not a tenant, so the dev caller would reach nothing.
+
 ```toml
 [api.auth]
 mode = "jwt"

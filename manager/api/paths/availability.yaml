@@ -12,6 +12,7 @@ paths:
 
         '
       operationId: changeAvailability
+      x-permission: cpms.connector.command
       parameters:
       - name: csId
         in: path
@@ -34,6 +35,18 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -43,6 +56,7 @@ paths:
   /cs/{csId}/reset:
     post:
       operationId: ResetChargeStation
+      x-permission: cpms.connector.command
       summary: Request a charge station reset
       parameters:
       - name: csId
@@ -67,11 +81,24 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '500':
           description: Internal server error
   /cs/{csId}/unlock-connector:
     post:
       operationId: UnlockConnector
+      x-permission: cpms.connector.command
       summary: Request to unlock a connector on a charge station
       parameters:
       - name: csId
@@ -92,6 +119,18 @@ paths:
           description: Invalid request
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
           content:
             application/json:
               schema:

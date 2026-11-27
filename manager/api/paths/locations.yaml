@@ -6,6 +6,7 @@ paths:
 
         '
       operationId: registerLocation
+      x-permission: cpms.station.write
       parameters:
       - name: locationId
         in: path
@@ -22,8 +23,32 @@ paths:
       responses:
         '201':
           description: Created
+        '400':
+          description: Invalid request, or `orgId` is missing for a caller whose own org is not a tenant here
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: The org is outside the scope of the caller
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: The location id is already in use
           content:
             application/json:
               schema:

@@ -9,13 +9,20 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
+// chargingProfileKey identifies a charging profile: the id of a profile is only unique
+// on its charge station.
+type chargingProfileKey struct {
+	chargeStationId   string
+	chargingProfileId int
+}
+
 func (s *Store) SetChargingProfile(_ context.Context, profile *store.ChargingProfile) error {
 	s.Lock()
 	defer s.Unlock()
 	// the profile belongs to the org of its charge station (the caller's profile is
 	// stored as it is, so the org is filled in on it)
 	profile.OrgId = s.orgIdForStation(profile.ChargeStationId)
-	s.chargingProfiles[profile.ChargingProfileId] = profile
+	s.chargingProfiles[chargingProfileKey{profile.ChargeStationId, profile.ChargingProfileId}] = profile
 	return nil
 }
 

@@ -10,6 +10,7 @@ paths:
 
         '
       operationId: getInstalledCertificates
+      x-permission: cpms.station.read
       parameters:
       - name: csId
         in: path
@@ -42,6 +43,18 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -51,6 +64,7 @@ paths:
     post:
       summary: Install certificates on the charge station
       operationId: installChargeStationCertificates
+      x-permission: cpms.station.write
       parameters:
       - name: csId
         in: path
@@ -73,6 +87,18 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -89,6 +115,7 @@ paths:
 
         '
       operationId: deleteChargeStationCertificate
+      x-permission: cpms.station.write
       parameters:
       - name: csId
         in: path
@@ -115,6 +142,18 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -132,6 +171,7 @@ paths:
 
         '
       operationId: uploadCertificate
+      x-permission: cpms.certificate.write
       requestBody:
         required: true
         content:
@@ -143,6 +183,12 @@ paths:
           description: Created
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
           content:
             application/json:
               schema:
@@ -163,6 +209,7 @@ paths:
 
         '
       operationId: lookupCertificate
+      x-permission: cpms.station.read
       parameters:
       - required: true
         in: path
@@ -179,6 +226,12 @@ paths:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Certificate'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
           content:
             application/json:
               schema:
@@ -203,6 +256,7 @@ paths:
 
         '
       operationId: deleteCertificate
+      x-permission: cpms.certificate.write
       parameters:
       - required: true
         in: path
@@ -215,6 +269,12 @@ paths:
           description: No content
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
           content:
             application/json:
               schema:

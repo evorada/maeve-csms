@@ -36,7 +36,8 @@ func (s *Server) RegisterParty(w http.ResponseWriter, r *http.Request) {
 
 		err := s.store.SetRegistrationDetails(r.Context(), req.Token, &store.OcpiRegistration{
 			Status: status,
-			OrgId:  s.defaultOrgId,
+			// OCPI connections are not per tenant yet: they belong to the default org
+			OrgId: s.defaultOrgId(),
 		})
 		if err != nil {
 			_ = render.Render(w, r, ErrInternalError(err))

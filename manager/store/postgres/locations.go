@@ -54,7 +54,7 @@ func (s *Store) SetLocation(ctx context.Context, location *store.Location) error
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// the query changes nothing when the id belongs to a location of another org
-			return fmt.Errorf("location %s is used by another org: %w", location.Id, store.ErrAlreadyExists)
+			return fmt.Errorf("location %s: %w", location.Id, store.ErrLocationOwnedByAnotherOrg)
 		}
 		return fmt.Errorf("failed to set location: %w", err)
 	}

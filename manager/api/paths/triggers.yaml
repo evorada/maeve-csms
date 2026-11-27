@@ -2,6 +2,7 @@ paths:
   /cs/{csId}/trigger:
     post:
       operationId: triggerChargeStation
+      x-permission: cpms.connector.command
       parameters:
       - name: csId
         in: path
@@ -20,6 +21,18 @@ paths:
           description: OK
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
           content:
             application/json:
               schema:

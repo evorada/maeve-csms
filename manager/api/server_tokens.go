@@ -5,6 +5,8 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/go-chi/render"
@@ -27,6 +29,11 @@ func (s *Server) SetToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	orgId, ok := s.targetOrg(w, r, req.OrgId)
+	if !ok {
+		return
+	}
+
 	err = s.store.SetToken(r.Context(), &store.Token{
 		CountryCode:  req.CountryCode,
 		PartyId:      req.PartyId,
@@ -41,7 +48,7 @@ func (s *Server) SetToken(w http.ResponseWriter, r *http.Request) {
 		CacheMode:    string(req.CacheMode),
 		LastUpdated:  s.clock.Now().Format(time.RFC3339),
 		ExpiresAt:    req.ExpiresAt,
-		OrgId:        s.defaultOrgId,
+		OrgId:        orgId,
 	})
 	if err != nil {
 		_ = render.Render(w, r, ErrInternalError(err))
@@ -65,10 +72,32 @@ func (s *Server) ListTokens(w http.ResponseWriter, r *http.Request, params ListT
 		limit = 100
 	}
 
-	tokens, err := s.store.ListTokens(r.Context(), offset, limit)
-	if err != nil {
-		_ = render.Render(w, r, ErrInternalError(err))
+	p, ok := s.caller(w, r)
+	if !ok {
 		return
+	}
+	orgIds, err := s.scoper.OrgIds(r.Context(), p)
+	if err != nil {
+		renderScopeError(w, r, err)
+		return
+	}
+	if params.OrgId != nil {
+		// narrow the list to one of the orgs that the caller may reach
+		requested := params.OrgId.String()
+		if slices.Contains(orgIds, requested) {
+			orgIds = []string{requested}
+		} else {
+			orgIds = nil
+		}
+	}
+
+	var tokens []*store.Token
+	if len(orgIds) > 0 {
+		tokens, err = s.store.ListTokensForOrgs(r.Context(), orgIds, offset, limit)
+		if err != nil {
+			_ = render.Render(w, r, ErrInternalError(err))
+			return
+		}
 	}
 
 	var resp = make([]render.Renderer, len(tokens))
@@ -82,8 +111,28 @@ func (s *Server) ListTokens(w http.ResponseWriter, r *http.Request, params ListT
 	_ = render.RenderList(w, r, resp)
 }
 
-func (s *Server) LookupToken(w http.ResponseWriter, r *http.Request, tokenUid string) {
-	tok, err := s.store.LookupToken(r.Context(), tokenUid)
+func (s *Server) LookupToken(w http.ResponseWriter, r *http.Request, tokenUid string, params LookupTokenParams) {
+	p, ok := s.caller(w, r)
+	if !ok {
+		return
+	}
+	orgId := p.OrgId
+	if params.OrgId != nil {
+		orgId = params.OrgId.String()
+	}
+	// a token of an org that the caller may not reach is answered like a token that
+	// does not exist
+	inScope, err := s.scoper.InScope(r.Context(), p, orgId)
+	if err != nil {
+		renderScopeError(w, r, err)
+		return
+	}
+	if !inScope {
+		_ = render.Render(w, r, ErrNotFound)
+		return
+	}
+
+	tok, err := s.store.LookupTokenForOrg(r.Context(), strings.ToLower(orgId), tokenUid)
 	if err != nil {
 		_ = render.Render(w, r, ErrInternalError(err))
 		return
