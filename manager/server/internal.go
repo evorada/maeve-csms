@@ -12,6 +12,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/adminui"
 	"github.com/thoughtworks/maeve-csms/manager/api"
 	"github.com/thoughtworks/maeve-csms/manager/config"
+	"github.com/thoughtworks/maeve-csms/manager/controlplane"
 	"github.com/thoughtworks/maeve-csms/manager/internalapi"
 	"github.com/thoughtworks/maeve-csms/manager/services"
 	"github.com/thoughtworks/maeve-csms/manager/store"
@@ -24,6 +25,8 @@ import (
 type InternalDeps struct {
 	Resolver *tenancy.Resolver
 	Engine   store.Engine
+	// Verifier authenticates the callers of the control plane. It is required.
+	Verifier tenancy.Verifier
 	// Settings says which legacy pages are served, and has the addresses and the
 	// organization name that the admin pages use.
 	Settings config.ApiSettings
@@ -34,17 +37,41 @@ type InternalDeps struct {
 }
 
 // NewInternalHandler creates the handler of the internal listener. It serves the
-// lookups of the gateway at /_internal/v1, the health check at /health, the metrics at
-// /metrics and the OpenAPI document of the API at /api/openapi.json. The legacy pages
-// /transactions and /adminui are only served when d.Settings enables them. Nothing on
-// the listener is authenticated: it must only be reachable from inside the deployment.
+// control plane of the console at /_evorada/v1, the lookups of the gateway at
+// /_internal/v1, the health check at /health, the metrics at /metrics and the OpenAPI
+// document of the API at /api/openapi.json. The legacy pages /transactions and /adminui
+// are only served when d.Settings enables them.
+//
+// Only the control plane is authenticated: every request to it must be accepted by
+// d.Verifier and must come from a service of the console that may manage tenants.
+// Everything else on the listener is open, so the listener must only be reachable from
+// inside the deployment.
 func NewInternalHandler(d InternalDeps) http.Handler {
+	if d.Verifier == nil {
+		panic("server: the internal handler needs a verifier")
+	}
+
 	r := chi.NewRouter()
 
 	logger := middleware.RequestLogger(logFormatter{})
 
 	r.Use(middleware.Recoverer)
 	r.With(logger).Mount("/_internal/v1", internalapi.NewHandler(d.Resolver, d.Engine))
+
+	controlPlane := &controlplane.Server{
+		Tenants:  d.Engine,
+		Resolver: d.Resolver,
+	}
+	if d.Resolver != nil {
+		controlPlane.Mode = d.Resolver.Mode
+	}
+	// not every storage engine can say whether it works
+	if checker, ok := d.Engine.(controlplane.HealthChecker); ok {
+		controlPlane.Store = checker
+	}
+	// a request is authenticated before anything else looks at it; the handler itself
+	// refuses every caller that is not a console service with the permission
+	r.With(logger, tenancy.Middleware(d.Verifier), logPrincipal).Mount(controlplane.BasePath, controlplane.NewHandler(controlPlane))
 
 	// what a browser may open keeps its security headers; there are no CORS headers, so
 	// that the page of another site cannot read anything from this listener

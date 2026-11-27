@@ -1,0 +1,489 @@
+openapi: 3.0.3
+info:
+  title: MaEVe CSMS control plane
+  description: |
+    The API that the console uses to provision and manage the tenants of the manager.
+    It is served at `/_evorada/v1` on the internal listener of the manager and is not
+    part of the administration API.
+
+    Every request needs a token that the console minted for one of its services: the
+    subject starts with `svc:` and the permissions contain `cpms.tenant.manage`. The org
+    of the token is not looked at.
+  version: 1.0.0
+servers:
+  - url: /_evorada/v1
+security:
+  - consoleToken: []
+paths:
+  /manifest:
+    get:
+      operationId: getManifest
+      summary: Describe the product
+      description: What the manager offers to the console - resources, permissions, events, meters and the schema of the tenant config.
+      responses:
+        '200':
+          description: The manifest
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Manifest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /health:
+    get:
+      operationId: getHealth
+      summary: Check the manager
+      responses:
+        '200':
+          description: The manager works
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          description: A check failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /tenants/{orgId}:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    put:
+      operationId: putTenant
+      summary: Create or update a tenant
+      description: |
+        Creates the tenant, or replaces its tree position, hostnames and parties. The
+        slug and the org key of a tenant never change. The entitlements and the config
+        are only replaced by a document whose version is not lower than the stored one;
+        an older document is ignored, without an error. The status of a tenant is not
+        changed. Sending the same document again changes nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantDocument'
+      responses:
+        '200':
+          description: The state of the tenant after the request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantState'
+        '400':
+          description: The document is not valid; `field` names what is wrong
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: |
+            `immutable_field` when the slug or the org key differs from the stored one,
+            `conflict` when the slug, the org key or a hostname belongs to another tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /tenants/{orgId}:suspend:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    post:
+      operationId: suspendTenant
+      summary: Suspend a tenant
+      description: Sets the status of the tenant to `suspended`. Charge stations stay connected and charging goes on. Suspending a suspended tenant changes nothing.
+      responses:
+        '200':
+          description: The state of the tenant after the request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantState'
+        '400':
+          $ref: '#/components/responses/InvalidOrgId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/TenantNotFound'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /tenants/{orgId}:resume:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    post:
+      operationId: resumeTenant
+      summary: Resume a tenant
+      description: Sets the status of the tenant to `active`. Resuming an active tenant changes nothing.
+      responses:
+        '200':
+          description: The state of the tenant after the request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantState'
+        '400':
+          $ref: '#/components/responses/InvalidOrgId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/TenantNotFound'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /tenants/{orgId}/entitlements:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    get:
+      operationId: getTenantEntitlements
+      summary: Read the entitlements of a tenant
+      description: Returns the entitlement document that the manager stores for the tenant, so that the console can see which version is applied.
+      parameters:
+        - name: If-None-Match
+          in: header
+          description: Entity tags of the versions that the caller already has
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        '200':
+          description: The stored entitlement document
+          headers:
+            ETag:
+              description: The version of the document, in double quotes
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntitlementDocument'
+        '304':
+          description: The caller already has the stored version
+          headers:
+            ETag:
+              description: The version of the document, in double quotes
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/InvalidOrgId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/TenantNotFound'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+components:
+  parameters:
+    OrgId:
+      name: orgId
+      in: path
+      required: true
+      description: The id of the org of the tenant, a UUID
+      schema:
+        type: string
+  responses:
+    Unauthorized:
+      description: The request has no valid token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: The caller is not a console service with the permission `cpms.tenant.manage`
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InvalidOrgId:
+      description: The org id is not a UUID
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    TenantNotFound:
+      description: There is no such tenant
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotImplemented:
+      description: The storage of the manager does not support tenants
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    TenantDocument:
+      type: object
+      description: What the console knows about a tenant.
+      required:
+        - path
+        - slug
+        - org_key
+        - hostnames
+      properties:
+        path:
+          type: string
+          description: |
+            The position of the org in the org tree: the labels of its ancestors, from
+            the root, and its own label last, separated by dots. The label of an org is
+            its id in lowercase hex digits without hyphens.
+          pattern: '^[0-9a-f]{32}(\.[0-9a-f]{32})*$'
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The org above this one; not set for a root org. It is the label before the last one in `path`.
+          x-go-type: string
+        slug:
+          type: string
+          pattern: '^[a-z0-9-]{3,32}$'
+          description: Cannot be changed once the tenant exists.
+        org_key:
+          type: string
+          pattern: '^[a-z0-9]{4,8}$'
+          description: The namespace of the charge stations of the tenant. Cannot be changed once the tenant exists.
+        hostnames:
+          type: array
+          description: The hosts that the charge stations of the tenant connect to - lowercase DNS names without a port. Replaces the stored set.
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 253
+        parties:
+          type: array
+          description: The OCPI parties of the tenant. Replaces the stored list.
+          items:
+            $ref: '#/components/schemas/TenantParty'
+        entitlements:
+          $ref: '#/components/schemas/EntitlementDocument'
+        config:
+          $ref: '#/components/schemas/TenantConfigDocument'
+    TenantParty:
+      type: object
+      required:
+        - id
+        - role
+        - country_code
+        - party_id
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        role:
+          type: string
+          enum:
+            - CPO
+            - EMSP
+        country_code:
+          type: string
+          pattern: '^[A-Z]{2}$'
+        party_id:
+          type: string
+          pattern: '^[A-Z0-9]{3}$'
+    EntitlementDocument:
+      type: object
+      description: The entitlements of a tenant, kept as the console sent them.
+      required:
+        - version
+      additionalProperties: true
+      properties:
+        org_id:
+          type: string
+          format: uuid
+          description: When set, it must be the org of the tenant.
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        status:
+          type: string
+        features:
+          type: object
+          additionalProperties:
+            type: boolean
+        limits:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Limit'
+      x-go-type: json.RawMessage
+    Limit:
+      type: object
+      properties:
+        value:
+          type: integer
+          format: int64
+        enforcement:
+          type: string
+          enum:
+            - hard
+            - soft
+        scope:
+          type: string
+          enum:
+            - org
+            - subtree
+        pool_org_id:
+          type: string
+          format: uuid
+    TenantConfigDocument:
+      type: object
+      description: The config of a tenant, kept as the console sent it.
+      required:
+        - version
+      additionalProperties: true
+      properties:
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+      x-go-type: json.RawMessage
+    TenantState:
+      type: object
+      required:
+        - org_id
+        - status
+        - entitlements_version
+        - config_version
+        - updated_at
+      properties:
+        org_id:
+          type: string
+          format: uuid
+          x-go-type: string
+        status:
+          type: string
+          enum:
+            - active
+            - suspended
+            - cancelled
+        entitlements_version:
+          type: integer
+          format: int64
+          description: The version of the stored entitlement document
+        config_version:
+          type: integer
+          format: int64
+          description: The version of the stored config
+        updated_at:
+          type: string
+          format: date-time
+    Manifest:
+      type: object
+      required:
+        - product
+        - service
+        - version
+        - resources
+        - permissions
+        - events
+        - meters
+        - config_schema
+      properties:
+        product:
+          type: string
+        service:
+          type: string
+        version:
+          type: string
+        resources:
+          type: array
+          items:
+            type: string
+        permissions:
+          type: array
+          description: The permissions that a token can give to a caller of the administration API
+          items:
+            type: string
+        events:
+          type: array
+          items:
+            type: string
+        meters:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        config_schema:
+          type: object
+          description: The JSON Schema of the tenant config
+          additionalProperties: true
+          x-go-type: json.RawMessage
+    Health:
+      type: object
+      required:
+        - status
+        - mode
+        - checks
+      properties:
+        status:
+          $ref: '#/components/schemas/HealthStatus'
+        mode:
+          type: string
+          description: How charge stations are mapped to orgs
+          enum:
+            - single
+            - multi
+        checks:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/HealthCheck'
+    HealthCheck:
+      type: object
+      required:
+        - status
+        - latency_ms
+      properties:
+        status:
+          $ref: '#/components/schemas/HealthStatus'
+        latency_ms:
+          type: integer
+          format: int64
+        error:
+          type: string
+          description: Why the check failed - `timeout` or `unavailable`
+    HealthStatus:
+      type: string
+      enum:
+        - ok
+        - down
+    Error:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          description: The text of the HTTP status
+        error:
+          type: string
+          description: What went wrong, as a fixed code
+        field:
+          type: string
+          description: The field of the request that is not valid
+        message:
+          type: string
+          description: Why the field is not valid
+  securitySchemes:
+    consoleToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

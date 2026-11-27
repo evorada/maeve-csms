@@ -42,6 +42,15 @@ jobs:
           git diff -- manager/api/api-spec.bundled.yaml manager/api/api.gen.go | head -50
           exit 1
         fi
+    - name: Check generated control-plane API is up to date
+      run: |
+        make controlplane-generate
+        cd "$GITHUB_WORKSPACE"
+        if ! git diff --exit-code --stat -- manager/controlplane/controlplane.gen.go; then
+          echo "::error::The generated control-plane API is out of date. Run 'make controlplane-generate' in manager/ and commit controlplane.gen.go."
+          git diff -- manager/controlplane/controlplane.gen.go | head -50
+          exit 1
+        fi
     - name: Run Gosec Security Scanner
       run: |
         go install github.com/securego/gosec/v2/cmd/gosec@latest

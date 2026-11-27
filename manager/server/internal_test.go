@@ -32,6 +32,7 @@ func TestInternalHandlerServesTheGatewayLookups(t *testing.T) {
 	handler := server.NewInternalHandler(server.InternalDeps{
 		Resolver: &tenancy.Resolver{Stations: engine},
 		Engine:   engine,
+		Verifier: devVerifier,
 	})
 
 	rr := httptest.NewRecorder()
@@ -70,7 +71,7 @@ func TestApiHandlerDoesNotServeTheInternalApi(t *testing.T) {
 
 func TestInternalHandlerServesHealthMetricsAndTheApiDocument(t *testing.T) {
 	engine := inmemory.NewStore(clock.RealClock{})
-	handler := server.NewInternalHandler(server.InternalDeps{Resolver: &tenancy.Resolver{Stations: engine}, Engine: engine})
+	handler := server.NewInternalHandler(server.InternalDeps{Resolver: &tenancy.Resolver{Stations: engine}, Engine: engine, Verifier: devVerifier})
 
 	rr := get(handler, "/health", "")
 	require.Equal(t, http.StatusOK, rr.Code)
@@ -126,6 +127,7 @@ func TestInternalHandlerServesTheLegacyPagesOnlyWhenEnabled(t *testing.T) {
 			handler := server.NewInternalHandler(server.InternalDeps{
 				Resolver:     &tenancy.Resolver{Stations: engine},
 				Engine:       engine,
+				Verifier:     devVerifier,
 				Settings:     tc.settings,
 				DefaultOrgId: orgA,
 			})

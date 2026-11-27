@@ -60,6 +60,7 @@ the gateway and send appropriate responses.`,
 			server.NewInternalHandler(server.InternalDeps{
 				Resolver:       settings.TenantResolver,
 				Engine:         settings.Storage,
+				Verifier:       settings.AuthVerifier,
 				Settings:       settings.Api,
 				CSCertProvider: settings.ChargeStationCertProviderService,
 				DefaultOrgId:   settings.DefaultOrgId,

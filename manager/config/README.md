@@ -21,7 +21,7 @@ Configuration is defined in TOML.
 | Section       | Key                         | Type   | Description                                                          |
 |---------------|-----------------------------|--------|----------------------------------------------------------------------|
 | api           | addr                        | string | Address that API server will listen on, e.g. localhost:9410. It serves only `/api/v0`, to callers with a token (see [API authentication](#api-authentication)) |
-| api           | internal_addr               | string | Address that the internal listener will listen on. Default "localhost:9412". It serves the lookups of the gateway (`/_internal/v1`, see [the internal API](../internalapi/README.md)), the health check (`/health`), the metrics (`/metrics`), the OpenAPI document of the API (`/api/openapi.json`) and the legacy pages that are enabled, all without authentication, so it must only be reachable from inside the deployment (the gateway, health probes, the metrics scraper) |
+| api           | internal_addr               | string | Address that the internal listener will listen on. Default "localhost:9412". It serves the control plane of the console (`/_evorada/v1`, only for tokens of a console service with the permission `cpms.tenant.manage`; closed in "dev" auth mode), the lookups of the gateway (`/_internal/v1`, see [the internal API](../internalapi/README.md)), the health check (`/health`), the metrics (`/metrics`), the OpenAPI document of the API (`/api/openapi.json`) and the legacy pages that are enabled. Everything but the control plane is served without authentication, so the listener must only be reachable from inside the deployment (the console, the gateway, health probes, the metrics scraper) |
 | api           | enable_transactions_page    | bool   | Serve the legacy page `/transactions`, which lists the transactions of every org, on the internal listener. Default "false". For local development only: the page has no authentication |
 | api           | enable_admin_ui             | bool   | Serve the legacy admin pages `/adminui`, which register charge stations and tokens and issue client certificates, on the internal listener. Default "false". For local development only: the pages have no authentication |
 | api           | external_addr               | string | The Externally visible URL that the server is available on           |
@@ -62,7 +62,9 @@ manager) requests are answered with `503`.
 In "dev" mode nothing is verified: every request to `/api/v0`, with any token or with none, is accepted as the
 caller `user:dev` of `[api.auth.dev]`. The manager refuses to start in this mode unless the `ENVIRONMENT`
 environment variable is `dev`, and logs the warning `API authentication disabled (dev mode)` at every startup.
-Never use it on a deployment that others can reach.
+Never use it on a deployment that others can reach. The control plane (`/_evorada/v1` on the internal listener)
+stays closed in this mode: it only serves services of the console, and `user:dev` is not one, so every request to
+it is answered with `403`. Tenants of a deployment without a console come from `[[tenancy.bootstrap_tenants]]`.
 
 A caller needs the permission of the operation (`x-permission` in the API spec), otherwise the answer is `403`,
 and only reaches the data of the orgs in its scope. With `[tenancy] mode = "single"` the only org is

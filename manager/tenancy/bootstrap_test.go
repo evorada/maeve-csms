@@ -172,3 +172,25 @@ func TestValidateTenantIdentity(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateTenantIdentityNamesTheField(t *testing.T) {
+	tests := map[string]struct {
+		slug, orgKey string
+		hostnames    []string
+		field        string
+	}{
+		"slug":      {"A", "acme", []string{"acme.example.com"}, tenancy.IdentityFieldSlug},
+		"org key":   {"acme", "K7F2", []string{"acme.example.com"}, tenancy.IdentityFieldOrgKey},
+		"hostname":  {"acme", "acme", []string{"acme.example.com", "acme.example.com:443"}, tenancy.IdentityFieldHostnames},
+		"the first": {"A", "K7F2", []string{"*"}, tenancy.IdentityFieldSlug},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			err := tenancy.ValidateTenantIdentity(tt.slug, tt.orgKey, tt.hostnames)
+			var identityError *tenancy.IdentityError
+			require.ErrorAs(t, err, &identityError)
+			assert.Equal(t, tt.field, identityError.Field)
+			assert.NotEmpty(t, identityError.Error())
+		})
+	}
+}

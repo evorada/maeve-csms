@@ -36,3 +36,16 @@ var AllPermissions = []string{
 	PermOcpiConnection,
 	PermMessageLogReadSensitive,
 }
+
+// ManifestPermissions lists the permissions that the console can give to the callers of
+// the API: every permission but PermTenantManage, which is only for the services of the
+// console that call the control plane.
+var ManifestPermissions []string
+
+func init() {
+	for _, permission := range AllPermissions {
+		if permission != PermTenantManage {
+			ManifestPermissions = append(ManifestPermissions, permission)
+		}
+	}
+}

@@ -31,18 +31,38 @@ type BootstrapTenant struct {
 	Hostnames []string
 }
 
+// The values of IdentityError.Field.
+const (
+	IdentityFieldSlug      = "slug"
+	IdentityFieldOrgKey    = "org_key"
+	IdentityFieldHostnames = "hostnames"
+)
+
+// IdentityError is the error of ValidateTenantIdentity: it says which of the names of a
+// tenant is not valid.
+type IdentityError struct {
+	// Field is one of the IdentityField constants.
+	Field   string
+	message string
+}
+
+func (e *IdentityError) Error() string {
+	return e.message
+}
+
 // ValidateTenantIdentity checks what names a tenant: the slug (^[a-z0-9-]{3,32}$), the
-// org key (^[a-z0-9]{4,8}$) and the hostnames (lowercase DNS names without a port).
+// org key (^[a-z0-9]{4,8}$) and the hostnames (lowercase DNS names without a port). The
+// error is an *IdentityError.
 func ValidateTenantIdentity(slug, orgKey string, hostnames []string) error {
 	if !slugPattern.MatchString(slug) {
-		return fmt.Errorf("invalid slug %q: must match %s", slug, slugPattern)
+		return &IdentityError{Field: IdentityFieldSlug, message: fmt.Sprintf("invalid slug %q: must match %s", slug, slugPattern)}
 	}
 	if !orgKeyPattern.MatchString(orgKey) {
-		return fmt.Errorf("invalid org key %q: must match %s", orgKey, orgKeyPattern)
+		return &IdentityError{Field: IdentityFieldOrgKey, message: fmt.Sprintf("invalid org key %q: must match %s", orgKey, orgKeyPattern)}
 	}
 	for _, hostname := range hostnames {
 		if len(hostname) > maxHostnameLength || !hostnamePattern.MatchString(hostname) {
-			return fmt.Errorf("invalid hostname %q: must be a lowercase DNS name without a port", hostname)
+			return &IdentityError{Field: IdentityFieldHostnames, message: fmt.Sprintf("invalid hostname %q: must be a lowercase DNS name without a port", hostname)}
 		}
 	}
 	return nil

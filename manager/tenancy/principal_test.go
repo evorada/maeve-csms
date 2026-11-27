@@ -57,3 +57,21 @@ func TestAllPermissionsAreDistinct(t *testing.T) {
 	}
 	assert.Len(t, tenancy.AllPermissions, 11)
 }
+
+func TestManifestPermissionsAreAllPermissionsButTheOneOfTheControlPlane(t *testing.T) {
+	assert.NotContains(t, tenancy.ManifestPermissions, tenancy.PermTenantManage)
+	assert.Len(t, tenancy.ManifestPermissions, len(tenancy.AllPermissions)-1)
+	// in the order of the catalogue
+	withoutTenantManage := []string{}
+	for _, perm := range tenancy.AllPermissions {
+		if perm != tenancy.PermTenantManage {
+			withoutTenantManage = append(withoutTenantManage, perm)
+		}
+	}
+	assert.Equal(t, withoutTenantManage, tenancy.ManifestPermissions)
+	assert.Contains(t, tenancy.AllPermissions, tenancy.PermTenantManage)
+}
+
+func TestConfigSchemaIsAJSONSchemaOfAnObject(t *testing.T) {
+	assert.JSONEq(t, `{"type":"object"}`, string(tenancy.ConfigSchema()))
+}
