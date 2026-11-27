@@ -105,6 +105,14 @@ type Config struct {
 	// ConnectivitySweepInterval is the pause between two runs of the job that marks the
 	// stations without a sign of life disconnected.
 	ConnectivitySweepInterval time.Duration
+	// EventRelay publishes the events of the outbox to JetStream. It is nil when the
+	// events or the relay are disabled and with Firestore storage.
+	EventRelay *events.Relay
+	// EventRelayInterval is the pause between two runs of the relay job.
+	EventRelayInterval time.Duration
+	// OutboxPurge says when the published events are deleted from the outbox. It is nil
+	// when the storage has no outbox (Firestore).
+	OutboxPurge *OutboxPurgeSettings
 }
 
 // devSubject is the caller of every API request in dev mode.
@@ -307,6 +315,12 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 	}
 	c.ConnectivitySweepInterval = connSettings.sweepInterval
 
+	evSettings, err := parseEventsConfig(&cfg.Events)
+	if err != nil {
+		return nil, err
+	}
+	c.EventRelayInterval = evSettings.relayInterval
+
 	c.AuthVerifier, err = getAuthVerifier(ctx, &cfg.Api.Auth, c.DefaultOrgId)
 	if err != nil {
 		return nil, err
@@ -350,6 +364,7 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		CacheTTL:     tenantCacheTTL,
 	}
 	c.Events = getEventEmitter(&cfg.Events, cfg.Storage.Type, c.Storage, c.TenantResolver)
+	c.OutboxPurge = getOutboxPurge(evSettings, cfg.Storage.Type)
 	c.Connectivity = getConnectivityTracker(connSettings, cfg.Storage.Type, c.Storage)
 	c.TenantConfig = &tenancy.ConfigProvider{Resolver: c.TenantResolver}
 	c.TenantScoper = &tenancy.Scoper{
@@ -390,6 +405,15 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 			return nil, err
 		}
 		c.NatsConn = natsConn
+	}
+
+	if cfg.relaysEvents() {
+		c.EventRelay, err = getEventRelay(ctx, &cfg.Events, evSettings, c.Storage, c.NatsConn, c.Tracer)
+		if err != nil {
+			return nil, err
+		}
+	} else if cfg.Events.Enabled && cfg.Storage.Type != "firestore" {
+		slog.Warn("the relay of the domain events is disabled: the events stay in the outbox")
 	}
 
 	c.MsgEmitter, err = getMsgEmitter(&cfg.Transport, c.Tracer, c.NatsConn)

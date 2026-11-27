@@ -126,7 +126,16 @@ func TestParseConfig(t *testing.T) {
 			CacheTTL:     "30s",
 		},
 		Events: config.EventsConfig{
-			Enabled: false,
+			Enabled:         false,
+			RelayEnabled:    true,
+			SubjectPrefix:   "cpms",
+			Stream:          "CPMS_EVENTS",
+			StreamReplicas:  1,
+			StreamMaxAge:    "720h",
+			RelayInterval:   "1s",
+			RelayBatchSize:  100,
+			OutboxRetention: "720h",
+			PurgeInterval:   "1h",
 		},
 		Connectivity: config.ConnectivityConfig{
 			LastSeenWriteInterval: "1m",
@@ -170,6 +179,8 @@ func TestExampleConfigsAreValid(t *testing.T) {
 			assert.Equal(t, "dev", cfg.Api.Auth.Mode)
 			assert.Equal(t, "nats", cfg.Transport.Type)
 			assert.Equal(t, []string{"nats://nats:4222"}, cfg.Nats.Urls)
+			assert.True(t, cfg.Events.RelayEnabled)
+			assert.True(t, cfg.Events.EnsureStream, "the manager creates the event stream in development")
 		})
 	}
 }

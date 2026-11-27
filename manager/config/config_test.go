@@ -12,6 +12,7 @@ import (
 
 	clone "github.com/huandu/go-clone/generic"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/config"
@@ -28,15 +29,17 @@ import (
 )
 
 // newTestConfig returns the default configuration with API authentication in dev mode,
-// so that it can be configured without a platform, and with the MQTT transport and no
-// [nats] section: the MQTT transport opens no connection in Configure, so the tests of
-// the other settings need no NATS server. TestConfigureNatsTransport covers the default
-// transport.
+// so that it can be configured without a platform, with the MQTT transport, without the
+// relay of the domain events and without a [nats] section: nothing opens a connection in
+// Configure, so the tests of the other settings need no NATS server.
+// TestConfigureNatsTransport covers the default transport, TestConfigureEventRelay the
+// relay.
 func newTestConfig(t *testing.T) *config.BaseConfig {
 	t.Helper()
 
 	cfg := newDefaultTestConfig(t)
 	cfg.Transport.Type = "mqtt"
+	cfg.Events.RelayEnabled = false
 	cfg.Nats = nil
 	return cfg
 }
@@ -81,6 +84,8 @@ func TestConfigure(t *testing.T) {
 	assert.NotNil(t, settings.TariffService)
 	assert.NotNil(t, settings.AuthVerifier)
 	assert.NotNil(t, settings.Events)
+	assert.Nil(t, settings.EventRelay)
+	assert.Equal(t, &config.OutboxPurgeSettings{Retention: 720 * time.Hour, Interval: time.Hour}, settings.OutboxPurge)
 }
 
 func TestConfigureFirestoreStorage(t *testing.T) {
@@ -101,6 +106,9 @@ func TestConfigureFirestoreStorage(t *testing.T) {
 	assert.Equal(t, events.NopEmitter{}, settings.Events)
 	// nor does it track connectivity: the manager starts without
 	assert.Nil(t, settings.Connectivity)
+	// nothing to relay or purge
+	assert.Nil(t, settings.EventRelay)
+	assert.Nil(t, settings.OutboxPurge)
 }
 
 func TestConfigureInMemoryStorage(t *testing.T) {
@@ -866,6 +874,222 @@ func TestConfigureEvents(t *testing.T) {
 	})
 }
 
+func TestConfigureEventRelay(t *testing.T) {
+	// the default configuration (relay enabled) with the MQTT transport, so that only the
+	// relay can need NATS
+	newConfig := func(t *testing.T, toml string) *config.BaseConfig {
+		cfg := newDefaultTestConfig(t)
+		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
+		cfg.Transport.Type = "mqtt"
+		require.NoError(t, cfg.Load(strings.NewReader(toml)))
+		return cfg
+	}
+	configure := func(t *testing.T, cfg *config.BaseConfig) *config.Config {
+		settings, err := config.Configure(context.TODO(), cfg)
+		require.NoError(t, err)
+		if settings.NatsConn != nil {
+			t.Cleanup(settings.NatsConn.Close)
+		}
+		return settings
+	}
+	emitStationEvent := func(t *testing.T, settings *config.Config) {
+		err := settings.Storage.RunInTx(context.TODO(), func(ctx context.Context) error {
+			return settings.Events.Emit(ctx, events.Event{
+				Type:         "station.registered",
+				StationKey:   "cs001",
+				ResourceType: "station",
+				ResourceId:   "cs001",
+				Data:         struct{}{},
+			})
+		})
+		require.NoError(t, err)
+	}
+	jetStream := func(t *testing.T, url string) jetstream.JetStream {
+		conn, err := nats.Connect(url)
+		require.NoError(t, err)
+		t.Cleanup(conn.Close)
+		js, err := jetstream.New(conn)
+		require.NoError(t, err)
+		return js
+	}
+
+	t.Run("defaults", func(t *testing.T) {
+		cfg := newDefaultTestConfig(t)
+		assert.Equal(t, config.EventsConfig{
+			Enabled:         true,
+			RelayEnabled:    true,
+			SubjectPrefix:   "cpms",
+			Stream:          "CPMS_EVENTS",
+			EnsureStream:    false,
+			StreamReplicas:  1,
+			StreamMaxAge:    "720h",
+			RelayInterval:   "1s",
+			RelayBatchSize:  100,
+			OutboxRetention: "720h",
+			PurgeInterval:   "1h",
+		}, cfg.Events)
+	})
+
+	t.Run("the relay needs the nats section", func(t *testing.T) {
+		cfg := newConfig(t, "")
+		cfg.Nats = nil
+		err := cfg.Validate()
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "[nats] section is required to relay the domain events")
+
+		settings, err := config.Configure(context.TODO(), cfg)
+		require.Error(t, err)
+		assert.Nil(t, settings)
+	})
+
+	t.Run("no nats section is needed without the relay", func(t *testing.T) {
+		for name, toml := range map[string]string{
+			"relay disabled":  "[events]\nrelay_enabled = false\n",
+			"events disabled": "[events]\nenabled = false\n",
+		} {
+			t.Run(name, func(t *testing.T) {
+				cfg := newConfig(t, toml)
+				cfg.Nats = nil
+				require.NoError(t, cfg.Validate())
+
+				settings := configure(t, cfg)
+				assert.Nil(t, settings.EventRelay)
+				assert.Nil(t, settings.NatsConn)
+				// what was published before is still purged
+				assert.Equal(t, &config.OutboxPurgeSettings{Retention: 720 * time.Hour, Interval: time.Hour}, settings.OutboxPurge)
+			})
+		}
+	})
+
+	t.Run("firestore disables the relay", func(t *testing.T) {
+		t.Setenv("FIRESTORE_EMULATOR_HOST", "localhost:8080")
+		cfg := newConfig(t, "[storage]\ntype = \"firestore\"\nfirestore.project_id = \"test-project-id\"\n")
+		cfg.Nats = nil
+		assert.True(t, cfg.Events.RelayEnabled)
+		require.NoError(t, cfg.Validate())
+
+		settings := configure(t, cfg)
+		assert.Nil(t, settings.EventRelay)
+		assert.Nil(t, settings.OutboxPurge)
+		assert.Nil(t, settings.NatsConn)
+	})
+
+	t.Run("relay with all settings creates the stream", func(t *testing.T) {
+		_, url := natstest.RunServer(t, true)
+		cfg := newConfig(t, `
+[nats]
+urls = ["`+url+`"]
+
+[events]
+subject_prefix = "csms"
+stream = "CSMS_EVENTS"
+ensure_stream = true
+stream_replicas = 1
+stream_max_age = "24h"
+relay_interval = "2s"
+relay_batch_size = 10
+outbox_retention = "48h"
+purge_interval = "30m"
+`)
+		settings := configure(t, cfg)
+		require.NotNil(t, settings.NatsConn, "the relay opens the connection to NATS with the MQTT transport")
+		require.NotNil(t, settings.EventRelay)
+		assert.Equal(t, "csms", settings.EventRelay.SubjectPrefix)
+		assert.Equal(t, events.Product, settings.EventRelay.Product)
+		assert.Equal(t, 10, settings.EventRelay.BatchSize)
+		assert.Same(t, settings.Storage, settings.EventRelay.Store)
+		assert.Equal(t, 2*time.Second, settings.EventRelayInterval)
+		assert.Equal(t, &config.OutboxPurgeSettings{Retention: 48 * time.Hour, Interval: 30 * time.Minute}, settings.OutboxPurge)
+
+		js := jetStream(t, url)
+		stream, err := js.Stream(context.TODO(), "CSMS_EVENTS")
+		require.NoError(t, err)
+		info := stream.CachedInfo()
+		assert.Equal(t, []string{"csms.>"}, info.Config.Subjects)
+		assert.Equal(t, 24*time.Hour, info.Config.MaxAge)
+		assert.Equal(t, 2*time.Minute, info.Config.Duplicates)
+
+		emitStationEvent(t, settings)
+		require.NoError(t, settings.EventRelay.RunOnce(context.TODO()))
+		msg, err := stream.GetMsg(context.TODO(), 1)
+		require.NoError(t, err)
+		assert.Equal(t, "csms.station.registered."+store.LegacyOrgId, msg.Subject)
+		var ce events.CloudEvent
+		require.NoError(t, json.Unmarshal(msg.Data, &ce))
+		assert.Equal(t, "cpms.station.registered", ce.Type)
+		assert.Equal(t, msg.Header.Get(jetstream.MsgIDHeader), ce.Id)
+	})
+
+	t.Run("a missing stream does not stop the manager", func(t *testing.T) {
+		_, url := natstest.RunServer(t, true)
+		cfg := newConfig(t, "[transport]\ntype = \"nats\"\n[nats]\nurls = [\""+url+"\"]\n")
+		assert.False(t, cfg.Events.EnsureStream)
+
+		settings := configure(t, cfg)
+		require.NotNil(t, settings.EventRelay)
+		js := jetStream(t, url)
+		_, err := js.Stream(context.TODO(), "CPMS_EVENTS")
+		require.ErrorIs(t, err, jetstream.ErrStreamNotFound, "the stream is only checked")
+
+		// the manager answers the stations
+		assertHeartbeatRoundTrip(t, settings, url, "ocpp")
+
+		// the events wait in the outbox until the stream is there
+		emitStationEvent(t, settings)
+		require.Error(t, settings.EventRelay.RunOnce(context.TODO()))
+		assert.Empty(t, publishedOutbox(t, settings.Storage))
+
+		require.NoError(t, events.EnsureStream(context.TODO(), js, events.StreamConfig{
+			Name: "CPMS_EVENTS", Subjects: []string{"cpms.>"}, Replicas: 1,
+		}))
+		require.NoError(t, settings.EventRelay.RunOnce(context.TODO()))
+		assert.Len(t, publishedOutbox(t, settings.Storage), 1)
+	})
+
+	t.Run("nats not reachable at startup", func(t *testing.T) {
+		cfg := newConfig(t, "[nats]\nurls = [\"nats://127.0.0.1:1\"]\nconnect_timeout = \"100ms\"\n")
+		start := time.Now()
+		settings := configure(t, cfg)
+		assert.Less(t, time.Since(start), 3*time.Second, "the manager does not wait for the stream")
+		require.NotNil(t, settings.EventRelay)
+		assert.False(t, settings.NatsConn.IsConnected())
+	})
+
+	for name, tc := range map[string]struct {
+		toml    string
+		wantErr string
+	}{
+		"bad stream_max_age":        {toml: "stream_max_age = \"a month\"", wantErr: "stream_max_age"},
+		"zero relay_interval":       {toml: "relay_interval = \"0s\"", wantErr: "relay_interval must be positive"},
+		"negative outbox_retention": {toml: "outbox_retention = \"-1h\"", wantErr: "outbox_retention must be positive"},
+		"empty purge_interval":      {toml: "purge_interval = \"\"", wantErr: "purge_interval"},
+		"zero relay_batch_size":     {toml: "relay_batch_size = 0", wantErr: "RelayBatchSize"},
+		"huge relay_batch_size":     {toml: "relay_batch_size = 1001", wantErr: "RelayBatchSize"},
+		"zero stream_replicas":      {toml: "stream_replicas = 0", wantErr: "StreamReplicas"},
+		"empty subject_prefix":      {toml: "subject_prefix = \"\"", wantErr: "SubjectPrefix"},
+		"subject_prefix with a dot": {toml: "subject_prefix = \"a.b\"", wantErr: "subject_prefix"},
+		"empty stream":              {toml: "stream = \"\"", wantErr: "Stream"},
+		"stream with a dot":         {toml: "stream = \"CPMS.EVENTS\"", wantErr: "not a valid stream name"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			// checked although the relay is disabled
+			cfg := newConfig(t, "[events]\nrelay_enabled = false\n"+tc.toml+"\n")
+			settings, err := config.Configure(context.TODO(), cfg)
+			require.Error(t, err)
+			assert.ErrorContains(t, err, tc.wantErr)
+			assert.Nil(t, settings)
+		})
+	}
+}
+
+// publishedOutbox returns the published events of the outbox of a storage.
+func publishedOutbox(t *testing.T, engine store.Engine) []*store.OutboxEvent {
+	t.Helper()
+	evs, err := engine.ListOutboxEvents(context.TODO(), store.OutboxEventFilter{})
+	require.NoError(t, err)
+	return evs
+}
+
 func TestConfigureConnectivity(t *testing.T) {
 	newConfig := func(t *testing.T, toml string) *config.BaseConfig {
 		cfg := newTestConfig(t)
@@ -978,8 +1202,8 @@ func TestConfigureNatsTransport(t *testing.T) {
 		assertHeartbeatRoundTrip(t, settings, url, "ocpp")
 	})
 
-	t.Run("mqtt needs no further keys and no nats", func(t *testing.T) {
-		cfg := newDefaultConfig(t, "[transport]\ntype = \"mqtt\"\n")
+	t.Run("mqtt needs no further keys and no nats without the event relay", func(t *testing.T) {
+		cfg := newDefaultConfig(t, "[transport]\ntype = \"mqtt\"\n[events]\nrelay_enabled = false\n")
 		assert.Equal(t, "mqtt", cfg.Transport.Type)
 		assert.Equal(t, []string{"mqtt://localhost:1883"}, cfg.Transport.Mqtt.Urls)
 		require.NoError(t, cfg.Validate())

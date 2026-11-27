@@ -22,6 +22,11 @@ type = "nats"
 [nats]
 urls = ["nats://nats:4222"]
 
+# The domain events go from the outbox to the CPMS_EVENTS stream of the NATS server of
+# docker-compose (started with JetStream); in development the manager creates it.
+[events]
+ensure_stream = true
+
 [ocpi]
 addr = ":9411"
 external_url = "http://manager:9411"

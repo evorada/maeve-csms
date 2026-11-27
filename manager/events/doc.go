@@ -3,8 +3,13 @@
 // Package events turns the domain events of the manager into rows of the transactional
 // outbox (store.OutboxStore). Business code emits an event with the ctx of the store
 // transaction (store.Transactor.RunInTx) that makes the change it describes, so the
-// event is stored if and only if the change is. Publishing the stored events is not
-// done here.
+// event is stored if and only if the change is.
+//
+// The Relay publishes the stored events to JetStream in outbox order, as CloudEvents
+// 1.0 JSON (ToCloudEvent) on "cpms.<type>.<org_id>" (Subject), with the event id as
+// Nats-Msg-Id so that the stream drops a message that a retry sends again. PurgeJob
+// deletes the published events after a retention period. EnsureStream and CheckStream
+// set up or check the stream at startup.
 //
 // # The envelope
 //

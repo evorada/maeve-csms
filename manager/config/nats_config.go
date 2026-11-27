@@ -3,7 +3,8 @@
 package config
 
 // NatsConfig configures the connection to NATS ([nats]). It is only read, and only
-// validated, when something uses NATS: today the NATS transport.
+// validated, when something uses NATS: the NATS transport or the relay of the domain
+// events to JetStream.
 //
 // The credentials and keys are files (in Kubernetes, mounted from the secret store);
 // user, password and token are meant for local development.

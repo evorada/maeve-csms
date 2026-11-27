@@ -4,6 +4,7 @@ package config
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/pelletier/go-toml/v2"
 	"github.com/thoughtworks/maeve-csms/manager/connectivity"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
@@ -111,7 +113,16 @@ var DefaultConfig = BaseConfig{
 		CacheTTL:     "30s",
 	},
 	Events: EventsConfig{
-		Enabled: true,
+		Enabled:         true,
+		RelayEnabled:    true,
+		SubjectPrefix:   events.DefaultSubjectPrefix,
+		Stream:          events.DefaultStreamName,
+		StreamReplicas:  1,
+		StreamMaxAge:    "720h",
+		RelayInterval:   "1s",
+		RelayBatchSize:  events.DefaultRelayBatchSize,
+		OutboxRetention: "720h",
+		PurgeInterval:   "1h",
 	},
 	Connectivity: ConnectivityConfig{
 		LastSeenWriteInterval: connectivity.DefaultSeenWriteEvery.String(),
@@ -171,7 +182,10 @@ func (c *BaseConfig) Validate() error {
 
 	if c.usesNats() {
 		if c.Nats == nil {
-			return fmt.Errorf("the [nats] section is required with transport type %q", c.Transport.Type)
+			if c.Transport.Type == "nats" {
+				return fmt.Errorf("the [nats] section is required with transport type %q", c.Transport.Type)
+			}
+			return errors.New("the [nats] section is required to relay the domain events to JetStream (events.relay_enabled)")
 		}
 		err = validate.Struct(c.Nats)
 		if err != nil {
@@ -181,7 +195,8 @@ func (c *BaseConfig) Validate() error {
 	return nil
 }
 
-// usesNats reports whether something needs the connection to NATS.
+// usesNats reports whether something needs the connection to NATS: the NATS transport
+// or the relay of the domain events.
 func (c *BaseConfig) usesNats() bool {
-	return c.Transport.Type == "nats"
+	return c.Transport.Type == "nats" || c.relaysEvents()
 }

@@ -8,6 +8,7 @@ Configuration is defined in TOML.
 * [Service settings](#service-settings)
 * [Transport](#transport-settings)
   * [NATS connection](#nats-connection)
+  * [Domain events](#domain-events)
 * [Storage](#storage)
 * [Contract certificate validator](#contract-certificate-validator)
 * [Contract certificate provider](#contract-certificate-provider)
@@ -46,6 +47,16 @@ Configuration is defined in TOML.
 | tenancy       | cache_ttl                   | string | How long a tenant that was looked up by host, org key or org id is kept in memory, e.g. "30s" (the default). It is also how long another instance of the manager takes to see that the platform suspended or resumed a tenant |
 | tenancy       | bootstrap_tenants           | array of tables | Tenants that are created or updated at startup, for deployments without a platform that provisions them. Only allowed in multi mode. See [Bootstrap tenants](#bootstrap-tenants) |
 | events        | enabled                     | bool   | Store domain events in the transactional outbox of the storage, in the same transaction as the change they describe. Default "true". Always off with Firestore storage, which has no outbox (a warning in the log at startup) |
+| events        | relay_enabled               | bool   | Publish the stored events to JetStream. Default "true". Needs the [`[nats]`](#nats-connection) section, whatever the transport. Off when `enabled` is off and with Firestore storage. See [Domain events](#domain-events) |
+| events        | subject_prefix              | string | First token of the subjects of the events, `<subject_prefix>.<type>.<org_id>`. Default "cpms" |
+| events        | stream                      | string | JetStream stream that captures `<subject_prefix>.>`. Default "CPMS_EVENTS" |
+| events        | ensure_stream               | bool   | Create or update the stream at startup. Default "false": the stream is provisioned by the infrastructure and only checked. The configurations for local runs set "true" |
+| events        | stream_replicas             | int    | Replicas of the stream that `ensure_stream` creates (1 to 5). Default 1 |
+| events        | stream_max_age              | string | How long the stream that `ensure_stream` creates keeps an event, e.g. "720h" (the default, 30 days) |
+| events        | relay_interval              | string | Pause between two runs of the relay, e.g. "1s" (the default) |
+| events        | relay_batch_size            | int    | Events published per batch (1 to 1000). Default 100; one run publishes at most 50 batches |
+| events        | outbox_retention            | string | Published events are deleted from the outbox this long after they were published, e.g. "720h" (the default, the retention of the stream, so that a replay from the outbox covers what the stream holds) |
+| events        | purge_interval              | string | Pause between two runs of the purge of the published events, e.g. "1h" (the default). The purge also runs when events are disabled, not with Firestore storage |
 | connectivity  | last_seen_write_interval    | string | The OCPP messages of a station update its last seen time at most once per interval, e.g. "30s" (the default). The alive events of the gateway always update it |
 | connectivity  | stale_after                 | string | A connected station that has shown no sign of life (connection event, OCPP message, heartbeat) for this long is marked disconnected, e.g. "5m" (the default). Must be longer than `last_seen_write_interval`. It must also exceed the alive interval of the gateways (`--conn-alive-interval`, default "2m") with a margin: more than twice that interval tolerates one lost alive event. The manager cannot read the setting of the gateways, so it only warns at startup when `stale_after` is not more than twice the gateway default. A station marked disconnected is not disconnected; only its status changes. Not tracked with Firestore storage (a warning in the log at startup) |
 | connectivity  | sweep_interval              | string | How often the stations without a sign of life are searched for, e.g. "30s" (the default) |
@@ -230,7 +241,8 @@ tls_ca_file = "/vault/secrets/nats-ca.pem"
 ### NATS connection
 
 The `[nats]` section configures the one connection to NATS that the manager opens when
-something uses NATS (today the NATS transport). It is only read and validated then.
+something uses NATS: the NATS transport or the relay of the domain events (see
+[Domain events](#domain-events)). It is only read and validated then.
 
 Credentials and keys are files: in Kubernetes they come from the secret store and are
 mounted into the pod; the TOML only holds their paths. `user`, `password` and `token` are
@@ -260,6 +272,44 @@ The NATS server accepts messages up to its `max_payload` (1 MiB by default). An 
 message above it cannot be published: the manager logs `message is larger than the max
 payload of the NATS server` with the sizes. Raise `max_payload` on the server if stations
 send larger frames.
+
+### Domain events
+
+The manager stores its domain events in a transactional outbox, in the transaction of the
+change they describe, and a background job (`outbox-relay`) publishes them to JetStream in
+outbox order:
+
+* subject `<subject_prefix>.<type>.<org_id>`, e.g. `cpms.session.completed.<org_id>`;
+* body: a CloudEvents 1.0 JSON envelope (`Content-Type: application/cloudevents+json`)
+  with `source` "urn:cpms", `type` "cpms.<type>", `subject` the URN of the resource and
+  the extensions `orgid`, `actor` and `traceparent` (when the change had a trace);
+* header `Nats-Msg-Id` = event id: within the duplicate window of the stream (2 minutes
+  for the stream that `ensure_stream` creates) a message that a retry sends again is
+  not stored twice. Consumers must still be idempotent: delivery is at least once.
+
+An event is marked published only after JetStream acknowledged it (5 s timeout per
+message). A publish that fails stops the batch; the event and the later ones stay in the
+outbox and the next run starts with it, so events never overtake each other. Charging is
+never blocked: nothing on the OCPP path waits for JetStream, and an outage of NATS or of
+the stream leaves the events in the outbox and logs the failed runs (`job failed`,
+`job=outbox-relay`).
+
+At startup the manager creates or updates the stream (`ensure_stream = true`, local
+development: limits retention, file storage, oldest events discarded) or checks that it
+exists and captures `<subject_prefix>.>` (`ensure_stream = false`, production, where the
+stream is provisioned by the infrastructure and the NATS user of the manager only needs
+publish rights on `<subject_prefix>.>`). A stream that is missing or cannot be created,
+or NATS not being connected at startup, is logged as an error and does not stop the
+manager; the relay keeps trying and publishes as soon as the stream exists.
+
+A second job (`outbox-purge`) deletes the events published more than `outbox_retention`
+ago. The metrics `maeve_outbox_published_total` and `maeve_outbox_publish_errors_total`
+are served on `/metrics`.
+
+```toml
+[events]
+ensure_stream = true  # local development only
+```
 
 ## Service settings
 

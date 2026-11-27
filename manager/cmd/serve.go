@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/thoughtworks/maeve-csms/manager/config"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/jobs"
 	"github.com/thoughtworks/maeve-csms/manager/server"
 	"github.com/thoughtworks/maeve-csms/manager/sync"
@@ -25,6 +26,10 @@ var (
 // when the manager stops.
 const natsDrainTimeout = 10 * time.Second
 
+// jobsStopTimeout bounds the wait for the background jobs to return when the manager
+// stops.
+const jobsStopTimeout = 10 * time.Second
+
 // serveCmd represents the serve command
 var serveCmd = &cobra.Command{
 	Use:   "serve",
@@ -32,7 +37,7 @@ var serveCmd = &cobra.Command{
 	Long: `Starts the server which will subscribe to messages from
 the gateway and send appropriate responses.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// cancelled when the command returns: stops the background jobs
+		// cancelled when the manager stops (and when the command returns): stops the background jobs
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
@@ -90,7 +95,18 @@ the gateway and send appropriate responses.`,
 			}
 			jobList = append(jobList, settings.Connectivity.SweepJob(settings.ConnectivitySweepInterval))
 		}
+		// the domain events go from the outbox to JetStream, and are deleted after the
+		// retention period
+		if settings.EventRelay != nil {
+			jobList = append(jobList, settings.EventRelay.Job(settings.EventRelayInterval))
+		}
+		if settings.OutboxPurge != nil {
+			jobList = append(jobList, events.PurgeJob(settings.Storage, clock.RealClock{},
+				settings.OutboxPurge.Retention, settings.OutboxPurge.Interval))
+		}
+		jobsDone := make(chan struct{})
 		go func() {
+			defer close(jobsDone)
 			if err := settings.JobRunner.Run(ctx, jobList); err != nil {
 				slog.Error("running background jobs", "err", err)
 			}
@@ -149,6 +165,15 @@ the gateway and send appropriate responses.`,
 			if err != nil {
 				slog.Warn("disconnecting the connection events from broker", "err", err)
 			}
+		}
+
+		// the jobs stop before NATS is drained: the relay publishes on the connection, and
+		// what it published before it stopped is marked in the outbox
+		cancel()
+		select {
+		case <-jobsDone:
+		case <-time.After(jobsStopTimeout):
+			slog.Warn("the background jobs did not stop in time", "timeout", jobsStopTimeout)
 		}
 
 		// after the listeners: what their handlers published is still sent
