@@ -21,6 +21,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -49,17 +50,7 @@ func TestWebSocketHandler(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	broker, addr := server.NewBroker(t)
-	err := broker.Serve()
-	if err != nil {
-		t.Fatalf("starting broker: %v", err)
-	}
-	defer func() {
-		err := broker.Close()
-		if err != nil {
-			t.Logf("WARN: broker close: %v", err)
-		}
-	}()
+	broker, addr := startBroker(t)
 
 	// simulate manager connection
 	client, err := autopaho.NewConnection(ctx, autopaho.ClientConfig{
@@ -114,12 +105,11 @@ func TestWebSocketHandler(t *testing.T) {
 	mockRegistry := registry.NewMockRegistry()
 	mockRegistry.Add(testHost, cs)
 
-	srv := httptest.NewServer(server.NewWebsocketHandler(
+	srv := startGateway(t,
 		server.WithMqttBrokerUrl(addr),
 		server.WithMqttTopicPrefix("cs"),
 		server.WithDeviceRegistry(mockRegistry),
-		server.WithMqttConnectSettings(15*time.Second, 15*time.Second, 5*time.Second)))
-	defer srv.Close()
+		server.WithMqttConnectSettings(15*time.Second, 15*time.Second, 5*time.Second))
 
 	authHeader := "Basic " + base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", cs.ClientId, "password")))
 	dialOptions := &websocket.DialOptions{
@@ -649,7 +639,18 @@ func (r *recordingRegistry) recorded() []string {
 	return append([]string(nil), r.lookups...)
 }
 
+// teardownTimeout is how long the end of a test waits for the gateway and for the test
+// broker before it fails the test.
+const teardownTimeout = 10 * time.Second
+
 // startBroker starts a test broker with the hooks; it is closed when the test ends.
+//
+// The test broker must not be closed while one of its clients connects or disconnects.
+// Its Close reads the clients under a read lock that it takes twice
+// (Clients.GetByListener calls Clients.Len); a client that is added or removed in
+// between asks for the write lock, and then neither of them gets any further. So the
+// end of the test first waits until every client has gone, which needs the gateway to
+// be served with startGateway, and nothing here waits without a deadline.
 func startBroker(t *testing.T, hooks ...mqtt.Hook) (*mqtt.Server, *url.URL) {
 	t.Helper()
 
@@ -659,12 +660,49 @@ func startBroker(t *testing.T, hooks ...mqtt.Hook) (*mqtt.Server, *url.URL) {
 	}
 	require.NoError(t, broker.Serve())
 	t.Cleanup(func() {
-		err := broker.Close()
-		if err != nil {
-			t.Logf("WARN: broker close: %v", err)
+		// counted from before a client is added until after it has been removed
+		connected := func() int64 {
+			return atomic.LoadInt64(&broker.Info.ClientsConnected)
+		}
+		assert.Eventually(t, func() bool { return connected() == 0 }, teardownTimeout, time.Millisecond,
+			"clients are still connected to the test broker at the end of the test")
+
+		closed := make(chan error, 1)
+		go func() {
+			closed <- broker.Close()
+		}()
+		select {
+		case err := <-closed:
+			if err != nil {
+				t.Logf("WARN: broker close: %v", err)
+			}
+		case <-time.After(teardownTimeout):
+			t.Errorf("the test broker did not close within %s", teardownTimeout)
 		}
 	})
 	return broker, addr
+}
+
+// startGateway serves the websocket handler with the options on a test server. The
+// server is closed when the test ends, and the end of the test then waits until the
+// handler has returned for every connection: a websocket outlives the close of the
+// server, and only when its handler has returned has the gateway left the broker.
+func startGateway(t *testing.T, opts ...server.WebsocketOpt) *httptest.Server {
+	t.Helper()
+
+	handler := server.NewWebsocketHandler(opts...)
+	var handling atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handling.Add(1)
+		defer handling.Add(-1)
+		handler.ServeHTTP(w, r)
+	}))
+	t.Cleanup(func() {
+		srv.Close()
+		assert.Eventually(t, func() bool { return handling.Load() == 0 }, teardownTimeout, time.Millisecond,
+			"the gateway is still handling a connection at the end of the test: is a websocket left open?")
+	})
+	return srv
 }
 
 // tenantStation returns a charge station of the tenant with the org key that
@@ -725,10 +763,9 @@ func TestUnknownHostIsRejected(t *testing.T) {
 	reg.Add("a.example", tenantStation("aaaa", "CP001"))
 
 	_, addr := startBroker(t)
-	srv := httptest.NewServer(server.NewWebsocketHandler(
+	srv := startGateway(t,
 		server.WithMqttBrokerUrl(addr),
-		server.WithDeviceRegistry(reg)))
-	defer srv.Close()
+		server.WithDeviceRegistry(reg))
 
 	// no tenant has the host, and a forwarding header does not change which host it is
 	forwarded := http.Header{
@@ -847,10 +884,9 @@ func TestBasicAuthUsernameIsThePlainStationId(t *testing.T) {
 	reg.Add("a.example", tenantStation("aaaa", "CP001"))
 
 	_, addr := startBroker(t)
-	srv := httptest.NewServer(server.NewWebsocketHandler(
+	srv := startGateway(t,
 		server.WithMqttBrokerUrl(addr),
-		server.WithDeviceRegistry(reg)))
-	defer srv.Close()
+		server.WithDeviceRegistry(reg))
 
 	// the station key is not a username
 	conn, resp, err := dialStation(ctx, t, srv, "a.example", "CP001", "aaaa.CP001", "password", nil)
@@ -882,10 +918,9 @@ func TestCredentialsOfAnotherTenantAreNotAccepted(t *testing.T) {
 	reg.Add("b.example", stationB)
 
 	_, addr := startBroker(t)
-	srv := httptest.NewServer(server.NewWebsocketHandler(
+	srv := startGateway(t,
 		server.WithMqttBrokerUrl(addr),
-		server.WithDeviceRegistry(reg)))
-	defer srv.Close()
+		server.WithDeviceRegistry(reg))
 
 	accepted := map[string]string{"a.example": "password", "b.example": "password2"}
 	for host, ownPassword := range accepted {
@@ -1024,11 +1059,10 @@ func TestTwoTenantsSameStationIdUseSeparateTopics(t *testing.T) {
 	mockRegistry.Add("a.example", tenantStation("aaaa", "CP001"))
 	mockRegistry.Add("b.example", tenantStation("bbbb", "CP001"))
 
-	srv := httptest.NewServer(server.NewWebsocketHandler(
+	srv := startGateway(t,
 		server.WithMqttBrokerUrl(addr),
 		server.WithMqttTopicPrefix("cs"),
-		server.WithDeviceRegistry(mockRegistry)))
-	defer srv.Close()
+		server.WithDeviceRegistry(mockRegistry))
 
 	connect := func(host string) *websocket.Conn {
 		t.Helper()
@@ -1139,11 +1173,10 @@ func TestSingleTenantStationKeepsItsTopics(t *testing.T) {
 		Base64SHA256Password: passwordHash,
 	})
 
-	srv := httptest.NewServer(server.NewWebsocketHandler(
+	srv := startGateway(t,
 		server.WithMqttBrokerUrl(addr),
 		server.WithMqttTopicPrefix("cs"),
-		server.WithDeviceRegistry(mockRegistry)))
-	defer srv.Close()
+		server.WithDeviceRegistry(mockRegistry))
 
 	conn, _, err := dialStation(ctx, t, srv, srv.Listener.Addr().String(), "cs.1", "cs.1", "password", nil)
 	require.NoError(t, err)
