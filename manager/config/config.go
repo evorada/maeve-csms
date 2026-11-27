@@ -5,6 +5,7 @@ package config
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -67,7 +68,10 @@ type Config struct {
 	// DefaultOrgId is the org that owns the rows from before orgs and everything that
 	// is created without a tenant.
 	DefaultOrgId string
-	// TenantResolver gives the org that owns a charge station.
+	// Tenancy says how charge stations are mapped to orgs.
+	Tenancy tenancy.Mode
+	// TenantResolver gives the identity of a charge station inside the manager and the
+	// org that owns it.
 	TenantResolver *tenancy.Resolver
 }
 
@@ -94,6 +98,48 @@ func assignLegacyOrg(ctx context.Context, engine store.Engine, defaultOrgId stri
 	return nil
 }
 
+// configureTenants checks that the storage engine can serve the tenancy mode and, in
+// multi mode, puts the configured bootstrap tenants in the tenant store.
+func configureTenants(ctx context.Context, cfg *TenancyConfig, storageType string, engine store.Engine) error {
+	switch tenancy.Mode(cfg.Mode) {
+	case tenancy.ModeSingle:
+		// the host of a station is ignored in single mode: tenants that are configured
+		// here would not be isolated from each other
+		if len(cfg.BootstrapTenants) > 0 {
+			return fmt.Errorf("tenancy bootstrap tenants need tenancy mode %q", tenancy.ModeMulti)
+		}
+		return nil
+	case tenancy.ModeMulti:
+		_, err := engine.GetTenant(ctx, store.LegacyOrgId)
+		if errors.Is(err, store.ErrNotImplemented) {
+			return fmt.Errorf("tenancy mode %q is not supported by the %s storage", tenancy.ModeMulti, storageType)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to read the tenant store: %w", err)
+		}
+
+		bootstrapTenants := make([]tenancy.BootstrapTenant, 0, len(cfg.BootstrapTenants))
+		for _, t := range cfg.BootstrapTenants {
+			bootstrapTenants = append(bootstrapTenants, tenancy.BootstrapTenant{
+				OrgId:     t.OrgId,
+				Slug:      t.Slug,
+				OrgKey:    t.OrgKey,
+				Hostnames: t.Hostnames,
+			})
+		}
+		err = tenancy.Bootstrap(ctx, engine, bootstrapTenants)
+		if err != nil {
+			return fmt.Errorf("failed to bootstrap tenants: %w", err)
+		}
+		if len(bootstrapTenants) > 0 {
+			slog.Info("bootstrapped tenants", "count", len(bootstrapTenants))
+		}
+		return nil
+	default:
+		return fmt.Errorf("unknown tenancy mode: %s", cfg.Mode)
+	}
+}
+
 func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 	err = cfg.Validate()
 	if err != nil {
@@ -113,6 +159,14 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		return nil, fmt.Errorf("reservation expiry interval must be positive: %s", cfg.Jobs.ReservationExpiryInterval)
 	}
 
+	tenantCacheTTL, err := time.ParseDuration(cfg.Tenancy.CacheTTL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse tenancy cache ttl: %s", err)
+	}
+	if tenantCacheTTL <= 0 {
+		return nil, fmt.Errorf("tenancy cache ttl must be positive: %s", cfg.Tenancy.CacheTTL)
+	}
+
 	c = &Config{
 		Api: ApiSettings{
 			Addr:    cfg.Api.Addr,
@@ -123,6 +177,7 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		},
 		ReservationExpiryInterval: reservationExpiryInterval,
 		DefaultOrgId:              cfg.Tenancy.DefaultOrgId,
+		Tenancy:                   tenancy.Mode(cfg.Tenancy.Mode),
 	}
 
 	switch cfg.Observability.LogFormat {
@@ -158,9 +213,18 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		return nil, err
 	}
 
+	err = configureTenants(ctx, &cfg.Tenancy, cfg.Storage.Type, c.Storage)
+	if err != nil {
+		return nil, err
+	}
+
 	c.TenantResolver = &tenancy.Resolver{
+		Mode:         c.Tenancy,
+		Tenants:      c.Storage,
 		Stations:     c.Storage,
 		DefaultOrgId: c.DefaultOrgId,
+		Clock:        clock.RealClock{},
+		CacheTTL:     tenantCacheTTL,
 	}
 
 	c.ContractCertValidationService, err = getContractCertValidator(&cfg.ContractCertValidator, httpClient)

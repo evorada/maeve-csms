@@ -15,6 +15,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/config"
 	"github.com/thoughtworks/maeve-csms/manager/jobs"
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 )
 
 func TestConfigure(t *testing.T) {
@@ -354,6 +355,153 @@ func TestConfigureDefaultOrgId(t *testing.T) {
 			cfg.Tenancy.DefaultOrgId = orgId
 
 			require.Error(t, cfg.Validate())
+
+			settings, err := config.Configure(context.TODO(), cfg)
+			require.Error(t, err)
+			assert.Nil(t, settings)
+		})
+	}
+}
+
+const multiTenantConfig = `
+[tenancy]
+mode = "multi"
+cache_ttl = "45s"
+
+[[tenancy.bootstrap_tenants]]
+org_id = "0193b2c4-0000-7000-8000-0000000000a1"
+slug = "dev1"
+org_key = "dev1"
+hostnames = ["localhost"]
+
+[[tenancy.bootstrap_tenants]]
+org_id = "0193b2c4-0000-7000-8000-0000000000b2"
+slug = "dev2"
+org_key = "dev2"
+hostnames = ["127.0.0.1", "dev2.example"]
+`
+
+func TestConfigureTenancyMode(t *testing.T) {
+	newConfig := func(t *testing.T, toml string) *config.BaseConfig {
+		cfg := clone.Clone(&config.DefaultConfig)
+		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
+		require.NoError(t, cfg.Load(strings.NewReader(toml)))
+		return cfg
+	}
+
+	t.Run("default is single: the host is ignored and the key is the station id", func(t *testing.T) {
+		cfg := newConfig(t, "")
+		assert.Equal(t, "single", cfg.Tenancy.Mode)
+		assert.Equal(t, "30s", cfg.Tenancy.CacheTTL)
+		assert.Equal(t, "localhost:9412", cfg.Api.InternalAddr)
+
+		settings, err := config.Configure(context.TODO(), cfg)
+		require.NoError(t, err)
+		assert.Equal(t, tenancy.ModeSingle, settings.Tenancy)
+		require.NotNil(t, settings.TenantResolver)
+		assert.Equal(t, tenancy.ModeSingle, settings.TenantResolver.Mode)
+
+		res, err := settings.TenantResolver.ResolveStation(context.TODO(), "unknown.example", "CP001")
+		require.NoError(t, err)
+		assert.Equal(t, &tenancy.StationResolution{OrgId: store.LegacyOrgId, StationKey: "CP001"}, res)
+
+		tenants, err := settings.Storage.ListTenants(context.TODO(), "", 10)
+		require.NoError(t, err)
+		assert.Empty(t, tenants)
+	})
+
+	t.Run("multi: the bootstrap tenants are parsed and stored, and their hosts resolve", func(t *testing.T) {
+		cfg := newConfig(t, multiTenantConfig)
+		assert.Equal(t, []config.BootstrapTenantConfig{
+			{OrgId: "0193b2c4-0000-7000-8000-0000000000a1", Slug: "dev1", OrgKey: "dev1", Hostnames: []string{"localhost"}},
+			{OrgId: "0193b2c4-0000-7000-8000-0000000000b2", Slug: "dev2", OrgKey: "dev2", Hostnames: []string{"127.0.0.1", "dev2.example"}},
+		}, cfg.Tenancy.BootstrapTenants)
+		// the default org is not changed by the other keys of the section
+		assert.Equal(t, store.LegacyOrgId, cfg.Tenancy.DefaultOrgId)
+
+		settings, err := config.Configure(context.TODO(), cfg)
+		require.NoError(t, err)
+		assert.Equal(t, tenancy.ModeMulti, settings.Tenancy)
+		require.NotNil(t, settings.TenantResolver)
+		assert.Equal(t, tenancy.ModeMulti, settings.TenantResolver.Mode)
+		assert.Equal(t, 45*time.Second, settings.TenantResolver.CacheTTL)
+
+		tenants, err := settings.Storage.ListTenants(context.TODO(), "", 10)
+		require.NoError(t, err)
+		require.Len(t, tenants, 2)
+		assert.Equal(t, "dev1", tenants[0].OrgKey)
+		assert.Equal(t, store.OrgPathLabel("0193b2c4-0000-7000-8000-0000000000a1"), tenants[0].Path)
+		assert.Equal(t, []string{"127.0.0.1", "dev2.example"}, tenants[1].Hostnames)
+
+		res, err := settings.TenantResolver.ResolveStation(context.TODO(), "localhost:9310", "CP001")
+		require.NoError(t, err)
+		assert.Equal(t, "dev1.CP001", res.StationKey)
+		assert.Equal(t, "0193b2c4-0000-7000-8000-0000000000a1", res.OrgId)
+		res, err = settings.TenantResolver.ResolveStation(context.TODO(), "127.0.0.1:9310", "CP001")
+		require.NoError(t, err)
+		assert.Equal(t, "dev2.CP001", res.StationKey)
+		_, err = settings.TenantResolver.ResolveStation(context.TODO(), "gateway:9310", "CP001")
+		assert.ErrorIs(t, err, tenancy.ErrUnknownHost)
+
+		// a station without an org belongs to the tenant of its key
+		orgId, err := settings.TenantResolver.OrgIdForStation(context.TODO(), "dev2.CP001")
+		require.NoError(t, err)
+		assert.Equal(t, "0193b2c4-0000-7000-8000-0000000000b2", orgId)
+	})
+
+	t.Run("multi without bootstrap tenants starts with no tenant", func(t *testing.T) {
+		settings, err := config.Configure(context.TODO(), newConfig(t, "[tenancy]\nmode = \"multi\"\n"))
+		require.NoError(t, err)
+		_, err = settings.TenantResolver.ResolveStation(context.TODO(), "localhost", "CP001")
+		assert.ErrorIs(t, err, tenancy.ErrUnknownHost)
+	})
+
+	t.Run("multi with firestore storage fails", func(t *testing.T) {
+		t.Setenv("FIRESTORE_EMULATOR_HOST", "localhost:8080")
+		cfg := newConfig(t, multiTenantConfig)
+		cfg.Storage.Type = "firestore"
+		cfg.Storage.FirestoreStorage = &config.FirestoreStorageConfig{ProjectId: "test-project-id"}
+
+		settings, err := config.Configure(context.TODO(), cfg)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, `tenancy mode "multi" is not supported by the firestore storage`)
+		assert.Nil(t, settings)
+	})
+
+	t.Run("bootstrap tenants in single mode fail", func(t *testing.T) {
+		cfg := newConfig(t, multiTenantConfig)
+		cfg.Tenancy.Mode = "single"
+
+		settings, err := config.Configure(context.TODO(), cfg)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "bootstrap tenants")
+		assert.Nil(t, settings)
+	})
+
+	invalid := map[string]func(cfg *config.BaseConfig){
+		"unknown mode":                     func(cfg *config.BaseConfig) { cfg.Tenancy.Mode = "shared" },
+		"empty mode":                       func(cfg *config.BaseConfig) { cfg.Tenancy.Mode = "" },
+		"mode in upper case":               func(cfg *config.BaseConfig) { cfg.Tenancy.Mode = "Multi" },
+		"cache ttl that is not a duration": func(cfg *config.BaseConfig) { cfg.Tenancy.CacheTTL = "soon" },
+		"cache ttl of zero":                func(cfg *config.BaseConfig) { cfg.Tenancy.CacheTTL = "0s" },
+		"negative cache ttl":               func(cfg *config.BaseConfig) { cfg.Tenancy.CacheTTL = "-30s" },
+		"empty cache ttl":                  func(cfg *config.BaseConfig) { cfg.Tenancy.CacheTTL = "" },
+		"bootstrap tenant without org id":  func(cfg *config.BaseConfig) { cfg.Tenancy.BootstrapTenants[0].OrgId = "" },
+		"bootstrap tenant org id no uuid":  func(cfg *config.BaseConfig) { cfg.Tenancy.BootstrapTenants[1].OrgId = "dev2" },
+		"bootstrap tenant bad org key":     func(cfg *config.BaseConfig) { cfg.Tenancy.BootstrapTenants[1].OrgKey = "DEV2" },
+		"bootstrap tenant without org key": func(cfg *config.BaseConfig) { cfg.Tenancy.BootstrapTenants[1].OrgKey = "" },
+		"bootstrap tenant bad slug":        func(cfg *config.BaseConfig) { cfg.Tenancy.BootstrapTenants[0].Slug = "Dev 1" },
+		"bootstrap tenant bad hostname":    func(cfg *config.BaseConfig) { cfg.Tenancy.BootstrapTenants[0].Hostnames = []string{"localhost:9310"} },
+		"bootstrap tenants with one host": func(cfg *config.BaseConfig) {
+			cfg.Tenancy.BootstrapTenants[1].Hostnames = []string{"localhost"}
+		},
+		"bootstrap tenants with one org key": func(cfg *config.BaseConfig) { cfg.Tenancy.BootstrapTenants[1].OrgKey = "dev1" },
+		"empty internal address":             func(cfg *config.BaseConfig) { cfg.Api.InternalAddr = "" },
+	}
+	for name, change := range invalid {
+		t.Run(name, func(t *testing.T) {
+			cfg := newConfig(t, multiTenantConfig)
+			change(cfg)
 
 			settings, err := config.Configure(context.TODO(), cfg)
 			require.Error(t, err)

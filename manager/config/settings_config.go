@@ -3,11 +3,14 @@
 package config
 
 type ApiSettingsConfig struct {
-	Addr    string `mapstructure:"addr" toml:"addr" validate:"required"`
-	Host    string `mapstructure:"host,omitempty" toml:"host,omitempty"`
-	WsPort  int    `mapstructure:"ws_port,omitempty" toml:"ws_port,omitempty"`
-	WssPort int    `mapstructure:"wss_port,omitempty" toml:"wss_port,omitempty"`
-	OrgName string `mapstructure:"org_name,omitempty" toml:"org_name,omitempty"`
+	Addr string `mapstructure:"addr" toml:"addr" validate:"required"`
+	// InternalAddr is the address of the internal listener, which serves the lookups of
+	// the gateway. It is not authenticated and must only be reachable by the gateway.
+	InternalAddr string `mapstructure:"internal_addr" toml:"internal_addr" validate:"required"`
+	Host         string `mapstructure:"host,omitempty" toml:"host,omitempty"`
+	WsPort       int    `mapstructure:"ws_port,omitempty" toml:"ws_port,omitempty"`
+	WssPort      int    `mapstructure:"wss_port,omitempty" toml:"wss_port,omitempty"`
+	OrgName      string `mapstructure:"org_name,omitempty" toml:"org_name,omitempty"`
 }
 
 type OcppSettingsConfig struct {

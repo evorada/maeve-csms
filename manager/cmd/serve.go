@@ -51,6 +51,8 @@ the gateway and send appropriate responses.`,
 
 		apiServer := server.New("api", cfg.Api.Addr, nil,
 			server.NewApiHandler(settings.Api, settings.Storage, settings.OcpiApi, settings.ChargeStationCertProviderService, settings.DefaultOrgId))
+		internalServer := server.New("internal", cfg.Api.InternalAddr, nil,
+			server.NewInternalHandler(server.InternalDeps{Resolver: settings.TenantResolver, Engine: settings.Storage}))
 
 		sync.Sync(settings.Storage, clock.RealClock{}, settings.Tracer, settings.MsgEmitter)
 
@@ -63,8 +65,10 @@ the gateway and send appropriate responses.`,
 			}
 		}()
 
-		errCh := make(chan error, 1)
+		// one slot for each sender below, so that none of them blocks when more than one fails
+		errCh := make(chan error, 5)
 		apiServer.Start(errCh)
+		internalServer.Start(errCh)
 		var ocpp16Connection transport.Connection
 		if settings.Ocpp16Handler != nil {
 			ocpp16Connection, err = settings.MsgListener.Connect(context.Background(), transport.OcppVersion16, nil, settings.Ocpp16Handler)

@@ -7,10 +7,12 @@ import (
 	"errors"
 	"testing"
 
+	clone "github.com/huandu/go-clone/generic"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"k8s.io/utils/clock"
 )
 
@@ -51,4 +53,27 @@ func TestAssignLegacyOrg(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "connection lost")
 	})
+}
+
+// The example for manual runs with two tenants must stay a configuration that starts.
+func TestMultiTenantExampleConfig(t *testing.T) {
+	ctx := context.Background()
+	cfg := clone.Clone(&DefaultConfig)
+	require.NoError(t, cfg.LoadFromFile("../../config/manager/config-multitenant.toml"))
+	require.NoError(t, cfg.Validate())
+	assert.Equal(t, "multi", cfg.Tenancy.Mode)
+	assert.Equal(t, ":9412", cfg.Api.InternalAddr)
+
+	engine := inmemory.NewStore(clock.RealClock{})
+	require.NoError(t, configureTenants(ctx, &cfg.Tenancy, "in_memory", engine))
+
+	resolver := &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine}
+	for host, wantKey := range map[string]string{
+		"localhost:9310": "dev1.cs001",
+		"127.0.0.1:9310": "dev2.cs001",
+	} {
+		res, err := resolver.ResolveStation(ctx, host, "cs001")
+		require.NoError(t, err, host)
+		assert.Equal(t, wantKey, res.StationKey)
+	}
 }

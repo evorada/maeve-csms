@@ -1,5 +1,6 @@
 [api]
 addr = ":9410"
+internal_addr = ":9412"
 org_name = "Example"
 host = "example.com"
 

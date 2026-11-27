@@ -18,11 +18,12 @@ func TestParseConfig(t *testing.T) {
 
 	want := &config.BaseConfig{
 		Api: config.ApiSettingsConfig{
-			Addr:    ":9410",
-			Host:    "example.com",
-			WsPort:  80,
-			WssPort: 443,
-			OrgName: "Example",
+			Addr:         ":9410",
+			InternalAddr: ":9412",
+			Host:         "example.com",
+			WsPort:       80,
+			WssPort:      443,
+			OrgName:      "Example",
 		},
 		Transport: config.TransportConfig{
 			Type: "mqtt",
@@ -102,6 +103,8 @@ func TestParseConfig(t *testing.T) {
 		},
 		Tenancy: config.TenancyConfig{
 			DefaultOrgId: "0193b2c4-0000-7000-8000-00000000000a",
+			Mode:         "single",
+			CacheTTL:     "30s",
 		},
 	}
 

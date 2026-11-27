@@ -21,6 +21,7 @@ Configuration is defined in TOML.
 | Section       | Key                         | Type   | Description                                                          |
 |---------------|-----------------------------|--------|----------------------------------------------------------------------|
 | api           | addr                        | string | Address that API server will listen on, e.g. localhost:9410          |
+| api           | internal_addr               | string | Address that the internal listener will listen on. Default "localhost:9412". It serves the lookups of the gateway (`/_internal/v1`, see [the internal API](../internalapi/README.md)) without authentication, so it must only be reachable by the gateway |
 | api           | external_addr               | string | The Externally visible URL that the server is available on           |
 | api           | org_name                    | string | The organization name to use when issuing client certificates        |
 | ocpp          | heartbeat_interval          | string | Frequency to request charge station heartbeat messages at, e.g. "5m" |
@@ -28,9 +29,37 @@ Configuration is defined in TOML.
 | ocpp          | ocpp201_enabled             | bool   | Is OCPP 2.0.1 support enabled, e.g. "true"?                          |
 | jobs          | reservation_expiry_interval | string | How often reservations past their expiry date are expired, e.g. "1m" |
 | tenancy       | default_org_id              | string | Org (UUID) that owns the data from before orgs and everything created without a tenant. Default "00000000-0000-0000-0000-000000000000" (the legacy org). With PostgreSQL storage, the rows of the legacy org are moved to this org at startup; a token of the legacy org stays there when this org already has a token with the same country code, party id and UID (a warning in the log names it) |
+| tenancy       | mode                        | string | Either "single" (default) or "multi". In single mode a charge station is known by the id it connects with and the host it connects to is ignored. In multi mode the host names the tenant, a charge station is known as `{org_key}.{stationId}` and a host that no tenant has is refused. Multi mode needs PostgreSQL or in-memory storage |
+| tenancy       | cache_ttl                   | string | How long a tenant that was looked up by host or org key is kept in memory, e.g. "30s" (the default) |
+| tenancy       | bootstrap_tenants           | array of tables | Tenants that are created or updated at startup, for deployments without a console that provisions them. Only allowed in multi mode. See [Bootstrap tenants](#bootstrap-tenants) |
 | observability | log_format                  | string | Either "json" or "text"                                              |
 | observability | otel_collector_addr         | string | Address of the OpenTelemetry collector, e.g. "localhost:4317"        |
 | observability | tls_keylog_file             | string | File where TLS session keys will be written for use with Wireshark   |
+
+### Bootstrap tenants
+
+Each `[[tenancy.bootstrap_tenants]]` table is one tenant. The manager does not start when one of them is not valid
+or clashes with another tenant.
+
+| Key       | Type             | Description                                                                              |
+|-----------|------------------|------------------------------------------------------------------------------------------|
+| org_id    | string           | Id of the org (lowercase UUID)                                                           |
+| slug      | string           | Name of the tenant in URLs, `^[a-z0-9-]{3,32}$`. Cannot be changed once the tenant exists |
+| org_key   | string           | Prefix of the station keys of the tenant, `^[a-z0-9]{4,8}$`. Cannot be changed once the tenant exists |
+| hostnames | array of strings | Hosts that the charge stations of the tenant connect to: lowercase DNS names without a port. A host belongs to one tenant |
+
+e.g.
+
+```toml
+[tenancy]
+mode = "multi"
+
+[[tenancy.bootstrap_tenants]]
+org_id = "0193b2c4-0000-7000-8000-000000000001"
+slug = "acme"
+org_key = "acme"
+hostnames = ["acme.ocpp.example.com"]
+```
 
 ## Transport settings
 
