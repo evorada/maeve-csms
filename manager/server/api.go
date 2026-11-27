@@ -8,6 +8,7 @@ import (
 
 	"github.com/rs/cors"
 	"github.com/thoughtworks/maeve-csms/manager/api"
+	"github.com/thoughtworks/maeve-csms/manager/commands"
 	"github.com/thoughtworks/maeve-csms/manager/entitlements"
 	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/ocpi"
@@ -34,10 +35,13 @@ type ApiDeps struct {
 	// Events stores the domain events of the changes made through /api/v0. It is
 	// required.
 	Events events.Emitter
+	// Commands queues the commands that callers send to the charge stations. Without it
+	// (a storage engine that does not keep commands) the command operations answer 501.
+	Commands *commands.Service
 }
 
 // apiBasePath is where the API is mounted.
-const apiBasePath = "/api/v0"
+const apiBasePath = api.BasePath
 
 // NewApiHandler creates the handler of the API listener. It serves /api/v0 and nothing
 // else: every request to it must be accepted by d.Verifier, and its caller needs the
@@ -55,7 +59,8 @@ func NewApiHandler(d ApiDeps) http.Handler {
 		panic("server: the api handler needs an emitter of domain events")
 	}
 
-	apiServer, err := api.NewServer(d.Engine, clock.RealClock{}, d.Ocpi, d.Events, api.WithScoper(d.Scoper), api.WithEntitlements(d.Entitlements))
+	apiServer, err := api.NewServer(d.Engine, clock.RealClock{}, d.Ocpi, d.Events, api.WithScoper(d.Scoper),
+		api.WithEntitlements(d.Entitlements), api.WithCommands(d.Commands))
 	if err != nil {
 		panic(err)
 	}

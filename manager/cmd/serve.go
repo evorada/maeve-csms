@@ -72,6 +72,7 @@ the gateway and send appropriate responses.`,
 				Scoper:       settings.TenantScoper,
 				Entitlements: settings.Entitlements,
 				Events:       settings.Events,
+				Commands:     settings.Commands,
 			}))
 		internalServer := server.New("internal", cfg.Api.InternalAddr, nil,
 			server.NewInternalHandler(server.InternalDeps{

@@ -115,6 +115,12 @@ paths:
     $ref: 'paths/monitoring.yaml#/paths/~1cs~1{csId}~1events'
   /cs/{csId}/reports:
     $ref: 'paths/monitoring.yaml#/paths/~1cs~1{csId}~1reports'
+  /cs/{csId}/commands:
+    $ref: 'paths/commands.yaml#/paths/~1cs~1{csId}~1commands'
+  /commands/{commandId}:
+    $ref: 'paths/commands.yaml#/paths/~1commands~1{commandId}'
+  /commands/{commandId}:cancel:
+    $ref: 'paths/commands.yaml#/paths/~1commands~1{commandId}:cancel'
 components:
   securitySchemes:
     bearerAuth:
@@ -272,3 +278,11 @@ components:
       $ref: 'schemas/schemas.yaml#/components/schemas/ReportsResponse'
     DeviceReport:
       $ref: 'schemas/schemas.yaml#/components/schemas/DeviceReport'
+    CommandStatus:
+      $ref: 'schemas/schemas.yaml#/components/schemas/CommandStatus'
+    CommandRequest:
+      $ref: 'schemas/schemas.yaml#/components/schemas/CommandRequest'
+    Command:
+      $ref: 'schemas/schemas.yaml#/components/schemas/Command'
+    CommandList:
+      $ref: 'schemas/schemas.yaml#/components/schemas/CommandList'
