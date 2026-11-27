@@ -13,6 +13,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 	"github.com/thoughtworks/maeve-csms/manager/connectivity"
 	"github.com/thoughtworks/maeve-csms/manager/events"
+	"github.com/thoughtworks/maeve-csms/manager/jobs"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
@@ -105,6 +106,13 @@ var DefaultConfig = BaseConfig{
 		Type: "kwh",
 	},
 	Jobs: JobsConfig{
+		Runner:                    "nats_kv",
+		LeaseBucket:               jobs.DefaultLeaseBucket,
+		LeaseTTL:                  jobs.DefaultLeaseTTL.String(),
+		EnsureBucket:              false,
+		BucketReplicas:            1,
+		SyncInterval:              "1m",
+		SyncRetryAfter:            "2m",
 		ReservationExpiryInterval: "1m",
 	},
 	Tenancy: TenancyConfig{
@@ -182,10 +190,14 @@ func (c *BaseConfig) Validate() error {
 
 	if c.usesNats() {
 		if c.Nats == nil {
-			if c.Transport.Type == "nats" {
+			switch {
+			case c.Transport.Type == "nats":
 				return fmt.Errorf("the [nats] section is required with transport type %q", c.Transport.Type)
+			case c.relaysEvents():
+				return errors.New("the [nats] section is required to relay the domain events to JetStream (events.relay_enabled)")
+			default:
+				return errors.New(`the [nats] section is required to run the background jobs with jobs runner "nats_kv" (use "local" for a single instance without NATS)`)
 			}
-			return errors.New("the [nats] section is required to relay the domain events to JetStream (events.relay_enabled)")
 		}
 		err = validate.Struct(c.Nats)
 		if err != nil {
@@ -195,8 +207,8 @@ func (c *BaseConfig) Validate() error {
 	return nil
 }
 
-// usesNats reports whether something needs the connection to NATS: the NATS transport
-// or the relay of the domain events.
+// usesNats reports whether something needs the connection to NATS: the NATS transport,
+// the relay of the domain events or the leases of the background jobs.
 func (c *BaseConfig) usesNats() bool {
-	return c.Transport.Type == "nats" || c.relaysEvents()
+	return c.Transport.Type == "nats" || c.relaysEvents() || c.Jobs.usesLeasedRunner()
 }

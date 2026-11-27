@@ -73,8 +73,16 @@ type Config struct {
 	ChargeStationCertProviderService services.ChargeStationCertificateProvider
 	TariffService                    services.TariffService
 	OcpiApi                          ocpi.Api
-	JobRunner                        jobs.Runner
-	ReservationExpiryInterval        time.Duration
+	// JobRunner runs the background jobs: on one replica at a time with leases in NATS KV
+	// (jobs runner "nats_kv"), or all of them in this process ("local").
+	JobRunner                 jobs.Runner
+	ReservationExpiryInterval time.Duration
+	// SyncInterval is the pause between two runs of each sync job (settings, certificates
+	// and trigger messages sent to the charge stations).
+	SyncInterval time.Duration
+	// SyncRetryAfter is how long the sync jobs wait for an answer before they send a
+	// setting, certificate or trigger message again.
+	SyncRetryAfter time.Duration
 	// DefaultOrgId is the org that owns the rows from before orgs and everything that
 	// is created without a tenant.
 	DefaultOrgId string
@@ -267,12 +275,9 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		return nil, fmt.Errorf("failed to parse heartbeat interval: %s", err)
 	}
 
-	reservationExpiryInterval, err := time.ParseDuration(cfg.Jobs.ReservationExpiryInterval)
+	jobSettings, err := parseJobsConfig(&cfg.Jobs)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse reservation expiry interval: %s", err)
-	}
-	if reservationExpiryInterval <= 0 {
-		return nil, fmt.Errorf("reservation expiry interval must be positive: %s", cfg.Jobs.ReservationExpiryInterval)
+		return nil, err
 	}
 
 	tenantCacheTTL, err := time.ParseDuration(cfg.Tenancy.CacheTTL)
@@ -294,7 +299,9 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 			EnableTransactionsPage: cfg.Api.EnableTransactionsPage,
 			EnableAdminUI:          cfg.Api.EnableAdminUI,
 		},
-		ReservationExpiryInterval: reservationExpiryInterval,
+		ReservationExpiryInterval: jobSettings.reservationExpiryInterval,
+		SyncInterval:              jobSettings.syncInterval,
+		SyncRetryAfter:            jobSettings.syncRetryAfter,
 		DefaultOrgId:              cfg.Tenancy.DefaultOrgId,
 		Tenancy:                   tenancy.Mode(cfg.Tenancy.Mode),
 	}
@@ -337,8 +344,6 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 	}
 
 	c.Tracer = c.TracerProvider.Tracer("manager")
-
-	c.JobRunner = &jobs.LocalRunner{Clock: clock.RealClock{}, Tracer: c.Tracer}
 
 	c.Storage, err = getStorage(ctx, &cfg.Storage)
 	if err != nil {
@@ -405,6 +410,11 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 			return nil, err
 		}
 		c.NatsConn = natsConn
+	}
+
+	c.JobRunner, err = getJobRunner(ctx, &cfg.Jobs, jobSettings, c.NatsConn, c.Tracer)
+	if err != nil {
+		return nil, err
 	}
 
 	if cfg.relaysEvents() {

@@ -6,6 +6,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/nats-io/nats.go"
 	"github.com/spf13/cobra"
 	"github.com/thoughtworks/maeve-csms/manager/config"
 	"github.com/thoughtworks/maeve-csms/manager/events"
@@ -80,11 +81,6 @@ the gateway and send appropriate responses.`,
 				DefaultOrgId:   settings.DefaultOrgId,
 			}))
 
-		sync.Sync(settings.Storage, clock.RealClock{}, settings.Tracer, settings.MsgEmitter)
-
-		jobList := []jobs.Job{
-			jobs.ReservationExpiryJob(settings.Storage, settings.ReservationExpiryInterval),
-		}
 		// every OCPP message is a sign of life of its station (Connectivity is nil when the
 		// storage does not track connectivity)
 		ocpp16Handler, ocpp201Handler := settings.Ocpp16Handler, settings.Ocpp201Handler
@@ -95,17 +91,9 @@ the gateway and send appropriate responses.`,
 			if ocpp201Handler != nil {
 				ocpp201Handler = settings.Connectivity.WrapHandler(ocpp201Handler)
 			}
-			jobList = append(jobList, settings.Connectivity.SweepJob(settings.ConnectivitySweepInterval))
 		}
-		// the domain events go from the outbox to JetStream, and are deleted after the
-		// retention period
-		if settings.EventRelay != nil {
-			jobList = append(jobList, settings.EventRelay.Job(settings.EventRelayInterval))
-		}
-		if settings.OutboxPurge != nil {
-			jobList = append(jobList, events.PurgeJob(settings.Storage, clock.RealClock{},
-				settings.OutboxPurge.Retention, settings.OutboxPurge.Interval))
-		}
+
+		jobList := backgroundJobs(settings)
 		jobsDone := make(chan struct{})
 		go func() {
 			defer close(jobsDone)
@@ -169,25 +157,54 @@ the gateway and send appropriate responses.`,
 			}
 		}
 
-		// the jobs stop before NATS is drained: the relay publishes on the connection, and
-		// what it published before it stopped is marked in the outbox
-		cancel()
-		select {
-		case <-jobsDone:
-		case <-time.After(jobsStopTimeout):
-			slog.Warn("the background jobs did not stop in time", "timeout", jobsStopTimeout)
-		}
-
 		// after the listeners: what their handlers published is still sent
-		if settings.NatsConn != nil {
-			err := natstransport.Drain(settings.NatsConn, natsDrainTimeout)
-			if err != nil {
-				slog.Warn("closing the NATS connection", "err", err)
-			}
-		}
+		stopJobsAndDrainNats(cancel, jobsDone, settings.NatsConn, jobsStopTimeout, natsDrainTimeout)
 
 		return err
 	},
+}
+
+// backgroundJobs returns the periodic jobs of the manager. The connectivity sweep, the
+// relay and the purge of the outbox are left out when the storage or the configuration
+// has no use for them.
+func backgroundJobs(settings *config.Config) []jobs.Job {
+	jobList := sync.Jobs(settings.Storage, clock.RealClock{}, settings.Tracer, settings.MsgEmitter,
+		settings.SyncInterval, settings.SyncRetryAfter)
+	jobList = append(jobList, jobs.ReservationExpiryJob(settings.Storage, settings.ReservationExpiryInterval))
+	if settings.Connectivity != nil {
+		jobList = append(jobList, settings.Connectivity.SweepJob(settings.ConnectivitySweepInterval))
+	}
+	// the domain events go from the outbox to JetStream, and are deleted after the
+	// retention period
+	if settings.EventRelay != nil {
+		jobList = append(jobList, settings.EventRelay.Job(settings.EventRelayInterval))
+	}
+	if settings.OutboxPurge != nil {
+		jobList = append(jobList, events.PurgeJob(settings.Storage, clock.RealClock{},
+			settings.OutboxPurge.Retention, settings.OutboxPurge.Interval))
+	}
+	return jobList
+}
+
+// stopJobsAndDrainNats stops the background jobs, waits for them at most jobsTimeout, and
+// then drains the NATS connection (when there is one). The jobs stop first: the relay
+// publishes on the connection and what it published before it stopped is marked in the
+// outbox, and the leased runner releases the leases of its jobs on it, so that another
+// replica takes them over at once.
+func stopJobsAndDrainNats(stopJobs context.CancelFunc, jobsDone <-chan struct{}, natsConn *nats.Conn, jobsTimeout, drainTimeout time.Duration) {
+	stopJobs()
+	select {
+	case <-jobsDone:
+	case <-time.After(jobsTimeout):
+		slog.Warn("the background jobs did not stop in time", "timeout", jobsTimeout)
+	}
+
+	if natsConn != nil {
+		err := natstransport.Drain(natsConn, drainTimeout)
+		if err != nil {
+			slog.Warn("closing the NATS connection", "err", err)
+		}
+	}
 }
 
 func init() {

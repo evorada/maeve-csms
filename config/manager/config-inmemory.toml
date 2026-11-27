@@ -21,6 +21,11 @@ urls = ["nats://nats:4222"]
 [events]
 ensure_stream = true
 
+# The background jobs run on one manager at a time, coordinated through leases in the
+# maeve_job_leases KV bucket of the same NATS server; in development the manager creates it.
+[jobs]
+ensure_bucket = true
+
 [ocpi]
 addr = ":9411"
 external_url = "http://manager:9411"

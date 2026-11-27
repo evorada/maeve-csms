@@ -30,16 +30,17 @@ import (
 
 // newTestConfig returns the default configuration with API authentication in dev mode,
 // so that it can be configured without a platform, with the MQTT transport, without the
-// relay of the domain events and without a [nats] section: nothing opens a connection in
-// Configure, so the tests of the other settings need no NATS server.
-// TestConfigureNatsTransport covers the default transport, TestConfigureEventRelay the
-// relay.
+// relay of the domain events, with the local job runner and without a [nats] section:
+// nothing opens a connection in Configure, so the tests of the other settings need no
+// NATS server. TestConfigureNatsTransport covers the default transport,
+// TestConfigureEventRelay the relay, TestConfigureJobRunner the leased job runner.
 func newTestConfig(t *testing.T) *config.BaseConfig {
 	t.Helper()
 
 	cfg := newDefaultTestConfig(t)
 	cfg.Transport.Type = "mqtt"
 	cfg.Events.RelayEnabled = false
+	cfg.Jobs.Runner = "local"
 	cfg.Nats = nil
 	return cfg
 }
@@ -348,6 +349,186 @@ func TestConfigureReservationExpiryInterval(t *testing.T) {
 
 			settings, err := config.Configure(context.TODO(), cfg)
 			require.Error(t, err)
+			assert.Nil(t, settings)
+		})
+	}
+}
+
+func TestConfigureJobRunner(t *testing.T) {
+	// MQTT transport and no relay, so that only the job runner can need NATS
+	newConfig := func(t *testing.T, toml string) *config.BaseConfig {
+		cfg := newDefaultTestConfig(t)
+		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
+		cfg.Transport.Type = "mqtt"
+		cfg.Events.RelayEnabled = false
+		require.NoError(t, cfg.Load(strings.NewReader(toml)))
+		return cfg
+	}
+	configure := func(t *testing.T, cfg *config.BaseConfig) *config.Config {
+		settings, err := config.Configure(context.TODO(), cfg)
+		require.NoError(t, err)
+		if settings.NatsConn != nil {
+			t.Cleanup(settings.NatsConn.Close)
+		}
+		return settings
+	}
+	// runJob runs a job on the runner until it has run once.
+	runJob := func(t *testing.T, runner jobs.Runner) {
+		ran := make(chan struct{}, 1)
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan error, 1)
+		go func() {
+			done <- runner.Run(ctx, []jobs.Job{{Name: "test", Interval: time.Millisecond, Run: func(context.Context) error {
+				select {
+				case ran <- struct{}{}:
+				default:
+				}
+				return nil
+			}}})
+		}()
+		select {
+		case <-ran:
+		case <-time.After(10 * time.Second):
+			t.Fatal("the job did not run")
+		}
+		cancel()
+		require.NoError(t, <-done)
+	}
+
+	t.Run("defaults", func(t *testing.T) {
+		cfg := newDefaultTestConfig(t)
+		assert.Equal(t, config.JobsConfig{
+			Runner:                    "nats_kv",
+			LeaseBucket:               "maeve_job_leases",
+			LeaseTTL:                  "15s",
+			EnsureBucket:              false,
+			BucketReplicas:            1,
+			SyncInterval:              "1m",
+			SyncRetryAfter:            "2m",
+			ReservationExpiryInterval: "1m",
+		}, cfg.Jobs)
+	})
+
+	t.Run("the leased runner needs the nats section", func(t *testing.T) {
+		for name, toml := range map[string]string{"default": "", "nats_kv": "[jobs]\nrunner = \"nats_kv\"\n"} {
+			t.Run(name, func(t *testing.T) {
+				cfg := newConfig(t, toml)
+				cfg.Nats = nil
+				err := cfg.Validate()
+				require.Error(t, err)
+				assert.ErrorContains(t, err, "[nats] section is required to run the background jobs")
+
+				settings, err := config.Configure(context.TODO(), cfg)
+				require.Error(t, err)
+				assert.Nil(t, settings)
+			})
+		}
+	})
+
+	t.Run("local builds the local runner without nats", func(t *testing.T) {
+		cfg := newConfig(t, "[jobs]\nrunner = \"local\"\nsync_interval = \"30s\"\nsync_retry_after = \"10m\"\n")
+		cfg.Nats = nil
+		require.NoError(t, cfg.Validate())
+
+		settings := configure(t, cfg)
+		assert.IsType(t, &jobs.LocalRunner{}, settings.JobRunner)
+		assert.Nil(t, settings.NatsConn)
+		assert.Equal(t, 30*time.Second, settings.SyncInterval)
+		assert.Equal(t, 10*time.Minute, settings.SyncRetryAfter)
+		runJob(t, settings.JobRunner)
+	})
+
+	t.Run("nats_kv with all settings creates the bucket", func(t *testing.T) {
+		_, url := natstest.RunServer(t, true)
+		cfg := newConfig(t, `
+[nats]
+urls = ["`+url+`"]
+
+[jobs]
+runner = "nats_kv"
+lease_bucket = "test_leases"
+lease_ttl = "9s"
+ensure_bucket = true
+bucket_replicas = 1
+`)
+		settings := configure(t, cfg)
+		require.NotNil(t, settings.NatsConn, "the job runner opens the connection to NATS with the MQTT transport")
+		require.IsType(t, &jobs.LeasedRunner{}, settings.JobRunner)
+		runner := settings.JobRunner.(*jobs.LeasedRunner)
+		assert.Equal(t, 9*time.Second, runner.TTL)
+		require.IsType(t, &jobs.KVLease{}, runner.Lease)
+		assert.Regexp(t, `-[0-9a-f]{6}$`, runner.Lease.(*jobs.KVLease).Instance())
+		assert.Equal(t, time.Minute, settings.SyncInterval)
+		assert.Equal(t, 2*time.Minute, settings.SyncRetryAfter)
+
+		conn, err := nats.Connect(url)
+		require.NoError(t, err)
+		t.Cleanup(conn.Close)
+		js, err := jetstream.New(conn)
+		require.NoError(t, err)
+		kv, err := js.KeyValue(context.TODO(), "test_leases")
+		require.NoError(t, err, "the bucket was not created at startup")
+		status, err := kv.Status(context.TODO())
+		require.NoError(t, err)
+		assert.Equal(t, 9*time.Second, status.TTL())
+
+		runJob(t, settings.JobRunner)
+		// the lease was released when the runner stopped
+		_, err = kv.Get(context.TODO(), "job.test")
+		assert.ErrorIs(t, err, jetstream.ErrKeyNotFound)
+	})
+
+	t.Run("a missing bucket does not stop the manager", func(t *testing.T) {
+		_, url := natstest.RunServer(t, true)
+		cfg := newConfig(t, "[nats]\nurls = [\""+url+"\"]\n")
+		assert.False(t, cfg.Jobs.EnsureBucket)
+
+		settings := configure(t, cfg)
+		require.IsType(t, &jobs.LeasedRunner{}, settings.JobRunner)
+		conn, err := nats.Connect(url)
+		require.NoError(t, err)
+		t.Cleanup(conn.Close)
+		js, err := jetstream.New(conn)
+		require.NoError(t, err)
+		_, err = js.KeyValue(context.TODO(), "maeve_job_leases")
+		require.ErrorIs(t, err, jetstream.ErrBucketNotFound, "the bucket is only looked up")
+
+		// once the bucket exists, the jobs run
+		_, err = js.CreateKeyValue(context.TODO(), jetstream.KeyValueConfig{Bucket: "maeve_job_leases", TTL: 15 * time.Second})
+		require.NoError(t, err)
+		runJob(t, settings.JobRunner)
+	})
+
+	t.Run("nats not reachable at startup", func(t *testing.T) {
+		cfg := newConfig(t, "[nats]\nurls = [\"nats://127.0.0.1:1\"]\nconnect_timeout = \"100ms\"\n")
+		start := time.Now()
+		settings := configure(t, cfg)
+		assert.Less(t, time.Since(start), 3*time.Second, "the manager does not wait for the bucket")
+		assert.IsType(t, &jobs.LeasedRunner{}, settings.JobRunner)
+		assert.False(t, settings.NatsConn.IsConnected())
+	})
+
+	for name, tc := range map[string]struct {
+		toml    string
+		wantErr string
+	}{
+		"unknown runner":            {toml: "runner = \"cron\"", wantErr: "Runner"},
+		"bad lease_ttl":             {toml: "lease_ttl = \"a while\"", wantErr: "lease ttl"},
+		"zero lease_ttl":            {toml: "lease_ttl = \"0s\"", wantErr: "lease ttl must be positive"},
+		"lease_ttl below 100ms":     {toml: "lease_ttl = \"50ms\"", wantErr: "at least 100ms"},
+		"bad lease_bucket":          {toml: "lease_bucket = \"job.leases\"", wantErr: "not a valid bucket name"},
+		"empty lease_bucket":        {toml: "lease_bucket = \"\"", wantErr: "not a valid bucket name"},
+		"zero bucket_replicas":      {toml: "bucket_replicas = 0", wantErr: "BucketReplicas"},
+		"too many bucket_replicas":  {toml: "bucket_replicas = 6", wantErr: "BucketReplicas"},
+		"empty sync_interval":       {toml: "sync_interval = \"\"", wantErr: "sync interval"},
+		"zero sync_interval":        {toml: "sync_interval = \"0s\"", wantErr: "sync interval must be positive"},
+		"negative sync_retry_after": {toml: "sync_retry_after = \"-1m\"", wantErr: "sync retry after must be positive"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := newConfig(t, "[nats]\nurls = [\"nats://127.0.0.1:1\"]\nconnect_timeout = \"100ms\"\n[jobs]\n"+tc.toml+"\n")
+			settings, err := config.Configure(context.TODO(), cfg)
+			require.Error(t, err)
+			assert.ErrorContains(t, err, tc.wantErr)
 			assert.Nil(t, settings)
 		})
 	}
@@ -942,10 +1123,10 @@ func TestConfigureEventRelay(t *testing.T) {
 		assert.Nil(t, settings)
 	})
 
-	t.Run("no nats section is needed without the relay", func(t *testing.T) {
+	t.Run("no nats section is needed without the relay and with the local job runner", func(t *testing.T) {
 		for name, toml := range map[string]string{
-			"relay disabled":  "[events]\nrelay_enabled = false\n",
-			"events disabled": "[events]\nenabled = false\n",
+			"relay disabled":  "[events]\nrelay_enabled = false\n[jobs]\nrunner = \"local\"\n",
+			"events disabled": "[events]\nenabled = false\n[jobs]\nrunner = \"local\"\n",
 		} {
 			t.Run(name, func(t *testing.T) {
 				cfg := newConfig(t, toml)
@@ -963,7 +1144,7 @@ func TestConfigureEventRelay(t *testing.T) {
 
 	t.Run("firestore disables the relay", func(t *testing.T) {
 		t.Setenv("FIRESTORE_EMULATOR_HOST", "localhost:8080")
-		cfg := newConfig(t, "[storage]\ntype = \"firestore\"\nfirestore.project_id = \"test-project-id\"\n")
+		cfg := newConfig(t, "[storage]\ntype = \"firestore\"\nfirestore.project_id = \"test-project-id\"\n[jobs]\nrunner = \"local\"\n")
 		cfg.Nats = nil
 		assert.True(t, cfg.Events.RelayEnabled)
 		require.NoError(t, cfg.Validate())
@@ -1202,8 +1383,8 @@ func TestConfigureNatsTransport(t *testing.T) {
 		assertHeartbeatRoundTrip(t, settings, url, "ocpp")
 	})
 
-	t.Run("mqtt needs no further keys and no nats without the event relay", func(t *testing.T) {
-		cfg := newDefaultConfig(t, "[transport]\ntype = \"mqtt\"\n[events]\nrelay_enabled = false\n")
+	t.Run("mqtt needs no further keys and no nats without the event relay and the leased job runner", func(t *testing.T) {
+		cfg := newDefaultConfig(t, "[transport]\ntype = \"mqtt\"\n[events]\nrelay_enabled = false\n[jobs]\nrunner = \"local\"\n")
 		assert.Equal(t, "mqtt", cfg.Transport.Type)
 		assert.Equal(t, []string{"mqtt://localhost:1883"}, cfg.Transport.Mqtt.Urls)
 		require.NoError(t, cfg.Validate())

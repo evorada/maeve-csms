@@ -9,6 +9,7 @@ Configuration is defined in TOML.
 * [Transport](#transport-settings)
   * [NATS connection](#nats-connection)
   * [Domain events](#domain-events)
+  * [Background jobs](#background-jobs)
 * [Storage](#storage)
 * [Contract certificate validator](#contract-certificate-validator)
 * [Contract certificate provider](#contract-certificate-provider)
@@ -41,6 +42,13 @@ Configuration is defined in TOML.
 | ocpp          | heartbeat_interval          | string | Frequency to request charge station heartbeat messages at, e.g. "5m". A tenant can set its own with `heartbeat_interval_s` of its config (see below) |
 | ocpp          | ocpp16_enabled              | bool   | Is OCPP 1.6 support enabled, e.g. "true"?                            |
 | ocpp          | ocpp201_enabled             | bool   | Is OCPP 2.0.1 support enabled, e.g. "true"?                          |
+| jobs          | runner                      | string | What runs the background jobs: "nats_kv" (default) runs each job on one instance of the manager at a time, coordinated through leases in a NATS KV bucket, and needs the [`[nats]`](#nats-connection) section whatever the transport; "local" runs every job in this process, for a single instance without NATS. See [Background jobs](#background-jobs) |
+| jobs          | lease_bucket                | string | KV bucket of the job leases. Default "maeve_job_leases" |
+| jobs          | lease_ttl                   | string | How long a lease lasts after its last renewal, e.g. "15s" (the default, at least "100ms"). It is renewed every third of it. A provisioned bucket must have this TTL: one with a shorter TTL, or none, is refused (logged, the jobs do not run) |
+| jobs          | ensure_bucket               | bool   | Create or update the bucket at startup. Default "false": the bucket is provisioned by the infrastructure and must exist. The configurations for local runs set "true" |
+| jobs          | bucket_replicas             | int    | Replicas of the bucket that `ensure_bucket` creates (1 to 5). Default 1 |
+| jobs          | sync_interval               | string | Pause between two runs of each sync job, which sends the pending settings, certificates and trigger messages to the charge stations, e.g. "1m" (the default) |
+| jobs          | sync_retry_after            | string | A setting, certificate or trigger message that was sent and is still pending is sent again after this, e.g. "2m" (the default) |
 | jobs          | reservation_expiry_interval | string | How often reservations past their expiry date are expired, e.g. "1m" |
 | tenancy       | default_org_id              | string | Org (UUID) that owns the data from before orgs and everything created without a tenant. Default "00000000-0000-0000-0000-000000000000" (the legacy org). With PostgreSQL storage, the rows of the legacy org are moved to this org at startup; a token of the legacy org stays there when this org already has a token with the same country code, party id and UID (a warning in the log names it) |
 | tenancy       | mode                        | string | Either "single" (default) or "multi". In single mode a charge station is known by the id it connects with and the host it connects to is ignored. In multi mode the host names the tenant, a charge station is known as `{org_key}.{stationId}` and a host that no tenant has is refused. Multi mode needs PostgreSQL or in-memory storage |
@@ -241,8 +249,9 @@ tls_ca_file = "/vault/secrets/nats-ca.pem"
 ### NATS connection
 
 The `[nats]` section configures the one connection to NATS that the manager opens when
-something uses NATS: the NATS transport or the relay of the domain events (see
-[Domain events](#domain-events)). It is only read and validated then.
+something uses NATS: the NATS transport, the relay of the domain events (see
+[Domain events](#domain-events)) or the leases of the background jobs (see
+[Background jobs](#background-jobs)). It is only read and validated then.
 
 Credentials and keys are files: in Kubernetes they come from the secret store and are
 mounted into the pod; the TOML only holds their paths. `user`, `password` and `token` are
@@ -317,6 +326,44 @@ of the token of the caller.
 ```toml
 [events]
 ensure_stream = true  # local development only
+```
+
+### Background jobs
+
+The manager runs its periodic work as named jobs: `sync-settings`, `sync-certificates`
+and `sync-triggers` (send what is pending to the charge stations, every `sync_interval`),
+`reservation-expiry`, `connectivity-sweep` (not with Firestore storage), `outbox-relay`
+(when the relay is enabled) and `outbox-purge` (not with Firestore storage). A job runs
+one interval after it starts, then one interval after the end of each run. A run that
+fails or panics is logged (`job failed`, `job panicked`) and the next one runs as usual.
+
+With `runner = "nats_kv"` (the default) several instances of the manager share the jobs:
+each job runs on one instance at a time, the one that holds its lease, the key
+`job.<name>` in the KV bucket `lease_bucket`. Different jobs can run on different
+instances. An instance takes a free lease (a create that only succeeds when the key is
+absent, deleted or expired), renews it every third of `lease_ttl`, and deletes it when it
+stops; both only succeed while the key still has the revision of its own last write, so
+an instance never extends or deletes the lease of another. An instance that cannot renew
+a lease (NATS unreachable, the lease taken over) cancels the job at once, and at the
+latest one renewal interval before the lease could expire, starts no further run, and
+tries to take the lease again every renewal interval. When an instance stops or loses
+NATS, another one takes its jobs over within about one `lease_ttl`. A job that ignores
+the cancellation can still be running when another instance starts it.
+
+Charging is never blocked: the jobs run in the background, and an outage of NATS only
+stops the jobs (logged as `job lease lost` and `job lease not available`) until the
+leases can be taken again. A bucket that is missing or cannot be created at startup, or
+NATS not being connected then, is logged as an error and does not stop the manager.
+
+In production the bucket (TTL `lease_ttl`, history 1, file storage, 3 replicas) is
+provisioned by the infrastructure together with the event stream, and the NATS user of
+the manager needs read and write access to that bucket only. Use `runner = "local"` only
+for a single instance: with several instances every job would run on all of them, and
+every pending setting would be sent once per instance.
+
+```toml
+[jobs]
+ensure_bucket = true  # local development only
 ```
 
 ## Service settings

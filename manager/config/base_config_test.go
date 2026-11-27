@@ -118,6 +118,13 @@ func TestParseConfig(t *testing.T) {
 			Type: "kwh",
 		},
 		Jobs: config.JobsConfig{
+			Runner:                    "local",
+			LeaseBucket:               "test_job_leases",
+			LeaseTTL:                  "30s",
+			EnsureBucket:              true,
+			BucketReplicas:            3,
+			SyncInterval:              "2m",
+			SyncRetryAfter:            "5m",
 			ReservationExpiryInterval: "30s",
 		},
 		Tenancy: config.TenancyConfig{
@@ -181,6 +188,8 @@ func TestExampleConfigsAreValid(t *testing.T) {
 			assert.Equal(t, []string{"nats://nats:4222"}, cfg.Nats.Urls)
 			assert.True(t, cfg.Events.RelayEnabled)
 			assert.True(t, cfg.Events.EnsureStream, "the manager creates the event stream in development")
+			assert.Equal(t, "nats_kv", cfg.Jobs.Runner)
+			assert.True(t, cfg.Jobs.EnsureBucket, "the manager creates the job lease bucket in development")
 		})
 	}
 }
