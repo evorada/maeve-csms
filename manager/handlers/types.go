@@ -4,6 +4,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
@@ -92,4 +93,19 @@ type CallResultRoute struct {
 type CallMaker interface {
 	// Send receives the charge station id and the request to send. It may return an error.
 	Send(ctx context.Context, chargeStationId string, request ocpp.Request) error
+}
+
+// RawCallMaker sends a pre-serialised OCPP call with a caller-chosen MessageId, so that
+// the CallResult or CallError of the station, which echoes the MessageId, can be tied
+// back to whoever sent the call.
+type RawCallMaker interface {
+	SendRaw(ctx context.Context, chargeStationId, messageId, action string, payload json.RawMessage) error
+}
+
+// CallOutcomeObserver sees every CallResult and CallError before the per-action routing.
+// It returns true when the message answered a call that it tracks. It must not fail or
+// hold up the handling of the message: errors are its own to log.
+type CallOutcomeObserver interface {
+	ObserveCallResult(ctx context.Context, chargeStationId string, msg *transport.Message) bool
+	ObserveCallError(ctx context.Context, chargeStationId string, msg *transport.Message) bool
 }

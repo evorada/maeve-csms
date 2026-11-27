@@ -58,7 +58,7 @@ func (s *Store) GetChargeStationStatus(ctx context.Context, chargeStationId stri
 	row, err := s.readQueries(ctx).GetChargeStationStatus(ctx, chargeStationId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("charge station %s not found", chargeStationId)
+			return nil, fmt.Errorf("charge station %s %w", chargeStationId, store.ErrNotFound)
 		}
 		return nil, fmt.Errorf("failed to get charge station status: %w", err)
 	}

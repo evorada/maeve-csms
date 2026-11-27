@@ -324,7 +324,7 @@ func TestDataTransferRoutesHas2beSignCertificate(t *testing.T) {
 		certProvider,
 		nil,
 		time.Minute,
-		schemas.OcppSchemas)
+		schemas.OcppSchemas, nil)
 
 	csr := newPemEncodedCsr(t, "cs001")
 	typeOfCertificate := has2be.CertificateSigningUseEnumTypeV2GCertificate

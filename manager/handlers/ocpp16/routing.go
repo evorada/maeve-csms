@@ -27,7 +27,9 @@ import (
 )
 
 // NewRouter returns the handler of the OCPP 1.6 messages. domainEvents receives the
-// domain events of the state changes that the messages cause.
+// domain events of the state changes that the messages cause. observer (may be nil) sees
+// every CallResult and CallError first; when it also implements CommandKicker it is
+// asked to send the next queued command of a station after each BootNotification.
 func NewRouter(emitter transport.Emitter,
 	clk clock.PassiveClock,
 	engine store.Engine,
@@ -38,9 +40,11 @@ func NewRouter(emitter transport.Emitter,
 	chargeStationCertProvider services.ChargeStationCertificateProvider,
 	contractCertProvider services.ContractCertificateProvider,
 	heartbeatInterval time.Duration,
-	schemaFS fs.FS) transport.MessageHandler {
+	schemaFS fs.FS,
+	observer handlers.CallOutcomeObserver) transport.MessageHandler {
 
 	standardCallMaker := NewCallMaker(emitter)
+	commandKicker, _ := observer.(CommandKicker)
 
 	// these handlers process both the result and the error returned for their call
 	changeConfigurationResultHandler := ChangeConfigurationResultHandler{
@@ -55,6 +59,7 @@ func NewRouter(emitter transport.Emitter,
 		Emitter:     emitter,
 		SchemaFS:    schemaFS,
 		OcppVersion: transport.OcppVersion16,
+		Observer:    observer,
 		CallRoutes: map[string]handlers.CallRoute{
 			"BootNotification": {
 				NewRequest:     func() ocpp.Request { return new(ocpp16.BootNotificationJson) },
@@ -67,6 +72,7 @@ func NewRouter(emitter transport.Emitter,
 					StatusStore:         engine,
 					HeartbeatInterval:   int(heartbeatInterval.Seconds()),
 					TenantConfig:        tenantConfig,
+					CommandKicker:       commandKicker,
 				},
 			},
 			"Heartbeat": {
@@ -525,6 +531,7 @@ func NewCallMaker(e transport.Emitter) *handlers.OcppCallMaker {
 		OcppVersion: transport.OcppVersion16,
 		Actions: map[reflect.Type]string{
 			reflect.TypeOf(&ocpp16.ChangeConfigurationJson{}):        "ChangeConfiguration",
+			reflect.TypeOf(&ocpp16.DataTransferJson{}):               "DataTransfer",
 			reflect.TypeOf(&ocpp16.TriggerMessageJson{}):             "TriggerMessage",
 			reflect.TypeOf(&ocpp16.RemoteStartTransactionJson{}):     "RemoteStartTransaction",
 			reflect.TypeOf(&ocpp16.RemoteStopTransactionJson{}):      "RemoteStopTransaction",

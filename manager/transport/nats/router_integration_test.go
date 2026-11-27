@@ -38,7 +38,7 @@ func TestRouterAnswersAHeartbeatOverNats(t *testing.T) {
 		nil,
 		nil,
 		time.Minute,
-		schemas.OcppSchemas)
+		schemas.OcppSchemas, nil)
 	listen(t, managerConn, transport.OcppVersion16, nil, router)
 
 	for _, stationKey := range []string{"k7f2.CP001", "CP001", "k7f2.CP.001"} {

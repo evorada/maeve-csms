@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,8 +16,16 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/thoughtworks/maeve-csms/manager/commands"
+	"github.com/thoughtworks/maeve-csms/manager/events"
+	"github.com/thoughtworks/maeve-csms/manager/handlers"
+	"github.com/thoughtworks/maeve-csms/manager/schemas"
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/store/postgres"
 	"github.com/thoughtworks/maeve-csms/manager/store/storetest"
+	"github.com/thoughtworks/maeve-csms/manager/transport"
+	"k8s.io/utils/clock"
+	clocktesting "k8s.io/utils/clock/testing"
 )
 
 func TestCommandStore(t *testing.T) {
@@ -250,4 +259,133 @@ func TestMigration_CreateCommands(t *testing.T) {
 
 	migrateTo(t, migrationConnString, versionAfter)
 	assert.Equal(t, wantIndexes, commandIndexes())
+}
+
+// rawSender is a handlers.RawCallMaker.
+type rawSender func(ctx context.Context, stationKey, messageId, action string, payload json.RawMessage) error
+
+func (f rawSender) SendRaw(ctx context.Context, stationKey, messageId, action string, payload json.RawMessage) error {
+	return f(ctx, stationKey, messageId, action, payload)
+}
+
+// connectedStations says every station is connected.
+type connectedStations struct{}
+
+func (connectedStations) IsConnected(context.Context, string) (bool, error) {
+	return true, nil
+}
+
+// Two managers share one database: each dispatcher sends and completes commands, and the
+// answers of the station reach either of them. The station never has two commands in
+// flight, and each command is sent once, in the order it was enqueued.
+func TestCommandDispatchersOnOneDatabase(t *testing.T) {
+	ctx := context.Background()
+	first := emptyTestStore(t).(*postgres.Store)
+	second, err := postgres.NewStore(ctx, connString)
+	require.NoError(t, err)
+	t.Cleanup(second.Close)
+
+	const stationKey = "k7f2.CP001"
+	const count = 20
+	type call struct {
+		replica   int
+		messageId string
+		action    string
+	}
+	calls := make(chan call, count*2)
+	var mu sync.Mutex
+	inFlight, maxInFlight := 0, 0
+	var sentIds []string
+
+	dispatchers := make([]*commands.Dispatcher, 2)
+	for i, s := range []*postgres.Store{first, second} {
+		replica := i
+		dispatchers[i] = &commands.Dispatcher{
+			Store: s,
+			Tx:    s,
+			Events: &events.OutboxEmitter{Store: s, Orgs: events.StaticOrgResolver{OrgId: "0193b2c4-0000-7000-8000-0000000000a1"},
+				Product: events.Product},
+			Senders: map[transport.OcppVersion]handlers.RawCallMaker{
+				transport.OcppVersion16: rawSender(func(_ context.Context, key, messageId, action string, _ json.RawMessage) error {
+					mu.Lock()
+					inFlight++
+					maxInFlight = max(maxInFlight, inFlight)
+					sentIds = append(sentIds, messageId)
+					mu.Unlock()
+					select {
+					case calls <- call{replica: replica, messageId: messageId, action: action}:
+					default: // more calls than commands: the assertions below fail
+					}
+					return nil
+				}),
+			},
+			Connectivity: connectedStations{},
+			SchemaFS:     schemas.OcppSchemas,
+			Clock:        clock.RealClock{},
+		}
+	}
+
+	// enqueued while the station is offline: only stored
+	clk := clocktesting.NewFakePassiveClock(time.Now())
+	service := &commands.Service{Store: first, RuntimeDetails: first, SchemaFS: schemas.OcppSchemas, Clock: clk}
+	var ids []string
+	for i := 0; i < count; i++ {
+		cmd, err := service.Enqueue(ctx, &store.Command{OrgId: "0193b2c4-0000-7000-8000-0000000000a1",
+			StationKey: stationKey, OcppVersion: "ocpp1.6", Action: "ClearCache"})
+		require.NoError(t, err)
+		ids = append(ids, cmd.Id)
+		clk.SetTime(clk.Now().Add(time.Millisecond))
+	}
+
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+	// the station answers each call through the other replica than the one that sent it
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-done:
+				return
+			case c := <-calls:
+				mu.Lock()
+				inFlight--
+				mu.Unlock()
+				dispatchers[1-c.replica].ObserveCallResult(ctx, stationKey, &transport.Message{
+					MessageType: transport.MessageTypeCallResult, Action: c.action, MessageId: c.messageId,
+					RequestPayload: json.RawMessage(`{}`), ResponsePayload: json.RawMessage(`{"status":"Accepted"}`)})
+			}
+		}
+	}()
+	// both replicas keep trying to send, as connection events, boots and sweeps would
+	for _, d := range dispatchers {
+		wg.Add(1)
+		go func(d *commands.Dispatcher) {
+			defer wg.Done()
+			for {
+				select {
+				case <-done:
+					return
+				default:
+				}
+				_ = d.Kick(ctx, stationKey)
+				_ = d.Sweep(ctx)
+			}
+		}(d)
+	}
+
+	allAccepted := func() bool {
+		_, total, err := first.ListCommands(ctx, store.CommandFilter{StationKey: stationKey,
+			Statuses: []store.CommandStatus{store.CommandStatusAccepted}, Limit: count})
+		return err == nil && total == count
+	}
+	assert.Eventually(t, allAccepted, 30*time.Second, 10*time.Millisecond)
+	close(done)
+	wg.Wait()
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Equal(t, 1, maxInFlight, "never more than one command in flight")
+	assert.Equal(t, ids, sentIds, "each command sent once, in order")
+	assert.Len(t, unpublishedOutboxEventIds(t), count, "one command.completed event per command")
 }

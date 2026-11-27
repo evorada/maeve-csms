@@ -1714,7 +1714,7 @@ func (s *Store) GetChargeStationStatus(_ context.Context, chargeStationId string
 
 	status, ok := s.chargeStationStatuses[chargeStationId]
 	if !ok {
-		return nil, fmt.Errorf("charge station %s not found", chargeStationId)
+		return nil, fmt.Errorf("charge station %s %w", chargeStationId, store.ErrNotFound)
 	}
 
 	statusCopy := *status

@@ -149,6 +149,15 @@ func TestParseConfig(t *testing.T) {
 			StaleAfter:            "10m",
 			SweepInterval:         "15s",
 		},
+		Commands: config.CommandsConfig{
+			ResponseTimeout:      "45s",
+			ConnectDispatchDelay: "2s",
+			SweepInterval:        "10s",
+			DefaultTTL:           "2h",
+			MaxTTL:               "72h",
+			Retention:            "720h",
+			TTL:                  map[string]string{"Reset": "10m", "ChangeConfiguration": "24h"},
+		},
 		// the default stays and is not used with the MQTT transport
 		Nats: &config.NatsConfig{
 			Urls: []string{"nats://localhost:4222"},

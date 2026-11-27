@@ -17,6 +17,8 @@ import (
 	"k8s.io/utils/clock"
 )
 
+// NewRouter returns the handler of the OCPP 2.0.1 messages. observer (may be nil) sees
+// every CallResult and CallError first.
 func NewRouter(emitter transport.Emitter,
 	clk clock.PassiveClock,
 	engine store.Engine,
@@ -27,12 +29,14 @@ func NewRouter(emitter transport.Emitter,
 	chargeStationCertProvider services.ChargeStationCertificateProvider,
 	contractCertProvider services.ContractCertificateProvider,
 	heartbeatInterval time.Duration,
-	schemaFS fs.FS) transport.MessageHandler {
+	schemaFS fs.FS,
+	observer handlers.CallOutcomeObserver) transport.MessageHandler {
 
 	return &handlers.Router{
 		Emitter:     emitter,
 		SchemaFS:    schemaFS,
 		OcppVersion: transport.OcppVersion201,
+		Observer:    observer,
 		CallRoutes: map[string]handlers.CallRoute{
 			"Authorize": {
 				NewRequest:     func() ocpp.Request { return new(ocpp201.AuthorizeRequestJson) },

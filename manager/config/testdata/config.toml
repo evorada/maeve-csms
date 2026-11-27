@@ -51,6 +51,18 @@ last_seen_write_interval = "1m"
 stale_after = "10m"
 sweep_interval = "15s"
 
+[commands]
+response_timeout = "45s"
+connect_dispatch_delay = "2s"
+sweep_interval = "10s"
+default_ttl = "2h"
+max_ttl = "72h"
+retention = "720h"
+
+[commands.ttl]
+Reset = "10m"
+ChangeConfiguration = "24h"
+
 [observability]
 log_format = "text"
 otel_collector_addr = "localhost:4317"

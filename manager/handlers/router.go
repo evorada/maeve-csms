@@ -27,6 +27,7 @@ type Router struct {
 	CallRoutes       map[string]CallRoute       // the set of routes for incoming calls (indexed by action)
 	CallResultRoutes map[string]CallResultRoute // the set of routes for call results (indexed by action)
 	CallErrorHandler CallErrorHandler           // optional: invoked for every CallError after the route's ErrorHandler
+	Observer         CallOutcomeObserver        // optional: sees every CallResult and CallError before the routes
 }
 
 func (r Router) Handle(ctx context.Context, chargeStationId string, msg *transport.Message) {
@@ -100,8 +101,13 @@ func (r Router) route(ctx context.Context, chargeStationId string, message *tran
 			return fmt.Errorf("sending call response: %w", err)
 		}
 	case transport.MessageTypeCallResult:
+		observed := r.observe(ctx, chargeStationId, message)
 		route, ok := r.CallResultRoutes[message.Action]
 		if !ok {
+			if observed {
+				// the result of a call that the observer tracks needs no route of its own
+				return nil
+			}
 			return fmt.Errorf("routing request: %w", transport.NewError(transport.ErrorNotImplemented, fmt.Errorf("%s result not implemented", message.Action)))
 		}
 		err := schemas.Validate(message.RequestPayload, r.SchemaFS, route.RequestSchema)
@@ -127,16 +133,42 @@ func (r Router) route(ctx context.Context, chargeStationId string, message *tran
 			return err
 		}
 	case transport.MessageTypeCallError:
-		return r.routeCallError(ctx, chargeStationId, message)
+		observed := r.observe(ctx, chargeStationId, message)
+		return r.routeCallError(ctx, chargeStationId, message, observed)
 	}
 
 	return nil
 }
 
+// observe hands a CallResult or CallError to the Observer and reports whether it
+// answered a call that the Observer tracks. A panic of the Observer is logged and the
+// message is then routed as if there were no Observer: it never stops the routing.
+func (r Router) observe(ctx context.Context, chargeStationId string, message *transport.Message) (observed bool) {
+	if r.Observer == nil {
+		return false
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			slog.Error("call outcome observer panicked",
+				slog.String("chargeStationId", chargeStationId),
+				slog.String("action", message.Action),
+				slog.String("messageId", message.MessageId),
+				"panic", p)
+			observed = false
+		}
+	}()
+	if message.MessageType == transport.MessageTypeCallError {
+		return r.Observer.ObserveCallError(ctx, chargeStationId, message)
+	}
+	return r.Observer.ObserveCallResult(ctx, chargeStationId, message)
+}
+
 // routeCallError delivers a CallError sent by a charge station in reply to a CSMS-initiated
 // Call: first to the ErrorHandler of the route for the action of that Call, then to the
-// router-wide CallErrorHandler. Nothing is sent back to the charge station.
-func (r Router) routeCallError(ctx context.Context, chargeStationId string, message *transport.Message) error {
+// router-wide CallErrorHandler. Nothing is sent back to the charge station. observed says
+// whether the Observer already took the CallError, in which case it is not logged as
+// unhandled when no handler takes it.
+func (r Router) routeCallError(ctx context.Context, chargeStationId string, message *transport.Message, observed bool) error {
 	callErr := &CallError{
 		MessageId:        message.MessageId,
 		Action:           message.Action,
@@ -184,6 +216,9 @@ func (r Router) routeCallError(ctx context.Context, chargeStationId string, mess
 	}
 
 	if !handled {
+		if observed {
+			return nil
+		}
 		slog.Warn("unhandled call error",
 			slog.String("chargeStationId", chargeStationId),
 			slog.String("action", callErr.Action),

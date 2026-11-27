@@ -68,6 +68,7 @@ func TestUnlockConnectorResultIsRouted(t *testing.T) {
 		&fakeContractCertProvider{},
 		5*time.Minute,
 		schemas.OcppSchemas,
+		nil,
 	)
 
 	reqBytes, err := json.Marshal(&types.UnlockConnectorRequestJson{

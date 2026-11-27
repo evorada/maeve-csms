@@ -119,7 +119,9 @@ type SessionCompletedData struct {
 }
 
 // CommandCompletedData is the payload of command.completed, which the dispatcher of the
-// commands to the stations emits.
+// commands to the stations emits each time a command reaches a final status: accepted,
+// rejected, failed, timeout or cancelled. A result that arrives after the command timed
+// out moves it once more, to accepted, rejected or failed, with Late set.
 type CommandCompletedData struct {
 	CommandId        string          `json:"command_id"`
 	StationKey       string          `json:"station_key"`
@@ -128,6 +130,13 @@ type CommandCompletedData struct {
 	Status           string          `json:"status"` // final status of the command
 	ErrorCode        string          `json:"error_code,omitempty"`
 	ErrorDescription string          `json:"error_description,omitempty"`
-	Result           json.RawMessage `json:"result,omitempty"`
+	Result           json.RawMessage `json:"result,omitempty"` // CallResult payload
 	CompletedAt      time.Time       `json:"completed_at"`
+	OrgId            string          `json:"org_id"`
+	OcppVersion      string          `json:"ocpp_version"` // "ocpp1.6" | "ocpp2.0.1"
+	Actor            *string         `json:"actor,omitempty"`
+	Jti              *string         `json:"jti,omitempty"` // of the token that created the command
+	CreatedAt        time.Time       `json:"created_at"`
+	SentAt           *time.Time      `json:"sent_at,omitempty"`
+	Late             bool            `json:"late"`
 }

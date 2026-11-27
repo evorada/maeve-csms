@@ -51,7 +51,7 @@ func TestOcpp16SessionEventsReachTheStream(t *testing.T) {
 	emitter := &events.OutboxEmitter{Store: engine, Orgs: orgs, Clock: clk, Product: events.Product}
 
 	sent := &replies{}
-	router := ocpp16.NewRouter(sent, clk, engine, emitter, orgs, nil, nil, nil, nil, time.Minute, schemas.OcppSchemas)
+	router := ocpp16.NewRouter(sent, clk, engine, emitter, orgs, nil, nil, nil, nil, time.Minute, schemas.OcppSchemas, nil)
 	call := func(action, payload string) json.RawMessage {
 		t.Helper()
 		msg := &transport.Message{

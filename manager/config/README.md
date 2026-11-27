@@ -68,6 +68,13 @@ Configuration is defined in TOML.
 | connectivity  | last_seen_write_interval    | string | The OCPP messages of a station update its last seen time at most once per interval, e.g. "30s" (the default). The alive events of the gateway always update it |
 | connectivity  | stale_after                 | string | A connected station that has shown no sign of life (connection event, OCPP message, heartbeat) for this long is marked disconnected, e.g. "5m" (the default). Must be longer than `last_seen_write_interval`. It must also exceed the alive interval of the gateways (`--conn-alive-interval`, default "2m") with a margin: more than twice that interval tolerates one lost alive event. The manager cannot read the setting of the gateways, so it only warns at startup when `stale_after` is not more than twice the gateway default. A station marked disconnected is not disconnected; only its status changes. Not tracked with Firestore storage (a warning in the log at startup) |
 | connectivity  | sweep_interval              | string | How often the stations without a sign of life are searched for, e.g. "30s" (the default) |
+| commands      | response_timeout            | string | How long a command sent to a charge station waits for its answer (CallResult or CallError) before it is marked `timeout` and the next command of the station is sent, e.g. "30s" (the default). An answer that comes later is still recorded (`late` in its `command.completed` event). The command queue is not available with Firestore storage (a warning in the log at startup) |
+| commands      | connect_dispatch_delay      | string | Pause between the connection of a station and the first command sent to it, so that a rebooting station can send its BootNotification first, e.g. "5s" (the default); "0s" sends at once. A BootNotification also sends the queued commands |
+| commands      | sweep_interval              | string | Pause between two runs of the job `commands-sweep`, which times out the commands that expired in the queue or got no answer and sends the queued commands of the connected stations, e.g. "5s" (the default) |
+| commands      | default_ttl                 | string | How long a command may wait in the queue for its station to connect, unless its caller, `ttl` or the action says otherwise, e.g. "1h" (the default). Reset, UnlockConnector and RemoteStartTransaction wait 5 minutes, GetDiagnostics, GetLog, UpdateFirmware and SignedUpdateFirmware 24 hours |
+| commands      | max_ttl                     | string | The longest time a command may wait in the queue, e.g. "168h" (the default). The expiry of every action (`default_ttl`, `ttl` and the defaults of the actions) must not be longer |
+| commands      | retention                   | string | Completed commands are deleted this long after they completed, by the hourly job `commands-purge`, e.g. "2160h" (the default, 90 days) |
+| commands.ttl  | `<Action>`                  | string | How long a command of the OCPP action may wait in the queue, e.g. `Reset = "10m"`. Overrides the default of the action and `default_ttl` |
 | observability | log_format                  | string | Either "json" or "text"                                              |
 | observability | otel_collector_addr         | string | Address of the OpenTelemetry collector, e.g. "localhost:4317"        |
 | observability | tls_keylog_file             | string | File where TLS session keys will be written for use with Wireshark   |
@@ -333,7 +340,8 @@ ensure_stream = true  # local development only
 The manager runs its periodic work as named jobs: `sync-settings`, `sync-certificates`
 and `sync-triggers` (send what is pending to the charge stations, every `sync_interval`),
 `reservation-expiry`, `connectivity-sweep` (not with Firestore storage), `outbox-relay`
-(when the relay is enabled) and `outbox-purge` (not with Firestore storage). A job runs
+(when the relay is enabled), `outbox-purge`, `commands-sweep` and `commands-purge` (these
+three not with Firestore storage). A job runs
 one interval after it starts, then one interval after the end of each run. A run that
 fails or panics is logged (`job failed`, `job panicked`) and the next one runs as usual.
 

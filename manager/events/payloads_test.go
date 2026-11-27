@@ -112,17 +112,24 @@ func TestPayloadFieldNames(t *testing.T) {
 		},
 		"command.completed": {
 			payload: events.CommandCompletedData{CommandId: "cmd", StationKey: "k7f2.CP001", StationId: "CP001",
-				Action: "Reset", Status: "Failed", ErrorCode: "Timeout", ErrorDescription: "no answer",
-				Result: json.RawMessage(`{"status":"Rejected"}`), CompletedAt: payloadTime},
-			want: `{"command_id":"cmd","station_key":"k7f2.CP001","station_id":"CP001","action":"Reset","status":"Failed",` +
-				`"error_code":"Timeout","error_description":"no answer","result":{"status":"Rejected"},` +
-				`"completed_at":"2026-11-27T10:30:00Z"}`,
+				Action: "Reset", Status: "accepted", ErrorCode: "ResponseTimeout", ErrorDescription: "no answer",
+				Result: json.RawMessage(`{"status":"Accepted"}`), CompletedAt: payloadTime,
+				OrgId: "0193b2c4-0000-7000-8000-0000000000a1", OcppVersion: "ocpp1.6", Actor: ptr("user:alice"),
+				Jti: ptr("jti-1"), CreatedAt: payloadTime.Add(-time.Hour), SentAt: ptr(payloadTime.Add(-time.Minute)),
+				Late: true},
+			want: `{"command_id":"cmd","station_key":"k7f2.CP001","station_id":"CP001","action":"Reset","status":"accepted",` +
+				`"error_code":"ResponseTimeout","error_description":"no answer","result":{"status":"Accepted"},` +
+				`"completed_at":"2026-11-27T10:30:00Z","org_id":"0193b2c4-0000-7000-8000-0000000000a1",` +
+				`"ocpp_version":"ocpp1.6","actor":"user:alice","jti":"jti-1","created_at":"2026-11-27T09:30:00Z",` +
+				`"sent_at":"2026-11-27T10:29:00Z","late":true}`,
 		},
 		"command.completed minimal": {
 			payload: events.CommandCompletedData{CommandId: "cmd", StationKey: "k7f2.CP001", StationId: "CP001",
-				Action: "Reset", Status: "Accepted", CompletedAt: payloadTime},
-			want: `{"command_id":"cmd","station_key":"k7f2.CP001","station_id":"CP001","action":"Reset","status":"Accepted",` +
-				`"completed_at":"2026-11-27T10:30:00Z"}`,
+				Action: "Reset", Status: "timeout", CompletedAt: payloadTime, OrgId: "org", OcppVersion: "ocpp1.6",
+				CreatedAt: payloadTime},
+			want: `{"command_id":"cmd","station_key":"k7f2.CP001","station_id":"CP001","action":"Reset","status":"timeout",` +
+				`"completed_at":"2026-11-27T10:30:00Z","org_id":"org","ocpp_version":"ocpp1.6",` +
+				`"created_at":"2026-11-27T10:30:00Z","late":false}`,
 		},
 	} {
 		got, err := json.Marshal(tc.payload)

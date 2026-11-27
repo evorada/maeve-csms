@@ -21,6 +21,12 @@ type OcppCallMaker struct {
 	Actions     map[reflect.Type]string // the OCPP Action associated with a specific ocpp.Request object
 }
 
+var (
+	_ CallMaker    = OcppCallMaker{}
+	_ RawCallMaker = OcppCallMaker{}
+)
+
+// Send sends the request with a new random MessageId.
 func (b OcppCallMaker) Send(ctx context.Context, chargeStationId string, request ocpp.Request) error {
 	action, ok := b.Actions[reflect.TypeOf(request)]
 	if !ok {
@@ -32,13 +38,19 @@ func (b OcppCallMaker) Send(ctx context.Context, chargeStationId string, request
 		return err
 	}
 
+	return b.SendRaw(ctx, chargeStationId, uuid.New().String(), action, requestBytes)
+}
+
+// SendRaw sends the payload as a call of the action with the given MessageId. The
+// payload is sent as it is: the caller has checked it against the schema of the action.
+func (b OcppCallMaker) SendRaw(ctx context.Context, chargeStationId, messageId, action string, payload json.RawMessage) error {
 	msg := &transport.Message{
 		MessageType:    transport.MessageTypeCall,
-		MessageId:      uuid.New().String(),
+		MessageId:      messageId,
 		Action:         action,
-		RequestPayload: requestBytes,
+		RequestPayload: payload,
 	}
 
-	slog.Info("sending message", "action", msg.Action, "chargeStationId", chargeStationId)
+	slog.Info("sending message", "action", msg.Action, "chargeStationId", chargeStationId, "messageId", messageId)
 	return b.Emitter.Emit(ctx, b.OcppVersion, chargeStationId, msg)
 }
