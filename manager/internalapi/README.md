@@ -6,7 +6,12 @@ OpenAPI specification.
 
 **Nothing on this listener is authenticated.** Whoever can reach it can read the auth details of a charge station
 (security profile and the SHA-256 hash of its password) for a host and station id that they name, and can find out
-which hosts belong to a tenant. Bind it to an address that only the gateway can reach.
+which hosts belong to a tenant. Bind it to an address that only the gateway, the health probes and the metrics
+scraper can reach.
+
+The same listener serves the health check (`/health`), the metrics (`/metrics`) and the OpenAPI document of the
+public API (`/api/openapi.json`), and the legacy pages `/transactions` and `/adminui` when the
+[configuration](../config/README.md) enables them.
 
 Every response is JSON and carries `Cache-Control: no-store`. A response that is not successful has this body, where
 `error` may be left out:

@@ -3,6 +3,8 @@
 package config_test
 
 import (
+	"context"
+	"strings"
 	"testing"
 
 	clone "github.com/huandu/go-clone/generic"
@@ -150,6 +152,41 @@ func TestExampleConfigsAreValid(t *testing.T) {
 			require.NoError(t, cfg.LoadFromFile("../../config/manager/"+file))
 			require.NoError(t, cfg.Validate())
 			assert.Equal(t, "dev", cfg.Api.Auth.Mode)
+		})
+	}
+}
+
+// The legacy pages have no authentication: they stay off unless the configuration
+// switches them on, each with its own setting.
+func TestLegacyPagesAreOffUnlessEnabled(t *testing.T) {
+	assert.False(t, config.DefaultConfig.Api.EnableTransactionsPage)
+	assert.False(t, config.DefaultConfig.Api.EnableAdminUI)
+
+	for name, tc := range map[string]struct {
+		toml             string
+		wantTransactions bool
+		wantAdminUI      bool
+	}{
+		"not set":            {toml: ""},
+		"other api settings": {toml: "[api]\naddr = \":9410\"\ninternal_addr = \":9412\"\n"},
+		"transactions page":  {toml: "[api]\nenable_transactions_page = true\n", wantTransactions: true},
+		"admin pages":        {toml: "[api]\nenable_admin_ui = true\n", wantAdminUI: true},
+		"both":               {toml: "[api]\nenable_transactions_page = true\nenable_admin_ui = true\n", wantTransactions: true, wantAdminUI: true},
+		"switched off":       {toml: "[api]\nenable_transactions_page = false\nenable_admin_ui = false\n"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := newTestConfig(t)
+			cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
+			require.NoError(t, cfg.Load(strings.NewReader(tc.toml)))
+			require.NoError(t, cfg.Validate())
+			assert.Equal(t, tc.wantTransactions, cfg.Api.EnableTransactionsPage)
+			assert.Equal(t, tc.wantAdminUI, cfg.Api.EnableAdminUI)
+
+			// the manager is set up with what the configuration says
+			settings, err := config.Configure(context.Background(), cfg)
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantTransactions, settings.Api.EnableTransactionsPage)
+			assert.Equal(t, tc.wantAdminUI, settings.Api.EnableAdminUI)
 		})
 	}
 }

@@ -113,7 +113,7 @@ services:
       - "9411"
       - "9412"
     healthcheck:
-      test: ["CMD", "/usr/bin/curl", "-s", "--fail", "http://localhost:9410/health"]
+      test: ["CMD", "/usr/bin/curl", "-s", "--fail", "http://localhost:9412/health"]
       interval: 10s
       timeout: 10s
       retries: 3

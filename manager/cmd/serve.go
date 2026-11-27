@@ -51,16 +51,19 @@ the gateway and send appropriate responses.`,
 
 		apiServer := server.New("api", cfg.Api.Addr, nil,
 			server.NewApiHandler(server.ApiDeps{
-				Settings:       settings.Api,
-				Engine:         settings.Storage,
-				Ocpi:           settings.OcpiApi,
-				CSCertProvider: settings.ChargeStationCertProviderService,
-				Verifier:       settings.AuthVerifier,
-				Scoper:         settings.TenantScoper,
-				DefaultOrgId:   settings.DefaultOrgId,
+				Engine:   settings.Storage,
+				Ocpi:     settings.OcpiApi,
+				Verifier: settings.AuthVerifier,
+				Scoper:   settings.TenantScoper,
 			}))
 		internalServer := server.New("internal", cfg.Api.InternalAddr, nil,
-			server.NewInternalHandler(server.InternalDeps{Resolver: settings.TenantResolver, Engine: settings.Storage}))
+			server.NewInternalHandler(server.InternalDeps{
+				Resolver:       settings.TenantResolver,
+				Engine:         settings.Storage,
+				Settings:       settings.Api,
+				CSCertProvider: settings.ChargeStationCertProviderService,
+				DefaultOrgId:   settings.DefaultOrgId,
+			}))
 
 		sync.Sync(settings.Storage, clock.RealClock{}, settings.Tracer, settings.MsgEmitter)
 

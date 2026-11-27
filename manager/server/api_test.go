@@ -6,9 +6,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"regexp"
 	"strings"
 	"testing"
@@ -17,7 +17,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/api"
-	"github.com/thoughtworks/maeve-csms/manager/config"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
@@ -40,7 +39,6 @@ var devVerifier = tenancy.DevVerifier{Principal: tenancy.Principal{
 // whose only org is the legacy org.
 func newApiHandler(engine store.Engine, verifier tenancy.Verifier) http.Handler {
 	return server.NewApiHandler(server.ApiDeps{
-		Settings: config.ApiSettings{},
 		Engine:   engine,
 		Verifier: verifier,
 		Scoper: &tenancy.Scoper{
@@ -48,7 +46,6 @@ func newApiHandler(engine store.Engine, verifier tenancy.Verifier) http.Handler 
 			Resolver:     &tenancy.Resolver{Stations: engine, DefaultOrgId: store.LegacyOrgId},
 			DefaultOrgId: store.LegacyOrgId,
 		},
-		DefaultOrgId: store.LegacyOrgId,
 	})
 }
 
@@ -142,13 +139,46 @@ func TestApiNeedsAConsoleToken(t *testing.T) {
 		require.NoError(t, err)
 		assert.Nil(t, auth)
 	})
+}
 
-	t.Run("the other routes of the listener are served without a token", func(t *testing.T) {
-		for _, target := range []string{"/health", "/metrics", "/api/openapi.json", "/transactions", "/adminui"} {
-			rr := get(handler, target, "")
-			assert.Equal(t, http.StatusOK, rr.Code, target)
+// The API listener is the one that callers from outside reach. It serves the API to
+// callers with a token and nothing else: not the health check, the metrics or the
+// OpenAPI document, and not the legacy pages, whatever the configuration says.
+func TestApiListenerServesNothingButTheApi(t *testing.T) {
+	_, verifier := newConsoleVerifier(t)
+	engine := inmemory.NewStore(clock.RealClock{})
+	handler := newApiHandler(engine, verifier)
+
+	// what the forms of the admin pages send
+	form := url.Values{"csid": {"cs001"}, "auth": {"unsecured"}, "uid": {"ABC123"}}.Encode()
+
+	for _, target := range []string{
+		"/health", "/metrics", "/api/openapi.json", "/transactions",
+		"/adminui", "/adminui/", "/adminui/connect", "/adminui/token", "/adminui/no-such-page",
+		"/", "/api", "/api/", "/openapi.json",
+	} {
+		for _, method := range []string{
+			http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut,
+			http.MethodPatch, http.MethodDelete, http.MethodOptions,
+		} {
+			req := httptest.NewRequest(method, target, strings.NewReader(form))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			assert.Equal(t, http.StatusNotFound, rr.Code, "%s %s", method, target)
 		}
-	})
+	}
+
+	// nothing was registered
+	auth, err := engine.LookupChargeStationAuth(context.Background(), "cs001")
+	require.NoError(t, err)
+	assert.Nil(t, auth)
+	tokens, err := engine.ListTokens(context.Background(), 0, 10)
+	require.NoError(t, err)
+	assert.Empty(t, tokens)
+
+	// and the API is still there, for callers with a token
+	assert.Equal(t, http.StatusUnauthorized, get(handler, "/api/v0/token", "").Code)
 }
 
 func TestApiAnswersServiceUnavailableWithoutKeys(t *testing.T) {
@@ -169,8 +199,6 @@ func TestApiAnswersServiceUnavailableWithoutKeys(t *testing.T) {
 	rr := get(handler, "/api/v0/token", token)
 	require.Equal(t, http.StatusServiceUnavailable, rr.Code)
 	assert.JSONEq(t, `{"status":"Service Unavailable","error":"auth keys unavailable"}`, rr.Body.String())
-
-	assert.Equal(t, http.StatusOK, get(handler, "/health", "").Code)
 }
 
 func TestApiHandlerNeedsAVerifier(t *testing.T) {
@@ -206,7 +234,6 @@ func newMultiTenantApiHandler(t *testing.T) (http.Handler, *testutil.Console, *i
 
 	console, verifier := newConsoleVerifier(t)
 	handler := server.NewApiHandler(server.ApiDeps{
-		Settings: config.ApiSettings{},
 		Engine:   engine,
 		Verifier: verifier,
 		Scoper: &tenancy.Scoper{
@@ -215,7 +242,6 @@ func newMultiTenantApiHandler(t *testing.T) (http.Handler, *testutil.Console, *i
 			Resolver:     &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine, DefaultOrgId: store.LegacyOrgId},
 			DefaultOrgId: store.LegacyOrgId,
 		},
-		DefaultOrgId: store.LegacyOrgId,
 	})
 	return handler, console, engine
 }
@@ -373,74 +399,4 @@ func TestRequestLogNamesTheCaller(t *testing.T) {
 	assert.NotContains(t, logged.String(), `"sub"`)
 	assert.NotContains(t, logged.String(), refused)
 	assert.NotContains(t, logged.String(), strings.Split(refused, ".")[2])
-}
-
-func TestHealthHandler(t *testing.T) {
-	handler := newApiHandler(inmemory.NewStore(clock.RealClock{}), devVerifier)
-
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-	res := w.Result()
-	defer func() {
-		err := res.Body.Close()
-		if err != nil {
-			t.Errorf("closing body: %v", err)
-		}
-	}()
-
-	if res.StatusCode != http.StatusOK {
-		t.Errorf("status code: want %d, got %d", http.StatusOK, res.StatusCode)
-	}
-}
-
-func TestMetricsHandler(t *testing.T) {
-	handler := newApiHandler(inmemory.NewStore(clock.RealClock{}), devVerifier)
-
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-	res := w.Result()
-	defer func() {
-		err := res.Body.Close()
-		if err != nil {
-			t.Errorf("closing body: %v", err)
-		}
-	}()
-
-	b, err := io.ReadAll(res.Body)
-	require.NoError(t, err)
-
-	if res.StatusCode != http.StatusOK {
-		t.Errorf("status code: want %d, got %d", http.StatusOK, res.StatusCode)
-	}
-
-	assert.Contains(t, string(b), "go_goroutines", "metrics should contain go_goroutines")
-}
-
-func TestSwaggerHandler(t *testing.T) {
-	handler := newApiHandler(inmemory.NewStore(clock.RealClock{}), devVerifier)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/openapi.json", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-	res := w.Result()
-	defer func() {
-		err := res.Body.Close()
-		if err != nil {
-			t.Errorf("closing body: %v", err)
-		}
-	}()
-
-	b, err := io.ReadAll(res.Body)
-	require.NoError(t, err)
-
-	if res.StatusCode != http.StatusOK {
-		t.Errorf("status code: want %d, got %d", http.StatusOK, res.StatusCode)
-	}
-
-	var jsonData map[string]interface{}
-	err = json.Unmarshal(b, &jsonData)
-	require.NoError(t, err)
-	require.Equal(t, jsonData["info"].(map[string]any)["title"], "MaEVe CSMS")
 }

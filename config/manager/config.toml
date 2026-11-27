@@ -1,6 +1,12 @@
 [api]
 addr = ":9410"
+# Health check, metrics, the OpenAPI document and the lookups of the gateway. It has no
+# authentication: docker-compose.yml publishes it on 127.0.0.1 only.
 internal_addr = ":9412"
+# The legacy pages are off. They have no authentication either; uncomment to get them
+# at http://localhost:9412/adminui and http://localhost:9412/transactions.
+# enable_admin_ui = true
+# enable_transactions_page = true
 
 # Local runs have no console that mints tokens: every request to the API is accepted as
 # a caller with all permissions. The manager only starts in this mode with ENVIRONMENT=dev.

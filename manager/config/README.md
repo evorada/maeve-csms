@@ -20,8 +20,10 @@ Configuration is defined in TOML.
 
 | Section       | Key                         | Type   | Description                                                          |
 |---------------|-----------------------------|--------|----------------------------------------------------------------------|
-| api           | addr                        | string | Address that API server will listen on, e.g. localhost:9410          |
-| api           | internal_addr               | string | Address that the internal listener will listen on. Default "localhost:9412". It serves the lookups of the gateway (`/_internal/v1`, see [the internal API](../internalapi/README.md)) without authentication, so it must only be reachable by the gateway |
+| api           | addr                        | string | Address that API server will listen on, e.g. localhost:9410. It serves only `/api/v0`, to callers with a token (see [API authentication](#api-authentication)) |
+| api           | internal_addr               | string | Address that the internal listener will listen on. Default "localhost:9412". It serves the lookups of the gateway (`/_internal/v1`, see [the internal API](../internalapi/README.md)), the health check (`/health`), the metrics (`/metrics`), the OpenAPI document of the API (`/api/openapi.json`) and the legacy pages that are enabled, all without authentication, so it must only be reachable from inside the deployment (the gateway, health probes, the metrics scraper) |
+| api           | enable_transactions_page    | bool   | Serve the legacy page `/transactions`, which lists the transactions of every org, on the internal listener. Default "false". For local development only: the page has no authentication |
+| api           | enable_admin_ui             | bool   | Serve the legacy admin pages `/adminui`, which register charge stations and tokens and issue client certificates, on the internal listener. Default "false". For local development only: the pages have no authentication |
 | api           | external_addr               | string | The Externally visible URL that the server is available on           |
 | api.auth      | mode                        | string | How the callers of `/api/v0` are authenticated: "jwt" (default) or "dev". See [API authentication](#api-authentication) |
 | api.auth      | jwks_url                    | string | URL of the key set (JWKS) with the public keys that sign the tokens of the console. Required in "jwt" mode; an http or https URL without credentials |

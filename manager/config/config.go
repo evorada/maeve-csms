@@ -48,6 +48,10 @@ type ApiSettings struct {
 	WsPort  int
 	WssPort int
 	OrgName string
+	// EnableTransactionsPage and EnableAdminUI switch on the legacy pages, which are
+	// served on the internal listener without authentication.
+	EnableTransactionsPage bool
+	EnableAdminUI          bool
 }
 
 type Config struct {
@@ -247,6 +251,9 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 			WsPort:  cfg.Api.WsPort,
 			WssPort: cfg.Api.WssPort,
 			OrgName: cfg.Api.OrgName,
+
+			EnableTransactionsPage: cfg.Api.EnableTransactionsPage,
+			EnableAdminUI:          cfg.Api.EnableAdminUI,
 		},
 		ReservationExpiryInterval: reservationExpiryInterval,
 		DefaultOrgId:              cfg.Tenancy.DefaultOrgId,

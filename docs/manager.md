@@ -16,6 +16,22 @@ the [api](../manager/api) package with [API documentation](../manager/api/API.md
 
 Support for OCPI is provided by the [ocpi](../manager/ocpi) package.
 
+The administration API and everything else that the manager serves over HTTP are on two
+separate listeners. The API listener (`[api] addr`, port 9410 in the local setup) serves
+only the administration API below `/api/v0`, and every request to it needs a token (see
+[API authentication](../manager/config/README.md#api-authentication)); it is the one that
+may be reachable from outside. The internal listener (`[api] internal_addr`, port 9412)
+has no authentication and must only be reachable from inside the deployment: it serves
+the lookups of the gateway (`/_internal/v1`, see the
+[internal API](../manager/internalapi/README.md)), the health check (`/health`), the
+Prometheus metrics (`/metrics`) and the OpenAPI document of the administration API
+(`/api/openapi.json`). The legacy pages `/transactions` (the transactions of every
+organization) and `/adminui` (registers charge stations and tokens) are off by default;
+`enable_transactions_page` and `enable_admin_ui` in `[api]` serve them on the internal
+listener, for local development only. The local `docker-compose.yml` publishes the
+internal listener on `127.0.0.1:9412`, so with `enable_admin_ui = true` the admin pages
+are at `http://localhost:9412/adminui`. OCPI has its own listener (`[ocpi] addr`).
+
 The structure of the manager source code is:
 ```
 manager/

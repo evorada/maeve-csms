@@ -5,12 +5,21 @@ package config
 type ApiSettingsConfig struct {
 	Addr string `mapstructure:"addr" toml:"addr" validate:"required"`
 	// InternalAddr is the address of the internal listener, which serves the lookups of
-	// the gateway. It is not authenticated and must only be reachable by the gateway.
+	// the gateway, the health check, the metrics, the OpenAPI document and the legacy
+	// pages that are enabled. It is not authenticated and must only be reachable from
+	// inside the deployment (the gateway, probes and the metrics scraper).
 	InternalAddr string `mapstructure:"internal_addr" toml:"internal_addr" validate:"required"`
-	Host         string `mapstructure:"host,omitempty" toml:"host,omitempty"`
-	WsPort       int    `mapstructure:"ws_port,omitempty" toml:"ws_port,omitempty"`
-	WssPort      int    `mapstructure:"wss_port,omitempty" toml:"wss_port,omitempty"`
-	OrgName      string `mapstructure:"org_name,omitempty" toml:"org_name,omitempty"`
+	// EnableTransactionsPage serves the legacy page /transactions on the internal
+	// listener. The page lists the transactions of every org without authentication.
+	EnableTransactionsPage bool `mapstructure:"enable_transactions_page" toml:"enable_transactions_page"`
+	// EnableAdminUI serves the legacy pages below /adminui on the internal listener.
+	// They register charge stations and tokens, and issue client certificates, without
+	// authentication.
+	EnableAdminUI bool   `mapstructure:"enable_admin_ui" toml:"enable_admin_ui"`
+	Host          string `mapstructure:"host,omitempty" toml:"host,omitempty"`
+	WsPort        int    `mapstructure:"ws_port,omitempty" toml:"ws_port,omitempty"`
+	WssPort       int    `mapstructure:"wss_port,omitempty" toml:"wss_port,omitempty"`
+	OrgName       string `mapstructure:"org_name,omitempty" toml:"org_name,omitempty"`
 	// Auth says how the callers of /api/v0 are authenticated.
 	Auth AuthConfig `mapstructure:"auth" toml:"auth"`
 }
