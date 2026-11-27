@@ -190,8 +190,7 @@ func TestLocalRunnerKeepsRunningAfterAPanic(t *testing.T) {
 			count++
 			runs <- count
 			if count == 1 {
-				var reservations map[string]int
-				reservations["cs001"] = 1 // assignment to entry in nil map
+				panic("the first run panics")
 			}
 			return nil
 		},
