@@ -15,6 +15,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/schemas"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	clockTest "k8s.io/utils/clock/testing"
 )
@@ -46,6 +47,7 @@ func TestOcpp16TransactionFlow(t *testing.T) {
 
 	groupId := "FLEET1"
 	require.NoError(t, engine.SetToken(ctx, &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -70,6 +72,7 @@ func TestOcpp16TransactionFlow(t *testing.T) {
 	router := ocpp16.NewRouter(emitter,
 		clk,
 		engine,
+		&tenancy.Resolver{Stations: engine},
 		nil,
 		nil,
 		nil,

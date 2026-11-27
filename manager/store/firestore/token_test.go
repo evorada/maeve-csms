@@ -236,3 +236,61 @@ func TestListTokensWithOffset(t *testing.T) {
 	require.Equal(t, 15, len(got))
 	assert.Equal(t, tokens[5:20], got)
 }
+
+// Firestore is single-tenant: it has one token for each UID and stores no org, so the
+// lookup and the listing for an org see every token.
+func TestTokenLookupAndListingIgnoreTheOrg(t *testing.T) {
+	defer cleanupAllCollections(t, "myproject")
+
+	const (
+		orgA = "0193b2c4-0000-7000-8000-0000000000a1"
+		orgB = "0193b2c4-0000-7000-8000-0000000000b2"
+	)
+	ctx := context.Background()
+
+	tokenStore, err := firestore.NewStore(ctx, "myproject", clock.RealClock{})
+	require.NoError(t, err)
+
+	contractId, err := ocpp.NormalizeEmaid("GB-TWK-C12345678")
+	require.NoError(t, err)
+	// the org of the token is not stored: the token is set with and without one
+	for uid, orgId := range map[string]string{"12345678": orgA, "87654321": ""} {
+		err = tokenStore.SetToken(ctx, &store.Token{
+			CountryCode: "GB",
+			PartyId:     "TWK",
+			Type:        "RFID",
+			Uid:         uid,
+			ContractId:  contractId,
+			Issuer:      "TWK",
+			Valid:       true,
+			CacheMode:   store.CacheModeAllowed,
+			OrgId:       orgId,
+		})
+		require.NoError(t, err)
+	}
+
+	for _, orgId := range []string{orgA, orgB, store.LegacyOrgId, ""} {
+		for _, uid := range []string{"12345678", "87654321"} {
+			got, err := tokenStore.LookupTokenForOrg(ctx, orgId, uid)
+			require.NoError(t, err)
+			require.NotNil(t, got, "org %q, uid %s", orgId, uid)
+			assert.Equal(t, uid, got.Uid)
+			assert.Equal(t, "", got.OrgId)
+		}
+	}
+	got, err := tokenStore.LookupTokenForOrg(ctx, orgA, "NOSUCHTOKEN")
+	require.NoError(t, err)
+	assert.Nil(t, got)
+
+	for _, orgIds := range [][]string{{orgA}, {orgB}, {}} {
+		listed, err := tokenStore.ListTokensForOrgs(ctx, orgIds, 0, 10)
+		require.NoError(t, err)
+		require.Len(t, listed, 2)
+		assert.Equal(t, "12345678", listed[0].Uid)
+		assert.Equal(t, "87654321", listed[1].Uid)
+	}
+	listed, err := tokenStore.ListTokensForOrgs(ctx, []string{orgA}, 1, 10)
+	require.NoError(t, err)
+	require.Len(t, listed, 1)
+	assert.Equal(t, "87654321", listed[0].Uid)
+}

@@ -32,7 +32,7 @@ func (t TransactionEventHandler) HandleCall(ctx context.Context, chargeStationId
 	if req.IdToken != nil {
 		idToken = req.IdToken.IdToken
 		tokenType = string(req.IdToken.Type)
-		idTokenInfo := t.TokenAuthService.Authorize(ctx, *req.IdToken)
+		idTokenInfo := t.TokenAuthService.Authorize(ctx, chargeStationId, *req.IdToken)
 		response.IdTokenInfo = &idTokenInfo
 	}
 

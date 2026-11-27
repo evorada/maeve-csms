@@ -23,7 +23,7 @@ import (
 
 func TestSwaggerHandler(t *testing.T) {
 	engine := inmemory.NewStore(clock.RealClock{})
-	ocpiApi := ocpi.NewOCPI(engine, http.DefaultClient, "GB", "TWK")
+	ocpiApi := ocpi.NewOCPI(engine, http.DefaultClient, "GB", "TWK", store.LegacyOrgId)
 	handler := NewOcpiHandler(engine, clock.RealClock{}, ocpiApi, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/openapi.json", nil)
@@ -59,7 +59,7 @@ func TestAPIRequestWithValidToken(t *testing.T) {
 	now, err := time.Parse(time.RFC3339, "2023-06-15T15:05:00Z")
 	require.NoError(t, err)
 	clock := clockTest.NewFakePassiveClock(now)
-	ocpiApi := ocpi.NewOCPI(engine, http.DefaultClient, "GB", "TWK")
+	ocpiApi := ocpi.NewOCPI(engine, http.DefaultClient, "GB", "TWK", store.LegacyOrgId)
 	handler := NewOcpiHandler(engine, clock, ocpiApi, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/ocpi/versions", nil)
@@ -87,7 +87,7 @@ func TestAPIRequestWithValidToken(t *testing.T) {
 func TestAPIRequestWithInvalidToken(t *testing.T) {
 	token := "abcdef123456"
 	engine := inmemory.NewStore(clock.RealClock{})
-	ocpiApi := ocpi.NewOCPI(engine, http.DefaultClient, "GB", "TWK")
+	ocpiApi := ocpi.NewOCPI(engine, http.DefaultClient, "GB", "TWK", store.LegacyOrgId)
 	handler := NewOcpiHandler(engine, clock.RealClock{}, ocpiApi, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/ocpi/versions", nil)

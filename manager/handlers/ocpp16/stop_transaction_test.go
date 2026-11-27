@@ -15,6 +15,7 @@ import (
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	clockTest "k8s.io/utils/clock/testing"
 )
 
@@ -41,6 +42,7 @@ func newStopTransactionHandler(t *testing.T) (handlers.StopTransactionHandler, *
 	engine := inmemory.NewStore(clk)
 
 	err = engine.SetToken(context.Background(), &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -55,6 +57,7 @@ func newStopTransactionHandler(t *testing.T) (handlers.StopTransactionHandler, *
 	return handlers.StopTransactionHandler{
 		Clock:            clk,
 		TokenStore:       engine,
+		OrgResolver:      &tenancy.Resolver{Stations: engine},
 		TransactionStore: engine,
 	}, engine
 }
@@ -67,6 +70,7 @@ func startedTransaction(t *testing.T, engine *inmemory.Store) int {
 	startHandler := handlers.StartTransactionHandler{
 		Clock:            clockTest.NewFakePassiveClock(time.Now()),
 		TokenStore:       engine,
+		OrgResolver:      &tenancy.Resolver{Stations: engine},
 		TransactionStore: engine,
 		ReservationStore: engine,
 	}
@@ -759,4 +763,42 @@ func TestStopTransactionHandlerReturnsStoreErrors(t *testing.T) {
 
 func int64Ptr(v int64) *int64 {
 	return &v
+}
+
+// The idTag of a StopTransaction.req is looked up in the tokens of the org that owns
+// the charge station: the token of another org is not known there.
+func TestStopTransactionHandlerWithTokenOfAnotherOrg(t *testing.T) {
+	const orgB = "0193b2c4-0000-7000-8000-0000000000b2"
+	handler, engine := newStopTransactionHandler(t)
+	ctx := context.Background()
+	require.NoError(t, engine.SetToken(ctx, &store.Token{
+		OrgId:       orgB,
+		CountryCode: "GB",
+		PartyId:     "TWK",
+		Type:        "RFID",
+		Uid:         "ORGBTAG",
+		ContractId:  "GBTWK012345678V",
+		Issuer:      "Thoughtworks",
+		Valid:       true,
+		CacheMode:   store.CacheModeAlways,
+	}))
+	require.NoError(t, engine.SetChargeStationAuth(ctx, "cs-org-b", &store.ChargeStationAuth{OrgId: orgB}))
+	transactionId := startedTransaction(t, engine)
+
+	status := func(chargeStationId string, transactionId int) types.StopTransactionResponseJsonIdTagInfoStatus {
+		t.Helper()
+		idTag := "ORGBTAG"
+		req := stopTransactionRequest(transactionId)
+		req.IdTag = &idTag
+		resp, err := handler.HandleCall(ctx, chargeStationId, req)
+		require.NoError(t, err)
+		got := resp.(*types.StopTransactionResponseJson)
+		require.NotNil(t, got.IdTagInfo)
+		return got.IdTagInfo.Status
+	}
+
+	// the charge station of the default org does not know the token of org B
+	assert.Equal(t, types.StopTransactionResponseJsonIdTagInfoStatusInvalid, status(stopTransactionChargeStationId, transactionId))
+	// a charge station of org B does
+	assert.Equal(t, types.StopTransactionResponseJsonIdTagInfoStatusAccepted, status("cs-org-b", 4711))
 }

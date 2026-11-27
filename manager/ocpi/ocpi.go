@@ -33,14 +33,24 @@ type OCPI struct {
 	externalUrl string
 	countryCode string
 	partyId     string
+	// defaultOrgId is the org that owns the tokens, parties and registrations that
+	// come in through OCPI
+	defaultOrgId string
 }
 
-func NewOCPI(store store.Engine, httpClient *http.Client, countryCode, partyId string) *OCPI {
+// NewOCPI creates the OCPI API. The tokens, parties and registrations that it stores
+// belong to defaultOrgId, and it only reads the tokens of that org; an empty
+// defaultOrgId is the legacy org (store.LegacyOrgId).
+func NewOCPI(engine store.Engine, httpClient *http.Client, countryCode, partyId, defaultOrgId string) *OCPI {
+	if defaultOrgId == "" {
+		defaultOrgId = store.LegacyOrgId
+	}
 	return &OCPI{
-		store:       store,
-		httpClient:  httpClient,
-		countryCode: countryCode,
-		partyId:     partyId,
+		store:        engine,
+		httpClient:   httpClient,
+		countryCode:  countryCode,
+		partyId:      partyId,
+		defaultOrgId: defaultOrgId,
 	}
 }
 
@@ -88,6 +98,7 @@ func (o *OCPI) SetCredentials(ctx context.Context, token string, credentials Cre
 			PartyId:     role.PartyId,
 			Url:         credentials.Url,
 			Token:       credentials.Token,
+			OrgId:       o.defaultOrgId,
 		})
 		if err != nil {
 			return err
@@ -115,6 +126,7 @@ func (o *OCPI) SetCredentials(ctx context.Context, token string, credentials Cre
 	// store new token
 	err = o.store.SetRegistrationDetails(ctx, credentials.Token, &store.OcpiRegistration{
 		Status: store.OcpiRegistrationStatusRegistered,
+		OrgId:  o.defaultOrgId,
 	})
 	if err != nil {
 		return err
@@ -124,11 +136,11 @@ func (o *OCPI) SetCredentials(ctx context.Context, token string, credentials Cre
 }
 
 func (o *OCPI) GetToken(ctx context.Context, countryCode string, partyID string, tokenUID string) (*Token, error) {
-	tok, err := o.store.LookupToken(ctx, tokenUID)
+	tok, err := o.store.LookupTokenForOrg(ctx, o.defaultOrgId, tokenUID)
 	if err != nil {
 		return nil, err
 	}
-	if tok.CountryCode != countryCode || tok.PartyId != partyID {
+	if tok == nil || tok.CountryCode != countryCode || tok.PartyId != partyID {
 		return nil, nil
 	}
 	return &Token{
@@ -160,6 +172,7 @@ func (o *OCPI) SetToken(ctx context.Context, token Token) error {
 		Valid:        token.Valid,
 		LanguageCode: token.Language,
 		CacheMode:    string(token.Whitelist),
+		OrgId:        o.defaultOrgId,
 	}
 
 	return o.store.SetToken(ctx, tok)

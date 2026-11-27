@@ -12,6 +12,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/services"
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	"k8s.io/utils/clock"
 )
@@ -19,6 +20,7 @@ import (
 func NewRouter(emitter transport.Emitter,
 	clk clock.PassiveClock,
 	engine store.Engine,
+	orgResolver tenancy.StationOrgResolver,
 	tariffService services.TariffService,
 	certValidationService services.CertificateValidationService,
 	chargeStationCertProvider services.ChargeStationCertificateProvider,
@@ -38,8 +40,9 @@ func NewRouter(emitter transport.Emitter,
 				Handler: AuthorizeHandler{
 					// PENDING: inject token auth service
 					TokenAuthService: &services.OcppTokenAuthService{
-						Clock:      clk,
-						TokenStore: engine,
+						Clock:       clk,
+						TokenStore:  engine,
+						OrgResolver: orgResolver,
 					},
 					CertificateValidationService: certValidationService,
 				},
@@ -210,8 +213,9 @@ func NewRouter(emitter transport.Emitter,
 				Handler: TransactionEventHandler{
 					Store: engine,
 					TokenAuthService: &services.OcppTokenAuthService{
-						Clock:      clk,
-						TokenStore: engine,
+						Clock:       clk,
+						TokenStore:  engine,
+						OrgResolver: orgResolver,
 					},
 					TariffService: tariffService,
 				},

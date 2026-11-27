@@ -14,6 +14,7 @@ import (
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/schemas"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/testutil"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	"go.opentelemetry.io/otel/codes"
@@ -59,6 +60,7 @@ func TestUnlockConnectorResultIsRouted(t *testing.T) {
 	router := ocpp201.NewRouter(&fakeEmitter{},
 		clock.RealClock{},
 		engine,
+		&tenancy.Resolver{Stations: engine},
 		&fakeTariffService{},
 		&fakeCertValidationService{},
 		&fakeChargeStationCertProvider{},

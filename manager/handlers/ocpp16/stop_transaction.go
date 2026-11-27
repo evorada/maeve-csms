@@ -10,6 +10,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"golang.org/x/exp/slog"
 	"k8s.io/utils/clock"
 )
@@ -20,6 +21,7 @@ import (
 type StopTransactionHandler struct {
 	Clock            clock.PassiveClock
 	TokenStore       store.TokenStore
+	OrgResolver      tenancy.StationOrgResolver
 	TransactionStore store.TransactionStore
 }
 
@@ -43,7 +45,7 @@ func (s StopTransactionHandler) HandleCall(ctx context.Context, chargeStationId 
 
 	var idTagInfo *types.StopTransactionResponseJsonIdTagInfo
 	if req.IdTag != nil {
-		auth, err := authorizeIdTag(ctx, s.TokenStore, s.Clock, *req.IdTag)
+		auth, err := authorizeIdTag(ctx, s.TokenStore, s.OrgResolver, s.Clock, chargeStationId, *req.IdTag)
 		if err != nil {
 			return nil, err
 		}

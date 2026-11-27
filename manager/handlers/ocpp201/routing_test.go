@@ -21,6 +21,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/services"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/testutil"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	"go.opentelemetry.io/otel/codes"
@@ -83,6 +84,7 @@ func TestRoutingCalls(t *testing.T) {
 	router := ocpp201.NewRouter(&fakeEmitter{},
 		clock,
 		engine,
+		&tenancy.Resolver{Stations: engine},
 		&fakeTariffService{},
 		&fakeCertValidationService{},
 		&fakeChargeStationCertProvider{},
@@ -275,6 +277,7 @@ func TestRoutingCallResults(t *testing.T) {
 	router := ocpp201.NewRouter(&fakeEmitter{},
 		clock,
 		engine,
+		&tenancy.Resolver{Stations: engine},
 		&fakeTariffService{},
 		&fakeCertValidationService{},
 		&fakeChargeStationCertProvider{},
@@ -799,6 +802,7 @@ func TestAllRouteSchemasExist(t *testing.T) {
 	router, ok := ocpp201.NewRouter(&fakeEmitter{},
 		clock,
 		engine,
+		&tenancy.Resolver{Stations: engine},
 		&fakeTariffService{},
 		&fakeCertValidationService{},
 		&fakeChargeStationCertProvider{},

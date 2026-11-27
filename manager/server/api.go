@@ -24,7 +24,7 @@ import (
 )
 
 // NewApiHandler creates the handler of the manager API. What is created through the API
-// belongs to defaultOrgId (see api.NewServer).
+// and the admin pages belongs to defaultOrgId (see api.NewServer).
 func NewApiHandler(settings config.ApiSettings, engine store.Engine, ocpi ocpi.Api, csCertProvider services.ChargeStationCertificateProvider, defaultOrgId string) http.Handler {
 	apiServer, err := api.NewServer(engine, clock.RealClock{}, ocpi, defaultOrgId)
 	if err != nil {
@@ -53,7 +53,7 @@ func NewApiHandler(settings config.ApiSettings, engine store.Engine, ocpi ocpi.A
 	r.Handle("/metrics", promhttp.Handler())
 	r.Get("/api/openapi.json", getApiSwaggerJson)
 	r.With(logger).Mount("/api/v0", api.Handler(apiServer))
-	r.With(logger).Mount("/adminui", adminui.NewServer(settings.Host, settings.WsPort, settings.WssPort, settings.OrgName, engine, csCertProvider))
+	r.With(logger).Mount("/adminui", adminui.NewServer(settings.Host, settings.WsPort, settings.WssPort, settings.OrgName, engine, csCertProvider, defaultOrgId))
 	return r
 }
 

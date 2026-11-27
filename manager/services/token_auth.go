@@ -8,21 +8,26 @@ import (
 
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"k8s.io/utils/clock"
 )
 
 type TokenAuthService interface {
-	Authorize(ctx context.Context, token ocpp201.IdTokenType) ocpp201.IdTokenInfoType
+	// Authorize gives the authorisation of the token at the charge station.
+	Authorize(ctx context.Context, chargeStationId string, token ocpp201.IdTokenType) ocpp201.IdTokenInfoType
 }
 
+// OcppTokenAuthService authorises a token with the tokens of the org that owns the
+// charge station: a token that only another org has is Unknown.
 type OcppTokenAuthService struct {
-	TokenStore store.TokenStore
-	Clock      clock.PassiveClock
+	TokenStore  store.TokenStore
+	OrgResolver tenancy.StationOrgResolver
+	Clock       clock.PassiveClock
 }
 
-func (o *OcppTokenAuthService) Authorize(ctx context.Context, token ocpp201.IdTokenType) ocpp201.IdTokenInfoType {
+func (o *OcppTokenAuthService) Authorize(ctx context.Context, chargeStationId string, token ocpp201.IdTokenType) ocpp201.IdTokenInfoType {
 	span := trace.SpanFromContext(ctx)
 	span.SetAttributes(
 		attribute.String("token_auth.id", token.IdToken),
@@ -45,7 +50,11 @@ func (o *OcppTokenAuthService) Authorize(ctx context.Context, token ocpp201.IdTo
 			Status: ocpp201.AuthorizationStatusEnumTypeInvalid,
 		}
 	default:
-		foundToken, err := o.TokenStore.LookupToken(ctx, token.IdToken)
+		var foundToken *store.Token
+		orgId, err := o.OrgResolver.OrgIdForStation(ctx, chargeStationId)
+		if err == nil {
+			foundToken, err = o.TokenStore.LookupTokenForOrg(ctx, orgId, token.IdToken)
+		}
 		if err != nil {
 			span.RecordError(err)
 			tokenInfo = &ocpp201.IdTokenInfoType{

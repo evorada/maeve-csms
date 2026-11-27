@@ -14,6 +14,7 @@ import (
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	clockTest "k8s.io/utils/clock/testing"
 )
 
@@ -33,14 +34,16 @@ func newAuthorizeHandler(t *testing.T, tokens ...*store.Token) handlers.Authoriz
 	}
 
 	return handlers.AuthorizeHandler{
-		TokenStore: engine,
-		Clock:      clk,
+		TokenStore:  engine,
+		OrgResolver: &tenancy.Resolver{Stations: engine},
+		Clock:       clk,
 	}
 }
 
 // rfidToken is a valid token that the station may cache and that does not expire.
 func rfidToken(uid string) *store.Token {
 	return &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -183,8 +186,9 @@ func TestAuthorizeReturnsTheExpiryDateOfTheAuthorizationCache(t *testing.T) {
 func TestAuthorizeReturnsStoreError(t *testing.T) {
 	lookupErr := errors.New("token store is down")
 	ah := handlers.AuthorizeHandler{
-		TokenStore: failingTokenLookupStore{err: lookupErr},
-		Clock:      clockTest.NewFakePassiveClock(time.Now()),
+		TokenStore:  failingTokenLookupStore{err: lookupErr},
+		OrgResolver: &tenancy.Resolver{Stations: inmemory.NewStore(clockTest.NewFakePassiveClock(time.Now()))},
+		Clock:       clockTest.NewFakePassiveClock(time.Now()),
 	}
 
 	resp, err := ah.HandleCall(context.Background(), "cs001", &types.AuthorizeJson{IdTag: "MYRFIDCARD"})
@@ -199,6 +203,64 @@ type failingTokenLookupStore struct {
 	err error
 }
 
-func (s failingTokenLookupStore) LookupToken(context.Context, string) (*store.Token, error) {
+func (s failingTokenLookupStore) LookupTokenForOrg(context.Context, string, string) (*store.Token, error) {
 	return nil, s.err
+}
+
+// A token belongs to an org: a charge station is only authorised with the tokens of
+// the org that owns it.
+func TestAuthorizeOnlyKnowsTheTokensOfTheOrgOfTheStation(t *testing.T) {
+	const (
+		orgA = "0193b2c4-0000-7000-8000-0000000000a1"
+		orgB = "0193b2c4-0000-7000-8000-0000000000b2"
+	)
+	onlyOrgB := rfidToken("ONLYORGB")
+	onlyOrgB.OrgId = orgB
+	// both orgs have a token with this UID: it is valid in org A and blocked in org B
+	validInOrgA := rfidToken("BOTHORGS")
+	validInOrgA.OrgId = orgA
+	blockedInOrgB := rfidToken("BOTHORGS")
+	blockedInOrgB.OrgId = orgB
+	blockedInOrgB.Valid = false
+
+	ah := newAuthorizeHandler(t, onlyOrgB, validInOrgA, blockedInOrgB)
+	stations := ah.TokenStore.(*inmemory.Store)
+	ctx := context.Background()
+	require.NoError(t, stations.SetChargeStationAuth(ctx, "cs-org-a", &store.ChargeStationAuth{OrgId: orgA}))
+	require.NoError(t, stations.SetChargeStationAuth(ctx, "cs-org-b", &store.ChargeStationAuth{OrgId: orgB}))
+
+	status := func(chargeStationId, idTag string) types.AuthorizeResponseJsonIdTagInfoStatus {
+		t.Helper()
+		resp, err := ah.HandleCall(ctx, chargeStationId, &types.AuthorizeJson{IdTag: idTag})
+		require.NoError(t, err)
+		return resp.(*types.AuthorizeResponseJson).IdTagInfo.Status
+	}
+
+	assert.Equal(t, types.AuthorizeResponseJsonIdTagInfoStatusInvalid, status("cs-org-a", "ONLYORGB"))
+	assert.Equal(t, types.AuthorizeResponseJsonIdTagInfoStatusAccepted, status("cs-org-b", "ONLYORGB"))
+	assert.Equal(t, types.AuthorizeResponseJsonIdTagInfoStatusAccepted, status("cs-org-a", "BOTHORGS"))
+	assert.Equal(t, types.AuthorizeResponseJsonIdTagInfoStatusBlocked, status("cs-org-b", "BOTHORGS"))
+	// a charge station that is not registered belongs to the default org
+	assert.Equal(t, types.AuthorizeResponseJsonIdTagInfoStatusInvalid, status("cs-unknown", "ONLYORGB"))
+	assert.Equal(t, types.AuthorizeResponseJsonIdTagInfoStatusInvalid, status("cs-unknown", "BOTHORGS"))
+}
+
+// failingOrgResolver fails every lookup of the org of a charge station.
+type failingOrgResolver struct {
+	err error
+}
+
+func (r failingOrgResolver) OrgIdForStation(context.Context, string) (string, error) {
+	return "", r.err
+}
+
+func TestAuthorizeReturnsOrgResolverError(t *testing.T) {
+	resolveErr := errors.New("charge station store is down")
+	ah := newAuthorizeHandler(t, rfidToken("MYRFIDCARD"))
+	ah.OrgResolver = failingOrgResolver{err: resolveErr}
+
+	resp, err := ah.HandleCall(context.Background(), "cs001", &types.AuthorizeJson{IdTag: "MYRFIDCARD"})
+
+	assert.ErrorIs(t, err, resolveErr)
+	assert.Nil(t, resp)
 }

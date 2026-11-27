@@ -17,9 +17,12 @@ import (
 	"k8s.io/utils/clock"
 )
 
+// ocpiTestOrgId is the default org of the OCPI API under test.
+const ocpiTestOrgId = "0193b2c4-0000-7000-8000-0000000000a1"
+
 func TestGetVersions(t *testing.T) {
 	engine := inmemory.NewStore(clock.RealClock{})
-	ocpiApi := ocpi.NewOCPI(engine, http.DefaultClient, "GB", "TWK")
+	ocpiApi := ocpi.NewOCPI(engine, http.DefaultClient, "GB", "TWK", store.LegacyOrgId)
 
 	want := []ocpi.Version{
 		{
@@ -35,7 +38,7 @@ func TestGetVersions(t *testing.T) {
 
 func TestGetVersionDetails(t *testing.T) {
 	engine := inmemory.NewStore(clock.RealClock{})
-	ocpiApi := ocpi.NewOCPI(engine, http.DefaultClient, "GB", "TWK")
+	ocpiApi := ocpi.NewOCPI(engine, http.DefaultClient, "GB", "TWK", store.LegacyOrgId)
 
 	want := ocpi.VersionDetail{
 		Version: "2.2",
@@ -65,8 +68,9 @@ func TestGetVersionDetails(t *testing.T) {
 
 func TestGetToken(t *testing.T) {
 	engine := inmemory.NewStore(clock.RealClock{})
-	ocpiApi := ocpi.NewOCPI(engine, http.DefaultClient, "GB", "TWK")
+	ocpiApi := ocpi.NewOCPI(engine, http.DefaultClient, "GB", "TWK", store.LegacyOrgId)
 	err := engine.SetToken(context.Background(), &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -97,9 +101,52 @@ func TestGetToken(t *testing.T) {
 	assert.Equal(t, want, got)
 }
 
+func TestGetTokenThatIsNotKnown(t *testing.T) {
+	engine := inmemory.NewStore(clock.RealClock{})
+	ocpiApi := ocpi.NewOCPI(engine, http.DefaultClient, "GB", "TWK", ocpiTestOrgId)
+
+	got, err := ocpiApi.GetToken(context.Background(), "GB", "TWK", "NOSUCHTOKEN")
+	require.NoError(t, err)
+	assert.Nil(t, got)
+}
+
+func TestGetTokenOnlyReadsTheTokensOfTheDefaultOrg(t *testing.T) {
+	engine := inmemory.NewStore(clock.RealClock{})
+	ocpiApi := ocpi.NewOCPI(engine, http.DefaultClient, "GB", "TWK", ocpiTestOrgId)
+	token := func(orgId, uid string) *store.Token {
+		return &store.Token{
+			OrgId:       orgId,
+			CountryCode: "GB",
+			PartyId:     "TWK",
+			Type:        "RFID",
+			Uid:         uid,
+			ContractId:  "GBTWKTWTW000018",
+			Issuer:      "Thoughtworks",
+			Valid:       true,
+			CacheMode:   "ALWAYS",
+		}
+	}
+	require.NoError(t, engine.SetToken(context.Background(), token(ocpiTestOrgId, "DEADBEEF")))
+	require.NoError(t, engine.SetToken(context.Background(), token("0193b2c4-0000-7000-8000-0000000000b2", "OTHERORG")))
+
+	got, err := ocpiApi.GetToken(context.Background(), "GB", "TWK", "DEADBEEF")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, "DEADBEEF", got.Uid)
+
+	got, err = ocpiApi.GetToken(context.Background(), "GB", "TWK", "OTHERORG")
+	require.NoError(t, err)
+	assert.Nil(t, got)
+
+	// the token of another party is not returned either
+	got, err = ocpiApi.GetToken(context.Background(), "GB", "EVO", "DEADBEEF")
+	require.NoError(t, err)
+	assert.Nil(t, got)
+}
+
 func TestSetToken(t *testing.T) {
 	engine := inmemory.NewStore(clock.RealClock{})
-	ocpiApi := ocpi.NewOCPI(engine, http.DefaultClient, "GB", "TWK")
+	ocpiApi := ocpi.NewOCPI(engine, http.DefaultClient, "GB", "TWK", ocpiTestOrgId)
 
 	err := ocpiApi.SetToken(context.Background(), ocpi.Token{
 		ContractId:  "GBTWKTWTW000018",
@@ -113,7 +160,9 @@ func TestSetToken(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	// the token belongs to the default org of the OCPI API
 	want := &store.Token{
+		OrgId:       ocpiTestOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -124,15 +173,37 @@ func TestSetToken(t *testing.T) {
 		CacheMode:   "ALWAYS",
 	}
 
-	got, err := engine.LookupToken(context.Background(), "DEADBEEF")
+	got, err := engine.LookupTokenForOrg(context.Background(), ocpiTestOrgId, "DEADBEEF")
 	require.NoError(t, err)
+	require.NotNil(t, got)
 	got.LastUpdated = ""
 	assert.Equal(t, want, got)
 }
 
+func TestSetTokenWithoutDefaultOrgUsesTheLegacyOrg(t *testing.T) {
+	engine := inmemory.NewStore(clock.RealClock{})
+	ocpiApi := ocpi.NewOCPI(engine, http.DefaultClient, "GB", "TWK", "")
+
+	err := ocpiApi.SetToken(context.Background(), ocpi.Token{
+		ContractId:  "GBTWKTWTW000018",
+		CountryCode: "GB",
+		Issuer:      "Thoughtworks",
+		PartyId:     "TWK",
+		Type:        "RFID",
+		Uid:         "DEADBEEF",
+		Valid:       true,
+		Whitelist:   "ALWAYS",
+	})
+	require.NoError(t, err)
+
+	got, err := engine.LookupTokenForOrg(context.Background(), store.LegacyOrgId, "DEADBEEF")
+	require.NoError(t, err)
+	assert.NotNil(t, got)
+}
+
 func TestPushLocation(t *testing.T) {
 	engine := inmemory.NewStore(clock.RealClock{})
-	ocpiApi := ocpi.NewOCPI(engine, http.DefaultClient, "GB", "TWK")
+	ocpiApi := ocpi.NewOCPI(engine, http.DefaultClient, "GB", "TWK", store.LegacyOrgId)
 
 	mux := http.NewServeMux()
 	receiverServer := httptest.NewServer(mux)

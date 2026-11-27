@@ -18,11 +18,15 @@ import (
 )
 
 func TestRegistration(t *testing.T) {
+	const (
+		senderOrgId   = "0193b2c4-0000-7000-8000-0000000000a1"
+		receiverOrgId = "0193b2c4-0000-7000-8000-0000000000b2"
+	)
 	tokenA := "abcdef123456"
 
 	// setup sender
 	senderStore := inmemory.NewStore(clock.RealClock{})
-	senderOcpiApi := ocpi.NewOCPI(senderStore, http.DefaultClient, "GB", "TWK")
+	senderOcpiApi := ocpi.NewOCPI(senderStore, http.DefaultClient, "GB", "TWK", senderOrgId)
 	senderHandler := server.NewOcpiHandler(senderStore, clock.RealClock{}, senderOcpiApi, nil)
 	senderServer := httptest.NewServer(senderHandler)
 	senderOcpiApi.SetExternalUrl(senderServer.URL)
@@ -34,7 +38,7 @@ func TestRegistration(t *testing.T) {
 		Status: store.OcpiRegistrationStatusPending,
 	})
 	require.NoError(t, err)
-	receiverOcpiApi := ocpi.NewOCPI(receiverStore, http.DefaultClient, "GB", "TWS")
+	receiverOcpiApi := ocpi.NewOCPI(receiverStore, http.DefaultClient, "GB", "TWS", receiverOrgId)
 	receiverHandler := server.NewOcpiHandler(receiverStore, clock.RealClock{}, receiverOcpiApi, nil)
 	receiverServer := httptest.NewServer(receiverHandler)
 	receiverOcpiApi.SetExternalUrl(receiverServer.URL)
@@ -82,4 +86,15 @@ func TestRegistration(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, senderTokenCReg)
 	assert.Equal(t, store.OcpiRegistrationStatusRegistered, senderTokenCReg.Status)
+
+	// the parties and registrations belong to the default org of the side that stores them
+	assert.Equal(t, receiverOrgId, senderPartyDetails.OrgId)
+	assert.Equal(t, senderOrgId, receiverPartyDetails.OrgId)
+	assert.Equal(t, receiverOrgId, receiverTokenBReg.OrgId)
+	assert.Equal(t, senderOrgId, senderTokenCReg.OrgId)
+	// the token that the sender made for the receiver when it started the registration
+	senderTokenBReg, err := senderStore.GetRegistrationDetails(context.Background(), senderPartyDetails.Token)
+	require.NoError(t, err)
+	require.NotNil(t, senderTokenBReg)
+	assert.Equal(t, senderOrgId, senderTokenBReg.OrgId)
 }

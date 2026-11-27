@@ -312,6 +312,12 @@ func TestConfigureDefaultOrgId(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "00000000-0000-0000-0000-000000000000", settings.DefaultOrgId)
 		assert.Equal(t, store.LegacyOrgId, settings.DefaultOrgId)
+
+		// a charge station without an org belongs to the default org
+		require.NotNil(t, settings.TenantResolver)
+		orgId, err := settings.TenantResolver.OrgIdForStation(context.TODO(), "cs-unknown")
+		require.NoError(t, err)
+		assert.Equal(t, store.LegacyOrgId, orgId)
 	})
 
 	t.Run("overridden", func(t *testing.T) {
@@ -323,6 +329,18 @@ func TestConfigureDefaultOrgId(t *testing.T) {
 		settings, err := config.Configure(context.TODO(), cfg)
 		require.NoError(t, err)
 		assert.Equal(t, "0193b2c4-0000-7000-8000-00000000000a", settings.DefaultOrgId)
+
+		// the resolver reads the charge stations of the configured storage
+		require.NotNil(t, settings.TenantResolver)
+		require.NoError(t, settings.Storage.SetChargeStationAuth(context.TODO(), "cs-with-org", &store.ChargeStationAuth{
+			OrgId: "0193b2c4-0000-7000-8000-0000000000b2",
+		}))
+		orgId, err := settings.TenantResolver.OrgIdForStation(context.TODO(), "cs-with-org")
+		require.NoError(t, err)
+		assert.Equal(t, "0193b2c4-0000-7000-8000-0000000000b2", orgId)
+		orgId, err = settings.TenantResolver.OrgIdForStation(context.TODO(), "cs-unknown")
+		require.NoError(t, err)
+		assert.Equal(t, "0193b2c4-0000-7000-8000-00000000000a", orgId)
 	})
 
 	for name, orgId := range map[string]string{

@@ -22,6 +22,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/store/firestore"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
 	"github.com/thoughtworks/maeve-csms/manager/store/postgres"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	mqtt2 "github.com/thoughtworks/maeve-csms/manager/transport/mqtt"
 	"go.opentelemetry.io/contrib/detectors/gcp"
@@ -66,6 +67,8 @@ type Config struct {
 	// DefaultOrgId is the org that owns the rows from before orgs and everything that
 	// is created without a tenant.
 	DefaultOrgId string
+	// TenantResolver gives the org that owns a charge station.
+	TenantResolver *tenancy.Resolver
 }
 
 // legacyOrgAssigner is implemented by the storage engines that store the org of a row.
@@ -155,6 +158,11 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		return nil, err
 	}
 
+	c.TenantResolver = &tenancy.Resolver{
+		Stations:     c.Storage,
+		DefaultOrgId: c.DefaultOrgId,
+	}
+
 	c.ContractCertValidationService, err = getContractCertValidator(&cfg.ContractCertValidator, httpClient)
 	if err != nil {
 		return nil, err
@@ -189,6 +197,7 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		c.Ocpp16Handler = ocpp16.NewRouter(c.MsgEmitter,
 			clock.RealClock{},
 			c.Storage,
+			c.TenantResolver,
 			c.ContractCertValidationService,
 			c.ChargeStationCertProviderService,
 			c.ContractCertProviderService,
@@ -199,6 +208,7 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		c.Ocpp201Handler = ocpp201.NewRouter(c.MsgEmitter,
 			clock.RealClock{},
 			c.Storage,
+			c.TenantResolver,
 			c.TariffService,
 			c.ContractCertValidationService,
 			c.ChargeStationCertProviderService,
@@ -208,7 +218,7 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 	}
 
 	if cfg.Ocpi != nil {
-		c.OcpiApi, err = getOcpiApi(cfg.Ocpi, c.Storage, httpClient)
+		c.OcpiApi, err = getOcpiApi(cfg.Ocpi, c.Storage, httpClient, c.DefaultOrgId)
 		if err != nil {
 			return nil, err
 		}
@@ -217,8 +227,8 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 	return
 }
 
-func getOcpiApi(o *OcpiConfig, engine store.Engine, httpClient *http.Client) (ocpi.Api, error) {
-	api := ocpi.NewOCPI(engine, httpClient, o.CountryCode, o.PartyId)
+func getOcpiApi(o *OcpiConfig, engine store.Engine, httpClient *http.Client, defaultOrgId string) (ocpi.Api, error) {
+	api := ocpi.NewOCPI(engine, httpClient, o.CountryCode, o.PartyId, defaultOrgId)
 	api.SetExternalUrl(o.ExternalURL)
 	return api, nil
 }

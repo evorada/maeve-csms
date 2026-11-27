@@ -5,7 +5,10 @@
 package postgres_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -64,34 +67,64 @@ func TestChargeStationRegisteredWithoutOrgBelongsToLegacyOrg(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestTokensPerOrg(t *testing.T) {
+	storetest.TestTokensPerOrg(t, emptyTestStore)
+}
+
 func TestTokenOrg(t *testing.T) {
 	s := emptyTestStore(t)
 	ctx := context.Background()
 
 	require.NoError(t, s.SetToken(ctx, orgTestToken("WITHORG", testOrgA)))
-	require.NoError(t, s.SetToken(ctx, orgTestToken("NOORG", "")))
 
 	got, err := s.LookupToken(ctx, "WITHORG")
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	assert.Equal(t, testOrgA, got.OrgId)
 
-	got, err = s.LookupToken(ctx, "NOORG")
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	assert.Equal(t, store.LegacyOrgId, got.OrgId)
-
-	// setting the token again writes its org again
-	require.NoError(t, s.SetToken(ctx, orgTestToken("WITHORG", testOrgB)))
 	listed, err := s.ListTokens(ctx, 0, 10)
 	require.NoError(t, err)
-	orgIds := map[string]string{}
-	for _, tok := range listed {
-		orgIds[tok.Uid] = tok.OrgId
-	}
-	assert.Equal(t, map[string]string{"WITHORG": testOrgB, "NOORG": store.LegacyOrgId}, orgIds)
+	require.Len(t, listed, 1)
+	assert.Equal(t, testOrgA, listed[0].OrgId)
 
+	// an org id must be a UUID
 	assert.Error(t, s.SetToken(ctx, orgTestToken("BADORG", "not-a-uuid")))
+	_, err = s.LookupTokenForOrg(ctx, "not-a-uuid", "WITHORG")
+	assert.Error(t, err)
+	_, err = s.ListTokensForOrgs(ctx, []string{testOrgA, "not-a-uuid"}, 0, 10)
+	assert.Error(t, err)
+}
+
+func TestLookupTokenPrefersTheMostRecentlyUpdatedToken(t *testing.T) {
+	s := emptyTestStore(t)
+	ctx := context.Background()
+
+	// the token that is created first is the most recently updated one
+	recent := orgTestToken("SAMEUID", testOrgA)
+	recent.PartyId = "TWK"
+	recent.LastUpdated = "2026-11-27T09:30:00Z"
+	older := orgTestToken("SAMEUID", testOrgA)
+	older.PartyId = "EVO"
+	older.LastUpdated = "2026-11-27T08:30:00Z"
+	require.NoError(t, s.SetToken(ctx, recent))
+	require.NoError(t, s.SetToken(ctx, older))
+
+	got, err := s.LookupTokenForOrg(ctx, testOrgA, "SAMEUID")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, "TWK", got.PartyId)
+	got, err = s.LookupToken(ctx, "SAMEUID")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, "TWK", got.PartyId)
+
+	// a valid token goes before a more recently updated token that is not valid
+	recent.Valid = false
+	require.NoError(t, s.SetToken(ctx, recent))
+	got, err = s.LookupTokenForOrg(ctx, testOrgA, "SAMEUID")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, "EVO", got.PartyId)
 }
 
 func TestOcpiOrg(t *testing.T) {
@@ -164,6 +197,7 @@ func TestAssignLegacyOrg(t *testing.T) {
 	// one row of the legacy org and one row of org B in each of the eight tables
 	seed := func(chargeStationId string, id int, orgId string) {
 		t.Helper()
+		// a location and a token must name their org
 		locationOrgId := orgId
 		if locationOrgId == "" {
 			locationOrgId = store.LegacyOrgId
@@ -171,7 +205,7 @@ func TestAssignLegacyOrg(t *testing.T) {
 		suffix := string(rune('a' + id))
 		require.NoError(t, s.SetChargeStationAuth(ctx, chargeStationId, &store.ChargeStationAuth{OrgId: orgId}))
 		require.NoError(t, s.SetLocation(ctx, &store.Location{Id: "loc-" + suffix, Name: "Location", OrgId: locationOrgId}))
-		require.NoError(t, s.SetToken(ctx, orgTestToken("TOKEN-"+suffix, orgId)))
+		require.NoError(t, s.SetToken(ctx, orgTestToken("TOKEN-"+suffix, locationOrgId)))
 		require.NoError(t, s.CreateTransaction(ctx, chargeStationId, "tx-"+suffix, "TOKEN", "ISO14443", nil, 0, false))
 		require.NoError(t, s.CreateReservation(ctx, &store.Reservation{
 			ReservationId:   id,
@@ -237,4 +271,111 @@ func TestAssignLegacyOrg(t *testing.T) {
 	rows, err = s.AssignLegacyOrg(ctx, testOrgA)
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), rows)
+}
+
+// A token of the legacy org cannot move to an org that already has a token with the
+// same country code, party id and UID. Both tokens must be kept as they are, every
+// other row must move, and the tokens that stay behind must be named in a warning.
+func TestAssignLegacyOrgKeepsTokensThatTheOrgAlreadyHas(t *testing.T) {
+	emptyTestStore(t)
+	ctx := context.Background()
+	s := testStore
+
+	var logged bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
+	token := func(orgId, partyId, uid, contractId string, valid bool) *store.Token {
+		tok := orgTestToken(uid, orgId)
+		tok.PartyId = partyId
+		tok.ContractId = contractId
+		tok.Valid = valid
+		return tok
+	}
+	// the default org and the legacy org both have GB-TWK-DUPLICATE
+	require.NoError(t, s.SetToken(ctx, token(testOrgA, "TWK", "DUPLICATE", "GBTWK0000000DEF", true)))
+	require.NoError(t, s.SetToken(ctx, token(store.LegacyOrgId, "TWK", "DUPLICATE", "GBTWK0000000LEG", false)))
+	// the same UID for another party, and another UID, are not in the default org
+	require.NoError(t, s.SetToken(ctx, token(store.LegacyOrgId, "EVO", "DUPLICATE", "GBEVO0000000LEG", true)))
+	require.NoError(t, s.SetToken(ctx, token(store.LegacyOrgId, "TWK", "ONLYLEGACY", "GBTWK0000001LEG", true)))
+	// another org has the UID too
+	require.NoError(t, s.SetToken(ctx, token(testOrgB, "TWK", "DUPLICATE", "GBTWK0000000ORB", true)))
+	// rows of the legacy org in tables that come before and after the tokens
+	require.NoError(t, s.SetChargeStationAuth(ctx, "cs-legacy", &store.ChargeStationAuth{}))
+	require.NoError(t, s.CreateTransaction(ctx, "cs-legacy", "tx-legacy", "DUPLICATE", "ISO14443", nil, 0, false))
+	require.NoError(t, s.SetPartyDetails(ctx, &store.OcpiParty{
+		CountryCode: "GB", PartyId: "TWK", Role: "EMSP", Url: "https://example.com", Token: "token",
+	}))
+
+	// tokensByOrg returns "org/party/uid/contract/valid" for every token.
+	tokensByOrg := func() []string {
+		rows, err := testPool.Query(ctx, `
+			SELECT org_id::text || '/' || party_id || '/' || uid || '/' || contract_id || '/' || valid::text
+			FROM tokens ORDER BY 1`)
+		require.NoError(t, err)
+		defer rows.Close()
+		tokens := []string{}
+		for rows.Next() {
+			var tok string
+			require.NoError(t, rows.Scan(&tok))
+			tokens = append(tokens, tok)
+		}
+		require.NoError(t, rows.Err())
+		return tokens
+	}
+	wantTokens := []string{
+		store.LegacyOrgId + "/TWK/DUPLICATE/GBTWK0000000LEG/false",
+		testOrgA + "/EVO/DUPLICATE/GBEVO0000000LEG/true",
+		testOrgA + "/TWK/DUPLICATE/GBTWK0000000DEF/true",
+		testOrgA + "/TWK/ONLYLEGACY/GBTWK0000001LEG/true",
+		testOrgB + "/TWK/DUPLICATE/GBTWK0000000ORB/true",
+	}
+
+	// two tokens, the charge station, the transaction and the party move
+	logged.Reset()
+	rows, err := s.AssignLegacyOrg(ctx, testOrgA)
+	require.NoError(t, err)
+	assert.Equal(t, int64(5), rows)
+	assert.Equal(t, wantTokens, tokensByOrg())
+	counts := orgRowCounts(t)
+	assert.Equal(t, map[string]int{testOrgA: 1}, counts["charge_stations"])
+	assert.Equal(t, map[string]int{testOrgA: 1}, counts["transactions"])
+	assert.Equal(t, map[string]int{testOrgA: 1}, counts["ocpi_parties"])
+
+	// the warning names the token that stays in the legacy org, and only that one
+	var warning struct {
+		Level  string   `json:"level"`
+		OrgId  string   `json:"org_id"`
+		Count  int      `json:"count"`
+		Tokens []string `json:"tokens"`
+	}
+	require.NoError(t, json.Unmarshal(bytes.TrimSpace(logged.Bytes()), &warning), logged.String())
+	assert.Equal(t, "WARN", warning.Level)
+	assert.Equal(t, testOrgA, warning.OrgId)
+	assert.Equal(t, 1, warning.Count)
+	assert.Equal(t, []string{"GB-TWK-DUPLICATE"}, warning.Tokens)
+
+	// a second run moves nothing, changes nothing and warns again
+	logged.Reset()
+	rows, err = s.AssignLegacyOrg(ctx, testOrgA)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), rows)
+	assert.Equal(t, wantTokens, tokensByOrg())
+	assert.Contains(t, logged.String(), "GB-TWK-DUPLICATE")
+
+	// once one token of the pair is gone, the other one moves and the warning stops
+	_, err = testPool.Exec(ctx, `DELETE FROM tokens WHERE org_id = $1 AND party_id = 'TWK' AND uid = 'DUPLICATE'`, testOrgA)
+	require.NoError(t, err)
+	logged.Reset()
+	rows, err = s.AssignLegacyOrg(ctx, testOrgA)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), rows)
+	assert.Empty(t, logged.String())
+	assert.Equal(t, []string{
+		testOrgA + "/EVO/DUPLICATE/GBEVO0000000LEG/true",
+		testOrgA + "/TWK/DUPLICATE/GBTWK0000000LEG/false",
+		testOrgA + "/TWK/ONLYLEGACY/GBTWK0000001LEG/true",
+		testOrgB + "/TWK/DUPLICATE/GBTWK0000000ORB/true",
+	}, tokensByOrg())
 }

@@ -22,6 +22,7 @@ func TestIntegration_TransactionWithToken(t *testing.T) {
 
 	// Create a token first
 	token := &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -87,6 +88,7 @@ func TestIntegration_ConcurrentTokenCreation(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 			token := &store.Token{
+				OrgId:       store.LegacyOrgId,
 				CountryCode: "GB",
 				PartyId:     "TWK",
 				Type:        "RFID",
@@ -126,6 +128,7 @@ func TestIntegration_ConcurrentTransactionUpdates(t *testing.T) {
 
 	// Create a token
 	token := &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -215,6 +218,7 @@ func TestIntegration_ConnectionPooling(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 			token := &store.Token{
+				OrgId:       store.LegacyOrgId,
 				CountryCode: "GB",
 				PartyId:     "TWK",
 				Type:        "RFID",
@@ -260,6 +264,7 @@ func TestIntegration_MultipleActiveTransactions(t *testing.T) {
 	// Create tokens
 	for i := 0; i < 3; i++ {
 		token := &store.Token{
+			OrgId:       store.LegacyOrgId,
 			CountryCode: "GB",
 			PartyId:     "TWK",
 			Type:        "RFID",
@@ -431,6 +436,7 @@ func TestIntegration_TokenCacheMode(t *testing.T) {
 
 	for i, mode := range cacheModes {
 		token := &store.Token{
+			OrgId:       store.LegacyOrgId,
 			CountryCode: "GB",
 			PartyId:     "TWK",
 			Type:        "RFID",
@@ -460,6 +466,7 @@ func TestIntegration_ErrorScenarios(t *testing.T) {
 
 	t.Run("duplicate token uid", func(t *testing.T) {
 		token := &store.Token{
+			OrgId:       store.LegacyOrgId,
 			CountryCode: "GB",
 			PartyId:     "TWK",
 			Type:        "RFID",

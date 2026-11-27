@@ -66,6 +66,12 @@ func (s *Store) LookupToken(ctx context.Context, tokenUid string) (*store.Token,
 	return newToken(snap, tokenUid)
 }
 
+// LookupTokenForOrg ignores orgId: Firestore is single-tenant, it stores one token for
+// each UID and no org.
+func (s *Store) LookupTokenForOrg(ctx context.Context, _, tokenUid string) (*store.Token, error) {
+	return s.LookupToken(ctx, tokenUid)
+}
+
 func newToken(snap *firestore.DocumentSnapshot, tokenUid string) (*store.Token, error) {
 	var tok token
 	if err := snap.DataTo(&tok); err != nil {
@@ -109,4 +115,10 @@ func (s *Store) ListTokens(context context.Context, offset int, limit int) ([]*s
 		tokens = make([]*store.Token, 0)
 	}
 	return tokens, nil
+}
+
+// ListTokensForOrgs ignores orgIds: Firestore is single-tenant, it stores no org and
+// lists every token.
+func (s *Store) ListTokensForOrgs(ctx context.Context, _ []string, offset, limit int) ([]*store.Token, error) {
+	return s.ListTokens(ctx, offset, limit)
 }

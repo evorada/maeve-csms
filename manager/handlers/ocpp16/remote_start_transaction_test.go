@@ -13,6 +13,7 @@ import (
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"k8s.io/utils/clock"
 )
 
@@ -41,6 +42,7 @@ func TestRemoteStartTransactionHandler_HandleCallResult(t *testing.T) {
 			setupStore: func() store.TokenStore {
 				engine := inmemory.NewStore(clock.RealClock{})
 				_ = engine.SetToken(ctx, &store.Token{
+					OrgId:       store.LegacyOrgId,
 					CountryCode: "US",
 					PartyId:     "ABC",
 					Type:        "RFID",
@@ -65,6 +67,7 @@ func TestRemoteStartTransactionHandler_HandleCallResult(t *testing.T) {
 			setupStore: func() store.TokenStore {
 				engine := inmemory.NewStore(clock.RealClock{})
 				_ = engine.SetToken(ctx, &store.Token{
+					OrgId:       store.LegacyOrgId,
 					CountryCode: "US",
 					PartyId:     "ABC",
 					Type:        "RFID",
@@ -89,6 +92,7 @@ func TestRemoteStartTransactionHandler_HandleCallResult(t *testing.T) {
 			setupStore: func() store.TokenStore {
 				engine := inmemory.NewStore(clock.RealClock{})
 				_ = engine.SetToken(ctx, &store.Token{
+					OrgId:       store.LegacyOrgId,
 					CountryCode: "US",
 					PartyId:     "ABC",
 					Type:        "RFID",
@@ -127,6 +131,7 @@ func TestRemoteStartTransactionHandler_HandleCallResult(t *testing.T) {
 			setupStore: func() store.TokenStore {
 				engine := inmemory.NewStore(clock.RealClock{})
 				_ = engine.SetToken(ctx, &store.Token{
+					OrgId:       store.LegacyOrgId,
 					CountryCode: "US",
 					PartyId:     "ABC",
 					Type:        "RFID",
@@ -165,6 +170,7 @@ func TestRemoteStartTransactionHandler_HandleCallResult(t *testing.T) {
 			setupStore: func() store.TokenStore {
 				engine := inmemory.NewStore(clock.RealClock{})
 				_ = engine.SetToken(ctx, &store.Token{
+					OrgId:       store.LegacyOrgId,
 					CountryCode: "US",
 					PartyId:     "ABC",
 					Type:        "RFID",
@@ -189,6 +195,7 @@ func TestRemoteStartTransactionHandler_HandleCallResult(t *testing.T) {
 			setupStore: func() store.TokenStore {
 				engine := inmemory.NewStore(clock.RealClock{})
 				_ = engine.SetToken(ctx, &store.Token{
+					OrgId:       store.LegacyOrgId,
 					CountryCode: "US",
 					PartyId:     "ABC",
 					Type:        "RFID",
@@ -234,7 +241,8 @@ func TestRemoteStartTransactionHandler_HandleCallResult(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := ocpp16.RemoteStartTransactionHandler{
-				TokenStore: tt.setupStore(),
+				TokenStore:  tt.setupStore(),
+				OrgResolver: &tenancy.Resolver{Stations: inmemory.NewStore(clock.RealClock{})},
 			}
 
 			err := handler.HandleCallResult(ctx, chargeStationId, tt.request, tt.response, nil)
@@ -264,6 +272,7 @@ func TestRemoteStartTransactionHandler_TokenValidation(t *testing.T) {
 			idTag: "VALID_TOKEN",
 			setupToken: func(engine *inmemory.Store) {
 				_ = engine.SetToken(ctx, &store.Token{
+					OrgId:       store.LegacyOrgId,
 					CountryCode: "US",
 					PartyId:     "ABC",
 					Type:        "RFID",
@@ -280,6 +289,7 @@ func TestRemoteStartTransactionHandler_TokenValidation(t *testing.T) {
 			idTag: "INVALID_TOKEN",
 			setupToken: func(engine *inmemory.Store) {
 				_ = engine.SetToken(ctx, &store.Token{
+					OrgId:       store.LegacyOrgId,
 					CountryCode: "US",
 					PartyId:     "ABC",
 					Type:        "RFID",
@@ -305,7 +315,8 @@ func TestRemoteStartTransactionHandler_TokenValidation(t *testing.T) {
 			tt.setupToken(engine)
 
 			handler := ocpp16.RemoteStartTransactionHandler{
-				TokenStore: engine,
+				TokenStore:  engine,
+				OrgResolver: &tenancy.Resolver{Stations: engine},
 			}
 
 			request := &types.RemoteStartTransactionJson{
@@ -335,6 +346,7 @@ func TestRemoteStartTransactionHandler_ChargingProfileVariations(t *testing.T) {
 
 	engine := inmemory.NewStore(clock.RealClock{})
 	_ = engine.SetToken(ctx, &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "US",
 		PartyId:     "ABC",
 		Type:        "RFID",
@@ -404,7 +416,8 @@ func TestRemoteStartTransactionHandler_ChargingProfileVariations(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := ocpp16.RemoteStartTransactionHandler{
-				TokenStore: engine,
+				TokenStore:  engine,
+				OrgResolver: &tenancy.Resolver{Stations: engine},
 			}
 
 			request := &types.RemoteStartTransactionJson{

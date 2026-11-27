@@ -22,7 +22,6 @@ type Querier interface {
 	// The reservation belongs to the org of its charge station, or to the legacy org when
 	// the charge station is not registered.
 	CreateReservation(ctx context.Context, arg CreateReservationParams) error
-	CreateToken(ctx context.Context, arg CreateTokenParams) (Token, error)
 	// CreateTransaction returns no row when the transaction already exists, instead of
 	// raising a unique violation that would abort an enclosing database transaction.
 	// The transaction belongs to the org of its charge station, or to the legacy org when
@@ -55,7 +54,7 @@ type Querier interface {
 	DeleteRemoteStopTransactionRequest(ctx context.Context, chargeStationID string) error
 	DeleteResetRequest(ctx context.Context, chargeStationID string) error
 	DeleteTenantHostnames(ctx context.Context, orgID pgtype.UUID) error
-	DeleteToken(ctx context.Context, uid string) error
+	DeleteTokenForOrg(ctx context.Context, arg DeleteTokenForOrgParams) error
 	DeleteUnlockConnectorRequest(ctx context.Context, chargeStationID string) error
 	DeleteVariableMonitoring(ctx context.Context, arg DeleteVariableMonitoringParams) error
 	ExpireReservations(ctx context.Context) (int64, error)
@@ -112,7 +111,8 @@ type Querier interface {
 	GetTenantByHost(ctx context.Context, hostname string) (GetTenantByHostRow, error)
 	GetTenantByOrgKey(ctx context.Context, orgKey string) (GetTenantByOrgKeyRow, error)
 	GetTenantIdentityForUpdate(ctx context.Context, orgID pgtype.UUID) (GetTenantIdentityForUpdateRow, error)
-	GetToken(ctx context.Context, uid string) (Token, error)
+	GetTokenAnyOrg(ctx context.Context, uid string) (Token, error)
+	GetTokenForOrg(ctx context.Context, arg GetTokenForOrgParams) (Token, error)
 	// Transactions are identified by (charge_station_id, id): ids are only unique per station.
 	GetTransaction(ctx context.Context, arg GetTransactionParams) (Transaction, error)
 	GetUnlockConnectorRequest(ctx context.Context, chargeStationID string) (UnlockConnectorRequest, error)
@@ -148,6 +148,7 @@ type Querier interface {
 	ListSubtreeOrgIds(ctx context.Context, arg ListSubtreeOrgIdsParams) ([]pgtype.UUID, error)
 	ListTenants(ctx context.Context, arg ListTenantsParams) ([]ListTenantsRow, error)
 	ListTokens(ctx context.Context, arg ListTokensParams) ([]Token, error)
+	ListTokensForOrgs(ctx context.Context, arg ListTokensForOrgsParams) ([]Token, error)
 	ListTransactions(ctx context.Context) ([]Transaction, error)
 	ListTransactionsFiltered(ctx context.Context, arg ListTransactionsFilteredParams) ([]Transaction, error)
 	ListVariableMonitoring(ctx context.Context, arg ListVariableMonitoringParams) ([]VariableMonitoring, error)
@@ -187,7 +188,6 @@ type Querier interface {
 	// The entitlement and config documents are only replaced by a document of the same or
 	// a newer version. The status, the slug and the org key are never changed here.
 	UpdateTenant(ctx context.Context, arg UpdateTenantParams) error
-	UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token, error)
 	UpdateTransaction(ctx context.Context, arg UpdateTransactionParams) (Transaction, error)
 	UpdateTransactionDetails(ctx context.Context, arg UpdateTransactionDetailsParams) (int64, error)
 	UpsertChargeStationStatus(ctx context.Context, arg UpsertChargeStationStatusParams) error
@@ -204,6 +204,7 @@ type Querier interface {
 	UpsertLogRequest(ctx context.Context, arg UpsertLogRequestParams) error
 	UpsertLogStatus(ctx context.Context, arg UpsertLogStatusParams) error
 	UpsertPublishFirmwareStatus(ctx context.Context, arg UpsertPublishFirmwareStatusParams) error
+	UpsertToken(ctx context.Context, arg UpsertTokenParams) (Token, error)
 	UpsertVariableMonitoring(ctx context.Context, arg UpsertVariableMonitoringParams) (int32, error)
 	UpsertVariableMonitoringWithId(ctx context.Context, arg UpsertVariableMonitoringWithIdParams) error
 }

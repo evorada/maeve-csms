@@ -19,6 +19,7 @@ func TestToken_SetAndLookup(t *testing.T) {
 	ctx := context.Background()
 
 	token := &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -57,6 +58,7 @@ func TestToken_List(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		err := testStore.SetToken(ctx, &store.Token{
+			OrgId:       store.LegacyOrgId,
 			CountryCode: "GB",
 			PartyId:     "TWK",
 			Type:        "RFID",
@@ -80,6 +82,7 @@ func TestToken_Update(t *testing.T) {
 	ctx := context.Background()
 
 	token := &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -112,6 +115,7 @@ func TestToken_ExpiresAt(t *testing.T) {
 	// an offset and microseconds: the instant is kept, the time comes back in UTC
 	expiresAt := time.Date(2027, 1, 31, 9, 30, 15, 123_456_000, time.FixedZone("CET", 3600))
 	token := &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",

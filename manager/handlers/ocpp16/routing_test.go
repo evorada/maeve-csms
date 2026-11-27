@@ -18,6 +18,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/schemas"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	"k8s.io/utils/clock"
 )
@@ -68,6 +69,7 @@ func TestAllRouteSchemasExist(t *testing.T) {
 	router, ok := ocpp16.NewRouter(&FakeEmitter{},
 		clock.RealClock{},
 		engine,
+		&tenancy.Resolver{Stations: engine},
 		nil,
 		nil,
 		nil,
@@ -133,6 +135,7 @@ func TestMeterValuesCallIsStoredThroughTheRouter(t *testing.T) {
 	router := ocpp16.NewRouter(emitter,
 		clock.RealClock{},
 		engine,
+		&tenancy.Resolver{Stations: engine},
 		nil,
 		nil,
 		nil,
@@ -222,6 +225,7 @@ func TestChangeConfigurationCallErrorRejectsSettingThroughTheRouter(t *testing.T
 	router := ocpp16.NewRouter(emitter,
 		clock.RealClock{},
 		engine,
+		&tenancy.Resolver{Stations: engine},
 		nil,
 		nil,
 		nil,
@@ -264,6 +268,7 @@ func TestTriggerMessageCallErrorStoresStatusThroughTheRouter(t *testing.T) {
 	router := ocpp16.NewRouter(emitter,
 		clock.RealClock{},
 		engine,
+		&tenancy.Resolver{Stations: engine},
 		nil,
 		nil,
 		nil,

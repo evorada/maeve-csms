@@ -13,6 +13,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/slog"
 	"k8s.io/utils/clock"
@@ -31,6 +32,7 @@ const transactionIdAttempts = 3
 type StartTransactionHandler struct {
 	Clock            clock.PassiveClock
 	TokenStore       store.TokenStore
+	OrgResolver      tenancy.StationOrgResolver
 	TransactionStore store.TransactionStore
 	ReservationStore store.ReservationStore
 }
@@ -40,7 +42,7 @@ func (t StartTransactionHandler) HandleCall(ctx context.Context, chargeStationId
 
 	slog.Info("starting transaction", slog.Any("request", req))
 
-	auth, err := authorizeIdTag(ctx, t.TokenStore, t.Clock, req.IdTag)
+	auth, err := authorizeIdTag(ctx, t.TokenStore, t.OrgResolver, t.Clock, chargeStationId, req.IdTag)
 	if err != nil {
 		return nil, err
 	}

@@ -11,51 +11,37 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const CreateToken = `-- name: CreateToken :one
-INSERT INTO tokens (
-    country_code, party_id, type, uid, contract_id,
-    visual_number, issuer, group_id, valid, language_code,
-    cache_mode, last_updated, expires_at, org_id
-) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
-)
-RETURNING id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at, org_id
+const DeleteTokenForOrg = `-- name: DeleteTokenForOrg :exec
+DELETE FROM tokens
+WHERE org_id = $1 AND country_code = $2 AND party_id = $3 AND uid = $4
 `
 
-type CreateTokenParams struct {
-	CountryCode  string             `db:"country_code" json:"country_code"`
-	PartyID      string             `db:"party_id" json:"party_id"`
-	Type         string             `db:"type" json:"type"`
-	Uid          string             `db:"uid" json:"uid"`
-	ContractID   string             `db:"contract_id" json:"contract_id"`
-	VisualNumber pgtype.Text        `db:"visual_number" json:"visual_number"`
-	Issuer       string             `db:"issuer" json:"issuer"`
-	GroupID      pgtype.Text        `db:"group_id" json:"group_id"`
-	Valid        bool               `db:"valid" json:"valid"`
-	LanguageCode pgtype.Text        `db:"language_code" json:"language_code"`
-	CacheMode    string             `db:"cache_mode" json:"cache_mode"`
-	LastUpdated  pgtype.Timestamp   `db:"last_updated" json:"last_updated"`
-	ExpiresAt    pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
-	OrgID        pgtype.UUID        `db:"org_id" json:"org_id"`
+type DeleteTokenForOrgParams struct {
+	OrgID       pgtype.UUID `db:"org_id" json:"org_id"`
+	CountryCode string      `db:"country_code" json:"country_code"`
+	PartyID     string      `db:"party_id" json:"party_id"`
+	Uid         string      `db:"uid" json:"uid"`
 }
 
-func (q *Queries) CreateToken(ctx context.Context, arg CreateTokenParams) (Token, error) {
-	row := q.db.QueryRow(ctx, CreateToken,
+func (q *Queries) DeleteTokenForOrg(ctx context.Context, arg DeleteTokenForOrgParams) error {
+	_, err := q.db.Exec(ctx, DeleteTokenForOrg,
+		arg.OrgID,
 		arg.CountryCode,
 		arg.PartyID,
-		arg.Type,
 		arg.Uid,
-		arg.ContractID,
-		arg.VisualNumber,
-		arg.Issuer,
-		arg.GroupID,
-		arg.Valid,
-		arg.LanguageCode,
-		arg.CacheMode,
-		arg.LastUpdated,
-		arg.ExpiresAt,
-		arg.OrgID,
 	)
+	return err
+}
+
+const GetTokenAnyOrg = `-- name: GetTokenAnyOrg :one
+SELECT id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at, org_id FROM tokens
+WHERE uid = $1
+ORDER BY valid DESC, last_updated DESC, id DESC
+LIMIT 1
+`
+
+func (q *Queries) GetTokenAnyOrg(ctx context.Context, uid string) (Token, error) {
+	row := q.db.QueryRow(ctx, GetTokenAnyOrg, uid)
 	var i Token
 	err := row.Scan(
 		&i.ID,
@@ -79,22 +65,20 @@ func (q *Queries) CreateToken(ctx context.Context, arg CreateTokenParams) (Token
 	return i, err
 }
 
-const DeleteToken = `-- name: DeleteToken :exec
-DELETE FROM tokens WHERE uid = $1
+const GetTokenForOrg = `-- name: GetTokenForOrg :one
+SELECT id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at, org_id FROM tokens
+WHERE org_id = $1 AND uid = $2
+ORDER BY valid DESC, last_updated DESC, id DESC
+LIMIT 1
 `
 
-func (q *Queries) DeleteToken(ctx context.Context, uid string) error {
-	_, err := q.db.Exec(ctx, DeleteToken, uid)
-	return err
+type GetTokenForOrgParams struct {
+	OrgID pgtype.UUID `db:"org_id" json:"org_id"`
+	Uid   string      `db:"uid" json:"uid"`
 }
 
-const GetToken = `-- name: GetToken :one
-SELECT id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at, org_id FROM tokens
-WHERE uid = $1 LIMIT 1
-`
-
-func (q *Queries) GetToken(ctx context.Context, uid string) (Token, error) {
-	row := q.db.QueryRow(ctx, GetToken, uid)
+func (q *Queries) GetTokenForOrg(ctx context.Context, arg GetTokenForOrgParams) (Token, error) {
+	row := q.db.QueryRow(ctx, GetTokenForOrg, arg.OrgID, arg.Uid)
 	var i Token
 	err := row.Scan(
 		&i.ID,
@@ -167,32 +151,85 @@ func (q *Queries) ListTokens(ctx context.Context, arg ListTokensParams) ([]Token
 	return items, nil
 }
 
-const UpdateToken = `-- name: UpdateToken :one
-UPDATE tokens
-SET 
-    country_code = $2,
-    party_id = $3,
-    type = $4,
-    contract_id = $5,
-    visual_number = $6,
-    issuer = $7,
-    group_id = $8,
-    valid = $9,
-    language_code = $10,
-    cache_mode = $11,
-    last_updated = $12,
-    expires_at = $13,
-    org_id = $14,
+const ListTokensForOrgs = `-- name: ListTokensForOrgs :many
+SELECT id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at, org_id FROM tokens
+WHERE org_id = ANY($1::uuid[])
+ORDER BY created_at DESC, id DESC
+LIMIT $3 OFFSET $2
+`
+
+type ListTokensForOrgsParams struct {
+	OrgIds    []pgtype.UUID `db:"org_ids" json:"org_ids"`
+	RowOffset int32         `db:"row_offset" json:"row_offset"`
+	RowLimit  int32         `db:"row_limit" json:"row_limit"`
+}
+
+func (q *Queries) ListTokensForOrgs(ctx context.Context, arg ListTokensForOrgsParams) ([]Token, error) {
+	rows, err := q.db.Query(ctx, ListTokensForOrgs, arg.OrgIds, arg.RowOffset, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Token{}
+	for rows.Next() {
+		var i Token
+		if err := rows.Scan(
+			&i.ID,
+			&i.CountryCode,
+			&i.PartyID,
+			&i.Type,
+			&i.Uid,
+			&i.ContractID,
+			&i.VisualNumber,
+			&i.Issuer,
+			&i.GroupID,
+			&i.Valid,
+			&i.LanguageCode,
+			&i.CacheMode,
+			&i.LastUpdated,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ExpiresAt,
+			&i.OrgID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const UpsertToken = `-- name: UpsertToken :one
+INSERT INTO tokens (
+    country_code, party_id, type, uid, contract_id,
+    visual_number, issuer, group_id, valid, language_code,
+    cache_mode, last_updated, expires_at, org_id
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+)
+ON CONFLICT ON CONSTRAINT tokens_org_party_uid_unique DO UPDATE SET
+    type = EXCLUDED.type,
+    contract_id = EXCLUDED.contract_id,
+    visual_number = EXCLUDED.visual_number,
+    issuer = EXCLUDED.issuer,
+    group_id = EXCLUDED.group_id,
+    valid = EXCLUDED.valid,
+    language_code = EXCLUDED.language_code,
+    cache_mode = EXCLUDED.cache_mode,
+    last_updated = EXCLUDED.last_updated,
+    expires_at = EXCLUDED.expires_at,
     updated_at = NOW()
-WHERE uid = $1
 RETURNING id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at, org_id
 `
 
-type UpdateTokenParams struct {
-	Uid          string             `db:"uid" json:"uid"`
+type UpsertTokenParams struct {
 	CountryCode  string             `db:"country_code" json:"country_code"`
 	PartyID      string             `db:"party_id" json:"party_id"`
 	Type         string             `db:"type" json:"type"`
+	Uid          string             `db:"uid" json:"uid"`
 	ContractID   string             `db:"contract_id" json:"contract_id"`
 	VisualNumber pgtype.Text        `db:"visual_number" json:"visual_number"`
 	Issuer       string             `db:"issuer" json:"issuer"`
@@ -205,12 +242,12 @@ type UpdateTokenParams struct {
 	OrgID        pgtype.UUID        `db:"org_id" json:"org_id"`
 }
 
-func (q *Queries) UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token, error) {
-	row := q.db.QueryRow(ctx, UpdateToken,
-		arg.Uid,
+func (q *Queries) UpsertToken(ctx context.Context, arg UpsertTokenParams) (Token, error) {
+	row := q.db.QueryRow(ctx, UpsertToken,
 		arg.CountryCode,
 		arg.PartyID,
 		arg.Type,
+		arg.Uid,
 		arg.ContractID,
 		arg.VisualNumber,
 		arg.Issuer,

@@ -12,12 +12,15 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 )
 
-// AuthorizeHandler answers an Authorize.req with what the token store knows about the idTag.
+// AuthorizeHandler answers an Authorize.req with what the token store knows about the
+// idTag in the org of the charge station.
 type AuthorizeHandler struct {
-	TokenStore store.TokenStore
-	Clock      clock.PassiveClock
+	TokenStore  store.TokenStore
+	OrgResolver tenancy.StationOrgResolver
+	Clock       clock.PassiveClock
 }
 
 func (a AuthorizeHandler) HandleCall(ctx context.Context, chargeStationId string, request ocpp.Request) (ocpp.Response, error) {
@@ -25,7 +28,7 @@ func (a AuthorizeHandler) HandleCall(ctx context.Context, chargeStationId string
 
 	req := request.(*types.AuthorizeJson)
 
-	auth, err := authorizeIdTag(ctx, a.TokenStore, a.Clock, req.IdTag)
+	auth, err := authorizeIdTag(ctx, a.TokenStore, a.OrgResolver, a.Clock, chargeStationId, req.IdTag)
 	if err != nil {
 		return nil, err
 	}

@@ -684,3 +684,147 @@ func TestMigration_TenancyOrgColumns(t *testing.T) {
 	assert.ElementsMatch(t, orgTables, orgColumns())
 	assert.Equal(t, map[string]int{legacyOrgId: 2, otherOrgId: 1}, rowsByOrg("charge_stations"))
 }
+
+// Migration 000036 replaces "one token for each UID" with "one token for each org,
+// country code, party id and UID". The tokens that are there must stay as they are,
+// and the migration must be reversible as long as no UID is stored twice.
+func TestMigration_TokensUniquePerOrg(t *testing.T) {
+	ctx := context.Background()
+
+	const (
+		versionBefore = 35
+		versionAfter  = 36
+		legacyOrgId   = "00000000-0000-0000-0000-000000000000"
+		otherOrgId    = "0193b2c4-0000-7000-8000-0000000000a1"
+	)
+
+	migrationConnString, pool := migrationTestDatabase(t, "maeve_migration_000036")
+
+	// uniqueConstraints returns the UNIQUE constraints of the tokens table by name.
+	uniqueConstraints := func() map[string]string {
+		rows, err := pool.Query(ctx, `
+			SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint
+			WHERE conrelid = 'tokens'::regclass AND contype = 'u'`)
+		require.NoError(t, err)
+		defer rows.Close()
+		constraints := map[string]string{}
+		for rows.Next() {
+			var name, definition string
+			require.NoError(t, rows.Scan(&name, &definition))
+			constraints[name] = definition
+		}
+		require.NoError(t, rows.Err())
+		return constraints
+	}
+	oldConstraints := map[string]string{"tokens_uid_unique": "UNIQUE (uid)"}
+	newConstraints := map[string]string{"tokens_org_party_uid_unique": "UNIQUE (org_id, country_code, party_id, uid)"}
+	// lookupIndexes returns the columns of the two lookup indexes that exist.
+	lookupIndexes := func() map[string]string {
+		rows, err := pool.Query(ctx, `
+			SELECT indexname, substring(indexdef FROM '\((.*)\)') FROM pg_indexes
+			WHERE tablename = 'tokens' AND indexname IN ('idx_tokens_org_uid', 'idx_tokens_uid')`)
+		require.NoError(t, err)
+		defer rows.Close()
+		indexes := map[string]string{}
+		for rows.Next() {
+			var name, columns string
+			require.NoError(t, rows.Scan(&name, &columns))
+			indexes[name] = columns
+		}
+		require.NoError(t, rows.Err())
+		return indexes
+	}
+	newIndexes := map[string]string{"idx_tokens_org_uid": "org_id, uid", "idx_tokens_uid": "uid"}
+	// tokens returns "org/country/party/uid/contract" for every token.
+	tokens := func() []string {
+		rows, err := pool.Query(ctx, `
+			SELECT org_id::text || '/' || country_code || '/' || party_id || '/' || uid || '/' || contract_id
+			FROM tokens ORDER BY uid, 1`)
+		require.NoError(t, err)
+		defer rows.Close()
+		found := []string{}
+		for rows.Next() {
+			var tok string
+			require.NoError(t, rows.Scan(&tok))
+			found = append(found, tok)
+		}
+		require.NoError(t, rows.Err())
+		return found
+	}
+	insertToken := func(orgId, countryCode, partyId, uid string) error {
+		_, err := pool.Exec(ctx, `
+			INSERT INTO tokens (org_id, country_code, party_id, type, uid, contract_id, issuer, valid, cache_mode, last_updated)
+			VALUES ($1, $2, $3, 'RFID', $4, $5, 'TestIssuer', true, 'ALWAYS', NOW())`,
+			orgId, countryCode, partyId, uid, "CONTRACT-"+uid)
+		return err
+	}
+
+	migrateTo(t, migrationConnString, versionBefore)
+	require.Equal(t, oldConstraints, uniqueConstraints())
+	require.Empty(t, lookupIndexes())
+
+	// tokens that share everything but one part of the new key: a constraint on fewer
+	// columns than (org, country code, party id, UID) could not be added over them
+	require.NoError(t, insertToken(legacyOrgId, "GB", "TWK", "UID1"))
+	require.NoError(t, insertToken(legacyOrgId, "GB", "TWK", "UID2"))
+	require.NoError(t, insertToken(otherOrgId, "GB", "TWK", "UID3"))
+	require.NoError(t, insertToken(legacyOrgId, "GB", "EVO", "UID4"))
+	require.NoError(t, insertToken(legacyOrgId, "BE", "TWK", "UID5"))
+	require.Error(t, insertToken(otherOrgId, "GB", "TWK", "UID1"), "a UID can only be stored once")
+	seeded := []string{
+		legacyOrgId + "/GB/TWK/UID1/CONTRACT-UID1",
+		legacyOrgId + "/GB/TWK/UID2/CONTRACT-UID2",
+		otherOrgId + "/GB/TWK/UID3/CONTRACT-UID3",
+		legacyOrgId + "/GB/EVO/UID4/CONTRACT-UID4",
+		legacyOrgId + "/BE/TWK/UID5/CONTRACT-UID5",
+	}
+	require.Equal(t, seeded, tokens())
+
+	// up: the tokens are untouched and a UID can be used by another org or party
+	migrateTo(t, migrationConnString, versionAfter)
+	assert.Equal(t, newConstraints, uniqueConstraints())
+	assert.Equal(t, newIndexes, lookupIndexes())
+	assert.Equal(t, seeded, tokens())
+
+	require.NoError(t, insertToken(otherOrgId, "GB", "TWK", "UID1"), "another org")
+	require.NoError(t, insertToken(legacyOrgId, "GB", "EVO", "UID1"), "another party")
+	require.NoError(t, insertToken(legacyOrgId, "BE", "TWK", "UID1"), "another country")
+	require.Error(t, insertToken(legacyOrgId, "GB", "TWK", "UID1"), "the same org, country code, party id and UID")
+	withDuplicates := []string{
+		legacyOrgId + "/BE/TWK/UID1/CONTRACT-UID1",
+		legacyOrgId + "/GB/EVO/UID1/CONTRACT-UID1",
+		legacyOrgId + "/GB/TWK/UID1/CONTRACT-UID1",
+		otherOrgId + "/GB/TWK/UID1/CONTRACT-UID1",
+	}
+	withDuplicates = append(withDuplicates, seeded[1:]...)
+	require.Equal(t, withDuplicates, tokens())
+
+	// down while a UID is stored more than once fails and changes nothing
+	m, err := migrate.New("file://./migrations", migrationConnString)
+	require.NoError(t, err)
+	err = m.Migrate(versionBefore)
+	require.Error(t, err, "UID1 is stored four times")
+	assert.Equal(t, newConstraints, uniqueConstraints())
+	assert.Equal(t, newIndexes, lookupIndexes())
+	assert.Equal(t, withDuplicates, tokens())
+
+	// once the duplicates are removed by hand (and the failed migration is cleared),
+	// down restores the old constraint and keeps the other tokens
+	_, err = pool.Exec(ctx, `DELETE FROM tokens WHERE uid = 'UID1' AND NOT (org_id = $1 AND country_code = 'GB' AND party_id = 'TWK')`, legacyOrgId)
+	require.NoError(t, err)
+	require.NoError(t, m.Force(versionAfter))
+	sourceErr, dbErr := m.Close()
+	require.NoError(t, sourceErr)
+	require.NoError(t, dbErr)
+
+	migrateTo(t, migrationConnString, versionBefore)
+	assert.Equal(t, oldConstraints, uniqueConstraints())
+	assert.Empty(t, lookupIndexes())
+	assert.Equal(t, seeded, tokens())
+
+	// up again with the tokens in the table
+	migrateUp(t, migrationConnString)
+	assert.Equal(t, newConstraints, uniqueConstraints())
+	assert.Equal(t, newIndexes, lookupIndexes())
+	assert.Equal(t, seeded, tokens())
+}

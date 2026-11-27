@@ -33,6 +33,7 @@ import (
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"k8s.io/utils/clock"
 	clockTest "k8s.io/utils/clock/testing"
 )
@@ -317,6 +318,7 @@ func TestListTokens(t *testing.T) {
 	tokens := make([]*store.Token, 20)
 	for i := 0; i < 20; i++ {
 		tokens[i] = &store.Token{
+			OrgId:       store.LegacyOrgId,
 			CountryCode: "GB",
 			PartyId:     "TWK",
 			Type:        "RFID",
@@ -505,7 +507,7 @@ func setupServer(t *testing.T) (*httptest.Server, *chi.Mux, store.Engine, clock.
 	now := time.Now().UTC()
 	c := clockTest.NewFakePassiveClock(now)
 	engine := inmemory.NewStore(c)
-	ocpiApi := ocpi.NewOCPI(engine, nil, "GB", "TWK")
+	ocpiApi := ocpi.NewOCPI(engine, nil, "GB", "TWK", testOrgId)
 
 	srv, err := api.NewServer(engine, c, ocpiApi, testOrgId)
 	require.NoError(t, err)
@@ -1141,6 +1143,7 @@ func TestTransactionsReturnOcpp16Transaction(t *testing.T) {
 	ctx := context.Background()
 
 	require.NoError(t, engine.SetToken(ctx, &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -1154,6 +1157,7 @@ func TestTransactionsReturnOcpp16Transaction(t *testing.T) {
 	startHandler := ocpp16.StartTransactionHandler{
 		Clock:            c,
 		TokenStore:       engine,
+		OrgResolver:      &tenancy.Resolver{Stations: engine},
 		TransactionStore: engine,
 		ReservationStore: engine,
 	}
@@ -1223,6 +1227,7 @@ func TestTransactionsReturnOcpp16Transaction(t *testing.T) {
 	stopHandler := ocpp16.StopTransactionHandler{
 		Clock:            c,
 		TokenStore:       engine,
+		OrgResolver:      &tenancy.Resolver{Stations: engine},
 		TransactionStore: engine,
 	}
 	reason := types.StopTransactionJsonReasonEVDisconnected
@@ -1505,7 +1510,7 @@ func TestListReservationsRendersEveryReservationStatus(t *testing.T) {
 		})
 	}
 
-	srv, err := api.NewServer(engine, c, ocpi.NewOCPI(engine, nil, "GB", "TWK"), testOrgId)
+	srv, err := api.NewServer(engine, c, ocpi.NewOCPI(engine, nil, "GB", "TWK", testOrgId), testOrgId)
 	require.NoError(t, err)
 	r := chi.NewRouter()
 	r.Use(api.ValidationMiddleware)
@@ -1625,7 +1630,7 @@ func (s uncategorisedEventStore) ListChargeStationEvents(ctx context.Context, ch
 func TestChargeStationEventsLeaveOutUnknownCategory(t *testing.T) {
 	c := clockTest.NewFakePassiveClock(time.Now().UTC())
 	engine := uncategorisedEventStore{Engine: inmemory.NewStore(c)}
-	srv, err := api.NewServer(engine, c, ocpi.NewOCPI(engine, nil, "GB", "TWK"), testOrgId)
+	srv, err := api.NewServer(engine, c, ocpi.NewOCPI(engine, nil, "GB", "TWK", testOrgId), testOrgId)
 	require.NoError(t, err)
 	r := chi.NewRouter()
 	r.Use(api.ValidationMiddleware)
