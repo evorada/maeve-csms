@@ -86,6 +86,7 @@ func TestWebSocketHandler(t *testing.T) {
 			}),
 		},
 	})
+	require.NoError(t, err)
 	defer func() {
 		err := client.Disconnect(ctx)
 		if err != nil {
