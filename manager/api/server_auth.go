@@ -3,14 +3,20 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/go-chi/render"
+	"github.com/thoughtworks/maeve-csms/manager/entitlements"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"golang.org/x/exp/slog"
 )
+
+// newStationConnectors is how many connectors a charge station counts for when it is
+// registered.
+const newStationConnectors = 1
 
 func (s *Server) RegisterChargeStation(w http.ResponseWriter, r *http.Request, csId string) {
 	req := new(ChargeStationAuth)
@@ -44,6 +50,30 @@ func (s *Server) RegisterChargeStation(w http.ResponseWriter, r *http.Request, c
 		return
 	}
 
+	// A charge station that is new adds to the connectors of its tenant: it is only
+	// registered while a hard limit on them has room for one more (how many connectors
+	// it really has is not known before it reports them). Registering a charge station
+	// again adds nothing and is never refused.
+	existing, err := s.store.LookupChargeStationAuth(r.Context(), csId)
+	if err != nil {
+		slog.Error("looking up a charge station before it is registered", "chargeStationId", csId, "err", err)
+		_ = render.Render(w, r, errInternal)
+		return
+	}
+	if existing == nil {
+		if err := s.limits.CheckConnectors(r.Context(), orgId, newStationConnectors); err != nil {
+			var exceeded *entitlements.LimitExceededError
+			if errors.As(err, &exceeded) {
+				_ = render.Render(w, r, ErrLimitExceeded(exceeded))
+				return
+			}
+			// nothing is registered when the limit cannot be checked
+			slog.Error("checking the connector limit of a tenant", "chargeStationId", csId, "org", orgId, "err", err)
+			_ = render.Render(w, r, errInternal)
+			return
+		}
+	}
+
 	var securityProfile store.SecurityProfile
 	if req.SecurityProfile != nil {
 		securityProfile = store.SecurityProfile(*req.SecurityProfile)
@@ -60,7 +90,7 @@ func (s *Server) RegisterChargeStation(w http.ResponseWriter, r *http.Request, c
 		securityProfile = cfg.SecurityProfile()
 	}
 
-	err := s.store.SetChargeStationAuth(r.Context(), csId, &store.ChargeStationAuth{
+	err = s.store.SetChargeStationAuth(r.Context(), csId, &store.ChargeStationAuth{
 		SecurityProfile:        securityProfile,
 		Base64SHA256Password:   pwd,
 		InvalidUsernameAllowed: invalidUsernameAllowed,

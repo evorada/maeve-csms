@@ -49,6 +49,18 @@ func ErrForbidden(msg string) render.Renderer {
 	}
 }
 
+// ErrLimitExceeded answers a request to create something that a hard limit of the
+// entitlements of the tenant does not allow. The error starts with
+// entitlement_limit_exceeded and names the limit.
+func ErrLimitExceeded(err error) render.Renderer {
+	return &ErrResponse{
+		Err:            err,
+		HTTPStatusCode: http.StatusForbidden,
+		StatusText:     http.StatusText(http.StatusForbidden),
+		ErrorText:      err.Error(),
+	}
+}
+
 // ErrConflict answers a request that clashes with something that exists.
 func ErrConflict(msg string) render.Renderer {
 	return &ErrResponse{

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/subnova/slog-exporter/slogtrace"
+	"github.com/thoughtworks/maeve-csms/manager/entitlements"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/jobs"
@@ -82,6 +83,9 @@ type Config struct {
 	TenantScoper *tenancy.Scoper
 	// TenantConfig gives the config of a tenant to the code that applies it.
 	TenantConfig *tenancy.ConfigProvider
+	// Entitlements enforces the hard limits of the entitlements of a tenant when
+	// something is created.
+	Entitlements *entitlements.Enforcer
 	// AuthVerifier says who the caller of an API request is.
 	AuthVerifier tenancy.Verifier
 }
@@ -319,6 +323,11 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		Tenants:      c.Storage,
 		Resolver:     c.TenantResolver,
 		DefaultOrgId: c.DefaultOrgId,
+	}
+	c.Entitlements = &entitlements.Enforcer{
+		Tenants: c.Storage,
+		Counter: c.Storage,
+		Mode:    c.Tenancy,
 	}
 
 	c.ContractCertValidationService, err = getContractCertValidator(&cfg.ContractCertValidator, httpClient)

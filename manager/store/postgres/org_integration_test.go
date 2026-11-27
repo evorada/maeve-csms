@@ -37,6 +37,10 @@ func TestStationKeys(t *testing.T) {
 	storetest.TestStationKeys(t, emptyTestStore)
 }
 
+func TestCountConnectorsForOrgs(t *testing.T) {
+	storetest.TestCountConnectorsForOrgs(t, emptyTestStore)
+}
+
 func orgTestToken(uid, orgId string) *store.Token {
 	return &store.Token{
 		CountryCode: "GB",

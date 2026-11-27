@@ -4,6 +4,7 @@ package api
 
 import (
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/thoughtworks/maeve-csms/manager/entitlements"
 	"github.com/thoughtworks/maeve-csms/manager/ocpi"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
@@ -19,6 +20,9 @@ type Server struct {
 	scoper *tenancy.Scoper
 	// tenantConfig gives the config of the tenant that something is created for
 	tenantConfig *tenancy.ConfigProvider
+	// limits refuses what goes beyond a hard limit of the entitlements of a tenant; nil
+	// limits nothing
+	limits *entitlements.Enforcer
 }
 
 // ServerOption changes how NewServer sets up the API server.
@@ -31,6 +35,14 @@ func WithScoper(scoper *tenancy.Scoper) ServerOption {
 		if scoper != nil {
 			s.scoper = scoper
 		}
+	}
+}
+
+// WithEntitlements sets what enforces the hard limits of the entitlements of a tenant
+// when something is created through the API. Without it nothing is limited.
+func WithEntitlements(enforcer *entitlements.Enforcer) ServerOption {
+	return func(s *Server) {
+		s.limits = enforcer
 	}
 }
 

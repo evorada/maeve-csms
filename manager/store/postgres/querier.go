@@ -15,6 +15,7 @@ type Querier interface {
 	AddMeterValues(ctx context.Context, arg AddMeterValuesParams) error
 	CancelReservation(ctx context.Context, reservationID int32) error
 	CountChargeStationEvents(ctx context.Context, chargeStationID string) (int64, error)
+	CountConnectorsForOrgs(ctx context.Context, orgIds []pgtype.UUID) (int64, error)
 	CountDeviceReports(ctx context.Context, chargeStationID string) (int64, error)
 	CountMeterValues(ctx context.Context, arg CountMeterValuesParams) (int64, error)
 	CountTransactionsFiltered(ctx context.Context, arg CountTransactionsFilteredParams) (int64, error)

@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/api"
+	"github.com/thoughtworks/maeve-csms/manager/entitlements"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/ocpi"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
@@ -550,13 +551,15 @@ func newSingleTenantRouter(t *testing.T, engine store.Engine, c clock.PassiveClo
 }
 
 // newRouter creates the router of an API server as the manager mounts it: behind the
-// authorisation of every operation. callerOf gives the caller of a request, in place
-// of the token verification of the manager; nil is a request without a caller. The
-// middlewares run after the caller is known and before the operation is.
+// authorisation of every operation, and with the limits of the entitlements of the
+// tenants in the store. callerOf gives the caller of a request, in place of the token
+// verification of the manager; nil is a request without a caller. The middlewares run
+// after the caller is known and before the operation is.
 func newRouter(t *testing.T, engine store.Engine, c clock.PassiveClock, ocpiApi ocpi.Api, scoper *tenancy.Scoper, callerOf func(*http.Request) *tenancy.Principal, middlewares ...func(http.Handler) http.Handler) *chi.Mux {
 	t.Helper()
 
-	srv, err := api.NewServer(engine, c, ocpiApi, api.WithScoper(scoper))
+	enforcer := &entitlements.Enforcer{Tenants: engine, Counter: engine, Mode: scoper.Mode}
+	srv, err := api.NewServer(engine, c, ocpiApi, api.WithScoper(scoper), api.WithEntitlements(enforcer))
 	require.NoError(t, err)
 	swagger, err := api.GetSwagger()
 	require.NoError(t, err)

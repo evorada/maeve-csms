@@ -81,6 +81,15 @@ charge stations (`cpms.connector.command`) stay possible, and the charge station
 authorize and charge as before. The instance of the manager that the console called applies a suspension or a
 resumption at once, any other instance within `[tenancy] cache_ttl`.
 
+The entitlements that the console sends with a tenant (`mode = "multi"`) can limit its connectors with
+`cpms.connectors.max`. While the `enforcement` of that limit is `hard`, a new charge station is not registered
+(`POST /api/v0/cs/{csId}` is answered with `403` and an error that starts with `entitlement_limit_exceeded`)
+once the connectors that the charge stations of the tenant have reported use up the limit. A limit with the
+`scope` `subtree` is shared by the org in its `pool_org_id` and the tenants below that org. A `soft` limit
+refuses nothing, and a changed limit applies to the next request on every instance of the manager. Only
+registering a new charge station is limited: the charge stations that are registered connect, report
+connectors and charge as before, and registering one of them again is always possible.
+
 #### Tenant config
 
 With `mode = "multi"` the console sends a config document with each tenant. Its JSON Schema is

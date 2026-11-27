@@ -232,3 +232,26 @@ func (s *Store) ListConnectorStatuses(ctx context.Context, chargeStationId strin
 
 	return statuses, nil
 }
+
+// CountConnectorsForOrgs counts the connectors (connector id above 0) that the
+// registered charge stations of the given orgs have reported a status for.
+func (s *Store) CountConnectorsForOrgs(ctx context.Context, orgIds []string) (int, error) {
+	if len(orgIds) == 0 {
+		return 0, nil
+	}
+
+	ids := make([]pgtype.UUID, len(orgIds))
+	for i, orgId := range orgIds {
+		id, err := pgUUID(orgId)
+		if err != nil {
+			return 0, fmt.Errorf("invalid org id %q: %w", orgId, err)
+		}
+		ids[i] = id
+	}
+
+	count, err := s.readQueries().CountConnectorsForOrgs(ctx, ids)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count connectors: %w", err)
+	}
+	return int(count), nil
+}

@@ -79,4 +79,10 @@ type StatusStore interface {
 	SetChargeStationStatus(ctx context.Context, chargeStationId string, status *ChargeStationStatus) error
 	GetChargeStationStatus(ctx context.Context, chargeStationId string) (*ChargeStationStatus, error)
 	UpdateHeartbeat(ctx context.Context, chargeStationId string, timestamp time.Time) error
+	// CountConnectorsForOrgs counts the connectors that the charge stations of the given
+	// orgs have reported a status for: the distinct (charge station, connector) pairs
+	// with a connector id above 0 (connector 0 is the charge station as a whole). Only
+	// registered charge stations count. Firestore stores no org: it returns
+	// ErrNotImplemented.
+	CountConnectorsForOrgs(ctx context.Context, orgIds []string) (int, error)
 }

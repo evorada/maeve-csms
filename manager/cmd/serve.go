@@ -51,10 +51,11 @@ the gateway and send appropriate responses.`,
 
 		apiServer := server.New("api", cfg.Api.Addr, nil,
 			server.NewApiHandler(server.ApiDeps{
-				Engine:   settings.Storage,
-				Ocpi:     settings.OcpiApi,
-				Verifier: settings.AuthVerifier,
-				Scoper:   settings.TenantScoper,
+				Engine:       settings.Storage,
+				Ocpi:         settings.OcpiApi,
+				Verifier:     settings.AuthVerifier,
+				Scoper:       settings.TenantScoper,
+				Entitlements: settings.Entitlements,
 			}))
 		internalServer := server.New("internal", cfg.Api.InternalAddr, nil,
 			server.NewInternalHandler(server.InternalDeps{

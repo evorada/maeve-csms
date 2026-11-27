@@ -94,3 +94,10 @@ SELECT
 FROM connector_status
 WHERE charge_station_id = $1
 ORDER BY connector_id;
+
+-- name: CountConnectorsForOrgs :one
+SELECT COUNT(*)
+FROM connector_status c
+JOIN charge_stations s ON s.charge_station_id = c.charge_station_id
+WHERE c.connector_id > 0
+  AND s.org_id = ANY(sqlc.arg(org_ids)::uuid[]);

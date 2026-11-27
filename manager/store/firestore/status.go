@@ -207,3 +207,8 @@ func (s *Store) UpdateHeartbeat(ctx context.Context, chargeStationId string, tim
 	}
 	return nil
 }
+
+// CountConnectorsForOrgs is not implemented by the Firestore backend, which stores no org.
+func (s *Store) CountConnectorsForOrgs(_ context.Context, _ []string) (int, error) {
+	return 0, fmt.Errorf("CountConnectorsForOrgs: %w", store.ErrNotImplemented)
+}

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -1645,6 +1646,32 @@ func (s *Store) ListConnectorStatuses(_ context.Context, chargeStationId string)
 	})
 
 	return statuses, nil
+}
+
+// CountConnectorsForOrgs counts the connectors (connector id above 0) that the
+// registered charge stations of the given orgs have reported a status for.
+func (s *Store) CountConnectorsForOrgs(_ context.Context, orgIds []string) (int, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	wanted := make(map[string]bool, len(orgIds))
+	for _, orgId := range orgIds {
+		wanted[strings.ToLower(orgId)] = true
+	}
+
+	count := 0
+	for chargeStationId, connectors := range s.connectorStatuses {
+		// a status of a charge station that is not registered belongs to no org
+		if s.chargeStationAuth[chargeStationId] == nil || !wanted[strings.ToLower(s.orgIdForStation(chargeStationId))] {
+			continue
+		}
+		for connectorId := range connectors {
+			if connectorId > 0 {
+				count++
+			}
+		}
+	}
+	return count, nil
 }
 
 func (s *Store) SetChargeStationStatus(_ context.Context, chargeStationId string, status *store.ChargeStationStatus) error {

@@ -46,7 +46,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Status'
         '403':
-          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          description: The caller does not have the permission of the operation, the tenant is suspended (error `tenant_suspended`), or the charge station is new and a hard limit on the connectors of the tenant is used up (the error starts with `entitlement_limit_exceeded`)
           content:
             application/json:
               schema:

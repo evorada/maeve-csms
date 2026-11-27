@@ -43,6 +43,11 @@ The API is described by an OpenAPI spec that is split over several files:
    writes to. `refusedForSuspendedTenant` in `authz_test.go` lists these operations, so add the new one there
    and name `tenant_suspended` in the description of its `403`. Reading and commands to a charge station
    (`cpms.connector.command`) never depend on the status of a tenant.
+
+   An operation that creates connectors for a tenant (today: registering a charge station that is new) calls
+   `entitlements.Enforcer.CheckConnectors` before it writes and answers a `*entitlements.LimitExceededError`
+   with `ErrLimitExceeded` (`403`, the error starts with `entitlement_limit_exceeded`), which the description
+   of its `403` names. Changing what exists is never limited.
 4. Run `make api-generate` in `manager/` and commit the changed source files together with
    `api-spec.bundled.yaml` and `api.gen.go`. Never edit those two files by hand.
 

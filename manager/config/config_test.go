@@ -4,6 +4,7 @@ package config_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/config"
+	"github.com/thoughtworks/maeve-csms/manager/entitlements"
 	"github.com/thoughtworks/maeve-csms/manager/jobs"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
@@ -432,6 +434,10 @@ func TestConfigureTenancyMode(t *testing.T) {
 		tenants, err := settings.Storage.ListTenants(context.TODO(), "", 10)
 		require.NoError(t, err)
 		assert.Empty(t, tenants)
+
+		// nothing is limited in single mode
+		require.NotNil(t, settings.Entitlements)
+		assert.Equal(t, tenancy.ModeSingle, settings.Entitlements.Mode)
 	})
 
 	t.Run("multi: the bootstrap tenants are parsed and stored, and their hosts resolve", func(t *testing.T) {
@@ -483,6 +489,23 @@ func TestConfigureTenancyMode(t *testing.T) {
 		orgId, err := settings.TenantResolver.OrgIdForStation(context.TODO(), "dev2.CP001")
 		require.NoError(t, err)
 		assert.Equal(t, "0193b2c4-0000-7000-8000-0000000000b2", orgId)
+
+		// the limits are the ones of the tenants of the storage, counted in the storage
+		require.NotNil(t, settings.Entitlements)
+		assert.Equal(t, tenancy.ModeMulti, settings.Entitlements.Mode)
+		require.NoError(t, settings.Entitlements.CheckConnectors(context.TODO(), tenants[0].OrgId, 1))
+		limited := *tenants[0]
+		limited.EntitlementsVersion = 1
+		limited.Entitlements = json.RawMessage(`{"version":1,"limits":{"cpms.connectors.max":{"value":1,"enforcement":"hard","scope":"org"}}}`)
+		require.NoError(t, settings.Storage.PutTenant(context.TODO(), &limited))
+		require.NoError(t, settings.Entitlements.CheckConnectors(context.TODO(), tenants[0].OrgId, 1))
+		require.NoError(t, settings.Storage.SetChargeStationAuth(context.TODO(), "dev1.CP001", &store.ChargeStationAuth{OrgId: tenants[0].OrgId}))
+		require.NoError(t, settings.Storage.SetConnectorStatus(context.TODO(), "dev1.CP001", 1, &store.ConnectorStatus{
+			ChargeStationId: "dev1.CP001", ConnectorId: 1, Status: store.ConnectorStatusAvailable,
+		}))
+		var exceeded *entitlements.LimitExceededError
+		require.ErrorAs(t, settings.Entitlements.CheckConnectors(context.TODO(), tenants[0].OrgId, 1), &exceeded)
+		assert.Equal(t, int64(1), exceeded.Current)
 	})
 
 	t.Run("multi without bootstrap tenants starts with no tenant", func(t *testing.T) {

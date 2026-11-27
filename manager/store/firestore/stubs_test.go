@@ -99,6 +99,10 @@ func TestStubsReturnErrNotImplemented(t *testing.T) {
 			_, err := s.SetTenantStatus(ctx, store.LegacyOrgId, store.TenantStatusSuspended)
 			return err
 		},
+		"CountConnectorsForOrgs": func() error {
+			_, err := s.CountConnectorsForOrgs(ctx, []string{store.LegacyOrgId})
+			return err
+		},
 	}
 
 	for name, stub := range stubs {

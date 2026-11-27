@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/controlplane"
+	"github.com/thoughtworks/maeve-csms/manager/entitlements"
 	"github.com/thoughtworks/maeve-csms/manager/internalapi"
 	"github.com/thoughtworks/maeve-csms/manager/server"
 	"github.com/thoughtworks/maeve-csms/manager/store"
@@ -492,4 +493,80 @@ func TestSuspendingATenantStopsItsWritesThroughTheApiAtOnce(t *testing.T) {
 
 	require.Equal(t, http.StatusCreated, setToken("AFTER").Code)
 	require.Equal(t, http.StatusCreated, register().Code)
+}
+
+// A hard limit on the connectors that the console sends with the entitlements of a
+// tenant stops new charge stations of that tenant from the next request on, and a
+// higher limit lets them in again: the API reads the entitlements that are stored, not
+// what the resolver keeps of the tenant.
+func TestAConnectorLimitFromTheConsoleAppliesToTheApiAtOnce(t *testing.T) {
+	ctx := context.Background()
+	engine := inmemory.NewStore(clock.RealClock{})
+	// one resolver behind both listeners, as in the manager. It keeps a tenant for an
+	// hour.
+	resolver := &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine, DefaultOrgId: store.LegacyOrgId, CacheTTL: time.Hour}
+	console, verifier := newConsoleVerifier(t)
+	internal := server.NewInternalHandler(server.InternalDeps{Resolver: resolver, Engine: engine, Verifier: verifier})
+	apiHandler := server.NewApiHandler(server.ApiDeps{
+		Engine:       engine,
+		Verifier:     verifier,
+		Scoper:       &tenancy.Scoper{Mode: tenancy.ModeMulti, Tenants: engine, Resolver: resolver, DefaultOrgId: store.LegacyOrgId},
+		Entitlements: &entitlements.Enforcer{Tenants: engine, Counter: engine, Mode: tenancy.ModeMulti},
+	})
+
+	provisioner := serviceToken(console, "svc:provisioner", tenancy.PermTenantManage)
+	claims := console.Claims(time.Now())
+	claims["org"] = orgA
+	claims["org_scope"] = "self"
+	claims["perms"] = tenancy.ManifestPermissions
+	operator := console.Sign(claims)
+
+	putEntitlements := func(document string) {
+		t.Helper()
+		body := `{"path":"` + store.OrgPathLabel(orgA) + `","slug":"tenant-aaaa","org_key":"aaaa","hostnames":["a.example.com"],"entitlements":` + document + `}`
+		req := httptest.NewRequest(http.MethodPut, controlplane.BasePath+"/tenants/"+orgA, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+provisioner)
+		rr := httptest.NewRecorder()
+		internal.ServeHTTP(rr, req)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+	}
+	register := func(csId string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/v0/cs/"+csId, strings.NewReader(`{"securityProfile":2}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+operator)
+		rr := httptest.NewRecorder()
+		apiHandler.ServeHTTP(rr, req)
+		return rr
+	}
+
+	putEntitlements(`{"version":1,"status":"active","features":{"cpms":true},"limits":{"cpms.connectors.max":{"value":2,"enforcement":"hard","scope":"org"}}}`)
+	require.Equal(t, http.StatusCreated, register(stationOfA).Code)
+	// the charge station reports its two connectors
+	for connectorId := 0; connectorId <= 2; connectorId++ {
+		require.NoError(t, engine.SetConnectorStatus(ctx, stationOfA, connectorId, &store.ConnectorStatus{
+			ChargeStationId: stationOfA, ConnectorId: connectorId, Status: store.ConnectorStatusAvailable,
+		}))
+	}
+
+	rr := register("aaaa.CP002")
+	require.Equal(t, http.StatusForbidden, rr.Code, rr.Body.String())
+	assert.JSONEq(t, `{"status":"Forbidden","error":"entitlement_limit_exceeded: cpms.connectors.max (limit 2, current 2, requested 1)"}`, rr.Body.String())
+	auth, err := engine.LookupChargeStationAuth(ctx, "aaaa.CP002")
+	require.NoError(t, err)
+	assert.Nil(t, auth)
+	// the charge station that is registered can be registered again, and the gateway
+	// still lets it in
+	assert.Equal(t, http.StatusCreated, register(stationOfA).Code)
+	assert.Equal(t, http.StatusOK, get(internal, "/_internal/v1/station-auth?host=a.example.com&stationId=CP001", "").Code)
+
+	// the same limit, only billed
+	putEntitlements(`{"version":2,"limits":{"cpms.connectors.max":{"value":2,"enforcement":"soft","scope":"org"}}}`)
+	require.Equal(t, http.StatusCreated, register("aaaa.CP002").Code)
+
+	putEntitlements(`{"version":3,"limits":{"cpms.connectors.max":{"value":2,"enforcement":"hard","scope":"org"}}}`)
+	require.Equal(t, http.StatusForbidden, register("aaaa.CP003").Code)
+
+	putEntitlements(`{"version":4,"limits":{"cpms.connectors.max":{"value":3,"enforcement":"hard","scope":"org"}}}`)
+	require.Equal(t, http.StatusCreated, register("aaaa.CP003").Code)
 }

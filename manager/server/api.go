@@ -8,6 +8,7 @@ import (
 
 	"github.com/rs/cors"
 	"github.com/thoughtworks/maeve-csms/manager/api"
+	"github.com/thoughtworks/maeve-csms/manager/entitlements"
 	"github.com/thoughtworks/maeve-csms/manager/ocpi"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
@@ -26,6 +27,9 @@ type ApiDeps struct {
 	Verifier tenancy.Verifier
 	// Scoper says which orgs a caller of /api/v0 may reach. It is required.
 	Scoper *tenancy.Scoper
+	// Entitlements enforces the hard limits of the entitlements of a tenant on what is
+	// created through /api/v0. Nothing is limited without it.
+	Entitlements *entitlements.Enforcer
 }
 
 // apiBasePath is where the API is mounted.
@@ -44,7 +48,7 @@ func NewApiHandler(d ApiDeps) http.Handler {
 		panic("server: the api handler needs a scoper")
 	}
 
-	apiServer, err := api.NewServer(d.Engine, clock.RealClock{}, d.Ocpi, api.WithScoper(d.Scoper))
+	apiServer, err := api.NewServer(d.Engine, clock.RealClock{}, d.Ocpi, api.WithScoper(d.Scoper), api.WithEntitlements(d.Entitlements))
 	if err != nil {
 		panic(err)
 	}
