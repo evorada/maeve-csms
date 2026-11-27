@@ -4,6 +4,7 @@ package cmd
 
 import (
 	"context"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/thoughtworks/maeve-csms/manager/config"
@@ -11,6 +12,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/server"
 	"github.com/thoughtworks/maeve-csms/manager/sync"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
+	natstransport "github.com/thoughtworks/maeve-csms/manager/transport/nats"
 	"golang.org/x/exp/slog"
 	"k8s.io/utils/clock"
 )
@@ -18,6 +20,10 @@ import (
 var (
 	configFile string
 )
+
+// natsDrainTimeout bounds the wait for the NATS connection to send what is pending
+// when the manager stops.
+const natsDrainTimeout = 10 * time.Second
 
 // serveCmd represents the serve command
 var serveCmd = &cobra.Command{
@@ -115,6 +121,14 @@ the gateway and send appropriate responses.`,
 			err := ocpp201Connection.Disconnect(context.Background())
 			if err != nil {
 				slog.Warn("disconnecting from broker", "err", err)
+			}
+		}
+
+		// after the listeners: what their handlers published is still sent
+		if settings.NatsConn != nil {
+			err := natstransport.Drain(settings.NatsConn, natsDrainTimeout)
+			if err != nil {
+				slog.Warn("closing the NATS connection", "err", err)
 			}
 		}
 

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	clone "github.com/huandu/go-clone/generic"
+	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/config"
@@ -20,6 +21,10 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/testutil"
+	"github.com/thoughtworks/maeve-csms/manager/transport"
+	"github.com/thoughtworks/maeve-csms/manager/transport/mqtt"
+	natstransport "github.com/thoughtworks/maeve-csms/manager/transport/nats"
+	"github.com/thoughtworks/maeve-csms/manager/transport/nats/natstest"
 )
 
 // newTestConfig returns the default configuration with API authentication in dev mode,
@@ -843,4 +848,135 @@ func TestConfigureEvents(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, events.NopEmitter{}, settings.Events)
 	})
+}
+
+func TestConfigureNatsTransport(t *testing.T) {
+	newConfig := func(t *testing.T, toml string) *config.BaseConfig {
+		cfg := newTestConfig(t)
+		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
+		require.NoError(t, cfg.Load(strings.NewReader(toml)))
+		return cfg
+	}
+	configure := func(t *testing.T, cfg *config.BaseConfig) *config.Config {
+		settings, err := config.Configure(context.TODO(), cfg)
+		require.NoError(t, err)
+		if settings.NatsConn != nil {
+			t.Cleanup(settings.NatsConn.Close)
+		}
+		return settings
+	}
+
+	t.Run("mqtt stays the default and needs no nats", func(t *testing.T) {
+		cfg := newConfig(t, "")
+		assert.Equal(t, "mqtt", cfg.Transport.Type)
+		assert.Nil(t, cfg.Nats)
+
+		settings := configure(t, cfg)
+		assert.Nil(t, settings.NatsConn)
+		assert.IsType(t, &mqtt.Emitter{}, settings.MsgEmitter)
+		assert.IsType(t, &mqtt.Listener{}, settings.MsgListener)
+	})
+
+	t.Run("the nats section is not read with mqtt", func(t *testing.T) {
+		cfg := newConfig(t, "[nats]\nurls = []\nconnect_timeout = \"not a duration\"\n")
+		require.NoError(t, cfg.Validate())
+
+		settings := configure(t, cfg)
+		assert.Nil(t, settings.NatsConn)
+	})
+
+	t.Run("nats works end to end with the defaults", func(t *testing.T) {
+		_, url := natstest.RunServer(t, false)
+		cfg := newConfig(t, "[transport]\ntype = \"nats\"\n[nats]\nurls = [\""+url+"\"]\n")
+
+		settings := configure(t, cfg)
+		require.NotNil(t, settings.NatsConn)
+		assert.True(t, settings.NatsConn.IsConnected())
+		assert.Equal(t, "maeve-manager", settings.NatsConn.Opts.Name)
+		assert.Equal(t, 5*time.Second, settings.NatsConn.Opts.Timeout)
+		assert.Equal(t, 2*time.Second, settings.NatsConn.Opts.ReconnectWait)
+		assert.Equal(t, -1, settings.NatsConn.Opts.MaxReconnect)
+		assert.IsType(t, &natstransport.Emitter{}, settings.MsgEmitter)
+		assert.IsType(t, &natstransport.Listener{}, settings.MsgListener)
+
+		assertHeartbeatRoundTrip(t, settings, url, "ocpp")
+	})
+
+	t.Run("nats with all settings", func(t *testing.T) {
+		_, url := natstest.RunServer(t, false)
+		cfg := newConfig(t, `
+[transport]
+type = "nats"
+nats.subject_prefix = "csms"
+nats.queue_group = "replicas"
+nats.workers = 4
+
+[nats]
+urls = ["`+url+`"]
+name = "manager-1"
+connect_timeout = "3s"
+reconnect_wait = "250ms"
+max_reconnects = 7
+`)
+		assert.Equal(t, &config.NatsTransportConfig{SubjectPrefix: "csms", QueueGroup: "replicas", Workers: 4}, cfg.Transport.Nats)
+
+		settings := configure(t, cfg)
+		assert.Equal(t, "manager-1", settings.NatsConn.Opts.Name)
+		assert.Equal(t, 3*time.Second, settings.NatsConn.Opts.Timeout)
+		assert.Equal(t, 250*time.Millisecond, settings.NatsConn.Opts.ReconnectWait)
+		assert.Equal(t, 7, settings.NatsConn.Opts.MaxReconnect)
+
+		assertHeartbeatRoundTrip(t, settings, url, "csms")
+	})
+
+	t.Run("invalid nats settings", func(t *testing.T) {
+		for name, tc := range map[string]struct {
+			toml    string
+			wantErr string
+		}{
+			"no nats section":          {toml: "", wantErr: "[nats] section is required"},
+			"no urls":                  {toml: "[nats]\nurls = []\n", wantErr: "Urls"},
+			"empty url":                {toml: "[nats]\nurls = [\"\"]\n", wantErr: "Urls"},
+			"bad connect timeout":      {toml: "[nats]\nurls = [\"nats://127.0.0.1:4222\"]\nconnect_timeout = \"soon\"\n", wantErr: "connect timeout"},
+			"negative connect timeout": {toml: "[nats]\nurls = [\"nats://127.0.0.1:4222\"]\nconnect_timeout = \"-1s\"\n", wantErr: "connect timeout must be positive"},
+			"zero reconnect wait":      {toml: "[nats]\nurls = [\"nats://127.0.0.1:4222\"]\nreconnect_wait = \"0s\"\n", wantErr: "reconnect wait must be positive"},
+			"cert without key":         {toml: "[nats]\nurls = [\"nats://127.0.0.1:4222\"]\ntls_cert_file = \"cert.pem\"\n", wantErr: "TlsKeyFile"},
+			"missing creds file":       {toml: "[nats]\nurls = [\"nats://127.0.0.1:4222\"]\ncreds_file = \"testdata/missing.creds\"\n", wantErr: "creds file"},
+			"too many workers":         {toml: "[transport.nats]\nworkers = 2000\n[nats]\nurls = [\"nats://127.0.0.1:4222\"]\n", wantErr: "Workers"},
+			"prefix with a dot":        {toml: "[transport.nats]\nsubject_prefix = \"a.b\"\n[nats]\nurls = [\"nats://127.0.0.1:4222\"]\n", wantErr: "subject prefix"},
+		} {
+			t.Run(name, func(t *testing.T) {
+				cfg := newConfig(t, "[transport]\ntype = \"nats\"\n"+tc.toml)
+				settings, err := config.Configure(context.TODO(), cfg)
+				require.Error(t, err)
+				assert.Nil(t, settings)
+				assert.ErrorContains(t, err, tc.wantErr)
+			})
+		}
+	})
+}
+
+// assertHeartbeatRoundTrip sends a heartbeat to the configured manager as the gateway
+// would and waits for the answer.
+func assertHeartbeatRoundTrip(t *testing.T, settings *config.Config, url, prefix string) {
+	t.Helper()
+	conn, err := settings.MsgListener.Connect(context.TODO(), transport.OcppVersion16, nil, settings.Ocpp16Handler)
+	require.NoError(t, err)
+	defer func() { assert.NoError(t, conn.Disconnect(context.TODO())) }()
+
+	gateway, err := nats.Connect(url)
+	require.NoError(t, err)
+	defer gateway.Close()
+	responses, err := gateway.SubscribeSync(prefix + ".out.ocpp16._.CP001")
+	require.NoError(t, err)
+	require.NoError(t, gateway.Flush())
+
+	require.NoError(t, gateway.Publish(prefix+".in.ocpp16._.CP001",
+		[]byte(`{"type":2,"action":"Heartbeat","id":"hb-1","request":{}}`)))
+	got, err := responses.NextMsg(5 * time.Second)
+	require.NoError(t, err)
+	var resp transport.Message
+	require.NoError(t, json.Unmarshal(got.Data, &resp))
+	assert.Equal(t, transport.MessageTypeCallResult, resp.MessageType)
+	assert.Equal(t, "hb-1", resp.MessageId)
 }

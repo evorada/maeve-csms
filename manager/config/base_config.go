@@ -4,6 +4,7 @@ package config
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 
@@ -28,6 +29,8 @@ type BaseConfig struct {
 	Tenancy                   TenancyConfig                   `mapstructure:"tenancy" toml:"tenancy"`
 	Events                    EventsConfig                    `mapstructure:"events" toml:"events"`
 	Ocpi                      *OcpiConfig                     `mapstructure:"ocpi,omitempty" toml:"ocpi,omitempty"`
+	// Nats is validated by Validate only when NATS is used.
+	Nats *NatsConfig `mapstructure:"nats,omitempty" toml:"nats,omitempty" validate:"-"`
 }
 
 // DefaultConfig provides the default configuration. The configuration
@@ -149,5 +152,24 @@ func (c *BaseConfig) replaceDefaults() {
 func (c *BaseConfig) Validate() error {
 	validate := validator.New()
 
-	return validate.Struct(c)
+	err := validate.Struct(c)
+	if err != nil {
+		return err
+	}
+
+	if c.usesNats() {
+		if c.Nats == nil {
+			return fmt.Errorf("the [nats] section is required with transport type %q", c.Transport.Type)
+		}
+		err = validate.Struct(c.Nats)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// usesNats reports whether something needs the connection to NATS.
+func (c *BaseConfig) usesNats() bool {
+	return c.Transport.Type == "nats"
 }

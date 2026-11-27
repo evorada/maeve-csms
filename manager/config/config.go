@@ -13,6 +13,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/nats-io/nats.go"
 	"github.com/subnova/slog-exporter/slogtrace"
 	"github.com/thoughtworks/maeve-csms/manager/entitlements"
 	"github.com/thoughtworks/maeve-csms/manager/events"
@@ -29,6 +30,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	mqtt2 "github.com/thoughtworks/maeve-csms/manager/transport/mqtt"
+	natstransport "github.com/thoughtworks/maeve-csms/manager/transport/nats"
 	"go.opentelemetry.io/contrib/detectors/gcp"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
@@ -92,6 +94,9 @@ type Config struct {
 	// Events stores the domain events in the outbox of the storage, in the transaction of
 	// the change they describe.
 	Events events.Emitter
+	// NatsConn is the one connection to NATS, nil when nothing uses NATS. Whoever stops
+	// the manager drains it after the listeners have disconnected.
+	NatsConn *nats.Conn
 }
 
 // devSubject is the caller of every API request in dev mode.
@@ -233,6 +238,14 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		return nil, err
 	}
 
+	// the NATS connection of a configuration that fails is closed again
+	var natsConn *nats.Conn
+	defer func() {
+		if err != nil && natsConn != nil {
+			natsConn.Close()
+		}
+	}()
+
 	heartbeatInterval, err := time.ParseDuration(cfg.Ocpp.HeartbeatInterval)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse heartbeat interval: %s", err)
@@ -355,12 +368,20 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		return nil, err
 	}
 
-	c.MsgEmitter, err = getMsgEmitter(&cfg.Transport, c.Tracer)
+	if cfg.usesNats() {
+		natsConn, err = getNatsConn(cfg.Nats)
+		if err != nil {
+			return nil, err
+		}
+		c.NatsConn = natsConn
+	}
+
+	c.MsgEmitter, err = getMsgEmitter(&cfg.Transport, c.Tracer, c.NatsConn)
 	if err != nil {
 		return nil, err
 	}
 
-	c.MsgListener, err = getMsgListener(&cfg.Transport, c.Tracer)
+	c.MsgListener, err = getMsgListener(&cfg.Transport, c.Tracer, c.NatsConn)
 	if err != nil {
 		return nil, err
 	}
@@ -736,8 +757,78 @@ func getTariffService(cfg *TariffServiceConfig) (tariffService services.TariffSe
 	return
 }
 
-func getMsgEmitter(cfg *TransportConfig, tracer oteltrace.Tracer) (transport.Emitter, error) {
+// getNatsConn opens the connection to NATS that [nats] describes.
+func getNatsConn(cfg *NatsConfig) (*nats.Conn, error) {
+	connCfg := natstransport.ConnConfig{
+		Urls:           cfg.Urls,
+		Name:           cfg.Name,
+		CredsFile:      cfg.CredsFile,
+		NkeySeedFile:   cfg.NkeySeedFile,
+		User:           cfg.User,
+		Password:       cfg.Password,
+		Token:          cfg.Token,
+		TlsCaFile:      cfg.TlsCaFile,
+		TlsCertFile:    cfg.TlsCertFile,
+		TlsKeyFile:     cfg.TlsKeyFile,
+		ConnectTimeout: natstransport.DefaultConnectTimeout,
+		ReconnectWait:  natstransport.DefaultReconnectWait,
+		MaxReconnects:  natstransport.DefaultMaxReconnects,
+	}
+	if cfg.ConnectTimeout != "" {
+		connectTimeout, err := time.ParseDuration(cfg.ConnectTimeout)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse nats connect timeout: %w", err)
+		}
+		if connectTimeout <= 0 {
+			return nil, fmt.Errorf("nats connect timeout must be positive: %s", cfg.ConnectTimeout)
+		}
+		connCfg.ConnectTimeout = connectTimeout
+	}
+	if cfg.ReconnectWait != "" {
+		reconnectWait, err := time.ParseDuration(cfg.ReconnectWait)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse nats reconnect wait: %w", err)
+		}
+		if reconnectWait <= 0 {
+			return nil, fmt.Errorf("nats reconnect wait must be positive: %s", cfg.ReconnectWait)
+		}
+		connCfg.ReconnectWait = reconnectWait
+	}
+	if cfg.MaxReconnects != nil {
+		connCfg.MaxReconnects = *cfg.MaxReconnects
+	}
+
+	conn, err := natstransport.Connect(connCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to nats: %w", err)
+	}
+	return conn, nil
+}
+
+// natsTransportSettings returns [transport.nats], which may be left out.
+func natsTransportSettings(cfg *TransportConfig) (*NatsTransportConfig, error) {
+	settings := cfg.Nats
+	if settings == nil {
+		settings = &NatsTransportConfig{}
+	}
+	if settings.SubjectPrefix != "" {
+		if err := natstransport.ValidatePrefix(settings.SubjectPrefix); err != nil {
+			return nil, fmt.Errorf("transport nats subject_prefix: %w", err)
+		}
+	}
+	return settings, nil
+}
+
+func getMsgEmitter(cfg *TransportConfig, tracer oteltrace.Tracer, natsConn *nats.Conn) (transport.Emitter, error) {
 	switch cfg.Type {
+	case "nats":
+		settings, err := natsTransportSettings(cfg)
+		if err != nil {
+			return nil, err
+		}
+		return natstransport.NewEmitter(natsConn,
+			natstransport.WithSubjectPrefix[natstransport.Emitter](settings.SubjectPrefix),
+			natstransport.WithOtelTracer[natstransport.Emitter](tracer)), nil
 	case "mqtt":
 		var mqttUrls []*url.URL
 		for _, urlStr := range cfg.Mqtt.Urls {
@@ -775,8 +866,18 @@ func getMsgEmitter(cfg *TransportConfig, tracer oteltrace.Tracer) (transport.Emi
 	}
 }
 
-func getMsgListener(cfg *TransportConfig, tracer oteltrace.Tracer) (transport.Listener, error) {
+func getMsgListener(cfg *TransportConfig, tracer oteltrace.Tracer, natsConn *nats.Conn) (transport.Listener, error) {
 	switch cfg.Type {
+	case "nats":
+		settings, err := natsTransportSettings(cfg)
+		if err != nil {
+			return nil, err
+		}
+		return natstransport.NewListener(natsConn,
+			natstransport.WithSubjectPrefix[natstransport.Listener](settings.SubjectPrefix),
+			natstransport.WithQueueGroup(settings.QueueGroup),
+			natstransport.WithWorkers(settings.Workers),
+			natstransport.WithOtelTracer[natstransport.Listener](tracer)), nil
 	case "mqtt":
 		var mqttUrls []*url.URL
 		for _, urlStr := range cfg.Mqtt.Urls {

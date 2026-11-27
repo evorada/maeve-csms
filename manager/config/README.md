@@ -6,7 +6,8 @@ Configuration is defined in TOML.
 
 * [General settings](#general-settings)
 * [Service settings](#service-settings)
-* [Transport](#transport)
+* [Transport](#transport-settings)
+  * [NATS connection](#nats-connection)
 * [Storage](#storage)
 * [Contract certificate validator](#contract-certificate-validator)
 * [Contract certificate provider](#contract-certificate-provider)
@@ -180,6 +181,68 @@ Configures the MQTT transport.
 | mqtt    | connect_timeout     | string           | MQTT connection timeout, e.g. "10s"                    |
 | mqtt    | connect_retry_delay | string           | MQTT connection retry delay, e.g. "1s"                 |
 | mqtt    | keep_alive_interval | string           | MQTT keep alive interval, e.g. "10s"                   |
+
+### NATS
+
+Configures the NATS transport (`type = "nats"`). The manager subscribes to
+`<subject_prefix>.in.<ocpp16|ocpp201>.<org_key>.<station>` in a queue group, so that each
+message is handled by one manager replica, and publishes to
+`<subject_prefix>.out.<ocpp16|ocpp201>.<org_key>.<station>`. A station key without an org
+part (single tenancy mode) uses `_` as `<org_key>`; the station id is one subject token in
+which every byte outside `[A-Za-z0-9_~:@=+-]` is written as `%XX`. The connection itself
+is configured in the [`[nats]`](#nats-connection) section, which is required with this
+transport. The default transport is still `mqtt`.
+
+| Section | Key            | Type    | Description                                                                                          |
+|---------|----------------|---------|------------------------------------------------------------------------------------------------------|
+| nats    | subject_prefix | string  | First token of the subjects, default "ocpp"                                                          |
+| nats    | queue_group    | string  | Queue group of the manager replicas, default "maeve-manager"                                         |
+| nats    | workers        | integer | Messages handled at the same time per OCPP version (1 to 1024), default 16; one station stays in order |
+
+```toml
+[transport]
+type = "nats"
+nats.queue_group = "maeve-manager"
+
+[nats]
+urls = ["nats://nats.cpms.svc:4222"]
+creds_file = "/vault/secrets/nats.creds"
+tls_ca_file = "/vault/secrets/nats-ca.pem"
+```
+
+### NATS connection
+
+The `[nats]` section configures the one connection to NATS that the manager opens when
+something uses NATS (today the NATS transport). It is only read and validated then.
+
+Credentials and keys are files: in Kubernetes they come from the secret store and are
+mounted into the pod; the TOML only holds their paths. `user`, `password` and `token` are
+meant for local development. Secrets are never logged.
+
+| Section | Key            | Type             | Description                                                                                 |
+|---------|----------------|------------------|---------------------------------------------------------------------------------------------|
+| nats    | urls           | array of strings | NATS server URLs, required, e.g. ["nats://localhost:4222"]                                  |
+| nats    | name           | string           | Client name shown in NATS monitoring, default "maeve-manager"                               |
+| nats    | creds_file     | string           | File with the user JWT and nkey seed (production)                                           |
+| nats    | nkey_seed_file | string           | File with an nkey seed, for servers that authenticate nkeys without JWTs                    |
+| nats    | user           | string           | User name (local development)                                                               |
+| nats    | password       | string           | Password (local development)                                                                |
+| nats    | token          | string           | Token (local development)                                                                   |
+| nats    | tls_ca_file    | string           | CA certificates that sign the certificate of the server                                     |
+| nats    | tls_cert_file  | string           | Client certificate, together with `tls_key_file`                                            |
+| nats    | tls_key_file   | string           | Key of the client certificate, together with `tls_cert_file`                                |
+| nats    | connect_timeout | string          | Timeout of one connection attempt, default "5s"                                             |
+| nats    | reconnect_wait | string           | Pause between two connection attempts, default "2s"                                         |
+| nats    | max_reconnects | integer          | Connection attempts after the connection is lost or the first attempt fails, default -1 (forever) |
+
+The manager does not fail when NATS cannot be reached at startup: the connection keeps
+trying in the background, but the transport needs the server within 5 seconds to register
+its subscriptions, otherwise the manager stops with an error.
+
+The NATS server accepts messages up to its `max_payload` (1 MiB by default). An OCPP
+message above it cannot be published: the manager logs `message is larger than the max
+payload of the NATS server` with the sizes. Raise `max_payload` on the server if stations
+send larger frames.
 
 ## Service settings
 
