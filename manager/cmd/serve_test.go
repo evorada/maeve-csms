@@ -148,3 +148,28 @@ func TestStopJobsAndDrainNatsDoesNotWaitForeverForTheJobs(t *testing.T) {
 	// without NATS there is nothing to drain
 	stopJobsAndDrainNats(func() {}, make(chan struct{}), nil, time.Millisecond, time.Second)
 }
+
+func TestWaitForStopReturnsTheErrorOfAServer(t *testing.T) {
+	errCh := make(chan error, 1)
+	failure := errors.New("listen tcp :9410: address already in use")
+	errCh <- failure
+
+	err := waitForStop(context.Background(), errCh)
+
+	assert.ErrorIs(t, err, failure)
+}
+
+func TestWaitForStopReturnsNilWhenTheManagerIsAskedToStop(t *testing.T) {
+	signals, stop := context.WithCancel(context.Background())
+	stop()
+
+	done := make(chan error, 1)
+	go func() { done <- waitForStop(signals, make(chan error)) }()
+
+	select {
+	case err := <-done:
+		assert.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("waitForStop did not return after the stop signal")
+	}
+}

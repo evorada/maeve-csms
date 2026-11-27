@@ -4,6 +4,9 @@ package cmd
 
 import (
 	"context"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -136,7 +139,12 @@ the gateway and send appropriate responses.`,
 			ocpiServer.Start(errCh)
 		}
 
-		err = <-errCh
+		// SIGTERM is how Kubernetes stops a pod. Until it arrives, a second signal would be
+		// swallowed too, so the handler is removed as soon as the first one is seen: a second
+		// signal then ends the process at once.
+		signals, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		err = waitForStop(signals, errCh)
+		stopSignals()
 
 		if ocpp16Connection != nil {
 			err := ocpp16Connection.Disconnect(context.Background())
@@ -162,6 +170,20 @@ the gateway and send appropriate responses.`,
 
 		return err
 	},
+}
+
+// waitForStop waits until a server fails (its error is returned) or until signals is
+// done because the manager was asked to stop (nil is returned). Either way the caller
+// then disconnects the listeners, stops the background jobs, which releases their leases,
+// and drains NATS.
+func waitForStop(signals context.Context, errCh <-chan error) error {
+	select {
+	case err := <-errCh:
+		return err
+	case <-signals.Done():
+		slog.Info("stop signal received, shutting down")
+		return nil
+	}
 }
 
 // backgroundJobs returns the periodic jobs of the manager. The connectivity sweep, the
