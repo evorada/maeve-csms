@@ -90,6 +90,11 @@ func (s *Store) GetChargeStationStatus(ctx context.Context, chargeStationId stri
 		status.SerialNumber = &row.SerialNumber.String
 	}
 
+	status.LastConnectedAt = fromNullTimestamptz(row.LastConnectedAt)
+	status.LastDisconnectedAt = fromNullTimestamptz(row.LastDisconnectedAt)
+	status.LastSeenAt = fromNullTimestamptz(row.LastSeenAt)
+	status.ConnectionId = stringFromText(row.ConnectionID)
+
 	return status, nil
 }
 

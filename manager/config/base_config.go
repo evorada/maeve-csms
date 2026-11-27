@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/pelletier/go-toml/v2"
+	"github.com/thoughtworks/maeve-csms/manager/connectivity"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
@@ -28,6 +29,7 @@ type BaseConfig struct {
 	Jobs                      JobsConfig                      `mapstructure:"jobs" toml:"jobs"`
 	Tenancy                   TenancyConfig                   `mapstructure:"tenancy" toml:"tenancy"`
 	Events                    EventsConfig                    `mapstructure:"events" toml:"events"`
+	Connectivity              ConnectivityConfig              `mapstructure:"connectivity" toml:"connectivity"`
 	Ocpi                      *OcpiConfig                     `mapstructure:"ocpi,omitempty" toml:"ocpi,omitempty"`
 	// Nats is validated by Validate only when NATS is used.
 	Nats *NatsConfig `mapstructure:"nats,omitempty" toml:"nats,omitempty" validate:"-"`
@@ -110,6 +112,11 @@ var DefaultConfig = BaseConfig{
 	},
 	Events: EventsConfig{
 		Enabled: true,
+	},
+	Connectivity: ConnectivityConfig{
+		LastSeenWriteInterval: connectivity.DefaultSeenWriteEvery.String(),
+		StaleAfter:            connectivity.DefaultStaleAfter.String(),
+		SweepInterval:         connectivity.DefaultSweepInterval.String(),
 	},
 	Nats: &NatsConfig{
 		Urls: []string{"nats://localhost:4222"},

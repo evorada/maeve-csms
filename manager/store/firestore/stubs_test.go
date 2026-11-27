@@ -122,6 +122,21 @@ func TestStubsReturnErrNotImplemented(t *testing.T) {
 			_, err := s.PurgePublishedOutboxEvents(ctx, time.Now())
 			return err
 		},
+		"RecordStationConnected": func() error {
+			_, err := s.RecordStationConnected(ctx, "cs001", "conn-a", time.Now())
+			return err
+		},
+		"RecordStationDisconnected": func() error {
+			_, err := s.RecordStationDisconnected(ctx, "cs001", "conn-a", time.Now())
+			return err
+		},
+		"TouchStationLastSeen": func() error {
+			return s.TouchStationLastSeen(ctx, "cs001", time.Now())
+		},
+		"DisconnectStaleStations": func() error {
+			_, err := s.DisconnectStaleStations(ctx, time.Now(), time.Now())
+			return err
+		},
 	}
 
 	for name, stub := range stubs {

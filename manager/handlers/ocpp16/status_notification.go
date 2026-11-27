@@ -49,6 +49,7 @@ func (h StatusNotificationHandler) HandleCall(ctx context.Context, chargeStation
 		Timestamp:       timestamp,
 		VendorErrorCode: req.VendorErrorCode,
 		VendorId:        req.VendorId,
+		UpdatedAt:       time.Now(),
 	}
 
 	if err := h.StatusStore.SetConnectorStatus(ctx, chargeStationId, req.ConnectorId, connectorStatus); err != nil {

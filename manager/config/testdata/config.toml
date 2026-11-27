@@ -39,6 +39,11 @@ default_org_id = "0193b2c4-0000-7000-8000-00000000000a"
 [events]
 enabled = false
 
+[connectivity]
+last_seen_write_interval = "1m"
+stale_after = "10m"
+sweep_interval = "15s"
+
 [observability]
 log_format = "text"
 otel_collector_addr = "localhost:4317"

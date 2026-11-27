@@ -15,6 +15,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/subnova/slog-exporter/slogtrace"
+	"github.com/thoughtworks/maeve-csms/manager/connectivity"
 	"github.com/thoughtworks/maeve-csms/manager/entitlements"
 	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
@@ -97,6 +98,13 @@ type Config struct {
 	// NatsConn is the one connection to NATS, nil when nothing uses NATS. Whoever stops
 	// the manager drains it after the listeners have disconnected.
 	NatsConn *nats.Conn
+	// Connectivity records whether the websockets of the charge stations are open, from
+	// the connection events of the gateways and the OCPP messages. It is nil when the
+	// storage does not track connectivity (Firestore).
+	Connectivity *connectivity.Tracker
+	// ConnectivitySweepInterval is the pause between two runs of the job that marks the
+	// stations without a sign of life disconnected.
+	ConnectivitySweepInterval time.Duration
 }
 
 // devSubject is the caller of every API request in dev mode.
@@ -292,6 +300,13 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		return nil, fmt.Errorf("unknown log format: %s", cfg.Observability.LogFormat)
 	}
 
+	// after the log format: it may warn
+	connSettings, err := parseConnectivityConfig(&cfg.Connectivity)
+	if err != nil {
+		return nil, err
+	}
+	c.ConnectivitySweepInterval = connSettings.sweepInterval
+
 	c.AuthVerifier, err = getAuthVerifier(ctx, &cfg.Api.Auth, c.DefaultOrgId)
 	if err != nil {
 		return nil, err
@@ -335,6 +350,7 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		CacheTTL:     tenantCacheTTL,
 	}
 	c.Events = getEventEmitter(&cfg.Events, cfg.Storage.Type, c.Storage, c.TenantResolver)
+	c.Connectivity = getConnectivityTracker(connSettings, cfg.Storage.Type, c.Storage)
 	c.TenantConfig = &tenancy.ConfigProvider{Resolver: c.TenantResolver}
 	c.TenantScoper = &tenancy.Scoper{
 		Mode:         c.Tenancy,

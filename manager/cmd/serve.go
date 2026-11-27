@@ -78,6 +78,18 @@ the gateway and send appropriate responses.`,
 		jobList := []jobs.Job{
 			jobs.ReservationExpiryJob(settings.Storage, settings.ReservationExpiryInterval),
 		}
+		// every OCPP message is a sign of life of its station (Connectivity is nil when the
+		// storage does not track connectivity)
+		ocpp16Handler, ocpp201Handler := settings.Ocpp16Handler, settings.Ocpp201Handler
+		if settings.Connectivity != nil {
+			if ocpp16Handler != nil {
+				ocpp16Handler = settings.Connectivity.WrapHandler(ocpp16Handler)
+			}
+			if ocpp201Handler != nil {
+				ocpp201Handler = settings.Connectivity.WrapHandler(ocpp201Handler)
+			}
+			jobList = append(jobList, settings.Connectivity.SweepJob(settings.ConnectivitySweepInterval))
+		}
 		go func() {
 			if err := settings.JobRunner.Run(ctx, jobList); err != nil {
 				slog.Error("running background jobs", "err", err)
@@ -85,20 +97,29 @@ the gateway and send appropriate responses.`,
 		}()
 
 		// one slot for each sender below, so that none of them blocks when more than one fails
-		errCh := make(chan error, 5)
+		errCh := make(chan error, 6)
 		apiServer.Start(errCh)
 		internalServer.Start(errCh)
 		var ocpp16Connection transport.Connection
-		if settings.Ocpp16Handler != nil {
-			ocpp16Connection, err = settings.MsgListener.Connect(context.Background(), transport.OcppVersion16, nil, settings.Ocpp16Handler)
+		if ocpp16Handler != nil {
+			ocpp16Connection, err = settings.MsgListener.Connect(context.Background(), transport.OcppVersion16, nil, ocpp16Handler)
 			if err != nil {
 				errCh <- err
 			}
 		}
 
 		var ocpp201Connection transport.Connection
-		if settings.Ocpp201Handler != nil {
-			ocpp201Connection, err = settings.MsgListener.Connect(context.Background(), transport.OcppVersion201, nil, settings.Ocpp201Handler)
+		if ocpp201Handler != nil {
+			ocpp201Connection, err = settings.MsgListener.Connect(context.Background(), transport.OcppVersion201, nil, ocpp201Handler)
+			if err != nil {
+				errCh <- err
+			}
+		}
+
+		// the connection events of the gateways, when the transport carries them
+		var connectionEvents transport.Connection
+		if listener, ok := settings.MsgListener.(transport.ConnectionEventListener); ok && settings.Connectivity != nil {
+			connectionEvents, err = listener.ListenConnectionEvents(context.Background(), settings.Connectivity)
 			if err != nil {
 				errCh <- err
 			}
@@ -121,6 +142,12 @@ the gateway and send appropriate responses.`,
 			err := ocpp201Connection.Disconnect(context.Background())
 			if err != nil {
 				slog.Warn("disconnecting from broker", "err", err)
+			}
+		}
+		if connectionEvents != nil {
+			err := connectionEvents.Disconnect(context.Background())
+			if err != nil {
+				slog.Warn("disconnecting the connection events from broker", "err", err)
 			}
 		}
 

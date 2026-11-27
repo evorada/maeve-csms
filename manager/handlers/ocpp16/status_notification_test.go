@@ -109,3 +109,34 @@ func TestStatusNotificationHandler(t *testing.T) {
 		assert.Equal(t, want, got)
 	*/
 }
+
+// connectorStatusRecorder records the connector status that a handler stores.
+type connectorStatusRecorder struct {
+	store.StatusStore
+	got *store.ConnectorStatus
+}
+
+func (r *connectorStatusRecorder) SetConnectorStatus(_ context.Context, _ string, _ int, status *store.ConnectorStatus) error {
+	r.got = status
+	return nil
+}
+
+// The PostgreSQL store writes the UpdatedAt it is given: a status without one was stored
+// as 0001-01-01. A 1.6 StatusNotification may also come without a timestamp.
+func TestStatusNotificationSetsUpdatedAt(t *testing.T) {
+	recorder := &connectorStatusRecorder{}
+	before := time.Now()
+
+	resp, err := handlers.StatusNotificationHandler{StatusStore: recorder}.HandleCall(context.Background(), "cs001", &types.StatusNotificationJson{
+		ConnectorId: 1,
+		ErrorCode:   types.StatusNotificationJsonErrorCodeNoError,
+		Status:      types.StatusNotificationJsonStatusAvailable,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, &types.StatusNotificationResponseJson{}, resp)
+
+	require.NotNil(t, recorder.got)
+	assert.Nil(t, recorder.got.Timestamp)
+	assert.False(t, recorder.got.UpdatedAt.Before(before), "UpdatedAt %s is the time of the call", recorder.got.UpdatedAt)
+	assert.False(t, recorder.got.UpdatedAt.After(time.Now()), "UpdatedAt %s is the time of the call", recorder.got.UpdatedAt)
+}

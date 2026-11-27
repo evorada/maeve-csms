@@ -99,6 +99,8 @@ func TestConfigureFirestoreStorage(t *testing.T) {
 	// Firestore has no outbox: events are off although they are enabled
 	assert.True(t, cfg.Events.Enabled)
 	assert.Equal(t, events.NopEmitter{}, settings.Events)
+	// nor does it track connectivity: the manager starts without
+	assert.Nil(t, settings.Connectivity)
 }
 
 func TestConfigureInMemoryStorage(t *testing.T) {
@@ -862,6 +864,74 @@ func TestConfigureEvents(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, events.NopEmitter{}, settings.Events)
 	})
+}
+
+func TestConfigureConnectivity(t *testing.T) {
+	newConfig := func(t *testing.T, toml string) *config.BaseConfig {
+		cfg := newTestConfig(t)
+		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
+		require.NoError(t, cfg.Load(strings.NewReader(toml)))
+		return cfg
+	}
+
+	t.Run("defaults", func(t *testing.T) {
+		settings, err := config.Configure(context.TODO(), newConfig(t, ""))
+		require.NoError(t, err)
+
+		require.NotNil(t, settings.Connectivity)
+		assert.Same(t, settings.Storage, settings.Connectivity.Store)
+		assert.NotNil(t, settings.Connectivity.Clock)
+		assert.Equal(t, 30*time.Second, settings.Connectivity.SeenWriteEvery)
+		assert.Equal(t, 5*time.Minute, settings.Connectivity.StaleAfter)
+		assert.Equal(t, 30*time.Second, settings.ConnectivitySweepInterval)
+	})
+
+	t.Run("overridden", func(t *testing.T) {
+		settings, err := config.Configure(context.TODO(), newConfig(t,
+			"[connectivity]\nlast_seen_write_interval = \"1m\"\nstale_after = \"10m\"\nsweep_interval = \"15s\"\n"))
+		require.NoError(t, err)
+
+		require.NotNil(t, settings.Connectivity)
+		assert.Equal(t, time.Minute, settings.Connectivity.SeenWriteEvery)
+		assert.Equal(t, 10*time.Minute, settings.Connectivity.StaleAfter)
+		assert.Equal(t, 15*time.Second, settings.ConnectivitySweepInterval)
+	})
+
+	t.Run("a short stale_after is accepted", func(t *testing.T) {
+		settings, err := config.Configure(context.TODO(), newConfig(t,
+			"[connectivity]\nlast_seen_write_interval = \"10s\"\nstale_after = \"1m\"\n"))
+		require.NoError(t, err)
+		assert.Equal(t, time.Minute, settings.Connectivity.StaleAfter)
+	})
+
+	for _, key := range []string{"last_seen_write_interval", "stale_after", "sweep_interval"} {
+		for name, value := range map[string]string{
+			"not a duration": "every minute",
+			"no unit":        "60",
+			"zero":           "0s",
+			"negative":       "-1m",
+			"empty":          "",
+		} {
+			t.Run(key+" "+name, func(t *testing.T) {
+				settings, err := config.Configure(context.TODO(), newConfig(t, "[connectivity]\n"+key+" = \""+value+"\"\n"))
+				require.Error(t, err)
+				assert.ErrorContains(t, err, key)
+				assert.Nil(t, settings)
+			})
+		}
+	}
+
+	for name, toml := range map[string]string{
+		"stale_after equal to last_seen_write_interval":     "[connectivity]\nlast_seen_write_interval = \"5m\"\nstale_after = \"5m\"\n",
+		"stale_after shorter than last_seen_write_interval": "[connectivity]\nlast_seen_write_interval = \"1m\"\nstale_after = \"30s\"\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			settings, err := config.Configure(context.TODO(), newConfig(t, toml))
+			require.Error(t, err)
+			assert.ErrorContains(t, err, "must be longer than last_seen_write_interval")
+			assert.Nil(t, settings)
+		})
+	}
 }
 
 func TestConfigureNatsTransport(t *testing.T) {

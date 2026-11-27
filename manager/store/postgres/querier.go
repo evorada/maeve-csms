@@ -59,6 +59,8 @@ type Querier interface {
 	DeleteTokenForOrg(ctx context.Context, arg DeleteTokenForOrgParams) error
 	DeleteUnlockConnectorRequest(ctx context.Context, chargeStationID string) error
 	DeleteVariableMonitoring(ctx context.Context, arg DeleteVariableMonitoringParams) error
+	// GREATEST ignores NULLs; a row where all three are NULL is not touched.
+	DisconnectStaleStations(ctx context.Context, arg DisconnectStaleStationsParams) ([]string, error)
 	ExpireReservations(ctx context.Context) (int64, error)
 	FindActiveTransaction(ctx context.Context, chargeStationID string) (Transaction, error)
 	GetActiveReservations(ctx context.Context, chargeStationID string) ([]Reservation, error)
@@ -166,6 +168,11 @@ type Querier interface {
 	PurgePublishedOutboxEventsBatch(ctx context.Context, publishedAt pgtype.Timestamptz) (int64, error)
 	// The optional filters are nullable parameters: NULL means "no filter".
 	QueryMeterValues(ctx context.Context, arg QueryMeterValuesParams) ([]MeterValue, error)
+	// Like the other connectivity statements, it decides in its WHERE clause whether the
+	// event still applies, so that the events of one station that several manager replicas
+	// handle at the same time cannot interleave between a read and a write.
+	RecordStationConnected(ctx context.Context, arg RecordStationConnectedParams) (int64, error)
+	RecordStationDisconnected(ctx context.Context, arg RecordStationDisconnectedParams) (int64, error)
 	SetCertificate(ctx context.Context, arg SetCertificateParams) (Certificate, error)
 	// SetChargeStationAuth without an org (NULL) registers a new charge station in the
 	// legacy org and leaves the org of a charge station that is already there as it is.
@@ -191,6 +198,7 @@ type Querier interface {
 	// Unlock Connector Request
 	SetUnlockConnectorRequest(ctx context.Context, arg SetUnlockConnectorRequestParams) (UnlockConnectorRequest, error)
 	StoreMeterValue(ctx context.Context, arg StoreMeterValueParams) error
+	TouchStationLastSeen(ctx context.Context, arg TouchStationLastSeenParams) error
 	// The key of the lock is a constant of the store (outboxRelayLockKey): a transaction
 	// that holds it is the only relay batch of every manager that shares the database.
 	TryLockOutboxRelay(ctx context.Context, lockKey int64) (bool, error)

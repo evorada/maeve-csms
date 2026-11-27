@@ -31,6 +31,7 @@ type Engine interface {
 	DiagnosticsRequestStore
 	LogRequestStore
 	StatusStore
+	ConnectivityStore
 	VariableMonitoringStore
 	ChargeStationEventStore
 	DeviceReportStore

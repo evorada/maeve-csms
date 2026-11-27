@@ -128,6 +128,11 @@ func TestParseConfig(t *testing.T) {
 		Events: config.EventsConfig{
 			Enabled: false,
 		},
+		Connectivity: config.ConnectivityConfig{
+			LastSeenWriteInterval: "1m",
+			StaleAfter:            "10m",
+			SweepInterval:         "15s",
+		},
 		// the default stays and is not used with the MQTT transport
 		Nats: &config.NatsConfig{
 			Urls: []string{"nats://localhost:4222"},

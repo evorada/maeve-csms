@@ -69,6 +69,15 @@ type ChargeStationStatus struct {
 	Vendor          *string
 	SerialNumber    *string
 	UpdatedAt       time.Time
+	// LastConnectedAt is when the current (or last) socket of the station opened.
+	LastConnectedAt *time.Time
+	// LastDisconnectedAt is when the station was last marked disconnected: its socket
+	// closed, or it showed no sign of life for too long.
+	LastDisconnectedAt *time.Time
+	// LastSeenAt is the time of the last connection event or OCPP message of the station.
+	LastSeenAt *time.Time
+	// ConnectionId is the id that the gateway gave the current (or last) socket.
+	ConnectionId *string
 }
 
 // StatusStore defines the interface for charge station and connector status tracking
