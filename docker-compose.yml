@@ -50,7 +50,7 @@ services:
       - "--mqtt-addr"
       - "mqtt://mqtt:1883"
       - "--manager-api-addr"
-      - "http://manager:9410"
+      - "http://manager:9412"
     ports:
       - "80:9310" # charge station ws
       - "443:9311" # charge station wss

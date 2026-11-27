@@ -9,16 +9,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"time"
+
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	"go.opentelemetry.io/otel/trace"
-	"io"
-	"net/http"
-	"net/url"
-	"time"
 
 	"github.com/eclipse/paho.golang/autopaho"
 	"github.com/eclipse/paho.golang/paho"
@@ -181,15 +182,33 @@ func (s *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	span := trace.SpanFromContext(r.Context())
 
 	clientId := chi.URLParam(r, "id")
-	if clientId == "" {
+	if err := validateStationId(clientId); err != nil {
+		span.SetStatus(codes.Error, "invalid station id")
+		span.RecordError(err)
+		span.SetAttributes(semconv.HTTPStatusCode(http.StatusBadRequest))
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
-	span.SetAttributes(attribute.String("csId", clientId))
+	span.SetAttributes(
+		attribute.String("csId", clientId),
+		attribute.String("ocpp.station_id", clientId))
 
-	cs, err := s.deviceRegistry.LookupChargeStation(clientId)
+	// The host that the charge station connected to names its tenant. Only the Host header
+	// of the request counts: a forwarding header can be set by whoever connects.
+	host := registry.NormalizeHost(r.Host)
+	if host == "" {
+		span.SetStatus(codes.Error, "no host")
+		span.SetAttributes(semconv.HTTPStatusCode(http.StatusBadRequest))
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	span.SetAttributes(semconv.NetHostName(host))
+
+	cs, err := s.deviceRegistry.LookupChargeStation(r.Context(), host, clientId)
 	if err != nil {
+		slog.Error("lookup charge station", "host", host, "stationId", clientId, "err", err)
 		span.SetStatus(codes.Error, "lookup charge station failed")
 		span.RecordError(err)
 		span.SetAttributes(semconv.HTTPStatusCode(http.StatusInternalServerError))
@@ -198,13 +217,27 @@ func (s *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if cs == nil {
 		span.SetStatus(codes.Error, "unknown charge station")
-		span.RecordError(err)
 		span.SetAttributes(semconv.HTTPStatusCode(http.StatusNotFound))
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
 	}
 
-	span.SetAttributes(attribute.Int("ocpp.security_profile", int(cs.SecurityProfile)))
+	// The station key names the charge station from here on: on the message broker two
+	// tenants must never share a client id or a topic, so there is no fallback to the
+	// plain station id.
+	stationKey := cs.StationKey
+	if stationKey == "" {
+		slog.Error("charge station without a station key", "host", host, "stationId", clientId)
+		span.SetStatus(codes.Error, "charge station without a station key")
+		span.SetAttributes(semconv.HTTPStatusCode(http.StatusInternalServerError))
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	span.SetAttributes(
+		attribute.String("csId", stationKey),
+		attribute.String("tenant.org_key", cs.OrgKey),
+		attribute.Int("ocpp.security_profile", int(cs.SecurityProfile)))
 
 	switch cs.SecurityProfile {
 	case registry.UnsecuredTransportWithBasicAuth:
@@ -275,9 +308,10 @@ func (s *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		KeepAlive:         s.mqttKeepAliveInterval,
 		ConnectRetryDelay: s.mqttConnectRetryDelay,
 		OnConnectionUp: func(manager *autopaho.ConnectionManager, connack *paho.Connack) {
-			topicName := fmt.Sprintf("%s/out/%s/%s", s.mqttTopicPrefix, protocol, clientId)
+			topicName := fmt.Sprintf("%s/out/%s/%s", s.mqttTopicPrefix, protocol, stationKey)
 			span.SetAttributes(attribute.String("mqtt.topic", topicName))
-			_, err = manager.Subscribe(ctx, &paho.Subscribe{
+			// a variable of its own: this runs in a goroutine of the connection manager
+			_, err := manager.Subscribe(ctx, &paho.Subscribe{
 				Subscriptions: map[string]paho.SubscribeOptions{
 					topicName: {},
 				},
@@ -292,7 +326,7 @@ func (s *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		},
 		ClientConfig: paho.ClientConfig{
-			ClientID: clientId,
+			ClientID: stationKey,
 			Router: paho.NewSingleHandlerRouter(func(mqttMsg *paho.Publish) {
 				// route requests from the CSMS
 				var msg pipe.GatewayMessage
@@ -316,7 +350,7 @@ func (s *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						semconv.MessagingMessagePayloadSizeBytes(len(mqttMsg.Payload)),
 						semconv.MessagingMessageConversationID(msg.MessageId),
 						semconv.MessagingOperationKey.String("receive"),
-						attribute.String("csId", clientId),
+						attribute.String("csId", stationKey),
 					))
 				defer span.End()
 
@@ -353,13 +387,13 @@ func (s *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	span.End()
 
 	// listen on the CSMS Tx channel and publish those messages on the inbound topic
-	goPublishToCSMS(ctx, s.tracer, p.CSMSTx, mqttConn, s.mqttTopicPrefix, protocol, clientId)
+	goPublishToCSMS(ctx, s.tracer, p.CSMSTx, mqttConn, s.mqttTopicPrefix, protocol, stationKey)
 
 	// listen the CS Tx channel and write those messages to the websocket
-	goWriteToChargeStation(ctx, s.tracer, p.ChargeStationTx, wsConn, protocol, clientId)
+	goWriteToChargeStation(ctx, s.tracer, p.ChargeStationTx, wsConn, protocol, stationKey)
 
 	// read from the websocket and send to the CS Rx channel (CS Tx used for error)
-	readFromChargeStation(ctx, s.tracer, wsConn, p.ChargeStationRx, p.ChargeStationTx, protocol, clientId)
+	readFromChargeStation(ctx, s.tracer, wsConn, p.ChargeStationRx, p.ChargeStationTx, protocol, stationKey)
 }
 
 func getScheme(r *http.Request) string {
@@ -431,7 +465,7 @@ func checkCertificate(ctx context.Context, r *http.Request, orgNames []string, c
 	return foundOrg
 }
 
-func goPublishToCSMS(ctx context.Context, tracer trace.Tracer, csmsTx chan *pipe.GatewayMessage, mqttConn *autopaho.ConnectionManager, topicPrefix, protocol, clientId string) {
+func goPublishToCSMS(ctx context.Context, tracer trace.Tracer, csmsTx chan *pipe.GatewayMessage, mqttConn *autopaho.ConnectionManager, topicPrefix, protocol, stationKey string) {
 	go func() {
 		for {
 			select {
@@ -441,7 +475,7 @@ func goPublishToCSMS(ctx context.Context, tracer trace.Tracer, csmsTx chan *pipe
 					slog.Error("marshaling message for publication", "err", err)
 					continue
 				}
-				err = publish(msg.Context, tracer, mqttConn, topicPrefix, protocol, clientId, msg.MessageId, data)
+				err = publish(msg.Context, tracer, mqttConn, topicPrefix, protocol, stationKey, msg.MessageId, data)
 				if err != nil {
 					slog.Error("publishing message", "err", err)
 				}
@@ -452,8 +486,8 @@ func goPublishToCSMS(ctx context.Context, tracer trace.Tracer, csmsTx chan *pipe
 	}()
 }
 
-func publish(ctx context.Context, tracer trace.Tracer, mqttConn *autopaho.ConnectionManager, topicPrefix, protocol, clientId, messageId string, data []byte) error {
-	topic := fmt.Sprintf("%s/in/%s/%s", topicPrefix, protocol, clientId)
+func publish(ctx context.Context, tracer trace.Tracer, mqttConn *autopaho.ConnectionManager, topicPrefix, protocol, stationKey, messageId string, data []byte) error {
+	topic := fmt.Sprintf("%s/in/%s/%s", topicPrefix, protocol, stationKey)
 
 	newCtx, span := tracer.Start(ctx,
 		fmt.Sprintf("%s/in/%s/# publish", topicPrefix, protocol),
@@ -463,7 +497,7 @@ func publish(ctx context.Context, tracer trace.Tracer, mqttConn *autopaho.Connec
 			semconv.MessagingMessagePayloadSizeBytes(len(data)),
 			semconv.MessagingOperationKey.String("publish"),
 			semconv.MessagingMessageConversationID(messageId),
-			attribute.String("csId", clientId),
+			attribute.String("csId", stationKey),
 		))
 	defer span.End()
 
@@ -480,7 +514,7 @@ func publish(ctx context.Context, tracer trace.Tracer, mqttConn *autopaho.Connec
 		Payload: data,
 		Properties: &paho.PublishProperties{
 			ContentType:     "application/json",
-			ResponseTopic:   fmt.Sprintf("%s/out/%s/%s", topicPrefix, protocol, clientId),
+			ResponseTopic:   fmt.Sprintf("%s/out/%s/%s", topicPrefix, protocol, stationKey),
 			CorrelationData: correlationData,
 		},
 	})
@@ -488,7 +522,7 @@ func publish(ctx context.Context, tracer trace.Tracer, mqttConn *autopaho.Connec
 	return err
 }
 
-func goWriteToChargeStation(ctx context.Context, tracer trace.Tracer, chargeStationTx chan *pipe.GatewayMessage, wsConn *websocket.Conn, protocol, clientId string) {
+func goWriteToChargeStation(ctx context.Context, tracer trace.Tracer, chargeStationTx chan *pipe.GatewayMessage, wsConn *websocket.Conn, protocol, stationKey string) {
 	go func() {
 		for {
 			select {
@@ -498,7 +532,7 @@ func goWriteToChargeStation(ctx context.Context, tracer trace.Tracer, chargeStat
 					slog.Error("marshaling gateway message for charge station", "err", err)
 					continue
 				}
-				err = write(msg.Context, tracer, wsConn, protocol, clientId, msg.MessageId, data)
+				err = write(msg.Context, tracer, wsConn, protocol, stationKey, msg.MessageId, data)
 				if err != nil {
 					slog.Error("writing to charge station", "err", err)
 				}
@@ -509,23 +543,23 @@ func goWriteToChargeStation(ctx context.Context, tracer trace.Tracer, chargeStat
 	}()
 }
 
-func write(ctx context.Context, tracer trace.Tracer, wsConn *websocket.Conn, protocol, clientId, messageId string, data []byte) error {
+func write(ctx context.Context, tracer trace.Tracer, wsConn *websocket.Conn, protocol, stationKey, messageId string, data []byte) error {
 	newCtx, span := tracer.Start(ctx, fmt.Sprintf("%s publish", protocol), trace.WithSpanKind(trace.SpanKindProducer),
 		trace.WithAttributes(
 			semconv.MessagingSystem("websocket"),
 			semconv.MessagingMessagePayloadSizeBytes(len(data)),
 			semconv.MessagingOperationKey.String("publish"),
 			semconv.MessagingMessageConversationID(messageId),
-			attribute.String("csId", clientId),
+			attribute.String("csId", stationKey),
 		))
 	defer span.End()
 
 	return wsConn.Write(newCtx, websocket.MessageText, data)
 }
 
-func readFromChargeStation(ctx context.Context, tracer trace.Tracer, wsConn *websocket.Conn, csRx, csTx chan *pipe.GatewayMessage, protocol, clientId string) {
+func readFromChargeStation(ctx context.Context, tracer trace.Tracer, wsConn *websocket.Conn, csRx, csTx chan *pipe.GatewayMessage, protocol, stationKey string) {
 	for {
-		msg, err := read(ctx, tracer, wsConn, protocol, clientId)
+		msg, err := read(ctx, tracer, wsConn, protocol, stationKey)
 		if err != nil {
 			if msg != nil {
 				slog.Warn("sending error message to client", "err", err)
@@ -545,7 +579,7 @@ func readFromChargeStation(ctx context.Context, tracer trace.Tracer, wsConn *web
 
 var errClient = errors.New("client error")
 
-func read(ctx context.Context, tracer trace.Tracer, wsConn *websocket.Conn, protocol, clientId string) (*pipe.GatewayMessage, error) {
+func read(ctx context.Context, tracer trace.Tracer, wsConn *websocket.Conn, protocol, stationKey string) (*pipe.GatewayMessage, error) {
 	typ, b, err := wsConn.Read(context.Background())
 	if errors.Is(err, context.DeadlineExceeded) {
 		return nil, nil
@@ -564,7 +598,7 @@ func read(ctx context.Context, tracer trace.Tracer, wsConn *websocket.Conn, prot
 			semconv.MessagingSystem("websocket"),
 			semconv.MessagingOperationKey.String("receive"),
 			semconv.MessagingMessagePayloadSizeBytes(len(b)),
-			attribute.String("csId", clientId),
+			attribute.String("csId", stationKey),
 		),
 		trace.WithLinks(trace.Link{
 			SpanContext: trace.SpanContextFromContext(ctx),
