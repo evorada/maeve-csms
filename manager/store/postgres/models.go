@@ -315,6 +315,21 @@ type OcpiRegistration struct {
 	OrgID     pgtype.UUID      `db:"org_id" json:"org_id"`
 }
 
+type OutboxEvent struct {
+	Seq          int64              `db:"seq" json:"seq"`
+	ID           pgtype.UUID        `db:"id" json:"id"`
+	OrgID        string             `db:"org_id" json:"org_id"`
+	Type         string             `db:"type" json:"type"`
+	Subject      string             `db:"subject" json:"subject"`
+	Actor        string             `db:"actor" json:"actor"`
+	Traceparent  pgtype.Text        `db:"traceparent" json:"traceparent"`
+	EventTime    pgtype.Timestamptz `db:"event_time" json:"event_time"`
+	Data         []byte             `db:"data" json:"data"`
+	CreatedAt    pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	PublishedAt  pgtype.Timestamptz `db:"published_at" json:"published_at"`
+	PublishedSeq pgtype.Int8        `db:"published_seq" json:"published_seq"`
+}
+
 type PublishFirmwareStatus struct {
 	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
 	Status          string             `db:"status" json:"status"`

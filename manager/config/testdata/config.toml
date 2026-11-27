@@ -36,6 +36,9 @@ reservation_expiry_interval = "30s"
 [tenancy]
 default_org_id = "0193b2c4-0000-7000-8000-00000000000a"
 
+[events]
+enabled = false
+
 [observability]
 log_format = "text"
 otel_collector_addr = "localhost:4317"

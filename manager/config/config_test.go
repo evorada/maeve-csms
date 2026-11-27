@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/config"
 	"github.com/thoughtworks/maeve-csms/manager/entitlements"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/jobs"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
@@ -60,6 +61,7 @@ func TestConfigure(t *testing.T) {
 	assert.NotNil(t, settings.ChargeStationCertProviderService)
 	assert.NotNil(t, settings.TariffService)
 	assert.NotNil(t, settings.AuthVerifier)
+	assert.NotNil(t, settings.Events)
 }
 
 func TestConfigureFirestoreStorage(t *testing.T) {
@@ -75,6 +77,9 @@ func TestConfigureFirestoreStorage(t *testing.T) {
 	settings, err := config.Configure(context.TODO(), cfg)
 	require.NoError(t, err)
 	require.NotNil(t, settings.Storage)
+	// Firestore has no outbox: events are off although they are enabled
+	assert.True(t, cfg.Events.Enabled)
+	assert.Equal(t, events.NopEmitter{}, settings.Events)
 }
 
 func TestConfigureInMemoryStorage(t *testing.T) {
@@ -768,5 +773,74 @@ perms = ["cpms.station.read"]
 
 		_, err = settings.AuthVerifier.Verify(ctx, platform.Token(time.Now()))
 		assert.Equal(t, tenancy.ErrKeysUnavailable, err)
+	})
+}
+
+// relayAll publishes every event in the outbox of a storage and returns them.
+func relayAll(t *testing.T, engine store.Engine) []*store.OutboxEvent {
+	t.Helper()
+	var published []*store.OutboxEvent
+	_, err := engine.RelayOutboxEvents(context.TODO(), store.MaxOutboxEventListLimit,
+		func(_ context.Context, events []*store.OutboxEvent) (int, error) {
+			published = append(published, events...)
+			return len(events), nil
+		})
+	require.NoError(t, err)
+	return published
+}
+
+func TestConfigureEvents(t *testing.T) {
+	const defaultOrgId = "0193b2c4-0000-7000-8000-00000000000a"
+	newConfig := func(t *testing.T, toml string) *config.BaseConfig {
+		cfg := newTestConfig(t)
+		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
+		require.NoError(t, cfg.Load(strings.NewReader(toml)))
+		return cfg
+	}
+	stationEvent := func(stationKey string) events.Event {
+		return events.Event{
+			Type:         "station.registered",
+			StationKey:   stationKey,
+			ResourceType: "station",
+			ResourceId:   stationKey,
+			Data:         struct{}{},
+		}
+	}
+
+	t.Run("enabled by default: the org of a station comes from the tenant resolver", func(t *testing.T) {
+		ctx := context.TODO()
+		cfg := newConfig(t, "[tenancy]\ndefault_org_id = \""+defaultOrgId+"\"\n")
+		assert.True(t, cfg.Events.Enabled)
+		assert.Equal(t, "single", cfg.Tenancy.Mode)
+
+		settings, err := config.Configure(ctx, cfg)
+		require.NoError(t, err)
+		require.IsType(t, &events.OutboxEmitter{}, settings.Events)
+
+		// a station that moved to another org has its org in its auth details
+		const otherOrgId = "0193b2c4-0000-7000-8000-0000000000b2"
+		require.NoError(t, settings.Storage.SetChargeStationAuth(ctx, "cs-moved", &store.ChargeStationAuth{OrgId: otherOrgId}))
+
+		err = settings.Storage.RunInTx(ctx, func(ctx context.Context) error {
+			// single mode: the station key is the plain station id, which has no org key
+			return settings.Events.Emit(ctx, stationEvent("cs001"), stationEvent("cs-moved"))
+		})
+		require.NoError(t, err)
+
+		published := relayAll(t, settings.Storage)
+		require.Len(t, published, 2)
+		assert.Equal(t, defaultOrgId, published[0].OrgId, "a station without an org belongs to the default org")
+		assert.Equal(t, "urn:cpms:"+defaultOrgId+":station/cs001", published[0].Subject)
+		assert.Equal(t, "station:cs001", published[0].Actor)
+		assert.Equal(t, otherOrgId, published[1].OrgId, "a station with an org belongs to it")
+	})
+
+	t.Run("disabled", func(t *testing.T) {
+		cfg := newConfig(t, "[events]\nenabled = false\n")
+		assert.False(t, cfg.Events.Enabled)
+
+		settings, err := config.Configure(context.TODO(), cfg)
+		require.NoError(t, err)
+		assert.Equal(t, events.NopEmitter{}, settings.Events)
 	})
 }

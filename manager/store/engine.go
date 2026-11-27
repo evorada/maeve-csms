@@ -36,4 +36,5 @@ type Engine interface {
 	DeviceReportStore
 	TenantStore
 	Transactor
+	OutboxStore
 }

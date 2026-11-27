@@ -26,6 +26,7 @@ type BaseConfig struct {
 	TariffService             TariffServiceConfig             `mapstructure:"tariff_service" toml:"tariff_service" validate:"required"`
 	Jobs                      JobsConfig                      `mapstructure:"jobs" toml:"jobs"`
 	Tenancy                   TenancyConfig                   `mapstructure:"tenancy" toml:"tenancy"`
+	Events                    EventsConfig                    `mapstructure:"events" toml:"events"`
 	Ocpi                      *OcpiConfig                     `mapstructure:"ocpi,omitempty" toml:"ocpi,omitempty"`
 }
 
@@ -101,6 +102,9 @@ var DefaultConfig = BaseConfig{
 		DefaultOrgId: store.LegacyOrgId,
 		Mode:         "single",
 		CacheTTL:     "30s",
+	},
+	Events: EventsConfig{
+		Enabled: true,
 	},
 }
 

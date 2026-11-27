@@ -15,6 +15,7 @@ import (
 
 	"github.com/subnova/slog-exporter/slogtrace"
 	"github.com/thoughtworks/maeve-csms/manager/entitlements"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/jobs"
@@ -88,6 +89,9 @@ type Config struct {
 	Entitlements *entitlements.Enforcer
 	// AuthVerifier says who the caller of an API request is.
 	AuthVerifier tenancy.Verifier
+	// Events stores the domain events in the outbox of the storage, in the transaction of
+	// the change they describe.
+	Events events.Emitter
 }
 
 // devSubject is the caller of every API request in dev mode.
@@ -317,6 +321,7 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		Clock:        clock.RealClock{},
 		CacheTTL:     tenantCacheTTL,
 	}
+	c.Events = getEventEmitter(&cfg.Events, cfg.Storage.Type, c.Storage, c.TenantResolver)
 	c.TenantConfig = &tenancy.ConfigProvider{Resolver: c.TenantResolver}
 	c.TenantScoper = &tenancy.Scoper{
 		Mode:         c.Tenancy,
@@ -394,6 +399,26 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 	}
 
 	return
+}
+
+// getEventEmitter creates what business code gives its domain events to: the outbox of
+// the storage, with the org of an event's charge station given by the tenant resolver.
+// Events are off when they are disabled and with Firestore storage, which has no outbox.
+func getEventEmitter(cfg *EventsConfig, storageType string, engine store.Engine, orgs events.OrgResolver) events.Emitter {
+	if !cfg.Enabled {
+		slog.Info("domain events disabled")
+		return events.NopEmitter{}
+	}
+	if storageType == "firestore" {
+		slog.Warn("domain events disabled: the firestore storage has no outbox")
+		return events.NopEmitter{}
+	}
+	return &events.OutboxEmitter{
+		Store:   engine,
+		Orgs:    orgs,
+		Clock:   clock.RealClock{},
+		Product: events.Product,
+	}
 }
 
 func getOcpiApi(o *OcpiConfig, engine store.Engine, httpClient *http.Client, defaultOrgId string) (ocpi.Api, error) {

@@ -75,6 +75,10 @@ type Store struct {
 	tenantsByHost                    map[string]string        // hostname to org id
 	tenantsByOrgKey                  map[string]string        // org key to org id
 	tenantsBySlug                    map[string]string        // slug to org id
+	outbox                           []*store.OutboxEvent     // in Seq order
+	outboxSeq                        int64
+	outboxPublishedSeq               int64
+	relayMu                          sync.Mutex // held by the relay batch that runs
 }
 
 func NewStore(clock clock.PassiveClock) *Store {

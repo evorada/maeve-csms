@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/thoughtworks/maeve-csms/manager/store"
@@ -102,6 +103,23 @@ func TestStubsReturnErrNotImplemented(t *testing.T) {
 		},
 		"CountConnectorsForOrgs": func() error {
 			_, err := s.CountConnectorsForOrgs(ctx, []string{store.LegacyOrgId})
+			return err
+		},
+		"AppendOutboxEvents": func() error {
+			return s.AppendOutboxEvents(ctx, &store.OutboxEvent{})
+		},
+		"RelayOutboxEvents": func() error {
+			_, err := s.RelayOutboxEvents(ctx, 10, func(context.Context, []*store.OutboxEvent) (int, error) {
+				panic("publish must not be called")
+			})
+			return err
+		},
+		"ListOutboxEvents": func() error {
+			_, err := s.ListOutboxEvents(ctx, store.OutboxEventFilter{})
+			return err
+		},
+		"PurgePublishedOutboxEvents": func() error {
+			_, err := s.PurgePublishedOutboxEvents(ctx, time.Now())
 			return err
 		},
 	}

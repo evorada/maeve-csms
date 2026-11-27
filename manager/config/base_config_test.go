@@ -125,6 +125,9 @@ func TestParseConfig(t *testing.T) {
 			Mode:         "single",
 			CacheTTL:     "30s",
 		},
+		Events: config.EventsConfig{
+			Enabled: false,
+		},
 	}
 
 	assert.Equal(t, want, cfg)
