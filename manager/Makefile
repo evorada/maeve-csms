@@ -8,6 +8,12 @@ api-bundle:
 api-generate: api-bundle
 	cd api && go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.1 -config cfg.yaml api-spec.bundled.yaml
 
+# Regenerates controlplane/controlplane.gen.go from the spec of the control plane, with
+# the same pinned oapi-codegen version as the API.
+.PHONY: controlplane-generate
+controlplane-generate:
+	cd controlplane && go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.1 -config cfg.yaml controlplane-spec.yaml
+
 .PHONY: postgres-generate
 postgres-generate:
 	cd store/postgres && sqlc generate

@@ -7,5 +7,5 @@ scrape_configs:
       - targets: [ 'host.docker.internal:9090' ]
   - job_name: 'endpoints'
     static_configs:
-      - targets: ['gateway:9312', 'manager:9410']
+      - targets: ['gateway:9312', 'manager:9412']
 

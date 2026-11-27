@@ -21,9 +21,13 @@ func (q *Queries) CancelReservation(ctx context.Context, reservationID int32) er
 }
 
 const CreateReservation = `-- name: CreateReservation :exec
+
 INSERT INTO reservations (
-    reservation_id, charge_station_id, connector_id, id_tag, parent_id_tag, expiry_date, status, created_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    reservation_id, charge_station_id, connector_id, id_tag, parent_id_tag, expiry_date, status, created_at, org_id
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8,
+    COALESCE((SELECT cs.org_id FROM charge_stations cs WHERE cs.charge_station_id = $2), '00000000-0000-0000-0000-000000000000'::uuid)
+)
 `
 
 type CreateReservationParams struct {
@@ -37,6 +41,8 @@ type CreateReservationParams struct {
 	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
+// The reservation belongs to the org of its charge station, or to the legacy org when
+// the charge station is not registered.
 func (q *Queries) CreateReservation(ctx context.Context, arg CreateReservationParams) error {
 	_, err := q.db.Exec(ctx, CreateReservation,
 		arg.ReservationID,
@@ -65,7 +71,7 @@ func (q *Queries) ExpireReservations(ctx context.Context) (int64, error) {
 }
 
 const GetActiveReservations = `-- name: GetActiveReservations :many
-SELECT reservation_id, charge_station_id, connector_id, id_tag, parent_id_tag, expiry_date, status, created_at FROM reservations
+SELECT reservation_id, charge_station_id, connector_id, id_tag, parent_id_tag, expiry_date, status, created_at, org_id FROM reservations
 WHERE charge_station_id = $1 AND status = 'Accepted'
 ORDER BY created_at ASC
 `
@@ -88,6 +94,7 @@ func (q *Queries) GetActiveReservations(ctx context.Context, chargeStationID str
 			&i.ExpiryDate,
 			&i.Status,
 			&i.CreatedAt,
+			&i.OrgID,
 		); err != nil {
 			return nil, err
 		}
@@ -100,7 +107,7 @@ func (q *Queries) GetActiveReservations(ctx context.Context, chargeStationID str
 }
 
 const GetReservation = `-- name: GetReservation :one
-SELECT reservation_id, charge_station_id, connector_id, id_tag, parent_id_tag, expiry_date, status, created_at FROM reservations WHERE reservation_id = $1
+SELECT reservation_id, charge_station_id, connector_id, id_tag, parent_id_tag, expiry_date, status, created_at, org_id FROM reservations WHERE reservation_id = $1
 `
 
 func (q *Queries) GetReservation(ctx context.Context, reservationID int32) (Reservation, error) {
@@ -115,12 +122,13 @@ func (q *Queries) GetReservation(ctx context.Context, reservationID int32) (Rese
 		&i.ExpiryDate,
 		&i.Status,
 		&i.CreatedAt,
+		&i.OrgID,
 	)
 	return i, err
 }
 
 const GetReservationByConnector = `-- name: GetReservationByConnector :one
-SELECT reservation_id, charge_station_id, connector_id, id_tag, parent_id_tag, expiry_date, status, created_at FROM reservations
+SELECT reservation_id, charge_station_id, connector_id, id_tag, parent_id_tag, expiry_date, status, created_at, org_id FROM reservations
 WHERE charge_station_id = $1 AND connector_id = $2 AND status = 'Accepted'
 LIMIT 1
 `
@@ -142,6 +150,7 @@ func (q *Queries) GetReservationByConnector(ctx context.Context, arg GetReservat
 		&i.ExpiryDate,
 		&i.Status,
 		&i.CreatedAt,
+		&i.OrgID,
 	)
 	return i, err
 }

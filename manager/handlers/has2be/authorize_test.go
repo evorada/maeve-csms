@@ -17,6 +17,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/services"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"k8s.io/utils/clock"
 )
 
@@ -56,6 +57,7 @@ func (m mockCertValidationService) ValidateHashedCertificateChain(ctx context.Co
 
 func setupTokenStore(tokenStore store.TokenStore) error {
 	err := tokenStore.SetToken(context.Background(), &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -70,6 +72,7 @@ func setupTokenStore(tokenStore store.TokenStore) error {
 		return err
 	}
 	err = tokenStore.SetToken(context.Background(), &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "OTHER",
@@ -94,8 +97,9 @@ func TestAuthorizeWithEmaidAndCertificateHashes(t *testing.T) {
 	ah := handlersHasToBe.AuthorizeHandler{
 		Handler201: handlers201.AuthorizeHandler{
 			TokenAuthService: &services.OcppTokenAuthService{
-				Clock:      clock.RealClock{},
-				TokenStore: engine,
+				Clock:       clock.RealClock{},
+				TokenStore:  engine,
+				OrgResolver: &tenancy.Resolver{Stations: engine},
 			},
 			CertificateValidationService: mockCertValidationService{},
 		},
@@ -135,8 +139,9 @@ func TestAuthorizeWithEmaidAndInvalidCertificateHashes(t *testing.T) {
 	ah := handlersHasToBe.AuthorizeHandler{
 		Handler201: handlers201.AuthorizeHandler{
 			TokenAuthService: &services.OcppTokenAuthService{
-				Clock:      clock.RealClock{},
-				TokenStore: engine,
+				Clock:       clock.RealClock{},
+				TokenStore:  engine,
+				OrgResolver: &tenancy.Resolver{Stations: engine},
 			},
 			CertificateValidationService: mockCertValidationService{},
 		},

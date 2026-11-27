@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
@@ -18,7 +19,12 @@ import (
 type BootNotificationHandler struct {
 	Clock               clock.PassiveClock
 	RuntimeDetailsStore store.ChargeStationRuntimeDetailsStore
-	HeartbeatInterval   int
+	// HeartbeatInterval is the interval in seconds of a charge station whose tenant has
+	// not set one.
+	HeartbeatInterval int
+	// TenantConfig gives the heartbeat interval of the tenant of a charge station. It
+	// may be nil.
+	TenantConfig *tenancy.ConfigProvider
 }
 
 func (b BootNotificationHandler) HandleCall(ctx context.Context, chargeStationId string, request ocpp.Request) (ocpp.Response, error) {
@@ -48,7 +54,7 @@ func (b BootNotificationHandler) HandleCall(ctx context.Context, chargeStationId
 
 	return &types.BootNotificationResponseJson{
 		CurrentTime: b.Clock.Now().Format(time.RFC3339),
-		Interval:    b.HeartbeatInterval,
+		Interval:    int(b.TenantConfig.HeartbeatIntervalForStation(ctx, chargeStationId, time.Duration(b.HeartbeatInterval)*time.Second).Seconds()),
 		Status:      types.RegistrationStatusEnumTypeAccepted,
 	}, nil
 }

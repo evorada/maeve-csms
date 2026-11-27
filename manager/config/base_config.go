@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/pelletier/go-toml/v2"
+	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
 // BaseConfig provides the data structures that represent the configuration
@@ -24,6 +25,7 @@ type BaseConfig struct {
 	ChargeStationCertProvider ChargeStationCertProviderConfig `mapstructure:"charge_station_cert_provider" toml:"charge_station_cert_provider" validate:"required"`
 	TariffService             TariffServiceConfig             `mapstructure:"tariff_service" toml:"tariff_service" validate:"required"`
 	Jobs                      JobsConfig                      `mapstructure:"jobs" toml:"jobs"`
+	Tenancy                   TenancyConfig                   `mapstructure:"tenancy" toml:"tenancy"`
 	Ocpi                      *OcpiConfig                     `mapstructure:"ocpi,omitempty" toml:"ocpi,omitempty"`
 }
 
@@ -31,11 +33,23 @@ type BaseConfig struct {
 // read from the TOML file will overlay this configuration.
 var DefaultConfig = BaseConfig{
 	Api: ApiSettingsConfig{
-		Addr:    "localhost:9410",
-		Host:    "localhost",
-		WsPort:  80,
-		WssPort: 443,
-		OrgName: "Thoughtworks",
+		Addr:         "localhost:9410",
+		InternalAddr: "localhost:9412",
+		Host:         "localhost",
+		WsPort:       80,
+		WssPort:      443,
+		OrgName:      "Thoughtworks",
+		Auth: AuthConfig{
+			Mode:               "jwt",
+			Issuer:             "platform",
+			Audience:           "maeve",
+			MinRefreshInterval: "5m",
+			ClockSkew:          "5s",
+			MaxTokenLifetime:   "120s",
+			Dev: AuthDevConfig{
+				OrgScope: "subtree",
+			},
+		},
 	},
 	Transport: TransportConfig{
 		Type: "mqtt",
@@ -82,6 +96,11 @@ var DefaultConfig = BaseConfig{
 	},
 	Jobs: JobsConfig{
 		ReservationExpiryInterval: "1m",
+	},
+	Tenancy: TenancyConfig{
+		DefaultOrgId: store.LegacyOrgId,
+		Mode:         "single",
+		CacheTTL:     "30s",
 	},
 }
 

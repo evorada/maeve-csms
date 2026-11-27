@@ -10,12 +10,16 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
 type RemoteStartTransactionHandler struct {
 	TokenStore store.TokenStore
+	// OrgResolver gives the org whose tokens are looked up. It is needed when
+	// TokenStore is set.
+	OrgResolver tenancy.StationOrgResolver
 }
 
 func (r RemoteStartTransactionHandler) HandleCallResult(ctx context.Context, chargeStationId string, request ocpp.Request, response ocpp.Response, state any) error {
@@ -33,7 +37,11 @@ func (r RemoteStartTransactionHandler) HandleCallResult(ctx context.Context, cha
 
 	// Validate token if TokenStore is available
 	if r.TokenStore != nil {
-		tok, err := r.TokenStore.LookupToken(ctx, req.IdTag)
+		orgId, err := r.OrgResolver.OrgIdForStation(ctx, chargeStationId)
+		if err != nil {
+			return fmt.Errorf("lookup token: %w", err)
+		}
+		tok, err := r.TokenStore.LookupTokenForOrg(ctx, orgId, req.IdTag)
 		if err != nil {
 			return fmt.Errorf("lookup token: %w", err)
 		}

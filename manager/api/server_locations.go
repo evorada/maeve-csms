@@ -3,6 +3,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -21,6 +22,11 @@ func (s *Server) RegisterLocation(w http.ResponseWriter, r *http.Request, locati
 	req := new(Location)
 	if err := render.Bind(r, req); err != nil {
 		_ = render.Render(w, r, ErrInvalidRequest(err))
+		return
+	}
+
+	orgId, ok := s.targetOrg(w, r, req.OrgId)
+	if !ok {
 		return
 	}
 
@@ -67,7 +73,13 @@ func (s *Server) RegisterLocation(w http.ResponseWriter, r *http.Request, locati
 		Name:        *req.Name,
 		ParkingType: string(*req.ParkingType),
 		PostalCode:  *req.PostalCode,
+		OrgId:       orgId,
 	})
+	if errors.Is(err, store.ErrLocationOwnedByAnotherOrg) {
+		// location ids are shared by all orgs: the answer does not say whose it is
+		_ = render.Render(w, r, ErrConflict("location id already in use"))
+		return
+	}
 	if err != nil {
 		_ = render.Render(w, r, ErrInternalError(err))
 		return

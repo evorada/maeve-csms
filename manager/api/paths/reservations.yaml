@@ -8,6 +8,7 @@ paths:
 
         '
       operationId: createReservation
+      x-permission: cpms.connector.command
       parameters:
       - name: csId
         in: path
@@ -15,7 +16,7 @@ paths:
         required: true
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       requestBody:
         required: true
         content:
@@ -31,8 +32,26 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: The reservation id is already in use
           content:
             application/json:
               schema:
@@ -52,6 +71,7 @@ paths:
 
         '
       operationId: cancelReservation
+      x-permission: cpms.connector.command
       parameters:
       - name: csId
         in: path
@@ -59,7 +79,7 @@ paths:
         required: true
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       - name: reservationId
         in: path
         description: The reservation identifier
@@ -70,6 +90,18 @@ paths:
       responses:
         '202':
           description: Accepted - cancellation request initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station or reservation
           content:
@@ -91,6 +123,7 @@ paths:
 
         '
       operationId: listReservations
+      x-permission: cpms.station.read
       parameters:
       - name: csId
         in: path
@@ -98,7 +131,7 @@ paths:
         required: true
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       - name: status
         in: query
         description: 'Filter by reservation status (default: active)'
@@ -117,6 +150,18 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/ReservationList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:

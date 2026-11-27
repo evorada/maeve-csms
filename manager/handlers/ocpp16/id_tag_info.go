@@ -12,6 +12,7 @@ import (
 	"k8s.io/utils/clock"
 
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 )
 
 // The OCPP 1.6 AuthorizationStatus values that the token store can give.
@@ -42,9 +43,9 @@ type idTagAuthorization struct {
 	Token *store.Token
 }
 
-// authorizeIdTag looks the idTag up in the token store and returns the authorisation
-// that an OCPP 1.6 station gets for it:
-//   - an unknown idTag is Invalid
+// authorizeIdTag looks the idTag up in the tokens of the org that owns the charge
+// station and returns the authorisation that an OCPP 1.6 station gets for it:
+//   - an unknown idTag is Invalid (also when another org has a token with that UID)
 //   - a token that is not valid is Blocked
 //   - a token whose expiry time has been reached is Expired
 //   - any other token is Accepted
@@ -52,11 +53,16 @@ type idTagAuthorization struct {
 // An accepted token that must not be cached (cache mode NEVER) gets the current time
 // as its expiry date, so that the station drops it from its authorisation cache at
 // once. Otherwise the expiry date is the expiry time of the token, if it has one.
-func authorizeIdTag(ctx context.Context, tokens store.TokenStore, clk clock.PassiveClock, idTag string) (idTagAuthorization, error) {
+func authorizeIdTag(ctx context.Context, tokens store.TokenStore, orgs tenancy.StationOrgResolver, clk clock.PassiveClock, chargeStationId, idTag string) (idTagAuthorization, error) {
 	span := trace.SpanFromContext(ctx)
 	span.SetAttributes(attribute.String("authorize.token", idTag))
 
-	tok, err := tokens.LookupToken(ctx, idTag)
+	orgId, err := orgs.OrgIdForStation(ctx, chargeStationId)
+	if err != nil {
+		return idTagAuthorization{}, err
+	}
+
+	tok, err := tokens.LookupTokenForOrg(ctx, orgId, idTag)
 	if err != nil {
 		return idTagAuthorization{}, err
 	}

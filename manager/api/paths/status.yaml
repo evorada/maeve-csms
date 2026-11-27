@@ -9,6 +9,7 @@ paths:
 
         '
       operationId: getChargeStationStatus
+      x-permission: cpms.station.read
       parameters:
       - name: csId
         in: path
@@ -16,7 +17,7 @@ paths:
         required: true
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       responses:
         '200':
           description: Charge station status
@@ -24,6 +25,18 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/ChargeStationStatusResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -46,6 +59,7 @@ paths:
 
         '
       operationId: getConnectorStatuses
+      x-permission: cpms.station.read
       parameters:
       - name: csId
         in: path
@@ -53,7 +67,7 @@ paths:
         required: true
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       responses:
         '200':
           description: Connector statuses
@@ -63,6 +77,18 @@ paths:
                 type: array
                 items:
                   $ref: '../schemas/schemas.yaml#/components/schemas/ConnectorStatusResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:

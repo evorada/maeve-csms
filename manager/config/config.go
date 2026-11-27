@@ -5,13 +5,16 @@ package config
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/subnova/slog-exporter/slogtrace"
+	"github.com/thoughtworks/maeve-csms/manager/entitlements"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/jobs"
@@ -22,6 +25,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/store/firestore"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
 	"github.com/thoughtworks/maeve-csms/manager/store/postgres"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	mqtt2 "github.com/thoughtworks/maeve-csms/manager/transport/mqtt"
 	"go.opentelemetry.io/contrib/detectors/gcp"
@@ -45,6 +49,10 @@ type ApiSettings struct {
 	WsPort  int
 	WssPort int
 	OrgName string
+	// EnableTransactionsPage and EnableAdminUI switch on the legacy pages, which are
+	// served on the internal listener without authentication.
+	EnableTransactionsPage bool
+	EnableAdminUI          bool
 }
 
 type Config struct {
@@ -63,6 +71,156 @@ type Config struct {
 	OcpiApi                          ocpi.Api
 	JobRunner                        jobs.Runner
 	ReservationExpiryInterval        time.Duration
+	// DefaultOrgId is the org that owns the rows from before orgs and everything that
+	// is created without a tenant.
+	DefaultOrgId string
+	// Tenancy says how charge stations are mapped to orgs.
+	Tenancy tenancy.Mode
+	// TenantResolver gives the identity of a charge station inside the manager and the
+	// org that owns it.
+	TenantResolver *tenancy.Resolver
+	// TenantScoper says which orgs a caller of the API may reach.
+	TenantScoper *tenancy.Scoper
+	// TenantConfig gives the config of a tenant to the code that applies it.
+	TenantConfig *tenancy.ConfigProvider
+	// Entitlements enforces the hard limits of the entitlements of a tenant when
+	// something is created.
+	Entitlements *entitlements.Enforcer
+	// AuthVerifier says who the caller of an API request is.
+	AuthVerifier tenancy.Verifier
+}
+
+// devSubject is the caller of every API request in dev mode.
+const devSubject = "user:dev"
+
+// getAuthVerifier creates what authenticates the callers of the API: the verifier of
+// the tokens of the platform, or in dev mode one that accepts every request.
+func getAuthVerifier(ctx context.Context, cfg *AuthConfig, defaultOrgId string) (tenancy.Verifier, error) {
+	switch cfg.Mode {
+	case "jwt":
+		minRefreshInterval, err := time.ParseDuration(cfg.MinRefreshInterval)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse api auth min refresh interval: %s", err)
+		}
+		if minRefreshInterval <= 0 {
+			return nil, fmt.Errorf("api auth min refresh interval must be positive: %s", cfg.MinRefreshInterval)
+		}
+		clockSkew, err := time.ParseDuration(cfg.ClockSkew)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse api auth clock skew: %s", err)
+		}
+		if clockSkew < 0 {
+			return nil, fmt.Errorf("api auth clock skew must not be negative: %s", cfg.ClockSkew)
+		}
+		maxTokenLifetime, err := time.ParseDuration(cfg.MaxTokenLifetime)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse api auth max token lifetime: %s", err)
+		}
+		if maxTokenLifetime <= 0 {
+			return nil, fmt.Errorf("api auth max token lifetime must be positive: %s", cfg.MaxTokenLifetime)
+		}
+
+		verifier, err := tenancy.NewJWKSVerifier(ctx, tenancy.JWKSVerifierConfig{
+			JWKSURL:            cfg.JWKSURL,
+			Issuer:             cfg.Issuer,
+			Audience:           cfg.Audience,
+			MinRefreshInterval: minRefreshInterval,
+			ClockSkew:          clockSkew,
+			MaxLifetime:        maxTokenLifetime,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create the api token verifier: %w", err)
+		}
+		return verifier, nil
+	case "dev":
+		if os.Getenv("ENVIRONMENT") != "dev" {
+			return nil, errors.New(`api auth mode "dev" needs the ENVIRONMENT environment variable to be "dev"`)
+		}
+
+		principal := tenancy.Principal{
+			Subject:  devSubject,
+			OrgId:    cfg.Dev.OrgId,
+			OrgScope: tenancy.OrgScope(cfg.Dev.OrgScope),
+			Perms:    cfg.Dev.Perms,
+		}
+		if principal.OrgId == "" {
+			principal.OrgId = defaultOrgId
+		}
+		if principal.Perms == nil {
+			principal.Perms = slices.Clone(tenancy.AllPermissions)
+		}
+
+		slog.Warn("API authentication disabled (dev mode)",
+			"sub", principal.Subject, "org", principal.OrgId, "org_scope", string(principal.OrgScope))
+		return tenancy.DevVerifier{Principal: principal}, nil
+	default:
+		return nil, fmt.Errorf("unknown api auth mode: %s", cfg.Mode)
+	}
+}
+
+// legacyOrgAssigner is implemented by the storage engines that store the org of a row.
+type legacyOrgAssigner interface {
+	AssignLegacyOrg(ctx context.Context, orgId string) (int64, error)
+}
+
+// assignLegacyOrg gives the rows of the legacy org to the default org, when another org
+// than the legacy one is configured and the storage engine stores the org of a row.
+func assignLegacyOrg(ctx context.Context, engine store.Engine, defaultOrgId string) error {
+	if defaultOrgId == store.LegacyOrgId {
+		return nil
+	}
+	assigner, ok := engine.(legacyOrgAssigner)
+	if !ok {
+		return nil
+	}
+	rows, err := assigner.AssignLegacyOrg(ctx, defaultOrgId)
+	if err != nil {
+		return fmt.Errorf("failed to assign the legacy org rows to the default org: %w", err)
+	}
+	slog.Info("assigned the rows of the legacy org to the default org", "org_id", defaultOrgId, "rows", rows)
+	return nil
+}
+
+// configureTenants checks that the storage engine can serve the tenancy mode and, in
+// multi mode, puts the configured bootstrap tenants in the tenant store.
+func configureTenants(ctx context.Context, cfg *TenancyConfig, storageType string, engine store.Engine) error {
+	switch tenancy.Mode(cfg.Mode) {
+	case tenancy.ModeSingle:
+		// the host of a station is ignored in single mode: tenants that are configured
+		// here would not be isolated from each other
+		if len(cfg.BootstrapTenants) > 0 {
+			return fmt.Errorf("tenancy bootstrap tenants need tenancy mode %q", tenancy.ModeMulti)
+		}
+		return nil
+	case tenancy.ModeMulti:
+		_, err := engine.GetTenant(ctx, store.LegacyOrgId)
+		if errors.Is(err, store.ErrNotImplemented) {
+			return fmt.Errorf("tenancy mode %q is not supported by the %s storage", tenancy.ModeMulti, storageType)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to read the tenant store: %w", err)
+		}
+
+		bootstrapTenants := make([]tenancy.BootstrapTenant, 0, len(cfg.BootstrapTenants))
+		for _, t := range cfg.BootstrapTenants {
+			bootstrapTenants = append(bootstrapTenants, tenancy.BootstrapTenant{
+				OrgId:     t.OrgId,
+				Slug:      t.Slug,
+				OrgKey:    t.OrgKey,
+				Hostnames: t.Hostnames,
+			})
+		}
+		err = tenancy.Bootstrap(ctx, engine, bootstrapTenants)
+		if err != nil {
+			return fmt.Errorf("failed to bootstrap tenants: %w", err)
+		}
+		if len(bootstrapTenants) > 0 {
+			slog.Info("bootstrapped tenants", "count", len(bootstrapTenants))
+		}
+		return nil
+	default:
+		return fmt.Errorf("unknown tenancy mode: %s", cfg.Mode)
+	}
 }
 
 func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
@@ -84,6 +242,14 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		return nil, fmt.Errorf("reservation expiry interval must be positive: %s", cfg.Jobs.ReservationExpiryInterval)
 	}
 
+	tenantCacheTTL, err := time.ParseDuration(cfg.Tenancy.CacheTTL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse tenancy cache ttl: %s", err)
+	}
+	if tenantCacheTTL <= 0 {
+		return nil, fmt.Errorf("tenancy cache ttl must be positive: %s", cfg.Tenancy.CacheTTL)
+	}
+
 	c = &Config{
 		Api: ApiSettings{
 			Addr:    cfg.Api.Addr,
@@ -91,8 +257,13 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 			WsPort:  cfg.Api.WsPort,
 			WssPort: cfg.Api.WssPort,
 			OrgName: cfg.Api.OrgName,
+
+			EnableTransactionsPage: cfg.Api.EnableTransactionsPage,
+			EnableAdminUI:          cfg.Api.EnableAdminUI,
 		},
 		ReservationExpiryInterval: reservationExpiryInterval,
+		DefaultOrgId:              cfg.Tenancy.DefaultOrgId,
+		Tenancy:                   tenancy.Mode(cfg.Tenancy.Mode),
 	}
 
 	switch cfg.Observability.LogFormat {
@@ -102,6 +273,11 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, nil)))
 	default:
 		return nil, fmt.Errorf("unknown log format: %s", cfg.Observability.LogFormat)
+	}
+
+	c.AuthVerifier, err = getAuthVerifier(ctx, &cfg.Api.Auth, c.DefaultOrgId)
+	if err != nil {
+		return nil, err
 	}
 
 	httpClient, err := getHttpClient(cfg.Observability.TlsKeylogFile)
@@ -121,6 +297,37 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 	c.Storage, err = getStorage(ctx, &cfg.Storage)
 	if err != nil {
 		return nil, err
+	}
+
+	err = assignLegacyOrg(ctx, c.Storage, c.DefaultOrgId)
+	if err != nil {
+		return nil, err
+	}
+
+	err = configureTenants(ctx, &cfg.Tenancy, cfg.Storage.Type, c.Storage)
+	if err != nil {
+		return nil, err
+	}
+
+	c.TenantResolver = &tenancy.Resolver{
+		Mode:         c.Tenancy,
+		Tenants:      c.Storage,
+		Stations:     c.Storage,
+		DefaultOrgId: c.DefaultOrgId,
+		Clock:        clock.RealClock{},
+		CacheTTL:     tenantCacheTTL,
+	}
+	c.TenantConfig = &tenancy.ConfigProvider{Resolver: c.TenantResolver}
+	c.TenantScoper = &tenancy.Scoper{
+		Mode:         c.Tenancy,
+		Tenants:      c.Storage,
+		Resolver:     c.TenantResolver,
+		DefaultOrgId: c.DefaultOrgId,
+	}
+	c.Entitlements = &entitlements.Enforcer{
+		Tenants: c.Storage,
+		Counter: c.Storage,
+		Mode:    c.Tenancy,
 	}
 
 	c.ContractCertValidationService, err = getContractCertValidator(&cfg.ContractCertValidator, httpClient)
@@ -157,6 +364,8 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		c.Ocpp16Handler = ocpp16.NewRouter(c.MsgEmitter,
 			clock.RealClock{},
 			c.Storage,
+			c.TenantResolver,
+			c.TenantConfig,
 			c.ContractCertValidationService,
 			c.ChargeStationCertProviderService,
 			c.ContractCertProviderService,
@@ -167,6 +376,8 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		c.Ocpp201Handler = ocpp201.NewRouter(c.MsgEmitter,
 			clock.RealClock{},
 			c.Storage,
+			c.TenantResolver,
+			c.TenantConfig,
 			c.TariffService,
 			c.ContractCertValidationService,
 			c.ChargeStationCertProviderService,
@@ -176,7 +387,7 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 	}
 
 	if cfg.Ocpi != nil {
-		c.OcpiApi, err = getOcpiApi(cfg.Ocpi, c.Storage, httpClient)
+		c.OcpiApi, err = getOcpiApi(cfg.Ocpi, c.Storage, httpClient, c.DefaultOrgId)
 		if err != nil {
 			return nil, err
 		}
@@ -185,8 +396,8 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 	return
 }
 
-func getOcpiApi(o *OcpiConfig, engine store.Engine, httpClient *http.Client) (ocpi.Api, error) {
-	api := ocpi.NewOCPI(engine, httpClient, o.CountryCode, o.PartyId)
+func getOcpiApi(o *OcpiConfig, engine store.Engine, httpClient *http.Client, defaultOrgId string) (ocpi.Api, error) {
+	api := ocpi.NewOCPI(engine, httpClient, o.CountryCode, o.PartyId, defaultOrgId)
 	api.SetExternalUrl(o.ExternalURL)
 	return api, nil
 }

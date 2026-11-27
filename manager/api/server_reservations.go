@@ -33,8 +33,20 @@ func (s *Server) CreateReservation(w http.ResponseWriter, r *http.Request, csId 
 		reservation.ParentIdTag = req.ParentIdTag
 	}
 
+	// reservation ids are shared by all charge stations: a reservation of another
+	// charge station, which may belong to another org, is never replaced
+	existing, err := s.store.GetReservation(r.Context(), reservation.ReservationId)
+	if err != nil {
+		_ = render.Render(w, r, ErrInternalError(err))
+		return
+	}
+	if existing != nil && existing.ChargeStationId != csId {
+		_ = render.Render(w, r, ErrConflict("reservation id already in use"))
+		return
+	}
+
 	// Store the reservation
-	err := s.store.CreateReservation(r.Context(), reservation)
+	err = s.store.CreateReservation(r.Context(), reservation)
 	if err != nil {
 		_ = render.Render(w, r, ErrInternalError(err))
 		return

@@ -2,10 +2,13 @@ paths:
   /token:
     post:
       summary: Create/update an authorization token
-      description: 'Creates or updates a token that can be used to authorize a charge
+      description: 'Creates or updates a token that can be used to authorize a charge.
+        The token belongs to the org of the caller, or to `orgId` when the body names
+        an org that the caller may reach.
 
         '
       operationId: setToken
+      x-permission: cpms.token.write
       requestBody:
         required: true
         content:
@@ -15,6 +18,30 @@ paths:
       responses:
         '201':
           description: Created
+        '400':
+          description: Invalid request, or `orgId` is missing for a caller whose own org is not a tenant here
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: The org is outside the scope of the caller
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -23,10 +50,11 @@ paths:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
     get:
       summary: List authorization tokens
-      description: 'Lists all tokens that can be used to authorize a charge
+      description: 'Lists the tokens of the orgs that the caller may reach
 
         '
       operationId: listTokens
+      x-permission: cpms.token.read
       parameters:
       - required: false
         in: query
@@ -41,6 +69,13 @@ paths:
           type: integer
           minimum: 1
           maximum: 100
+      - required: false
+        in: query
+        name: orgId
+        description: Only list the tokens of this org. An org outside the scope of the caller gives an empty list
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
           description: List of tokens
@@ -50,6 +85,18 @@ paths:
                 type: array
                 items:
                   $ref: '../schemas/schemas.yaml#/components/schemas/Token'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -63,6 +110,7 @@ paths:
 
         '
       operationId: lookupToken
+      x-permission: cpms.token.read
       parameters:
       - required: true
         in: path
@@ -70,6 +118,13 @@ paths:
         schema:
           type: string
           maxLength: 36
+      - required: false
+        in: query
+        name: orgId
+        description: The org that owns the token. Without it the token is looked up in the org of the caller
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
           description: Authorization token details
@@ -77,6 +132,18 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Token'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Not found
           content:

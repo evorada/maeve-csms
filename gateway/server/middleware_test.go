@@ -1,15 +1,17 @@
 package server_test
 
 import (
+	"context"
 	"crypto/x509"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/thoughtworks/maeve-csms/gateway/registry"
 	"github.com/thoughtworks/maeve-csms/gateway/server"
-	"net/http"
-	"net/http/httptest"
-	"testing"
 )
 
 func TestTraceMatchedRequest(t *testing.T) {
@@ -147,11 +149,11 @@ func TestTLSOffloadWithUnknownClientCertificate(t *testing.T) {
 
 type errorRegistry struct{}
 
-func (e errorRegistry) LookupChargeStation(clientId string) (*registry.ChargeStation, error) {
+func (e errorRegistry) LookupChargeStation(context.Context, string, string) (*registry.ChargeStation, error) {
 	return nil, fmt.Errorf("expected error")
 }
 
-func (e errorRegistry) LookupCertificate(certHash string) (*x509.Certificate, error) {
+func (e errorRegistry) LookupCertificate(context.Context, string) (*x509.Certificate, error) {
 	return nil, fmt.Errorf("expected error")
 }
 

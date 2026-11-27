@@ -14,6 +14,7 @@ import (
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	clockTest "k8s.io/utils/clock/testing"
 )
 
@@ -33,14 +34,16 @@ func newAuthorizeHandler(t *testing.T, tokens ...*store.Token) handlers.Authoriz
 	}
 
 	return handlers.AuthorizeHandler{
-		TokenStore: engine,
-		Clock:      clk,
+		TokenStore:  engine,
+		OrgResolver: &tenancy.Resolver{Stations: engine},
+		Clock:       clk,
 	}
 }
 
 // rfidToken is a valid token that the station may cache and that does not expire.
 func rfidToken(uid string) *store.Token {
 	return &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -183,8 +186,9 @@ func TestAuthorizeReturnsTheExpiryDateOfTheAuthorizationCache(t *testing.T) {
 func TestAuthorizeReturnsStoreError(t *testing.T) {
 	lookupErr := errors.New("token store is down")
 	ah := handlers.AuthorizeHandler{
-		TokenStore: failingTokenLookupStore{err: lookupErr},
-		Clock:      clockTest.NewFakePassiveClock(time.Now()),
+		TokenStore:  failingTokenLookupStore{err: lookupErr},
+		OrgResolver: &tenancy.Resolver{Stations: inmemory.NewStore(clockTest.NewFakePassiveClock(time.Now()))},
+		Clock:       clockTest.NewFakePassiveClock(time.Now()),
 	}
 
 	resp, err := ah.HandleCall(context.Background(), "cs001", &types.AuthorizeJson{IdTag: "MYRFIDCARD"})
@@ -199,6 +203,130 @@ type failingTokenLookupStore struct {
 	err error
 }
 
-func (s failingTokenLookupStore) LookupToken(context.Context, string) (*store.Token, error) {
+func (s failingTokenLookupStore) LookupTokenForOrg(context.Context, string, string) (*store.Token, error) {
 	return nil, s.err
+}
+
+// A token belongs to an org: a charge station is only authorised with the tokens of
+// the org that owns it.
+func TestAuthorizeOnlyKnowsTheTokensOfTheOrgOfTheStation(t *testing.T) {
+	const (
+		orgA = "0193b2c4-0000-7000-8000-0000000000a1"
+		orgB = "0193b2c4-0000-7000-8000-0000000000b2"
+	)
+	onlyOrgB := rfidToken("ONLYORGB")
+	onlyOrgB.OrgId = orgB
+	// both orgs have a token with this UID: it is valid in org A and blocked in org B
+	validInOrgA := rfidToken("BOTHORGS")
+	validInOrgA.OrgId = orgA
+	blockedInOrgB := rfidToken("BOTHORGS")
+	blockedInOrgB.OrgId = orgB
+	blockedInOrgB.Valid = false
+
+	ah := newAuthorizeHandler(t, onlyOrgB, validInOrgA, blockedInOrgB)
+	stations := ah.TokenStore.(*inmemory.Store)
+	ctx := context.Background()
+	require.NoError(t, stations.SetChargeStationAuth(ctx, "cs-org-a", &store.ChargeStationAuth{OrgId: orgA}))
+	require.NoError(t, stations.SetChargeStationAuth(ctx, "cs-org-b", &store.ChargeStationAuth{OrgId: orgB}))
+
+	status := func(chargeStationId, idTag string) types.AuthorizeResponseJsonIdTagInfoStatus {
+		t.Helper()
+		resp, err := ah.HandleCall(ctx, chargeStationId, &types.AuthorizeJson{IdTag: idTag})
+		require.NoError(t, err)
+		return resp.(*types.AuthorizeResponseJson).IdTagInfo.Status
+	}
+
+	assert.Equal(t, types.AuthorizeResponseJsonIdTagInfoStatusInvalid, status("cs-org-a", "ONLYORGB"))
+	assert.Equal(t, types.AuthorizeResponseJsonIdTagInfoStatusAccepted, status("cs-org-b", "ONLYORGB"))
+	assert.Equal(t, types.AuthorizeResponseJsonIdTagInfoStatusAccepted, status("cs-org-a", "BOTHORGS"))
+	assert.Equal(t, types.AuthorizeResponseJsonIdTagInfoStatusBlocked, status("cs-org-b", "BOTHORGS"))
+	// a charge station that is not registered belongs to the default org
+	assert.Equal(t, types.AuthorizeResponseJsonIdTagInfoStatusInvalid, status("cs-unknown", "ONLYORGB"))
+	assert.Equal(t, types.AuthorizeResponseJsonIdTagInfoStatusInvalid, status("cs-unknown", "BOTHORGS"))
+}
+
+// failingOrgResolver fails every lookup of the org of a charge station.
+type failingOrgResolver struct {
+	err error
+}
+
+func (r failingOrgResolver) OrgIdForStation(context.Context, string) (string, error) {
+	return "", r.err
+}
+
+func TestAuthorizeReturnsOrgResolverError(t *testing.T) {
+	resolveErr := errors.New("charge station store is down")
+	ah := newAuthorizeHandler(t, rfidToken("MYRFIDCARD"))
+	ah.OrgResolver = failingOrgResolver{err: resolveErr}
+
+	resp, err := ah.HandleCall(context.Background(), "cs001", &types.AuthorizeJson{IdTag: "MYRFIDCARD"})
+
+	assert.ErrorIs(t, err, resolveErr)
+	assert.Nil(t, resp)
+}
+
+// The status of a tenant only stops what is created or changed through the API: the
+// charge stations of a suspended tenant authorize and charge like any other.
+func TestStationOfASuspendedTenantStillAuthorizesAndCharges(t *testing.T) {
+	const orgA = "0193b2c4-0000-7000-8000-0000000000a1"
+	ctx := context.Background()
+	now, err := time.Parse(time.RFC3339, authorizeClockTime)
+	require.NoError(t, err)
+	clk := clockTest.NewFakePassiveClock(now)
+	engine := inmemory.NewStore(clk)
+	require.NoError(t, engine.PutTenant(ctx, &store.Tenant{
+		OrgId: orgA, Path: store.OrgPathLabel(orgA), Slug: "tenant-a", OrgKey: "aaaa", Hostnames: []string{"a.example"},
+	}))
+	token := rfidToken("MYRFIDCARD")
+	token.OrgId = orgA
+	require.NoError(t, engine.SetToken(ctx, token))
+	// the first charge station is registered, the second is only known by the org key
+	// that its station key starts with
+	stations := []string{"aaaa.cs001", "aaaa.cs002"}
+	require.NoError(t, engine.SetChargeStationAuth(ctx, stations[0], &store.ChargeStationAuth{OrgId: orgA}))
+	resolver := &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine}
+	idTag := "MYRFIDCARD"
+
+	for _, status := range []store.TenantStatus{store.TenantStatusSuspended, store.TenantStatusCancelled} {
+		found, err := engine.SetTenantStatus(ctx, orgA, status)
+		require.NoError(t, err)
+		require.True(t, found)
+		resolver.Invalidate(orgA)
+
+		for _, chargeStationId := range stations {
+			name := string(status) + " " + chargeStationId
+
+			resp, err := handlers.AuthorizeHandler{TokenStore: engine, OrgResolver: resolver, Clock: clk}.
+				HandleCall(ctx, chargeStationId, &types.AuthorizeJson{IdTag: idTag})
+			require.NoError(t, err, name)
+			assert.Equal(t, types.AuthorizeResponseJsonIdTagInfoStatusAccepted, resp.(*types.AuthorizeResponseJson).IdTagInfo.Status, name)
+
+			started := startTransaction(t, handlers.StartTransactionHandler{
+				Clock: clk, TokenStore: engine, OrgResolver: resolver, TransactionStore: engine, ReservationStore: engine,
+			}, chargeStationId, startTransactionRequest(idTag))
+			require.Equal(t, types.StartTransactionResponseJsonIdTagInfoStatusAccepted, started.IdTagInfo.Status, name)
+
+			_, err = handlers.MeterValuesHandler{TransactionStore: engine, MeterValuesStore: engine}.
+				HandleCall(ctx, chargeStationId, &types.MeterValuesJson{
+					ConnectorId:   2,
+					TransactionId: &started.TransactionId,
+					MeterValue: []types.MeterValuesJsonMeterValueElem{{
+						Timestamp: authorizeClockTime,
+						SampledValue: []types.MeterValuesJsonMeterValueElemSampledValueElem{
+							meterValuesSample("150", types.MeterValuesJsonMeterValueElemSampledValueElemMeasurandEnergyActiveImportRegister, types.MeterValuesJsonMeterValueElemSampledValueElemUnitWh),
+						},
+					}},
+				})
+			require.NoError(t, err, name)
+
+			resp, err = handlers.StopTransactionHandler{Clock: clk, TokenStore: engine, OrgResolver: resolver, TransactionStore: engine}.
+				HandleCall(ctx, chargeStationId, &types.StopTransactionJson{
+					IdTag: &idTag, MeterStop: 200, Timestamp: authorizeClockTime, TransactionId: started.TransactionId,
+				})
+			require.NoError(t, err, name)
+			stopped := resp.(*types.StopTransactionResponseJson)
+			require.NotNil(t, stopped.IdTagInfo, name)
+			assert.Equal(t, types.StopTransactionResponseJsonIdTagInfoStatusAccepted, stopped.IdTagInfo.Status, name)
+		}
+	}
 }

@@ -5,6 +5,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -13,6 +14,14 @@ import (
 
 // SetLocation creates or updates a location
 func (s *Store) SetLocation(ctx context.Context, location *store.Location) error {
+	if location.OrgId == "" {
+		return fmt.Errorf("location org id is required")
+	}
+	orgId, err := optionalOrgId(location.OrgId)
+	if err != nil {
+		return fmt.Errorf("failed to set location: %w", err)
+	}
+
 	// Serialize location data to JSON
 	locationData, err := json.Marshal(location)
 	if err != nil {
@@ -38,10 +47,15 @@ func (s *Store) SetLocation(ctx context.Context, location *store.Location) error
 		CountryCode:  countryCode,
 		PartyID:      partyId,
 		LocationData: locationData,
+		OrgID:        orgId,
 	}
 
 	_, err = s.writeQueries().SetLocation(ctx, params)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// the query changes nothing when the id belongs to a location of another org
+			return fmt.Errorf("location %s: %w", location.Id, store.ErrLocationOwnedByAnotherOrg)
+		}
 		return fmt.Errorf("failed to set location: %w", err)
 	}
 
@@ -63,6 +77,7 @@ func (s *Store) LookupLocation(ctx context.Context, locationId string) (*store.L
 	if err := json.Unmarshal(loc.LocationData, &location); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal location data: %w", err)
 	}
+	location.OrgId = uuidString(loc.OrgID)
 
 	return &location, nil
 }
@@ -94,6 +109,7 @@ func (s *Store) ListLocations(ctx context.Context, offset int, limit int) ([]*st
 		if err := json.Unmarshal(loc.LocationData, &location); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal location data: %w", err)
 		}
+		location.OrgId = uuidString(loc.OrgID)
 		result[i] = &location
 	}
 

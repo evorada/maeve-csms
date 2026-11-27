@@ -72,6 +72,37 @@ func TestStubsReturnErrNotImplemented(t *testing.T) {
 			_, err := s.NextOcpp16TransactionId(ctx)
 			return err
 		},
+		"PutTenant": func() error {
+			return s.PutTenant(ctx, &store.Tenant{})
+		},
+		"GetTenant": func() error {
+			_, err := s.GetTenant(ctx, store.LegacyOrgId)
+			return err
+		},
+		"GetTenantByHost": func() error {
+			_, err := s.GetTenantByHost(ctx, "chargeco.ocpp.example.com")
+			return err
+		},
+		"GetTenantByOrgKey": func() error {
+			_, err := s.GetTenantByOrgKey(ctx, "chrg01")
+			return err
+		},
+		"ListTenants": func() error {
+			_, err := s.ListTenants(ctx, "", 10)
+			return err
+		},
+		"ListSubtreeOrgIds": func() error {
+			_, err := s.ListSubtreeOrgIds(ctx, store.LegacyOrgId)
+			return err
+		},
+		"SetTenantStatus": func() error {
+			_, err := s.SetTenantStatus(ctx, store.LegacyOrgId, store.TenantStatusSuspended)
+			return err
+		},
+		"CountConnectorsForOrgs": func() error {
+			_, err := s.CountConnectorsForOrgs(ctx, []string{store.LegacyOrgId})
+			return err
+		},
 	}
 
 	for name, stub := range stubs {

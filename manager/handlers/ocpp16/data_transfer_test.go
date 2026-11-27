@@ -27,6 +27,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/services"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	"k8s.io/utils/clock"
 )
@@ -315,6 +316,8 @@ func TestDataTransferRoutesHas2beSignCertificate(t *testing.T) {
 	router := handlers16.NewRouter(emitter,
 		clock.RealClock{},
 		engine,
+		&tenancy.Resolver{Stations: engine},
+		nil,
 		nil,
 		certProvider,
 		nil,

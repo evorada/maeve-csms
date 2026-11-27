@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,14 +40,15 @@ type Store struct {
 	chargeStationCertificateDeletion map[string]*store.ChargeStationCertificateDeletion
 	remoteStartTransactionRequests   map[string]*store.RemoteStartTransactionRequest
 	remoteStopTransactionRequests    map[string]*store.RemoteStopTransactionRequest
-	tokens                           map[string]*store.Token
+	tokens                           map[string]*tokenEntry
+	tokenSeq                         uint64
 	transactions                     map[string]*store.Transaction
 	ocpp16TransactionSeq             int
 	certificates                     map[string]string
 	registrations                    map[string]*store.OcpiRegistration
 	partyDetails                     map[string]*store.OcpiParty
 	locations                        map[string]*store.Location
-	chargingProfiles                 map[int]*store.ChargingProfile
+	chargingProfiles                 map[chargingProfileKey]*store.ChargingProfile
 	firmwareUpdateStatus             map[string]*store.FirmwareUpdateStatus
 	firmwareUpdateRequests           map[string]*store.FirmwareUpdateRequest
 	diagnosticsStatus                map[string]*store.DiagnosticsStatus
@@ -69,6 +71,10 @@ type Store struct {
 	chargeStationEventNextId         int
 	deviceReports                    map[string][]*store.DeviceReport
 	deviceReportNextId               int
+	tenants                          map[string]*store.Tenant // by org id
+	tenantsByHost                    map[string]string        // hostname to org id
+	tenantsByOrgKey                  map[string]string        // org key to org id
+	tenantsBySlug                    map[string]string        // slug to org id
 }
 
 func NewStore(clock clock.PassiveClock) *Store {
@@ -86,13 +92,13 @@ func NewStore(clock clock.PassiveClock) *Store {
 		chargeStationCertificateDeletion: make(map[string]*store.ChargeStationCertificateDeletion),
 		remoteStartTransactionRequests:   make(map[string]*store.RemoteStartTransactionRequest),
 		remoteStopTransactionRequests:    make(map[string]*store.RemoteStopTransactionRequest),
-		tokens:                           make(map[string]*store.Token),
+		tokens:                           make(map[string]*tokenEntry),
 		transactions:                     make(map[string]*store.Transaction),
 		certificates:                     make(map[string]string),
 		registrations:                    make(map[string]*store.OcpiRegistration),
 		partyDetails:                     make(map[string]*store.OcpiParty),
 		locations:                        make(map[string]*store.Location),
-		chargingProfiles:                 make(map[int]*store.ChargingProfile),
+		chargingProfiles:                 make(map[chargingProfileKey]*store.ChargingProfile),
 		firmwareUpdateStatus:             make(map[string]*store.FirmwareUpdateStatus),
 		firmwareUpdateRequests:           make(map[string]*store.FirmwareUpdateRequest),
 		diagnosticsStatus:                make(map[string]*store.DiagnosticsStatus),
@@ -115,6 +121,10 @@ func NewStore(clock clock.PassiveClock) *Store {
 		chargeStationEventNextId:         1,
 		deviceReports:                    make(map[string][]*store.DeviceReport),
 		deviceReportNextId:               1,
+		tenants:                          make(map[string]*store.Tenant),
+		tenantsByHost:                    make(map[string]string),
+		tenantsByOrgKey:                  make(map[string]string),
+		tenantsBySlug:                    make(map[string]string),
 	}
 }
 
@@ -220,8 +230,25 @@ func (s *Store) ListFirmwareUpdateRequests(_ context.Context, pageSize int, prev
 func (s *Store) SetChargeStationAuth(_ context.Context, chargeStationId string, auth *store.ChargeStationAuth) error {
 	s.Lock()
 	defer s.Unlock()
+	if auth.OrgId == "" {
+		// setting the auth details without an org keeps the org of the charge station
+		if current := s.chargeStationAuth[chargeStationId]; current != nil && current.OrgId != "" {
+			withOrg := *auth
+			withOrg.OrgId = current.OrgId
+			auth = &withOrg
+		}
+	}
 	s.chargeStationAuth[chargeStationId] = auth
 	return nil
+}
+
+// orgIdForStation returns the org that owns a charge station: the org it was registered
+// with, or the legacy org when it has none or is not registered. The caller holds the lock.
+func (s *Store) orgIdForStation(chargeStationId string) string {
+	if auth := s.chargeStationAuth[chargeStationId]; auth != nil && auth.OrgId != "" {
+		return auth.OrgId
+	}
+	return store.LegacyOrgId
 }
 
 func (s *Store) LookupChargeStationAuth(_ context.Context, chargeStationId string) (*store.ChargeStationAuth, error) {
@@ -399,35 +426,116 @@ func (s *Store) ListChargeStationTriggerMessages(ctx context.Context, pageSize i
 	return triggerMessages, nil
 }
 
+// tokenEntry is a stored token and the order in which it was first set.
+type tokenEntry struct {
+	token *store.Token
+	seq   uint64
+}
+
+func tokenKey(orgId, countryCode, partyId, uid string) string {
+	return orgId + "|" + countryCode + "|" + partyId + "|" + uid
+}
+
+// SetToken stores the token, or replaces the token with the same org, country code,
+// party id and UID (which keeps its place in the listings).
 func (s *Store) SetToken(_ context.Context, token *store.Token) error {
+	if token.OrgId == "" {
+		return fmt.Errorf("token org id is required")
+	}
 	s.Lock()
 	defer s.Unlock()
 	token.LastUpdated = s.clock.Now().UTC().Format(time.RFC3339)
-	s.tokens[token.Uid] = token
+	key := tokenKey(token.OrgId, token.CountryCode, token.PartyId, token.Uid)
+	if entry, ok := s.tokens[key]; ok {
+		entry.token = token
+		return nil
+	}
+	s.tokenSeq++
+	s.tokens[key] = &tokenEntry{token: token, seq: s.tokenSeq}
 	return nil
 }
 
+// lookupToken returns the token with the UID that matches: a valid token first, then
+// the most recently updated one, then the one that was created last. The caller holds
+// the lock.
+func (s *Store) lookupToken(tokenUid string, matches func(*store.Token) bool) *store.Token {
+	var best *tokenEntry
+	var bestUpdated time.Time
+	for _, entry := range s.tokens {
+		if entry.token.Uid != tokenUid || !matches(entry.token) {
+			continue
+		}
+		// a timestamp that cannot be read is the oldest one
+		updated, _ := time.Parse(time.RFC3339, entry.token.LastUpdated)
+		better := best == nil
+		if !better {
+			switch {
+			case entry.token.Valid != best.token.Valid:
+				better = entry.token.Valid
+			case !updated.Equal(bestUpdated):
+				better = updated.After(bestUpdated)
+			default:
+				better = entry.seq > best.seq
+			}
+		}
+		if better {
+			best, bestUpdated = entry, updated
+		}
+	}
+	if best == nil {
+		return nil
+	}
+	return best.token
+}
+
+// LookupToken finds a token by UID, whatever its org.
 func (s *Store) LookupToken(_ context.Context, tokenUid string) (*store.Token, error) {
 	s.Lock()
 	defer s.Unlock()
-	return s.tokens[tokenUid], nil
+	return s.lookupToken(tokenUid, func(*store.Token) bool { return true }), nil
 }
 
+// LookupTokenForOrg finds a token of one org by UID.
+func (s *Store) LookupTokenForOrg(_ context.Context, orgId, tokenUid string) (*store.Token, error) {
+	s.Lock()
+	defer s.Unlock()
+	return s.lookupToken(tokenUid, func(token *store.Token) bool { return token.OrgId == orgId }), nil
+}
+
+// listTokens returns a page of the tokens that match, the token that was created last
+// first. The caller holds the lock.
+func (s *Store) listTokens(offset, limit int, matches func(*store.Token) bool) []*store.Token {
+	var entries []*tokenEntry
+	for _, entry := range s.tokens {
+		if matches(entry.token) {
+			entries = append(entries, entry)
+		}
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].seq > entries[j].seq })
+
+	tokens := make([]*store.Token, 0)
+	for i, entry := range entries {
+		if i >= offset && i-offset < limit {
+			tokens = append(tokens, entry.token)
+		}
+	}
+	return tokens
+}
+
+// ListTokens lists the tokens of all orgs.
 func (s *Store) ListTokens(_ context.Context, offset int, limit int) ([]*store.Token, error) {
 	s.Lock()
 	defer s.Unlock()
-	var tokens []*store.Token
-	count := 0
-	for _, token := range s.tokens {
-		if count >= offset && count < offset+limit {
-			tokens = append(tokens, token)
-		}
-		count++
-	}
-	if tokens == nil {
-		tokens = make([]*store.Token, 0)
-	}
-	return tokens, nil
+	return s.listTokens(offset, limit, func(*store.Token) bool { return true }), nil
+}
+
+// ListTokensForOrgs lists the tokens of the given orgs.
+func (s *Store) ListTokensForOrgs(_ context.Context, orgIds []string, offset, limit int) ([]*store.Token, error) {
+	s.Lock()
+	defer s.Unlock()
+	return s.listTokens(offset, limit, func(token *store.Token) bool {
+		return slices.Contains(orgIds, token.OrgId)
+	}), nil
 }
 
 func transactionKey(chargeStationId, transactionId string) string {
@@ -439,8 +547,10 @@ func (s *Store) getTransaction(chargeStationId, transactionId string) *store.Tra
 	return transaction
 }
 
+// updateTransaction stores a new transaction, which belongs to the org of its charge station.
 func (s *Store) updateTransaction(transaction *store.Transaction) {
 	key := transactionKey(transaction.ChargeStationId, transaction.TransactionId)
+	transaction.OrgId = s.orgIdForStation(transaction.ChargeStationId)
 	s.transactions[key] = transaction
 }
 
@@ -856,6 +966,14 @@ func (s *Store) SetLocation(_ context.Context, location *store.Location) error {
 	s.Lock()
 	defer s.Unlock()
 
+	if location.OrgId == "" {
+		return fmt.Errorf("location org id is required")
+	}
+	// location ids are global: a location of another org is not replaced
+	if current := s.locations[location.Id]; current != nil && current.OrgId != location.OrgId {
+		return fmt.Errorf("location %s: %w", location.Id, store.ErrLocationOwnedByAnotherOrg)
+	}
+
 	s.locations[location.Id] = location
 
 	return nil
@@ -937,6 +1055,7 @@ func (s *Store) CreateReservation(_ context.Context, reservation *store.Reservat
 	s.Lock()
 	defer s.Unlock()
 	r := *reservation
+	r.OrgId = s.orgIdForStation(r.ChargeStationId)
 	s.reservations[reservation.ReservationId] = &r
 	return nil
 }
@@ -1527,6 +1646,32 @@ func (s *Store) ListConnectorStatuses(_ context.Context, chargeStationId string)
 	})
 
 	return statuses, nil
+}
+
+// CountConnectorsForOrgs counts the connectors (connector id above 0) that the
+// registered charge stations of the given orgs have reported a status for.
+func (s *Store) CountConnectorsForOrgs(_ context.Context, orgIds []string) (int, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	wanted := make(map[string]bool, len(orgIds))
+	for _, orgId := range orgIds {
+		wanted[strings.ToLower(orgId)] = true
+	}
+
+	count := 0
+	for chargeStationId, connectors := range s.connectorStatuses {
+		// a status of a charge station that is not registered belongs to no org
+		if s.chargeStationAuth[chargeStationId] == nil || !wanted[strings.ToLower(s.orgIdForStation(chargeStationId))] {
+			continue
+		}
+		for connectorId := range connectors {
+			if connectorId > 0 {
+				count++
+			}
+		}
+	}
+	return count, nil
 }
 
 func (s *Store) SetChargeStationStatus(_ context.Context, chargeStationId string, status *store.ChargeStationStatus) error {

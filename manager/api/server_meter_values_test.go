@@ -27,6 +27,7 @@ func meterValuesStr(s string) *string {
 func TestGetMeterValuesReturnsOcpp16MeterValues(t *testing.T) {
 	server, r, engine, _ := setupServer(t)
 	defer server.Close()
+	registerStation(t, engine, "cs001")
 
 	handler := ocpp16.MeterValuesHandler{
 		TransactionStore: engine,

@@ -10,6 +10,7 @@ paths:
 
         '
       operationId: setVariableMonitoring
+      x-permission: cpms.station.write
       parameters:
       - name: csId
         in: path
@@ -17,7 +18,7 @@ paths:
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       requestBody:
         required: true
         content:
@@ -31,6 +32,18 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/SetVariableMonitoringResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -51,6 +64,7 @@ paths:
 
         '
       operationId: clearVariableMonitoring
+      x-permission: cpms.station.write
       parameters:
       - name: csId
         in: path
@@ -58,7 +72,7 @@ paths:
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       - name: monitorId
         in: path
         required: true
@@ -68,6 +82,18 @@ paths:
       responses:
         '202':
           description: Accepted - monitoring clear initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station or monitor
           content:
@@ -88,6 +114,7 @@ paths:
 
         '
       operationId: setMonitoringBase
+      x-permission: cpms.station.write
       parameters:
       - name: csId
         in: path
@@ -95,7 +122,7 @@ paths:
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       requestBody:
         required: true
         content:
@@ -105,6 +132,18 @@ paths:
       responses:
         '202':
           description: Accepted - monitoring base configuration initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -127,6 +166,7 @@ paths:
 
         '
       operationId: setMonitoringLevel
+      x-permission: cpms.station.write
       parameters:
       - name: csId
         in: path
@@ -134,7 +174,7 @@ paths:
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       requestBody:
         required: true
         content:
@@ -144,6 +184,18 @@ paths:
       responses:
         '202':
           description: Accepted - monitoring level configuration initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -166,6 +218,7 @@ paths:
 
         '
       operationId: getMonitoringReport
+      x-permission: cpms.connector.command
       parameters:
       - name: csId
         in: path
@@ -173,7 +226,7 @@ paths:
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       requestBody:
         required: true
         content:
@@ -183,6 +236,18 @@ paths:
       responses:
         '202':
           description: Accepted - monitoring report request initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -205,6 +270,7 @@ paths:
 
         '
       operationId: getChargeStationEvents
+      x-permission: cpms.station.read
       parameters:
       - name: csId
         in: path
@@ -212,7 +278,7 @@ paths:
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       - name: eventType
         in: query
         description: Filter by event type
@@ -252,6 +318,18 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/EventsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -275,6 +353,7 @@ paths:
 
         '
       operationId: getDeviceReports
+      x-permission: cpms.station.read
       parameters:
       - name: csId
         in: path
@@ -282,7 +361,7 @@ paths:
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       - name: reportType
         in: query
         description: Filter by report type
@@ -315,6 +394,18 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/ReportsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:

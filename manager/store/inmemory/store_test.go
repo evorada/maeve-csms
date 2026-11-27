@@ -310,6 +310,7 @@ func TestSetTokenKeepsTheExpiryTime(t *testing.T) {
 
 	expiresAt := time.Date(2027, 1, 31, 8, 30, 0, 0, time.UTC)
 	err := engine.SetToken(ctx, &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -322,6 +323,7 @@ func TestSetTokenKeepsTheExpiryTime(t *testing.T) {
 	})
 	require.NoError(t, err)
 	err = engine.SetToken(ctx, &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",

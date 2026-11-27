@@ -29,6 +29,8 @@ func TestChargeStationAuth_SetAndLookup(t *testing.T) {
 
 	got, err := testStore.LookupChargeStationAuth(ctx, "cs001")
 	require.NoError(t, err)
+	// a charge station that is registered without an org belongs to the legacy org
+	want.OrgId = store.LegacyOrgId
 	assert.Equal(t, want, got)
 }
 

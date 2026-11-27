@@ -4,7 +4,7 @@ The API is described by an OpenAPI spec that is split over several files:
 
 | File | Content |
 |---|---|
-| `api-spec.yaml` | Root document: `info`, `servers` and one `$ref` per path and per schema. It holds no inline definitions. |
+| `api-spec.yaml` | Root document: `info`, `servers`, the security scheme and one `$ref` per path and per schema. It holds no inline paths or schemas. |
 | `paths/<module>.yaml` | The operations, one file per module. |
 | `schemas/schemas.yaml` | All schemas. |
 | `api-spec.bundled.yaml` | Generated: the root with every `$ref` resolved. Do not edit. |
@@ -29,7 +29,29 @@ The API is described by an OpenAPI spec that is split over several files:
    ```
 
    In the fragment of a path `$ref` every `/` of the path is written as `~1` (and `~` as `~0`).
-3. Run `make api-generate` in `manager/` and commit the changed source files together with
+3. Give every operation the permission that its caller needs, as `x-permission` next to `operationId`
+   (one of `tenancy.AllPermissions`), and a `403` response. The manager does not start, and
+   `TestEveryOperationHasPermission` fails, when an operation has none; the test also lists the permission of
+   every operation, so add the new one there. An operation on a charge station has the station key as the path
+   parameter `csId` (`/cs/{csId}/...`): `api.AuthzMiddleware` answers `404` for a charge station outside the
+   scope of the caller before the operation runs. Any other operation scopes what it reads and writes itself,
+   with the `tenancy.Scoper` of the server. A request with a token whose path or query parameters cannot be
+   read (a number that is not one, a required query parameter that is missing) is answered `400` by the
+   generated code before the permission and the scope are checked; the answer says nothing about the charge
+   station.
+
+   An operation that creates or changes something that a tenant owns has one of `tenancy.WritePermissions` and
+   is answered with `403` and the error `tenant_suspended` while that tenant is suspended: on a charge station
+   by `api.AuthzMiddleware`, anywhere else by `Server.targetOrg`, which gives the operation the org that it
+   writes to. `refusedForSuspendedTenant` in `authz_test.go` lists these operations, so add the new one there
+   and name `tenant_suspended` in the description of its `403`. Reading and commands to a charge station
+   (`cpms.connector.command`) never depend on the status of a tenant.
+
+   An operation that creates connectors for a tenant (today: registering a charge station that is new) calls
+   `entitlements.Enforcer.CheckConnectors` before it writes and answers a `*entitlements.LimitExceededError`
+   with `ErrLimitExceeded` (`403`, the error starts with `entitlement_limit_exceeded`), which the description
+   of its `403` names. Changing what exists is never limited.
+4. Run `make api-generate` in `manager/` and commit the changed source files together with
    `api-spec.bundled.yaml` and `api.gen.go`. Never edit those two files by hand.
 
 ```shell

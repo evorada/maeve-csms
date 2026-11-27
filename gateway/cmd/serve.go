@@ -7,6 +7,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"net/url"
+	"os"
+	"time"
+
 	"github.com/spf13/cobra"
 	"github.com/subnova/slog-exporter/slogtrace"
 	"github.com/thoughtworks/maeve-csms/gateway/registry"
@@ -21,24 +25,23 @@ import (
 	"golang.org/x/exp/slog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"net/url"
-	"os"
-	"time"
 )
 
 var (
-	mqttAddr          string
-	wsAddr            string
-	wssAddr           string
-	statusAddr        string
-	tlsServerCert     string
-	tlsServerKey      string
-	tlsTrustCert      []string
-	orgNames          []string
-	managerApiAddr    string
-	trustProxyHeaders bool
-	otelCollectorAddr string
-	logFormat         string
+	mqttAddr                 string
+	wsAddr                   string
+	wssAddr                  string
+	statusAddr               string
+	tlsServerCert            string
+	tlsServerKey             string
+	tlsTrustCert             []string
+	orgNames                 []string
+	managerApiAddr           string
+	registryCacheTTL         time.Duration
+	registryNegativeCacheTTL time.Duration
+	trustProxyHeaders        bool
+	otelCollectorAddr        string
+	logFormat                string
 )
 
 // Initializes an OTLP exporter, and configures the corresponding trace and
@@ -136,14 +139,22 @@ var serveCmd = &cobra.Command{
 			return fmt.Errorf("parsing mqtt broker url: %v", err)
 		}
 
-		remoteRegistry := registry.RemoteRegistry{
-			ManagerApiAddr: managerApiAddr,
+		if registryCacheTTL < 0 || registryNegativeCacheTTL < 0 {
+			return fmt.Errorf("the registry cache TTLs must not be negative")
+		}
+
+		deviceRegistry := &registry.CachingRegistry{
+			Inner: registry.RemoteRegistry{
+				ManagerApiAddr: managerApiAddr,
+			},
+			TTL:         registryCacheTTL,
+			NegativeTTL: registryNegativeCacheTTL,
 		}
 		statusServer := server.New("status", statusAddr, nil, server.NewStatusHandler())
 		websocketHandler := server.NewWebsocketHandler(
 			server.WithMqttBrokerUrl(brokerUrl),
 			server.WithMqttTopicPrefix("cs"),
-			server.WithDeviceRegistry(remoteRegistry),
+			server.WithDeviceRegistry(deviceRegistry),
 			server.WithOrgNames(orgNames),
 			server.WithTrustProxyHeaders(trustProxyHeaders),
 			server.WithOtelTracer(tracer))
@@ -223,9 +234,14 @@ func init() {
 	serveCmd.Flags().StringArrayVarP(&tlsTrustCert, "tls-trust-cert", "t", []string{},
 		"A file that contains a PEM encoded certificate to add to the TLS trust store")
 	serveCmd.Flags().StringSliceVarP(&orgNames, "org-name", "o", []string{"Thoughtworks"},
-		"A comma-separated list of organisation names that are valid in client certificates")
-	serveCmd.Flags().StringVarP(&managerApiAddr, "manager-api-addr", "r", "http://127.0.0.1:9410",
-		"The address of the CSMS manager API, e.g. http://127.0.0.1:9410")
+		"A comma-separated list of organisation names that are valid in client certificates. "+
+			"Deprecated: single-tenant mode only. It is only used for a charge station whose tenant has no list of its own (accepted_cert_org_names of the tenant config)")
+	serveCmd.Flags().StringVarP(&managerApiAddr, "manager-api-addr", "r", "http://127.0.0.1:9412",
+		"The internal address of the CSMS manager (its [api] internal_addr, not the public API), e.g. http://127.0.0.1:9412")
+	serveCmd.Flags().DurationVar(&registryCacheTTL, "registry-cache-ttl", 10*time.Second,
+		"How long the auth details of a charge station that the manager returned are kept, 0 to always ask the manager")
+	serveCmd.Flags().DurationVar(&registryNegativeCacheTTL, "registry-negative-cache-ttl", 2*time.Second,
+		"How long it is kept that the manager does not know a host or a charge station, 0 to always ask the manager")
 	serveCmd.Flags().BoolVar(&trustProxyHeaders, "trust-proxy", false,
 		"Trust proxy headers when determining the client's TLS status")
 	serveCmd.Flags().StringVar(&otelCollectorAddr, "otel-collector-addr", "",

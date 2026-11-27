@@ -7,6 +7,8 @@ package postgres
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const DeleteOcpiRegistration = `-- name: DeleteOcpiRegistration :exec
@@ -20,7 +22,7 @@ func (q *Queries) DeleteOcpiRegistration(ctx context.Context, token string) erro
 }
 
 const GetOcpiParty = `-- name: GetOcpiParty :one
-SELECT id, role, country_code, party_id, url, token, created_at, updated_at FROM ocpi_parties
+SELECT id, role, country_code, party_id, url, token, created_at, updated_at, org_id FROM ocpi_parties
 WHERE role = $1 AND country_code = $2 AND party_id = $3
 LIMIT 1
 `
@@ -44,12 +46,13 @@ func (q *Queries) GetOcpiParty(ctx context.Context, arg GetOcpiPartyParams) (Ocp
 		&i.Token,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.OrgID,
 	)
 	return i, err
 }
 
 const GetOcpiRegistration = `-- name: GetOcpiRegistration :one
-SELECT token, status, created_at, updated_at FROM ocpi_registrations
+SELECT token, status, created_at, updated_at, org_id FROM ocpi_registrations
 WHERE token = $1
 LIMIT 1
 `
@@ -63,12 +66,13 @@ func (q *Queries) GetOcpiRegistration(ctx context.Context, token string) (OcpiRe
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.OrgID,
 	)
 	return i, err
 }
 
 const ListOcpiPartiesForRole = `-- name: ListOcpiPartiesForRole :many
-SELECT id, role, country_code, party_id, url, token, created_at, updated_at FROM ocpi_parties
+SELECT id, role, country_code, party_id, url, token, created_at, updated_at, org_id FROM ocpi_parties
 WHERE role = $1
 ORDER BY created_at DESC
 `
@@ -91,6 +95,7 @@ func (q *Queries) ListOcpiPartiesForRole(ctx context.Context, role string) ([]Oc
 			&i.Token,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.OrgID,
 		); err != nil {
 			return nil, err
 		}
@@ -103,21 +108,23 @@ func (q *Queries) ListOcpiPartiesForRole(ctx context.Context, role string) ([]Oc
 }
 
 const SetOcpiParty = `-- name: SetOcpiParty :one
-INSERT INTO ocpi_parties (role, country_code, party_id, url, token)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO ocpi_parties (role, country_code, party_id, url, token, org_id)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (role, country_code, party_id) DO UPDATE
 SET url = EXCLUDED.url,
     token = EXCLUDED.token,
+    org_id = EXCLUDED.org_id,
     updated_at = NOW()
-RETURNING id, role, country_code, party_id, url, token, created_at, updated_at
+RETURNING id, role, country_code, party_id, url, token, created_at, updated_at, org_id
 `
 
 type SetOcpiPartyParams struct {
-	Role        string `db:"role" json:"role"`
-	CountryCode string `db:"country_code" json:"country_code"`
-	PartyID     string `db:"party_id" json:"party_id"`
-	Url         string `db:"url" json:"url"`
-	Token       string `db:"token" json:"token"`
+	Role        string      `db:"role" json:"role"`
+	CountryCode string      `db:"country_code" json:"country_code"`
+	PartyID     string      `db:"party_id" json:"party_id"`
+	Url         string      `db:"url" json:"url"`
+	Token       string      `db:"token" json:"token"`
+	OrgID       pgtype.UUID `db:"org_id" json:"org_id"`
 }
 
 func (q *Queries) SetOcpiParty(ctx context.Context, arg SetOcpiPartyParams) (OcpiParty, error) {
@@ -127,6 +134,7 @@ func (q *Queries) SetOcpiParty(ctx context.Context, arg SetOcpiPartyParams) (Ocp
 		arg.PartyID,
 		arg.Url,
 		arg.Token,
+		arg.OrgID,
 	)
 	var i OcpiParty
 	err := row.Scan(
@@ -138,32 +146,36 @@ func (q *Queries) SetOcpiParty(ctx context.Context, arg SetOcpiPartyParams) (Ocp
 		&i.Token,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.OrgID,
 	)
 	return i, err
 }
 
 const SetOcpiRegistration = `-- name: SetOcpiRegistration :one
-INSERT INTO ocpi_registrations (token, status)
-VALUES ($1, $2)
+INSERT INTO ocpi_registrations (token, status, org_id)
+VALUES ($1, $2, $3)
 ON CONFLICT (token) DO UPDATE
 SET status = EXCLUDED.status,
+    org_id = EXCLUDED.org_id,
     updated_at = NOW()
-RETURNING token, status, created_at, updated_at
+RETURNING token, status, created_at, updated_at, org_id
 `
 
 type SetOcpiRegistrationParams struct {
-	Token  string `db:"token" json:"token"`
-	Status string `db:"status" json:"status"`
+	Token  string      `db:"token" json:"token"`
+	Status string      `db:"status" json:"status"`
+	OrgID  pgtype.UUID `db:"org_id" json:"org_id"`
 }
 
 func (q *Queries) SetOcpiRegistration(ctx context.Context, arg SetOcpiRegistrationParams) (OcpiRegistration, error) {
-	row := q.db.QueryRow(ctx, SetOcpiRegistration, arg.Token, arg.Status)
+	row := q.db.QueryRow(ctx, SetOcpiRegistration, arg.Token, arg.Status, arg.OrgID)
 	var i OcpiRegistration
 	err := row.Scan(
 		&i.Token,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.OrgID,
 	)
 	return i, err
 }

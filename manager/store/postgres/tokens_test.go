@@ -18,6 +18,7 @@ func TestTokenStore_SetAndLookup(t *testing.T) {
 	ctx := context.Background()
 
 	token := &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -60,6 +61,7 @@ func TestTokenStore_SetTokenWithNilFields(t *testing.T) {
 
 	// Token with nil pointer fields
 	token := &store.Token{
+		OrgId:        store.LegacyOrgId,
 		CountryCode:  "GB",
 		PartyId:      "TWK",
 		Type:         "RFID",
@@ -97,6 +99,7 @@ func TestTokenStore_SetTokenWithOptionalFields(t *testing.T) {
 	languageCode := "en"
 
 	token := &store.Token{
+		OrgId:        store.LegacyOrgId,
 		CountryCode:  "GB",
 		PartyId:      "TWK",
 		Type:         "RFID",
@@ -135,6 +138,7 @@ func TestTokenStore_ListTokens(t *testing.T) {
 	// Create multiple tokens
 	for i := 0; i < 5; i++ {
 		token := &store.Token{
+			OrgId:       store.LegacyOrgId,
 			CountryCode: "GB",
 			PartyId:     "TWK",
 			Type:        "RFID",
@@ -184,6 +188,7 @@ func TestTokenStore_UpdateToken(t *testing.T) {
 
 	// Create initial token
 	token := &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -198,6 +203,7 @@ func TestTokenStore_UpdateToken(t *testing.T) {
 
 	// Update token (SetToken should handle upsert)
 	updatedToken := &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -230,6 +236,7 @@ func TestTokenStore_DifferentTokenTypes(t *testing.T) {
 
 	for i, tokenType := range tokenTypes {
 		token := &store.Token{
+			OrgId:       store.LegacyOrgId,
 			CountryCode: "GB",
 			PartyId:     "TWK",
 			Type:        tokenType,

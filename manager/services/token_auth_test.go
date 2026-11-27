@@ -4,6 +4,7 @@ package services_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/services"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/testutil"
 	fakeclock "k8s.io/utils/clock/testing"
 )
@@ -23,8 +25,9 @@ func TestOcppTokenAuthServiceAcceptsNoAuthorization(t *testing.T) {
 	tokenStore := inmemory.NewStore(clock)
 
 	tokenAuthService := services.OcppTokenAuthService{
-		TokenStore: tokenStore,
-		Clock:      clock,
+		TokenStore:  tokenStore,
+		OrgResolver: &tenancy.Resolver{Stations: tokenStore},
+		Clock:       clock,
 	}
 
 	tracer, exporter := testutil.GetTracer()
@@ -35,7 +38,7 @@ func TestOcppTokenAuthServiceAcceptsNoAuthorization(t *testing.T) {
 		ctx, span := tracer.Start(ctx, "test")
 		defer span.End()
 
-		tokenInfo := tokenAuthService.Authorize(ctx, ocpp201.IdTokenType{
+		tokenInfo := tokenAuthService.Authorize(ctx, "cs001", ocpp201.IdTokenType{
 			Type:    ocpp201.IdTokenEnumTypeNoAuthorization,
 			IdToken: "",
 		})
@@ -58,8 +61,9 @@ func TestOcppTokenAuthServiceAcceptsCentral(t *testing.T) {
 	tokenStore := inmemory.NewStore(clock)
 
 	tokenAuthService := services.OcppTokenAuthService{
-		TokenStore: tokenStore,
-		Clock:      clock,
+		TokenStore:  tokenStore,
+		OrgResolver: &tenancy.Resolver{Stations: tokenStore},
+		Clock:       clock,
 	}
 
 	tracer, exporter := testutil.GetTracer()
@@ -70,7 +74,7 @@ func TestOcppTokenAuthServiceAcceptsCentral(t *testing.T) {
 		ctx, span := tracer.Start(ctx, "test")
 		defer span.End()
 
-		tokenInfo := tokenAuthService.Authorize(ctx, ocpp201.IdTokenType{
+		tokenInfo := tokenAuthService.Authorize(ctx, "cs001", ocpp201.IdTokenType{
 			Type:    ocpp201.IdTokenEnumTypeCentral,
 			IdToken: "SomeToken",
 		})
@@ -93,8 +97,9 @@ func TestOcppTokenAuthServiceRejectsLocalAuth(t *testing.T) {
 	tokenStore := inmemory.NewStore(clock)
 
 	tokenAuthService := services.OcppTokenAuthService{
-		TokenStore: tokenStore,
-		Clock:      clock,
+		TokenStore:  tokenStore,
+		OrgResolver: &tenancy.Resolver{Stations: tokenStore},
+		Clock:       clock,
 	}
 
 	tracer, exporter := testutil.GetTracer()
@@ -105,7 +110,7 @@ func TestOcppTokenAuthServiceRejectsLocalAuth(t *testing.T) {
 		ctx, span := tracer.Start(ctx, "test")
 		defer span.End()
 
-		tokenInfo := tokenAuthService.Authorize(ctx, ocpp201.IdTokenType{
+		tokenInfo := tokenAuthService.Authorize(ctx, "cs001", ocpp201.IdTokenType{
 			Type:    ocpp201.IdTokenEnumTypeLocal,
 			IdToken: "some-local-id",
 		})
@@ -128,8 +133,9 @@ func TestOcppTokenAuthServiceReturnsUnknownIfNoTokenRegistered(t *testing.T) {
 	tokenStore := inmemory.NewStore(clock)
 
 	tokenAuthService := services.OcppTokenAuthService{
-		TokenStore: tokenStore,
-		Clock:      clock,
+		TokenStore:  tokenStore,
+		OrgResolver: &tenancy.Resolver{Stations: tokenStore},
+		Clock:       clock,
 	}
 
 	tracer, exporter := testutil.GetTracer()
@@ -140,7 +146,7 @@ func TestOcppTokenAuthServiceReturnsUnknownIfNoTokenRegistered(t *testing.T) {
 		ctx, span := tracer.Start(ctx, "test")
 		defer span.End()
 
-		tokenInfo := tokenAuthService.Authorize(ctx, ocpp201.IdTokenType{
+		tokenInfo := tokenAuthService.Authorize(ctx, "cs001", ocpp201.IdTokenType{
 			Type:    ocpp201.IdTokenEnumTypeISO14443,
 			IdToken: "DEADBEEF",
 		})
@@ -163,6 +169,7 @@ func TestOcppTokenAuthServiceReturnsInvalidIfTokenIsInvalid(t *testing.T) {
 	tokenStore := inmemory.NewStore(clock)
 
 	err := tokenStore.SetToken(context.Background(), &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -176,8 +183,9 @@ func TestOcppTokenAuthServiceReturnsInvalidIfTokenIsInvalid(t *testing.T) {
 	require.NoError(t, err)
 
 	tokenAuthService := services.OcppTokenAuthService{
-		TokenStore: tokenStore,
-		Clock:      clock,
+		TokenStore:  tokenStore,
+		OrgResolver: &tenancy.Resolver{Stations: tokenStore},
+		Clock:       clock,
 	}
 
 	tracer, exporter := testutil.GetTracer()
@@ -188,7 +196,7 @@ func TestOcppTokenAuthServiceReturnsInvalidIfTokenIsInvalid(t *testing.T) {
 		ctx, span := tracer.Start(ctx, "test")
 		defer span.End()
 
-		tokenInfo := tokenAuthService.Authorize(ctx, ocpp201.IdTokenType{
+		tokenInfo := tokenAuthService.Authorize(ctx, "cs001", ocpp201.IdTokenType{
 			Type:    ocpp201.IdTokenEnumTypeISO14443,
 			IdToken: "DEADBEEF",
 		})
@@ -211,6 +219,7 @@ func TestOcppTokenAuthServiceReturnsAcceptedIfTokenIsValid(t *testing.T) {
 	tokenStore := inmemory.NewStore(clock)
 
 	err := tokenStore.SetToken(context.Background(), &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -224,8 +233,9 @@ func TestOcppTokenAuthServiceReturnsAcceptedIfTokenIsValid(t *testing.T) {
 	require.NoError(t, err)
 
 	tokenAuthService := services.OcppTokenAuthService{
-		TokenStore: tokenStore,
-		Clock:      clock,
+		TokenStore:  tokenStore,
+		OrgResolver: &tenancy.Resolver{Stations: tokenStore},
+		Clock:       clock,
 	}
 
 	tracer, exporter := testutil.GetTracer()
@@ -236,7 +246,7 @@ func TestOcppTokenAuthServiceReturnsAcceptedIfTokenIsValid(t *testing.T) {
 		ctx, span := tracer.Start(ctx, "test")
 		defer span.End()
 
-		tokenInfo := tokenAuthService.Authorize(ctx, ocpp201.IdTokenType{
+		tokenInfo := tokenAuthService.Authorize(ctx, "cs001", ocpp201.IdTokenType{
 			Type:    ocpp201.IdTokenEnumTypeISO14443,
 			IdToken: "DEADBEEF",
 		})
@@ -259,6 +269,7 @@ func TestOcppTokenAuthServiceIncludesGroupIdIfConfigured(t *testing.T) {
 	tokenStore := inmemory.NewStore(clock)
 
 	err := tokenStore.SetToken(context.Background(), &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -272,8 +283,9 @@ func TestOcppTokenAuthServiceIncludesGroupIdIfConfigured(t *testing.T) {
 	require.NoError(t, err)
 
 	tokenAuthService := services.OcppTokenAuthService{
-		TokenStore: tokenStore,
-		Clock:      clock,
+		TokenStore:  tokenStore,
+		OrgResolver: &tenancy.Resolver{Stations: tokenStore},
+		Clock:       clock,
 	}
 
 	tracer, exporter := testutil.GetTracer()
@@ -284,7 +296,7 @@ func TestOcppTokenAuthServiceIncludesGroupIdIfConfigured(t *testing.T) {
 		ctx, span := tracer.Start(ctx, "test")
 		defer span.End()
 
-		tokenInfo := tokenAuthService.Authorize(ctx, ocpp201.IdTokenType{
+		tokenInfo := tokenAuthService.Authorize(ctx, "cs001", ocpp201.IdTokenType{
 			Type:    ocpp201.IdTokenEnumTypeISO14443,
 			IdToken: "DEADBEEF",
 		})
@@ -312,6 +324,7 @@ func TestOcppTokenAuthServiceSetsExpiryTimeToNowIfCacheModeIsNever(t *testing.T)
 	tokenStore := inmemory.NewStore(clock)
 
 	err := tokenStore.SetToken(context.Background(), &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -325,8 +338,9 @@ func TestOcppTokenAuthServiceSetsExpiryTimeToNowIfCacheModeIsNever(t *testing.T)
 	require.NoError(t, err)
 
 	tokenAuthService := services.OcppTokenAuthService{
-		TokenStore: tokenStore,
-		Clock:      clock,
+		TokenStore:  tokenStore,
+		OrgResolver: &tenancy.Resolver{Stations: tokenStore},
+		Clock:       clock,
 	}
 
 	tracer, exporter := testutil.GetTracer()
@@ -337,7 +351,7 @@ func TestOcppTokenAuthServiceSetsExpiryTimeToNowIfCacheModeIsNever(t *testing.T)
 		ctx, span := tracer.Start(ctx, "test")
 		defer span.End()
 
-		tokenInfo := tokenAuthService.Authorize(ctx, ocpp201.IdTokenType{
+		tokenInfo := tokenAuthService.Authorize(ctx, "cs001", ocpp201.IdTokenType{
 			Type:    ocpp201.IdTokenEnumTypeISO14443,
 			IdToken: "DEADBEEF",
 		})
@@ -423,6 +437,7 @@ func TestOcppTokenAuthServiceHonoursTheExpiryTimeOfTheToken(t *testing.T) {
 			tokenStore := inmemory.NewStore(clock)
 
 			err := tokenStore.SetToken(context.Background(), &store.Token{
+				OrgId:       store.LegacyOrgId,
 				CountryCode: "GB",
 				PartyId:     "TWK",
 				Type:        "RFID",
@@ -436,8 +451,9 @@ func TestOcppTokenAuthServiceHonoursTheExpiryTimeOfTheToken(t *testing.T) {
 			require.NoError(t, err)
 
 			tokenAuthService := services.OcppTokenAuthService{
-				TokenStore: tokenStore,
-				Clock:      clock,
+				TokenStore:  tokenStore,
+				OrgResolver: &tenancy.Resolver{Stations: tokenStore},
+				Clock:       clock,
 			}
 
 			tracer, exporter := testutil.GetTracer()
@@ -446,7 +462,7 @@ func TestOcppTokenAuthServiceHonoursTheExpiryTimeOfTheToken(t *testing.T) {
 				ctx, span := tracer.Start(context.Background(), "test")
 				defer span.End()
 
-				tokenInfo := tokenAuthService.Authorize(ctx, ocpp201.IdTokenType{
+				tokenInfo := tokenAuthService.Authorize(ctx, "cs001", ocpp201.IdTokenType{
 					Type:    ocpp201.IdTokenEnumTypeISO14443,
 					IdToken: "DEADBEEF",
 				})
@@ -461,4 +477,94 @@ func TestOcppTokenAuthServiceHonoursTheExpiryTimeOfTheToken(t *testing.T) {
 			})
 		})
 	}
+}
+
+// A token belongs to an org: a charge station is only authorised with the tokens of
+// the org that owns it.
+func TestOcppTokenAuthServiceOnlyKnowsTheTokensOfTheOrgOfTheStation(t *testing.T) {
+	const (
+		orgA = "0193b2c4-0000-7000-8000-0000000000a1"
+		orgB = "0193b2c4-0000-7000-8000-0000000000b2"
+	)
+	clock := fakeclock.NewFakePassiveClock(time.Now())
+	engine := inmemory.NewStore(clock)
+	ctx := context.Background()
+
+	token := func(orgId, uid string, valid bool) *store.Token {
+		return &store.Token{
+			OrgId:       orgId,
+			CountryCode: "GB",
+			PartyId:     "TWK",
+			Type:        "RFID",
+			Uid:         uid,
+			ContractId:  "GBTWK012345678V",
+			Issuer:      "Thoughtworks",
+			Valid:       valid,
+			CacheMode:   "ALWAYS",
+		}
+	}
+	require.NoError(t, engine.SetToken(ctx, token(orgB, "ONLYORGB", true)))
+	// both orgs have a token with this UID: it is valid in org A and not valid in org B
+	require.NoError(t, engine.SetToken(ctx, token(orgA, "BOTHORGS", true)))
+	require.NoError(t, engine.SetToken(ctx, token(orgB, "BOTHORGS", false)))
+	require.NoError(t, engine.SetChargeStationAuth(ctx, "cs-org-a", &store.ChargeStationAuth{OrgId: orgA}))
+	require.NoError(t, engine.SetChargeStationAuth(ctx, "cs-org-b", &store.ChargeStationAuth{OrgId: orgB}))
+
+	tokenAuthService := services.OcppTokenAuthService{
+		TokenStore:  engine,
+		OrgResolver: &tenancy.Resolver{Stations: engine},
+		Clock:       clock,
+	}
+	status := func(chargeStationId, uid string) ocpp201.AuthorizationStatusEnumType {
+		return tokenAuthService.Authorize(ctx, chargeStationId, ocpp201.IdTokenType{
+			Type:    ocpp201.IdTokenEnumTypeISO14443,
+			IdToken: uid,
+		}).Status
+	}
+
+	assert.Equal(t, ocpp201.AuthorizationStatusEnumTypeUnknown, status("cs-org-a", "ONLYORGB"))
+	assert.Equal(t, ocpp201.AuthorizationStatusEnumTypeAccepted, status("cs-org-b", "ONLYORGB"))
+	assert.Equal(t, ocpp201.AuthorizationStatusEnumTypeAccepted, status("cs-org-a", "BOTHORGS"))
+	assert.Equal(t, ocpp201.AuthorizationStatusEnumTypeInvalid, status("cs-org-b", "BOTHORGS"))
+	// a charge station that is not registered belongs to the default org
+	assert.Equal(t, ocpp201.AuthorizationStatusEnumTypeUnknown, status("cs-unknown", "ONLYORGB"))
+}
+
+// failingOrgResolver fails every lookup of the org of a charge station.
+type failingOrgResolver struct {
+	err error
+}
+
+func (r failingOrgResolver) OrgIdForStation(context.Context, string) (string, error) {
+	return "", r.err
+}
+
+func TestOcppTokenAuthServiceReturnsUnknownIfTheOrgOfTheStationIsNotFound(t *testing.T) {
+	clock := fakeclock.NewFakePassiveClock(time.Now())
+	engine := inmemory.NewStore(clock)
+	ctx := context.Background()
+	require.NoError(t, engine.SetToken(ctx, &store.Token{
+		OrgId:       store.LegacyOrgId,
+		CountryCode: "GB",
+		PartyId:     "TWK",
+		Type:        "RFID",
+		Uid:         "DEADBEEF",
+		ContractId:  "GBTWK012345678V",
+		Issuer:      "Thoughtworks",
+		Valid:       true,
+		CacheMode:   "ALWAYS",
+	}))
+
+	tokenAuthService := services.OcppTokenAuthService{
+		TokenStore:  engine,
+		OrgResolver: failingOrgResolver{err: errors.New("charge station store is down")},
+		Clock:       clock,
+	}
+
+	tokenInfo := tokenAuthService.Authorize(ctx, "cs001", ocpp201.IdTokenType{
+		Type:    ocpp201.IdTokenEnumTypeISO14443,
+		IdToken: "DEADBEEF",
+	})
+
+	assert.Equal(t, ocpp201.IdTokenInfoType{Status: ocpp201.AuthorizationStatusEnumTypeUnknown}, tokenInfo)
 }

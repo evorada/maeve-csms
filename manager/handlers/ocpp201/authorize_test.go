@@ -15,6 +15,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/services"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	clockutil "k8s.io/utils/clock"
 )
 
@@ -54,6 +55,7 @@ func (m mockCertValidationService) ValidateHashedCertificateChain(_ context.Cont
 
 func setupTokenStore(tokenStore store.TokenStore) error {
 	err := tokenStore.SetToken(context.Background(), &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -68,6 +70,7 @@ func setupTokenStore(tokenStore store.TokenStore) error {
 		return err
 	}
 	err = tokenStore.SetToken(context.Background(), &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "OTHER",
@@ -90,8 +93,9 @@ func TestAuthorizeKnownRfidCard(t *testing.T) {
 	err := setupTokenStore(engine)
 	require.NoError(t, err)
 	tokenAuthService := &services.OcppTokenAuthService{
-		Clock:      clock,
-		TokenStore: engine,
+		Clock:       clock,
+		TokenStore:  engine,
+		OrgResolver: &tenancy.Resolver{Stations: engine},
 	}
 
 	ah := handlers.AuthorizeHandler{
@@ -124,8 +128,9 @@ func TestAuthorizeWithUnknownRfidCard(t *testing.T) {
 	err := setupTokenStore(engine)
 	require.NoError(t, err)
 	tokenAuthService := &services.OcppTokenAuthService{
-		Clock:      clock,
-		TokenStore: engine,
+		Clock:       clock,
+		TokenStore:  engine,
+		OrgResolver: &tenancy.Resolver{Stations: engine},
 	}
 
 	ah := handlers.AuthorizeHandler{
@@ -158,8 +163,9 @@ func TestAuthorizeWithEmaidAndCertificateChain(t *testing.T) {
 	err := setupTokenStore(engine)
 	require.NoError(t, err)
 	tokenAuthService := &services.OcppTokenAuthService{
-		Clock:      clock,
-		TokenStore: engine,
+		Clock:       clock,
+		TokenStore:  engine,
+		OrgResolver: &tenancy.Resolver{Stations: engine},
 	}
 
 	ah := handlers.AuthorizeHandler{
@@ -196,8 +202,9 @@ func TestAuthorizeWithEmaidAndInvalidCertificateChain(t *testing.T) {
 	err := setupTokenStore(engine)
 	require.NoError(t, err)
 	tokenAuthService := &services.OcppTokenAuthService{
-		Clock:      clock,
-		TokenStore: engine,
+		Clock:       clock,
+		TokenStore:  engine,
+		OrgResolver: &tenancy.Resolver{Stations: engine},
 	}
 
 	ah := handlers.AuthorizeHandler{
@@ -245,8 +252,9 @@ func TestAuthorizeWithEmaidAndCertificateHashes(t *testing.T) {
 	err := setupTokenStore(engine)
 	require.NoError(t, err)
 	tokenAuthService := &services.OcppTokenAuthService{
-		Clock:      clock,
-		TokenStore: engine,
+		Clock:       clock,
+		TokenStore:  engine,
+		OrgResolver: &tenancy.Resolver{Stations: engine},
 	}
 
 	ah := handlers.AuthorizeHandler{
@@ -286,8 +294,9 @@ func TestAuthorizeWithEmaidAndInvalidCertificateHashes(t *testing.T) {
 	err := setupTokenStore(engine)
 	require.NoError(t, err)
 	tokenAuthService := &services.OcppTokenAuthService{
-		Clock:      clock,
-		TokenStore: engine,
+		Clock:       clock,
+		TokenStore:  engine,
+		OrgResolver: &tenancy.Resolver{Stations: engine},
 	}
 
 	ah := handlers.AuthorizeHandler{
@@ -339,8 +348,9 @@ func TestAuthorizeWithEmaidAndNoCertificateData(t *testing.T) {
 	err := setupTokenStore(engine)
 	require.NoError(t, err)
 	tokenAuthService := &services.OcppTokenAuthService{
-		Clock:      clock,
-		TokenStore: engine,
+		Clock:       clock,
+		TokenStore:  engine,
+		OrgResolver: &tenancy.Resolver{Stations: engine},
 	}
 
 	ah := handlers.AuthorizeHandler{

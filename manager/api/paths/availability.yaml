@@ -12,13 +12,14 @@ paths:
 
         '
       operationId: changeAvailability
+      x-permission: cpms.connector.command
       parameters:
       - name: csId
         in: path
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       requestBody:
         required: true
         content:
@@ -28,6 +29,24 @@ paths:
       responses:
         '202':
           description: Accepted - availability change request submitted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -37,6 +56,7 @@ paths:
   /cs/{csId}/reset:
     post:
       operationId: ResetChargeStation
+      x-permission: cpms.connector.command
       summary: Request a charge station reset
       parameters:
       - name: csId
@@ -55,11 +75,30 @@ paths:
           description: Reset request accepted
         '400':
           description: Invalid request
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '500':
           description: Internal server error
   /cs/{csId}/unlock-connector:
     post:
       operationId: UnlockConnector
+      x-permission: cpms.connector.command
       summary: Request to unlock a connector on a charge station
       parameters:
       - name: csId
@@ -78,5 +117,23 @@ paths:
           description: Unlock request accepted
         '400':
           description: Invalid request
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '500':
           description: Internal server error

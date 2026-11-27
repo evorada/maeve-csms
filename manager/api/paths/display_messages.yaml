@@ -11,13 +11,14 @@ paths:
 
         '
       operationId: setDisplayMessage
+      x-permission: cpms.station.write
       parameters:
       - name: csId
         in: path
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       requestBody:
         required: true
         content:
@@ -27,6 +28,18 @@ paths:
       responses:
         '202':
           description: Accepted - message request queued
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station or OCPP version not supported
           content:
@@ -48,13 +61,14 @@ paths:
 
         '
       operationId: clearDisplayMessage
+      x-permission: cpms.station.write
       parameters:
       - name: csId
         in: path
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       - name: messageId
         in: path
         description: The message identifier to clear
@@ -64,6 +78,18 @@ paths:
       responses:
         '202':
           description: Accepted - clear request queued
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station or OCPP version not supported
           content:
@@ -88,13 +114,14 @@ paths:
 
         '
       operationId: getDisplayMessages
+      x-permission: cpms.station.read
       parameters:
       - name: csId
         in: path
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       - name: state
         in: query
         description: Filter messages by charging state
@@ -108,6 +135,18 @@ paths:
       responses:
         '202':
           description: Accepted - get request queued
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station or OCPP version not supported
           content:

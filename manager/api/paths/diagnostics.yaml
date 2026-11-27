@@ -10,6 +10,7 @@ paths:
 
         '
       operationId: requestChargeStationDiagnostics
+      x-permission: cpms.connector.command
       parameters:
       - name: csId
         in: path
@@ -17,7 +18,7 @@ paths:
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       requestBody:
         required: true
         content:
@@ -27,6 +28,18 @@ paths:
       responses:
         '202':
           description: Accepted - diagnostics request initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -41,6 +54,7 @@ paths:
 
         '
       operationId: getChargeStationDiagnosticsStatus
+      x-permission: cpms.station.read
       parameters:
       - name: csId
         in: path
@@ -48,7 +62,7 @@ paths:
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       responses:
         '200':
           description: Diagnostics status response
@@ -56,6 +70,18 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/DiagnosticsStatus'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -70,6 +96,7 @@ paths:
 
         '
       operationId: requestChargeStationLogs
+      x-permission: cpms.connector.command
       parameters:
       - name: csId
         in: path
@@ -77,7 +104,7 @@ paths:
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       requestBody:
         required: true
         content:
@@ -87,6 +114,18 @@ paths:
       responses:
         '202':
           description: Accepted - log request initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -101,6 +140,7 @@ paths:
 
         '
       operationId: getChargeStationLogStatus
+      x-permission: cpms.station.read
       parameters:
       - name: csId
         in: path
@@ -108,7 +148,7 @@ paths:
         description: The charge station identifier
         schema:
           type: string
-          maxLength: 28
+          maxLength: 80
       - name: requestId
         in: query
         required: false
@@ -122,6 +162,18 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/LogStatus'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:

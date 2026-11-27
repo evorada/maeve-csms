@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"k8s.io/utils/clock"
 
 	"github.com/stretchr/testify/assert"
@@ -23,14 +24,16 @@ func TestTransactionEventHandlerWithStartedEvent(t *testing.T) {
 	tariffService := services.BasicKwhTariffService{}
 
 	err := engine.SetToken(ctx, &store.Token{
+		OrgId: store.LegacyOrgId,
 		Uid:   "SOMERFID",
 		Valid: true,
 	})
 	require.NoError(t, err)
 
 	tokenAuthService := &services.OcppTokenAuthService{
-		Clock:      clock.RealClock{},
-		TokenStore: engine,
+		Clock:       clock.RealClock{},
+		TokenStore:  engine,
+		OrgResolver: &tenancy.Resolver{Stations: engine},
 	}
 
 	handler := handlers.TransactionEventHandler{
@@ -87,8 +90,9 @@ func TestTransactionEventHandlerWithStartedEventWithInvalidToken(t *testing.T) {
 	tariffService := services.BasicKwhTariffService{}
 
 	tokenAuthService := &services.OcppTokenAuthService{
-		Clock:      clock.RealClock{},
-		TokenStore: engine,
+		Clock:       clock.RealClock{},
+		TokenStore:  engine,
+		OrgResolver: &tenancy.Resolver{Stations: engine},
 	}
 
 	handler := handlers.TransactionEventHandler{
@@ -145,8 +149,9 @@ func TestTransactionEventHandlerWithUpdatedEvent(t *testing.T) {
 	tariffService := services.BasicKwhTariffService{}
 
 	tokenAuthService := &services.OcppTokenAuthService{
-		Clock:      clock.RealClock{},
-		TokenStore: engine,
+		Clock:       clock.RealClock{},
+		TokenStore:  engine,
+		OrgResolver: &tenancy.Resolver{Stations: engine},
 	}
 
 	handler := handlers.TransactionEventHandler{
@@ -195,8 +200,9 @@ func TestTransactionEventHandlerWithEndedEvent(t *testing.T) {
 	tariffService := services.BasicKwhTariffService{}
 
 	tokenAuthService := &services.OcppTokenAuthService{
-		Clock:      clock.RealClock{},
-		TokenStore: engine,
+		Clock:       clock.RealClock{},
+		TokenStore:  engine,
+		OrgResolver: &tenancy.Resolver{Stations: engine},
 	}
 
 	handler := handlers.TransactionEventHandler{

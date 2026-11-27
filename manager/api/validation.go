@@ -35,6 +35,12 @@ func ValidationMiddleware(next http.Handler) http.Handler {
 						Method:    r.Method,
 						Operation: operation,
 					},
+					// callers are authenticated before this middleware, by the token
+					// verifier of the server: the security requirements of the spec are
+					// not checked a second time here
+					Options: &openapi3filter.Options{
+						AuthenticationFunc: openapi3filter.NoopAuthenticationFunc,
+					},
 				}
 				err := openapi3filter.ValidateRequest(r.Context(), requestValidationInput)
 				if err != nil {

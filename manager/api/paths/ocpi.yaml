@@ -7,6 +7,7 @@ paths:
         \ the party will wait for the party to initiate \na registration with the\
         \ CSMS.\n"
       operationId: registerParty
+      x-permission: ocpi.connection.manage
       requestBody:
         required: true
         content:
@@ -16,6 +17,18 @@ paths:
       responses:
         '201':
           description: Created
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:

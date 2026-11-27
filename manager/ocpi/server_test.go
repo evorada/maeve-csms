@@ -33,7 +33,7 @@ func setupHandler(t *testing.T) (http.Handler, store.Engine, time.Time) {
 	})
 	require.NoError(t, err)
 
-	ocpiApi := ocpi.NewOCPI(engine, http.DefaultClient, "GB", "TWK")
+	ocpiApi := ocpi.NewOCPI(engine, http.DefaultClient, "GB", "TWK", store.LegacyOrgId)
 	v16CallMaker := newNoopV16CallMaker()
 	now := time.Now().UTC()
 	server, err := ocpi.NewServer(ocpiApi, fakeclock.NewFakePassiveClock(now), v16CallMaker)
@@ -122,6 +122,7 @@ func TestServerGetClientOwnedToken(t *testing.T) {
 	handler, engine, now := setupHandler(t)
 
 	err := engine.SetToken(context.Background(), &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -204,6 +205,7 @@ func TestServerPutClientOwnedToken(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	want := &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -224,6 +226,7 @@ func TestServerPatchClientOwnedToken(t *testing.T) {
 	handler, engine, _ := setupHandler(t)
 
 	err := engine.SetToken(context.Background(), &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -256,6 +259,7 @@ func TestServerPatchClientOwnedToken(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	want := &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -280,6 +284,7 @@ func TestPostStartSession(t *testing.T) {
 	handler, engine, _ := setupHandler(t)
 
 	err := engine.SetToken(context.Background(), &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",

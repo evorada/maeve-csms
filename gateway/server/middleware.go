@@ -4,12 +4,13 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"net/http"
+	"strconv"
+
 	"github.com/go-chi/chi/v5"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"net/http"
-	"strconv"
 
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 
@@ -65,7 +66,7 @@ func TLSOffload(registry registry.DeviceRegistry) func(http.Handler) http.Handle
 					if err == nil && clientCertChainValid {
 						clientCertHashHeader := r.Header.Get("X-Client-Cert-Hash")
 						span.SetAttributes(attribute.String("cert.hash", clientCertHashHeader))
-						certificate, err := registry.LookupCertificate(clientCertHashHeader)
+						certificate, err := registry.LookupCertificate(r.Context(), clientCertHashHeader)
 						if err == nil && certificate != nil {
 							r.TLS.PeerCertificates = []*x509.Certificate{certificate}
 						} else if err != nil {

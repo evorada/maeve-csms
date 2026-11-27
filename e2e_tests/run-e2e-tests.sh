@@ -56,7 +56,9 @@ stop_docker_compose_for_maeve_csms() {
 
 # Function to check health endpoint
 check_health_endpoint() {
-    HEALTH_ENDPOINT="http://localhost:9410/health"
+    # the health check is on the internal listener of the manager, which
+    # docker-compose.yml publishes on this machine only
+    HEALTH_ENDPOINT="http://127.0.0.1:9412/health"
     echo "$(date +"%Y-%m-%d %H:%M:%S"):Waiting for the health endpoint to become available..."
     while true; do
         STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" $HEALTH_ENDPOINT)

@@ -15,6 +15,7 @@ import (
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	clockTest "k8s.io/utils/clock/testing"
 )
 
@@ -42,6 +43,7 @@ func newStartTransactionHandler(t *testing.T) (handlers.StartTransactionHandler,
 
 	groupId := startTransactionGroupId
 	err = engine.SetToken(context.Background(), &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -57,6 +59,7 @@ func newStartTransactionHandler(t *testing.T) (handlers.StartTransactionHandler,
 	return handlers.StartTransactionHandler{
 		Clock:            clk,
 		TokenStore:       engine,
+		OrgResolver:      &tenancy.Resolver{Stations: engine},
 		TransactionStore: engine,
 		ReservationStore: engine,
 	}, engine
@@ -171,6 +174,7 @@ func TestStartTransaction(t *testing.T) {
 	meterStart := int64(100)
 	groupId := startTransactionGroupId
 	expected := &store.Transaction{
+		OrgId:           store.LegacyOrgId, // the charge station is not registered
 		ChargeStationId: startTransactionChargeStationId,
 		TransactionId:   transactionId,
 		IdToken:         startTransactionIdTag,
@@ -674,6 +678,7 @@ func TestStartTransactionWithStoreWithoutIdSequenceAndDetails(t *testing.T) {
 	found, err := engine.FindTransaction(ctx, startTransactionChargeStationId, transactionId)
 	require.NoError(t, err)
 	expected := &store.Transaction{
+		OrgId:           store.LegacyOrgId, // the charge station is not registered
 		ChargeStationId: startTransactionChargeStationId,
 		TransactionId:   transactionId,
 		IdToken:         startTransactionIdTag,
@@ -688,4 +693,30 @@ func TestStartTransactionWithStoreWithoutIdSequenceAndDetails(t *testing.T) {
 	stored, err := engine.GetReservation(ctx, 77)
 	require.NoError(t, err)
 	assert.Equal(t, store.ReservationStatusUsed, stored.Status)
+}
+
+// The idTag of a StartTransaction.req is looked up in the tokens of the org that owns
+// the charge station: the token of another org is not known there.
+func TestStartTransactionWithTokenOfAnotherOrg(t *testing.T) {
+	const orgA = "0193b2c4-0000-7000-8000-0000000000a1"
+	// the store has the token in the default org
+	handler, engine := newStartTransactionHandler(t)
+	ctx := context.Background()
+	require.NoError(t, engine.SetChargeStationAuth(ctx, "cs-org-a", &store.ChargeStationAuth{OrgId: orgA}))
+
+	got := startTransaction(t, handler, "cs-org-a", startTransactionRequest(startTransactionIdTag))
+
+	assert.Equal(t, types.StartTransactionResponseJsonIdTagInfoStatusInvalid, got.IdTagInfo.Status)
+	assert.Nil(t, got.IdTagInfo.ParentIdTag)
+	assert.Nil(t, got.IdTagInfo.ExpiryDate)
+
+	found, err := engine.FindTransaction(ctx, "cs-org-a", handlers.ConvertToUUID(got.TransactionId))
+	require.NoError(t, err)
+	require.NotNil(t, found)
+	assert.Equal(t, orgA, found.OrgId)
+	assert.Nil(t, found.IdTokenGroup, "the group of the token of another org is not recorded")
+
+	// the same idTag is accepted at a charge station of the org that has the token
+	got = startTransaction(t, handler, startTransactionChargeStationId, startTransactionRequest(startTransactionIdTag))
+	assert.Equal(t, types.StartTransactionResponseJsonIdTagInfoStatusAccepted, got.IdTagInfo.Status)
 }

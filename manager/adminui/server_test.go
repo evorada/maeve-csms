@@ -3,12 +3,14 @@
 package adminui
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"html"
 	"io"
 	"math"
 	"math/big"
@@ -21,9 +23,15 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/thoughtworks/maeve-csms/manager/services"
+	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
 	"k8s.io/utils/clock"
 )
+
+// exampleOrgName gives every charge station the organisation name "Example".
+func exampleOrgName(context.Context, string) string {
+	return "Example"
+}
 
 func TestConnectWithUnsecuredAuth(t *testing.T) {
 	caCert, caKey := generateCA(t)
@@ -34,7 +42,7 @@ func TestConnectWithUnsecuredAuth(t *testing.T) {
 		CertificateReader: services.StringSource{Data: caCert},
 		PrivateKeyReader:  services.StringSource{Data: caKey},
 	}
-	server := NewServer("localhost", 80, 443, "Example", engine, certificateProvider)
+	server := NewServer("localhost", 80, 443, exampleOrgName, engine, certificateProvider, store.LegacyOrgId)
 
 	r := chi.NewRouter()
 	r.Mount("/adminui", server)
@@ -80,7 +88,7 @@ func TestConnectWithBasicAuth(t *testing.T) {
 		CertificateReader: services.StringSource{Data: caCert},
 		PrivateKeyReader:  services.StringSource{Data: caKey},
 	}
-	server := NewServer("localhost", 80, 443, "Example", engine, certificateProvider)
+	server := NewServer("localhost", 80, 443, exampleOrgName, engine, certificateProvider, store.LegacyOrgId)
 
 	r := chi.NewRouter()
 	r.Mount("/adminui", server)
@@ -126,7 +134,11 @@ func TestConnectWithMTLS(t *testing.T) {
 		CertificateReader: services.StringSource{Data: caCert},
 		PrivateKeyReader:  services.StringSource{Data: caKey},
 	}
-	server := NewServer("localhost", 80, 443, "Example", engine, certificateProvider)
+	// the organisation of the certificate is the one of the charge station
+	orgNameFor := func(_ context.Context, csId string) string {
+		return "Org of " + csId
+	}
+	server := NewServer("localhost", 80, 443, orgNameFor, engine, certificateProvider, store.LegacyOrgId)
 
 	r := chi.NewRouter()
 	r.Mount("/adminui", server)
@@ -151,6 +163,20 @@ func TestConnectWithMTLS(t *testing.T) {
 	}
 	t.Log(string(data))
 
+	// the first certificate on the page is the one of the charge station
+	page := []byte(html.UnescapeString(string(data)))
+	block, _ := pem.Decode(page[bytes.Index(page, []byte("-----BEGIN CERTIFICATE-----")):])
+	if block == nil {
+		t.Fatalf("no certificate on the page")
+	}
+	clientCert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatalf("unable to parse the client certificate: %v", err)
+	}
+	if clientCert.Subject.CommonName != "cs001" || len(clientCert.Subject.Organization) != 1 || clientCert.Subject.Organization[0] != "Org of cs001" {
+		t.Fatalf("unexpected subject of the client certificate: %s", clientCert.Subject)
+	}
+
 	auth, err := engine.LookupChargeStationAuth(context.TODO(), "cs001")
 	if err != nil {
 		t.Fatalf("unable to lookup charge station: %v", err)
@@ -166,7 +192,7 @@ func TestConnectWithMTLS(t *testing.T) {
 func TestRegisterTokenWithShortUid(t *testing.T) {
 	engine := inmemory.NewStore(clock.RealClock{})
 
-	server := NewServer("localhost", 80, 443, "Example", engine, nil)
+	server := NewServer("localhost", 80, 443, exampleOrgName, engine, nil, store.LegacyOrgId)
 
 	r := chi.NewRouter()
 	r.Mount("/adminui", server)
@@ -208,7 +234,7 @@ func TestRegisterTokenWithShortUid(t *testing.T) {
 func TestRegisterTokenWithLongUid(t *testing.T) {
 	engine := inmemory.NewStore(clock.RealClock{})
 
-	server := NewServer("localhost", 80, 443, "Example", engine, nil)
+	server := NewServer("localhost", 80, 443, exampleOrgName, engine, nil, store.LegacyOrgId)
 
 	r := chi.NewRouter()
 	r.Mount("/adminui", server)
@@ -288,4 +314,53 @@ func generateCA(t *testing.T) (string, string) {
 	})
 
 	return string(pemCert), string(pemKey)
+}
+
+// The charge stations and tokens that are registered on the admin pages belong to the
+// default org of the server.
+func TestRegistrationsBelongToTheDefaultOrg(t *testing.T) {
+	const defaultOrgId = "0193b2c4-0000-7000-8000-0000000000a1"
+
+	for name, tt := range map[string]struct {
+		defaultOrgId string
+		wantOrgId    string
+	}{
+		"default org":    {defaultOrgId: defaultOrgId, wantOrgId: defaultOrgId},
+		"no default org": {defaultOrgId: "", wantOrgId: store.LegacyOrgId},
+	} {
+		t.Run(name, func(t *testing.T) {
+			engine := inmemory.NewStore(clock.RealClock{})
+			r := chi.NewRouter()
+			r.Mount("/adminui", NewServer("localhost", 80, 443, exampleOrgName, engine, nil, tt.defaultOrgId))
+
+			post := func(path string, form url.Values) {
+				t.Helper()
+				req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
+				req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+				rr := httptest.NewRecorder()
+				r.ServeHTTP(rr, req)
+				if rr.Code != http.StatusOK {
+					t.Fatalf("request to %s failed with status: %d", path, rr.Code)
+				}
+			}
+			post("/adminui/connect", url.Values{"csid": {"cs001"}, "auth": {"unsecured"}})
+			post("/adminui/token", url.Values{"uid": {"ABC123"}})
+
+			auth, err := engine.LookupChargeStationAuth(context.TODO(), "cs001")
+			if err != nil || auth == nil {
+				t.Fatalf("unable to lookup charge station: %v", err)
+			}
+			if auth.OrgId != tt.wantOrgId {
+				t.Errorf("wrong org of the charge station, want %s got %s", tt.wantOrgId, auth.OrgId)
+			}
+
+			tok, err := engine.LookupTokenForOrg(context.TODO(), tt.wantOrgId, "ABC123")
+			if err != nil || tok == nil {
+				t.Fatalf("unable to read the token of the org from db: %v", err)
+			}
+			if tok.OrgId != tt.wantOrgId {
+				t.Errorf("wrong org of the token, want %s got %s", tt.wantOrgId, tok.OrgId)
+			}
+		})
+	}
 }

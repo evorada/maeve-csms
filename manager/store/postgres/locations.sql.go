@@ -7,6 +7,8 @@ package postgres
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const DeleteLocation = `-- name: DeleteLocation :exec
@@ -20,7 +22,7 @@ func (q *Queries) DeleteLocation(ctx context.Context, id string) error {
 }
 
 const GetLocation = `-- name: GetLocation :one
-SELECT id, country_code, party_id, location_data, created_at, updated_at FROM locations
+SELECT id, country_code, party_id, location_data, created_at, updated_at, org_id FROM locations
 WHERE id = $1
 LIMIT 1
 `
@@ -35,12 +37,13 @@ func (q *Queries) GetLocation(ctx context.Context, id string) (Location, error) 
 		&i.LocationData,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.OrgID,
 	)
 	return i, err
 }
 
 const ListAllLocations = `-- name: ListAllLocations :many
-SELECT id, country_code, party_id, location_data, created_at, updated_at FROM locations
+SELECT id, country_code, party_id, location_data, created_at, updated_at, org_id FROM locations
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -66,6 +69,7 @@ func (q *Queries) ListAllLocations(ctx context.Context, arg ListAllLocationsPara
 			&i.LocationData,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.OrgID,
 		); err != nil {
 			return nil, err
 		}
@@ -78,7 +82,7 @@ func (q *Queries) ListAllLocations(ctx context.Context, arg ListAllLocationsPara
 }
 
 const ListLocations = `-- name: ListLocations :many
-SELECT id, country_code, party_id, location_data, created_at, updated_at FROM locations
+SELECT id, country_code, party_id, location_data, created_at, updated_at, org_id FROM locations
 WHERE country_code = $1 AND party_id = $2
 ORDER BY created_at DESC
 LIMIT $3 OFFSET $4
@@ -112,6 +116,7 @@ func (q *Queries) ListLocations(ctx context.Context, arg ListLocationsParams) ([
 			&i.LocationData,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.OrgID,
 		); err != nil {
 			return nil, err
 		}
@@ -124,33 +129,40 @@ func (q *Queries) ListLocations(ctx context.Context, arg ListLocationsParams) ([
 }
 
 const SetLocation = `-- name: SetLocation :one
+
 INSERT INTO locations (
     id,
     country_code,
     party_id,
-    location_data
-) VALUES ($1, $2, $3, $4)
+    location_data,
+    org_id
+) VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (id) DO UPDATE
 SET country_code = EXCLUDED.country_code,
     party_id = EXCLUDED.party_id,
     location_data = EXCLUDED.location_data,
     updated_at = NOW()
-RETURNING id, country_code, party_id, location_data, created_at, updated_at
+WHERE locations.org_id = EXCLUDED.org_id
+RETURNING id, country_code, party_id, location_data, created_at, updated_at, org_id
 `
 
 type SetLocationParams struct {
-	ID           string `db:"id" json:"id"`
-	CountryCode  string `db:"country_code" json:"country_code"`
-	PartyID      string `db:"party_id" json:"party_id"`
-	LocationData []byte `db:"location_data" json:"location_data"`
+	ID           string      `db:"id" json:"id"`
+	CountryCode  string      `db:"country_code" json:"country_code"`
+	PartyID      string      `db:"party_id" json:"party_id"`
+	LocationData []byte      `db:"location_data" json:"location_data"`
+	OrgID        pgtype.UUID `db:"org_id" json:"org_id"`
 }
 
+// Location ids are global. SetLocation returns no row, and changes nothing, when the
+// id is already used by a location of another org.
 func (q *Queries) SetLocation(ctx context.Context, arg SetLocationParams) (Location, error) {
 	row := q.db.QueryRow(ctx, SetLocation,
 		arg.ID,
 		arg.CountryCode,
 		arg.PartyID,
 		arg.LocationData,
+		arg.OrgID,
 	)
 	var i Location
 	err := row.Scan(
@@ -160,6 +172,7 @@ func (q *Queries) SetLocation(ctx context.Context, arg SetLocationParams) (Locat
 		&i.LocationData,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.OrgID,
 	)
 	return i, err
 }

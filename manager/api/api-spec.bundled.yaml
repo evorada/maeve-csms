@@ -11,6 +11,8 @@ info:
 servers:
   - url: http://localhost:9410/api/v0
     description: The local development server
+security:
+  - bearerAuth: []
 paths:
   /cs/{csId}:
     post:
@@ -20,13 +22,14 @@ paths:
         has not yet been provisioned and will place the charge station into a pending state
         so it can been configured when it sends a boot notification.
       operationId: registerChargeStation
+      x-permission: cpms.station.write
       parameters:
         - name: csId
           in: path
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -36,6 +39,24 @@ paths:
       responses:
         '201':
           description: Created
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, the tenant is suspended (error `tenant_suspended`), or the charge station is new and a hard limit on the connectors of the tenant is used up (the error starts with `entitlement_limit_exceeded`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -51,13 +72,14 @@ paths:
         for one time changes required during testing. After reconfiguration, the charge station
         will be rebooted so the new configuration can take effect if instructed to.
       operationId: reconfigureChargeStation
+      x-permission: cpms.station.write
       parameters:
         - name: csId
           in: path
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -67,6 +89,24 @@ paths:
       responses:
         '200':
           description: OK
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -80,13 +120,14 @@ paths:
         Queries the charge station for installed certificates. Uses OCPP GetInstalledCertificateIds
         to retrieve certificate hash data for certificates currently installed on the charge station.
       operationId: getInstalledCertificates
+      x-permission: cpms.station.read
       parameters:
         - name: csId
           in: path
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: certificateType
           in: query
           description: Optional filter by certificate type
@@ -106,6 +147,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -115,13 +174,14 @@ paths:
     post:
       summary: Install certificates on the charge station
       operationId: installChargeStationCertificates
+      x-permission: cpms.station.write
       parameters:
         - name: csId
           in: path
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -131,6 +191,24 @@ paths:
       responses:
         '200':
           description: OK
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -144,13 +222,14 @@ paths:
         Requests the charge station to delete a specific certificate identified by its hash data.
         Uses OCPP DeleteCertificate to remove the certificate from the charge station.
       operationId: deleteChargeStationCertificate
+      x-permission: cpms.station.write
       parameters:
         - name: csId
           in: path
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -164,6 +243,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -177,13 +274,14 @@ paths:
         Returns the details required by the CSMS gateway to determine how to authenticate
         the charge station
       operationId: lookupChargeStationAuth
+      x-permission: cpms.station.write
       parameters:
         - name: csId
           in: path
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       responses:
         '200':
           description: Charge station auth response
@@ -191,6 +289,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChargeStationAuth'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -206,13 +316,14 @@ paths:
   /cs/{csId}/trigger:
     post:
       operationId: triggerChargeStation
+      x-permission: cpms.connector.command
       parameters:
         - name: csId
           in: path
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -222,6 +333,24 @@ paths:
       responses:
         '200':
           description: OK
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -236,13 +365,14 @@ paths:
         and signed firmware updates. The charge station will download and install the firmware
         from the provided location.
       operationId: updateChargeStationFirmware
+      x-permission: cpms.connector.command
       parameters:
         - name: csId
           in: path
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -252,6 +382,24 @@ paths:
       responses:
         '202':
           description: Accepted - firmware update initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -265,13 +413,14 @@ paths:
         Returns the current firmware update status for the specified charge station,
         including current version, pending version (if any), and update progress.
       operationId: getChargeStationFirmwareStatus
+      x-permission: cpms.station.read
       parameters:
         - name: csId
           in: path
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       responses:
         '200':
           description: Firmware status response
@@ -279,6 +428,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FirmwareStatus'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -298,6 +459,7 @@ paths:
         Initiates a diagnostics upload from the specified charge station (OCPP 1.6).
         The charge station will collect diagnostics and upload them to the provided location.
       operationId: requestChargeStationDiagnostics
+      x-permission: cpms.connector.command
       parameters:
         - name: csId
           in: path
@@ -305,7 +467,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -315,6 +477,18 @@ paths:
       responses:
         '202':
           description: Accepted - diagnostics request initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -327,6 +501,7 @@ paths:
       description: |
         Returns the current diagnostics upload status for the specified charge station.
       operationId: getChargeStationDiagnosticsStatus
+      x-permission: cpms.station.read
       parameters:
         - name: csId
           in: path
@@ -334,7 +509,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       responses:
         '200':
           description: Diagnostics status response
@@ -342,6 +517,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DiagnosticsStatus'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -354,6 +541,7 @@ paths:
       description: |
         Initiates a log upload from the specified charge station (OCPP 2.0.1 GetLog).
       operationId: requestChargeStationLogs
+      x-permission: cpms.connector.command
       parameters:
         - name: csId
           in: path
@@ -361,7 +549,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -371,6 +559,18 @@ paths:
       responses:
         '202':
           description: Accepted - log request initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -383,6 +583,7 @@ paths:
       description: |
         Returns the current log upload status for the specified charge station.
       operationId: getChargeStationLogStatus
+      x-permission: cpms.station.read
       parameters:
         - name: csId
           in: path
@@ -390,7 +591,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: requestId
           in: query
           required: false
@@ -404,6 +605,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LogStatus'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -417,6 +630,7 @@ paths:
         Creates a reservation for a specific connector on the charge station.
         The charge station will be instructed to reserve the connector via OCPP ReserveNow.
       operationId: createReservation
+      x-permission: cpms.connector.command
       parameters:
         - name: csId
           in: path
@@ -424,7 +638,7 @@ paths:
           required: true
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -440,8 +654,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: The reservation id is already in use
           content:
             application/json:
               schema:
@@ -459,6 +691,7 @@ paths:
         Cancels an active reservation on the charge station.
         The charge station will be instructed to cancel the reservation via OCPP CancelReservation.
       operationId: cancelReservation
+      x-permission: cpms.connector.command
       parameters:
         - name: csId
           in: path
@@ -466,7 +699,7 @@ paths:
           required: true
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: reservationId
           in: path
           description: The reservation identifier
@@ -477,6 +710,18 @@ paths:
       responses:
         '202':
           description: Accepted - cancellation request initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station or reservation
           content:
@@ -496,6 +741,7 @@ paths:
         Lists reservations for the specified charge station.
         By default returns active reservations only.
       operationId: listReservations
+      x-permission: cpms.station.read
       parameters:
         - name: csId
           in: path
@@ -503,7 +749,7 @@ paths:
           required: true
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: status
           in: query
           description: 'Filter by reservation status (default: active)'
@@ -522,6 +768,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReservationList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -541,6 +799,7 @@ paths:
         Lists transactions for the specified charge station with optional filtering
         by status, date range, and pagination.
       operationId: listTransactions
+      x-permission: cpms.session.read
       parameters:
         - name: csId
           in: path
@@ -548,7 +807,7 @@ paths:
           required: true
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: status
           in: query
           description: 'Filter by transaction status (default: all)'
@@ -598,6 +857,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TransactionList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -617,6 +888,7 @@ paths:
         Retrieves detailed information about a specific transaction including
         all meter values.
       operationId: getTransactionDetails
+      x-permission: cpms.session.read
       parameters:
         - name: csId
           in: path
@@ -624,7 +896,7 @@ paths:
           required: true
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: transactionId
           in: path
           description: The transaction identifier
@@ -639,6 +911,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TransactionDetail'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Transaction not found
           content:
@@ -658,6 +942,7 @@ paths:
         Returns the current status of the specified charge station,
         including connection state, last heartbeat, firmware version, and hardware details.
       operationId: getChargeStationStatus
+      x-permission: cpms.station.read
       parameters:
         - name: csId
           in: path
@@ -665,7 +950,7 @@ paths:
           required: true
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       responses:
         '200':
           description: Charge station status
@@ -673,6 +958,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChargeStationStatusResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -692,6 +989,7 @@ paths:
         Returns the current status of all connectors on the specified charge station,
         including their availability, error codes, and active transactions.
       operationId: getConnectorStatuses
+      x-permission: cpms.station.read
       parameters:
         - name: csId
           in: path
@@ -699,7 +997,7 @@ paths:
           required: true
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       responses:
         '200':
           description: Connector statuses
@@ -709,6 +1007,18 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ConnectorStatusResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -728,13 +1038,14 @@ paths:
         Remotely starts a charging transaction on the specified charge station.
         This is an async operation that returns immediately with 202 Accepted.
       operationId: remoteStartTransaction
+      x-permission: cpms.connector.command
       parameters:
         - name: csId
           in: path
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -744,6 +1055,24 @@ paths:
       responses:
         '202':
           description: Accepted - remote start initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -757,13 +1086,14 @@ paths:
         Remotely stops an active charging transaction on the specified charge station.
         This is an async operation that returns immediately with 202 Accepted.
       operationId: remoteStopTransaction
+      x-permission: cpms.connector.command
       parameters:
         - name: csId
           in: path
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -773,6 +1103,24 @@ paths:
       responses:
         '202':
           description: Accepted - remote stop initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -783,8 +1131,9 @@ paths:
     post:
       summary: Create/update an authorization token
       description: |
-        Creates or updates a token that can be used to authorize a charge
+        Creates or updates a token that can be used to authorize a charge. The token belongs to the org of the caller, or to `orgId` when the body names an org that the caller may reach.
       operationId: setToken
+      x-permission: cpms.token.write
       requestBody:
         required: true
         content:
@@ -794,6 +1143,30 @@ paths:
       responses:
         '201':
           description: Created
+        '400':
+          description: Invalid request, or `orgId` is missing for a caller whose own org is not a tenant here
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: The org is outside the scope of the caller
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -803,8 +1176,9 @@ paths:
     get:
       summary: List authorization tokens
       description: |
-        Lists all tokens that can be used to authorize a charge
+        Lists the tokens of the orgs that the caller may reach
       operationId: listTokens
+      x-permission: cpms.token.read
       parameters:
         - required: false
           in: query
@@ -819,6 +1193,13 @@ paths:
             type: integer
             minimum: 1
             maximum: 100
+        - required: false
+          in: query
+          name: orgId
+          description: Only list the tokens of this org. An org outside the scope of the caller gives an empty list
+          schema:
+            type: string
+            format: uuid
       responses:
         '200':
           description: List of tokens
@@ -828,6 +1209,18 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Token'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -840,6 +1233,7 @@ paths:
       description: |
         Lookup a token that can be used to authorize a charge
       operationId: lookupToken
+      x-permission: cpms.token.read
       parameters:
         - required: true
           in: path
@@ -847,6 +1241,13 @@ paths:
           schema:
             type: string
             maxLength: 36
+        - required: false
+          in: query
+          name: orgId
+          description: The org that owns the token. Without it the token is looked up in the org of the caller
+          schema:
+            type: string
+            format: uuid
       responses:
         '200':
           description: Authorization token details
@@ -854,6 +1255,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Token'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Not found
           content:
@@ -873,6 +1286,7 @@ paths:
         Uploads a client certificate to the CSMS. The CSMS can use the certificate to authenticate
         the charge station using mutual TLS when the TLS operations are being offloaded to a load-balancer.
       operationId: uploadCertificate
+      x-permission: cpms.certificate.write
       requestBody:
         required: true
         content:
@@ -882,6 +1296,18 @@ paths:
       responses:
         '201':
           description: Created
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -895,6 +1321,7 @@ paths:
         Lookup a client certificate that has been uploaded to the CSMS using a base64 encoded SHA-256 hash
         of the DER bytes.
       operationId: lookupCertificate
+      x-permission: cpms.station.read
       parameters:
         - required: true
           in: path
@@ -909,6 +1336,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Certificate'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Not found
           content:
@@ -927,6 +1366,7 @@ paths:
         Deletes a client certificate that has been uploaded to the CSMS using a base64 encoded SHA-256 hash
         of the DER bytes.
       operationId: deleteCertificate
+      x-permission: cpms.certificate.write
       parameters:
         - required: true
           in: path
@@ -937,6 +1377,18 @@ paths:
       responses:
         '204':
           description: No content
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Not found
           content:
@@ -957,6 +1409,7 @@ paths:
         either initiate a registration with the party or the party will wait for the party to initiate 
         a registration with the CSMS.
       operationId: registerParty
+      x-permission: ocpi.connection.manage
       requestBody:
         required: true
         content:
@@ -966,6 +1419,18 @@ paths:
       responses:
         '201':
           description: Created
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -978,6 +1443,7 @@ paths:
       description: |
         Registers a location with the CSMS.
       operationId: registerLocation
+      x-permission: cpms.station.write
       parameters:
         - name: locationId
           in: path
@@ -994,6 +1460,36 @@ paths:
       responses:
         '201':
           description: Created
+        '400':
+          description: Invalid request, or `orgId` is missing for a caller whose own org is not a tenant here
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: The org is outside the scope of the caller
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: The location id is already in use
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -1007,13 +1503,14 @@ paths:
         Sends vendor-specific data to a charge station. The data format and semantics
         are defined by the vendor. Supports both OCPP 1.6 and OCPP 2.0.1.
       operationId: sendDataTransfer
+      x-permission: cpms.connector.command
       parameters:
         - name: csId
           in: path
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -1027,6 +1524,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataTransferResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -1040,16 +1555,35 @@ paths:
         Requests the charge station to clear its local authorization cache. 
         The next authorization request will query the CSMS. Supports both OCPP 1.6 and OCPP 2.0.1.
       operationId: clearAuthorizationCache
+      x-permission: cpms.connector.command
       parameters:
         - name: csId
           in: path
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       responses:
         '202':
           description: Accepted - cache clear request submitted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -1064,13 +1598,14 @@ paths:
         Used to take equipment out of service for maintenance or make it available again.
         Supports both OCPP 1.6 and OCPP 2.0.1.
       operationId: changeAvailability
+      x-permission: cpms.connector.command
       parameters:
         - name: csId
           in: path
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -1080,6 +1615,24 @@ paths:
       responses:
         '202':
           description: Accepted - availability change request submitted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -1093,13 +1646,14 @@ paths:
         Retrieves historical meter values (energy consumption, power, voltage, etc.) 
         reported by the charge station. Supports filtering and pagination.
       operationId: getMeterValues
+      x-permission: cpms.session.read
       parameters:
         - name: csId
           in: path
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: connectorId
           in: query
           description: Filter by connector ID
@@ -1151,6 +1705,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MeterValuesResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1170,13 +1736,14 @@ paths:
         Returns the current version number of the local authorization list
         stored on the charge station.
       operationId: getLocalListVersion
+      x-permission: cpms.station.read
       parameters:
         - name: csId
           in: path
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       responses:
         '200':
           description: Local list version response
@@ -1184,6 +1751,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LocalListVersionResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station or no local list
           content:
@@ -1202,13 +1781,14 @@ paths:
       description: |
         Returns the complete local authorization list for the specified charge station.
       operationId: getLocalAuthorizationList
+      x-permission: cpms.station.read
       parameters:
         - name: csId
           in: path
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       responses:
         '200':
           description: Local authorization list response
@@ -1216,6 +1796,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LocalAuthorizationListResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station or no local list
           content:
@@ -1234,13 +1826,14 @@ paths:
         Updates the local authorization list on the specified charge station.
         Supports both full replacement and differential updates.
       operationId: updateLocalAuthorizationList
+      x-permission: cpms.token.write
       parameters:
         - name: csId
           in: path
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -1250,6 +1843,18 @@ paths:
       responses:
         '202':
           description: Accepted - operation queued
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1269,6 +1874,7 @@ paths:
         Retrieves the current configuration of a charge station using OCPP 1.6 GetConfiguration.
         Optionally filter by specific configuration keys.
       operationId: getChargeStationConfiguration
+      x-permission: cpms.station.read
       parameters:
         - name: csId
           in: path
@@ -1276,7 +1882,7 @@ paths:
           required: true
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: key
           in: query
           description: Comma-separated list of configuration keys to retrieve
@@ -1290,6 +1896,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConfigurationResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1308,6 +1926,7 @@ paths:
         Changes configuration values on a charge station using OCPP 1.6 ChangeConfiguration.
         Returns 202 Accepted with per-key results. Some changes may require a reboot.
       operationId: changeChargeStationConfiguration
+      x-permission: cpms.station.write
       parameters:
         - name: csId
           in: path
@@ -1315,7 +1934,7 @@ paths:
           required: true
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -1329,6 +1948,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConfigurationChangeResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1348,6 +1979,7 @@ paths:
         Retrieves variables from a charge station using OCPP 2.0.1 GetVariables.
         Optionally filter by component and/or variable name.
       operationId: getChargeStationVariables
+      x-permission: cpms.station.read
       parameters:
         - name: csId
           in: path
@@ -1355,7 +1987,7 @@ paths:
           required: true
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: component
           in: query
           description: Filter by component name
@@ -1375,6 +2007,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VariablesResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1393,6 +2037,7 @@ paths:
         Sets variable values on a charge station using OCPP 2.0.1 SetVariables.
         Returns 202 Accepted with per-variable results.
       operationId: setChargeStationVariables
+      x-permission: cpms.station.write
       parameters:
         - name: csId
           in: path
@@ -1400,7 +2045,7 @@ paths:
           required: true
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -1414,6 +2059,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VariablesChangeResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1434,13 +2091,14 @@ paths:
         Supports priority, scheduling, state-based display, and multiple content formats.
         OCPP 2.0.1 only.
       operationId: setDisplayMessage
+      x-permission: cpms.station.write
       parameters:
         - name: csId
           in: path
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -1450,6 +2108,18 @@ paths:
       responses:
         '202':
           description: Accepted - message request queued
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station or OCPP version not supported
           content:
@@ -1469,13 +2139,14 @@ paths:
         Removes a specific message from the charge station display.
         OCPP 2.0.1 only.
       operationId: clearDisplayMessage
+      x-permission: cpms.station.write
       parameters:
         - name: csId
           in: path
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: messageId
           in: path
           description: The message identifier to clear
@@ -1485,6 +2156,18 @@ paths:
       responses:
         '202':
           description: Accepted - clear request queued
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station or OCPP version not supported
           content:
@@ -1505,13 +2188,14 @@ paths:
         Optionally filter by state or priority.
         OCPP 2.0.1 only.
       operationId: getDisplayMessages
+      x-permission: cpms.station.read
       parameters:
         - name: csId
           in: path
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: state
           in: query
           description: Filter messages by charging state
@@ -1525,6 +2209,18 @@ paths:
       responses:
         '202':
           description: Accepted - get request queued
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station or OCPP version not supported
           content:
@@ -1544,6 +2240,7 @@ paths:
         Sets a charging profile for a specific connector on the charge station.
         Used for smart charging, load balancing, and dynamic pricing.
       operationId: setChargingProfile
+      x-permission: cpms.connector.command
       parameters:
         - name: csId
           in: path
@@ -1559,6 +2256,18 @@ paths:
       responses:
         '202':
           description: Accepted - charging profile request queued
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1574,6 +2283,7 @@ paths:
     get:
       summary: Get charging profiles
       operationId: getChargingProfiles
+      x-permission: cpms.station.read
       parameters:
         - name: csId
           in: path
@@ -1608,6 +2318,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChargingProfileList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1624,6 +2346,7 @@ paths:
     delete:
       summary: Clear charging profile
       operationId: clearChargingProfile
+      x-permission: cpms.connector.command
       parameters:
         - name: csId
           in: path
@@ -1660,6 +2383,18 @@ paths:
       responses:
         '202':
           description: Accepted - clear profile request queued
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1676,6 +2411,7 @@ paths:
     get:
       summary: Get composite schedule
       operationId: getCompositeSchedule
+      x-permission: cpms.station.read
       parameters:
         - name: csId
           in: path
@@ -1711,6 +2447,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CompositeSchedule'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1726,6 +2474,7 @@ paths:
   /cs/{csId}/reset:
     post:
       operationId: ResetChargeStation
+      x-permission: cpms.connector.command
       summary: Request a charge station reset
       parameters:
         - name: csId
@@ -1744,11 +2493,30 @@ paths:
           description: Reset request accepted
         '400':
           description: Invalid request
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '500':
           description: Internal server error
   /cs/{csId}/unlock-connector:
     post:
       operationId: UnlockConnector
+      x-permission: cpms.connector.command
       summary: Request to unlock a connector on a charge station
       parameters:
         - name: csId
@@ -1767,6 +2535,24 @@ paths:
           description: Unlock request accepted
         '400':
           description: Invalid request
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '500':
           description: Internal server error
   /cs/{csId}/monitoring:
@@ -1776,6 +2562,7 @@ paths:
         Configure variable monitoring on a charge station (OCPP 2.0.1 only).
         The charge station will monitor specified variables and send alerts based on the configured thresholds.
       operationId: setVariableMonitoring
+      x-permission: cpms.station.write
       parameters:
         - name: csId
           in: path
@@ -1783,7 +2570,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -1797,6 +2584,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SetVariableMonitoringResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1815,6 +2614,7 @@ paths:
       description: |
         Remove a specific variable monitor from a charge station (OCPP 2.0.1 only).
       operationId: clearVariableMonitoring
+      x-permission: cpms.station.write
       parameters:
         - name: csId
           in: path
@@ -1822,7 +2622,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: monitorId
           in: path
           required: true
@@ -1832,6 +2632,18 @@ paths:
       responses:
         '202':
           description: Accepted - monitoring clear initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station or monitor
           content:
@@ -1850,6 +2662,7 @@ paths:
       description: |
         Configure the base level of monitoring on a charge station (OCPP 2.0.1 only).
       operationId: setMonitoringBase
+      x-permission: cpms.station.write
       parameters:
         - name: csId
           in: path
@@ -1857,7 +2670,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -1867,6 +2680,18 @@ paths:
       responses:
         '202':
           description: Accepted - monitoring base configuration initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1886,6 +2711,7 @@ paths:
         Configure the monitoring severity level on a charge station (OCPP 2.0.1 only).
         Only events with severity at or below this level will be reported.
       operationId: setMonitoringLevel
+      x-permission: cpms.station.write
       parameters:
         - name: csId
           in: path
@@ -1893,7 +2719,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -1903,6 +2729,18 @@ paths:
       responses:
         '202':
           description: Accepted - monitoring level configuration initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1922,6 +2760,7 @@ paths:
         Request a monitoring report from a charge station (OCPP 2.0.1 only).
         The report will be sent asynchronously via NotifyMonitoringReport notifications.
       operationId: getMonitoringReport
+      x-permission: cpms.connector.command
       parameters:
         - name: csId
           in: path
@@ -1929,7 +2768,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
       requestBody:
         required: true
         content:
@@ -1939,6 +2778,18 @@ paths:
       responses:
         '202':
           description: Accepted - monitoring report request initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1958,6 +2809,7 @@ paths:
         Retrieve events from a charge station, filtered by type and time range.
         Events are collected from NotifyEvent notifications.
       operationId: getChargeStationEvents
+      x-permission: cpms.station.read
       parameters:
         - name: csId
           in: path
@@ -1965,7 +2817,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: eventType
           in: query
           description: Filter by event type
@@ -2005,6 +2857,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EventsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -2024,6 +2888,7 @@ paths:
         Retrieve device reports from a charge station, such as configuration inventory
         or monitoring reports. Reports are collected from NotifyReport and NotifyMonitoringReport notifications.
       operationId: getDeviceReports
+      x-permission: cpms.station.read
       parameters:
         - name: csId
           in: path
@@ -2031,7 +2896,7 @@ paths:
           description: The charge station identifier
           schema:
             type: string
-            maxLength: 28
+            maxLength: 80
         - name: reportType
           in: query
           description: Filter by report type
@@ -2064,6 +2929,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReportsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -2077,17 +2954,21 @@ paths:
               schema:
                 $ref: '#/components/schemas/Status'
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   schemas:
     ChargeStationAuth:
       type: object
       description: Connection details for a charge station
-      required:
-        - securityProfile
       properties:
         securityProfile:
           type: integer
           description: |
             The security profile to use for the charge station: * `0` - unsecured transport with basic auth * `1` - TLS with basic auth * `2` - TLS with client certificate
+            When a charge station is registered without it, it defaults to the `default_security_profile` of the config of the tenant that owns the charge station, and to `1` when the tenant has not set one. It is always present in a response.
         base64SHA256Password:
           type: string
           maxLength: 64
@@ -2459,6 +3340,10 @@ components:
           type: string
           format: date-time
           description: After this instant the token is rejected with status Expired. A token without it does not expire
+        orgId:
+          type: string
+          format: uuid
+          description: The org that owns the token. When a token is set it defaults to the org of the caller and must be an org that the caller may reach. Absent in a response when the storage does not keep it
     RemoteStartTransactionRequest:
       type: object
       description: Request to remotely start a charging transaction
@@ -2573,6 +3458,10 @@ components:
           items:
             $ref: '#/components/schemas/Evse'
           nullable: true
+        orgId:
+          type: string
+          format: uuid
+          description: The org that owns the location. It defaults to the org of the caller and must be an org that the caller may reach
     GeoLocation:
       required:
         - latitude

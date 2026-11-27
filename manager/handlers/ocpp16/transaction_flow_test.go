@@ -15,6 +15,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/schemas"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	clockTest "k8s.io/utils/clock/testing"
 )
@@ -46,6 +47,7 @@ func TestOcpp16TransactionFlow(t *testing.T) {
 
 	groupId := "FLEET1"
 	require.NoError(t, engine.SetToken(ctx, &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",
@@ -70,6 +72,8 @@ func TestOcpp16TransactionFlow(t *testing.T) {
 	router := ocpp16.NewRouter(emitter,
 		clk,
 		engine,
+		&tenancy.Resolver{Stations: engine},
+		nil,
 		nil,
 		nil,
 		nil,
@@ -102,7 +106,7 @@ func TestOcpp16TransactionFlow(t *testing.T) {
 		return reply.ResponsePayload
 	}
 
-	boot := call("BootNotification", `{"chargePointVendor": "Evorada", "chargePointModel": "AC22", "firmwareVersion": "1.4.2"}`)
+	boot := call("BootNotification", `{"chargePointVendor": "Acme", "chargePointModel": "AC22", "firmwareVersion": "1.4.2"}`)
 	assert.JSONEq(t, `{"currentTime": "2026-11-26T12:00:00Z", "interval": 60, "status": "Accepted"}`, string(boot))
 
 	authorize := call("Authorize", `{"idTag": "MYRFIDTAG"}`)
@@ -179,6 +183,7 @@ func TestOcpp16TransactionFlow(t *testing.T) {
 	stopReason := "EVDisconnected"
 	reservation := reservationId
 	wantTransaction := &store.Transaction{
+		OrgId:           store.LegacyOrgId, // the charge station is not registered
 		ChargeStationId: chargeStationId,
 		TransactionId:   transactionUuid,
 		IdToken:         idTag,

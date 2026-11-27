@@ -6,6 +6,8 @@ package postgres
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
@@ -13,14 +15,18 @@ type Querier interface {
 	AddMeterValues(ctx context.Context, arg AddMeterValuesParams) error
 	CancelReservation(ctx context.Context, reservationID int32) error
 	CountChargeStationEvents(ctx context.Context, chargeStationID string) (int64, error)
+	CountConnectorsForOrgs(ctx context.Context, orgIds []pgtype.UUID) (int64, error)
 	CountDeviceReports(ctx context.Context, chargeStationID string) (int64, error)
 	CountMeterValues(ctx context.Context, arg CountMeterValuesParams) (int64, error)
 	CountTransactionsFiltered(ctx context.Context, arg CountTransactionsFilteredParams) (int64, error)
 	CreateOrUpdateDisplayMessage(ctx context.Context, arg CreateOrUpdateDisplayMessageParams) error
+	// The reservation belongs to the org of its charge station, or to the legacy org when
+	// the charge station is not registered.
 	CreateReservation(ctx context.Context, arg CreateReservationParams) error
-	CreateToken(ctx context.Context, arg CreateTokenParams) (Token, error)
 	// CreateTransaction returns no row when the transaction already exists, instead of
 	// raising a unique violation that would abort an enclosing database transaction.
+	// The transaction belongs to the org of its charge station, or to the legacy org when
+	// the charge station is not registered.
 	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
 	DeleteAllDisplayMessages(ctx context.Context, chargeStationID string) error
 	DeleteAllLocalAuthListEntries(ctx context.Context, chargeStationID string) error
@@ -48,7 +54,8 @@ type Querier interface {
 	DeleteRemoteStartTransactionRequest(ctx context.Context, chargeStationID string) error
 	DeleteRemoteStopTransactionRequest(ctx context.Context, chargeStationID string) error
 	DeleteResetRequest(ctx context.Context, chargeStationID string) error
-	DeleteToken(ctx context.Context, uid string) error
+	DeleteTenantHostnames(ctx context.Context, orgID pgtype.UUID) error
+	DeleteTokenForOrg(ctx context.Context, arg DeleteTokenForOrgParams) error
 	DeleteUnlockConnectorRequest(ctx context.Context, chargeStationID string) error
 	DeleteVariableMonitoring(ctx context.Context, arg DeleteVariableMonitoringParams) error
 	ExpireReservations(ctx context.Context) (int64, error)
@@ -98,13 +105,23 @@ type Querier interface {
 	GetReservation(ctx context.Context, reservationID int32) (Reservation, error)
 	GetReservationByConnector(ctx context.Context, arg GetReservationByConnectorParams) (Reservation, error)
 	GetResetRequest(ctx context.Context, chargeStationID string) (ResetRequest, error)
-	GetToken(ctx context.Context, uid string) (Token, error)
+	// The path column is an ltree, which sqlc cannot type: it is always read as text and
+	// written through a text cast. The hostnames of a tenant are read with the tenant, in
+	// the same statement.
+	GetTenant(ctx context.Context, orgID pgtype.UUID) (GetTenantRow, error)
+	GetTenantByHost(ctx context.Context, hostname string) (GetTenantByHostRow, error)
+	GetTenantByOrgKey(ctx context.Context, orgKey string) (GetTenantByOrgKeyRow, error)
+	GetTenantIdentityForUpdate(ctx context.Context, orgID pgtype.UUID) (GetTenantIdentityForUpdateRow, error)
+	GetTokenAnyOrg(ctx context.Context, uid string) (Token, error)
+	GetTokenForOrg(ctx context.Context, arg GetTokenForOrgParams) (Token, error)
 	// Transactions are identified by (charge_station_id, id): ids are only unique per station.
 	GetTransaction(ctx context.Context, arg GetTransactionParams) (Transaction, error)
 	GetUnlockConnectorRequest(ctx context.Context, chargeStationID string) (UnlockConnectorRequest, error)
 	GetVariableMonitoring(ctx context.Context, arg GetVariableMonitoringParams) (VariableMonitoring, error)
 	InsertChargeStationEvent(ctx context.Context, arg InsertChargeStationEventParams) (int32, error)
 	InsertDeviceReport(ctx context.Context, arg InsertDeviceReportParams) (int32, error)
+	InsertTenant(ctx context.Context, arg InsertTenantParams) error
+	InsertTenantHostname(ctx context.Context, arg InsertTenantHostnameParams) error
 	ListAllLocations(ctx context.Context, arg ListAllLocationsParams) ([]Location, error)
 	ListCertificates(ctx context.Context) ([]Certificate, error)
 	ListChargeStationCertificateDeletions(ctx context.Context, arg ListChargeStationCertificateDeletionsParams) ([]ChargeStationCertificateDeletion, error)
@@ -129,7 +146,10 @@ type Querier interface {
 	ListOcpiPartiesForRole(ctx context.Context, role string) ([]OcpiParty, error)
 	ListRemoteStartTransactionRequests(ctx context.Context, arg ListRemoteStartTransactionRequestsParams) ([]RemoteStartTransactionRequest, error)
 	ListRemoteStopTransactionRequests(ctx context.Context, arg ListRemoteStopTransactionRequestsParams) ([]RemoteStopTransactionRequest, error)
+	ListSubtreeOrgIds(ctx context.Context, arg ListSubtreeOrgIdsParams) ([]pgtype.UUID, error)
+	ListTenants(ctx context.Context, arg ListTenantsParams) ([]ListTenantsRow, error)
 	ListTokens(ctx context.Context, arg ListTokensParams) ([]Token, error)
+	ListTokensForOrgs(ctx context.Context, arg ListTokensForOrgsParams) ([]Token, error)
 	ListTransactions(ctx context.Context) ([]Transaction, error)
 	ListTransactionsFiltered(ctx context.Context, arg ListTransactionsFilteredParams) ([]Transaction, error)
 	ListVariableMonitoring(ctx context.Context, arg ListVariableMonitoringParams) ([]VariableMonitoring, error)
@@ -139,6 +159,8 @@ type Querier interface {
 	// The optional filters are nullable parameters: NULL means "no filter".
 	QueryMeterValues(ctx context.Context, arg QueryMeterValuesParams) ([]MeterValue, error)
 	SetCertificate(ctx context.Context, arg SetCertificateParams) (Certificate, error)
+	// SetChargeStationAuth without an org (NULL) registers a new charge station in the
+	// legacy org and leaves the org of a charge station that is already there as it is.
 	SetChargeStationAuth(ctx context.Context, arg SetChargeStationAuthParams) (ChargeStation, error)
 	SetChargeStationCertificateDeletion(ctx context.Context, arg SetChargeStationCertificateDeletionParams) (ChargeStationCertificateDeletion, error)
 	SetChargeStationCertificateQuery(ctx context.Context, arg SetChargeStationCertificateQueryParams) (ChargeStationCertificateQuery, error)
@@ -148,6 +170,8 @@ type Querier interface {
 	SetChargeStationRuntime(ctx context.Context, arg SetChargeStationRuntimeParams) (ChargeStationRuntime, error)
 	SetChargeStationSettings(ctx context.Context, arg SetChargeStationSettingsParams) (ChargeStationSetting, error)
 	SetChargeStationTrigger(ctx context.Context, arg SetChargeStationTriggerParams) (ChargeStationTrigger, error)
+	// Location ids are global. SetLocation returns no row, and changes nothing, when the
+	// id is already used by a location of another org.
 	SetLocation(ctx context.Context, arg SetLocationParams) (Location, error)
 	SetOcpiParty(ctx context.Context, arg SetOcpiPartyParams) (OcpiParty, error)
 	SetOcpiRegistration(ctx context.Context, arg SetOcpiRegistrationParams) (OcpiRegistration, error)
@@ -155,16 +179,21 @@ type Querier interface {
 	SetRemoteStopTransactionRequest(ctx context.Context, arg SetRemoteStopTransactionRequestParams) (RemoteStopTransactionRequest, error)
 	// Reset Request
 	SetResetRequest(ctx context.Context, arg SetResetRequestParams) (ResetRequest, error)
+	SetTenantStatus(ctx context.Context, arg SetTenantStatusParams) (int64, error)
 	// Unlock Connector Request
 	SetUnlockConnectorRequest(ctx context.Context, arg SetUnlockConnectorRequestParams) (UnlockConnectorRequest, error)
 	StoreMeterValue(ctx context.Context, arg StoreMeterValueParams) error
 	UpdateChargeStationCertificate(ctx context.Context, arg UpdateChargeStationCertificateParams) (ChargeStationCertificate, error)
 	UpdateHeartbeat(ctx context.Context, arg UpdateHeartbeatParams) error
 	UpdateReservationStatus(ctx context.Context, arg UpdateReservationStatusParams) error
-	UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token, error)
+	// The entitlement and config documents are only replaced by a document of the same or
+	// a newer version. The status, the slug and the org key are never changed here.
+	UpdateTenant(ctx context.Context, arg UpdateTenantParams) error
 	UpdateTransaction(ctx context.Context, arg UpdateTransactionParams) (Transaction, error)
 	UpdateTransactionDetails(ctx context.Context, arg UpdateTransactionDetailsParams) (int64, error)
 	UpsertChargeStationStatus(ctx context.Context, arg UpsertChargeStationStatusParams) error
+	// The charging profile belongs to the org of its charge station, or to the legacy org
+	// when the charge station is not registered.
 	UpsertChargingProfile(ctx context.Context, arg UpsertChargingProfileParams) error
 	UpsertConnectorStatus(ctx context.Context, arg UpsertConnectorStatusParams) error
 	UpsertDiagnosticsRequest(ctx context.Context, arg UpsertDiagnosticsRequestParams) error
@@ -176,6 +205,7 @@ type Querier interface {
 	UpsertLogRequest(ctx context.Context, arg UpsertLogRequestParams) error
 	UpsertLogStatus(ctx context.Context, arg UpsertLogStatusParams) error
 	UpsertPublishFirmwareStatus(ctx context.Context, arg UpsertPublishFirmwareStatusParams) error
+	UpsertToken(ctx context.Context, arg UpsertTokenParams) (Token, error)
 	UpsertVariableMonitoring(ctx context.Context, arg UpsertVariableMonitoringParams) (int32, error)
 	UpsertVariableMonitoringWithId(ctx context.Context, arg UpsertVariableMonitoringWithIdParams) error
 }

@@ -30,7 +30,16 @@ var (
 	res embed.FS
 )
 
-func NewServer(host string, wsPort, wssPort int, orgName string, engine store.Engine, certificateProvider services.ChargeStationCertificateProvider) chi.Router {
+// NewServer creates the admin pages. The charge stations and tokens that are registered
+// there belong to defaultOrgId; an empty defaultOrgId is the legacy org
+// (store.LegacyOrgId).
+// NewServer creates the admin pages. orgNameFor returns the organisation name of the
+// client certificate that is issued for a charge station.
+func NewServer(host string, wsPort, wssPort int, orgNameFor func(ctx context.Context, csId string) string, engine store.Engine, certificateProvider services.ChargeStationCertificateProvider, defaultOrgId string) chi.Router {
+	if defaultOrgId == "" {
+		defaultOrgId = store.LegacyOrgId
+	}
+
 	r := chi.NewRouter()
 
 	templates := template.Must(template.ParseFS(res, "templates/*.gohtml"))
@@ -81,7 +90,7 @@ func NewServer(host string, wsPort, wssPort int, orgName string, engine store.En
 				_ = templates.ExecuteTemplate(w, "error.gohtml", nil)
 				return
 			}
-			err = registerChargeStation(r.Context(), engine, csId, 0, password, invalidUsername == "on")
+			err = registerChargeStation(r.Context(), engine, defaultOrgId, csId, 0, password, invalidUsername == "on")
 			if err != nil {
 				slog.Error("registering charge station", "err", err)
 				_ = templates.ExecuteTemplate(w, "error.gohtml", nil)
@@ -105,7 +114,7 @@ func NewServer(host string, wsPort, wssPort int, orgName string, engine store.En
 				_ = templates.ExecuteTemplate(w, "error.gohtml", nil)
 				return
 			}
-			err = registerChargeStation(r.Context(), engine, csId, 1, password, invalidUsername == "on")
+			err = registerChargeStation(r.Context(), engine, defaultOrgId, csId, 1, password, invalidUsername == "on")
 			if err != nil {
 				slog.Error("registering charge station", "err", err)
 				_ = templates.ExecuteTemplate(w, "error.gohtml", nil)
@@ -123,13 +132,13 @@ func NewServer(host string, wsPort, wssPort int, orgName string, engine store.En
 				"invalidUsername": invalidUsername,
 			}
 		case "mtls":
-			clientKey, clientCert, err := createSignedKeyPair(r.Context(), csId, orgName, certificateProvider)
+			clientKey, clientCert, err := createSignedKeyPair(r.Context(), csId, orgNameFor(r.Context(), csId), certificateProvider)
 			if err != nil {
 				slog.Error("creating signed key pair", "err", err)
 				_ = templates.ExecuteTemplate(w, "error.gohtml", nil)
 				return
 			}
-			err = registerChargeStation(r.Context(), engine, csId, 2, "", false)
+			err = registerChargeStation(r.Context(), engine, defaultOrgId, csId, 2, "", false)
 			if err != nil {
 				slog.Error("registering charge station", "err", err)
 				_ = templates.ExecuteTemplate(w, "error.gohtml", nil)
@@ -172,7 +181,7 @@ func NewServer(host string, wsPort, wssPort int, orgName string, engine store.En
 			"uid": uid,
 		}
 
-		err = registerToken(r.Context(), engine, uid)
+		err = registerToken(r.Context(), engine, defaultOrgId, uid)
 		if err != nil {
 			slog.Error("unable to register token", "token", uid, "err", err)
 			_ = templates.ExecuteTemplate(w, "error.gohtml", nil)
@@ -190,7 +199,7 @@ func NewServer(host string, wsPort, wssPort int, orgName string, engine store.En
 	return r
 }
 
-func registerToken(ctx context.Context, engine store.Engine, uid string) error {
+func registerToken(ctx context.Context, engine store.Engine, orgId, uid string) error {
 	// at present, the only thing used about a token is the uid - but we
 	// need to fill in all the other fields to support OCPI.
 	contractId, err := ocpp.NormalizeEmaid(fmt.Sprintf("GBTWK%09s", uid[:int(math.Min(9, float64(len(uid))))]))
@@ -206,6 +215,7 @@ func registerToken(ctx context.Context, engine store.Engine, uid string) error {
 		ContractId:  contractId,
 		Issuer:      "Thoughtworks",
 		CacheMode:   "ALWAYS",
+		OrgId:       orgId,
 	})
 }
 
@@ -266,7 +276,7 @@ func createSignedKeyPair(ctx context.Context, csId string, orgName string, certi
 	return string(pemKey), chain, nil
 }
 
-func registerChargeStation(ctx context.Context, engine store.Engine, csId string, scheme int, password string, invalidUsername bool) error {
+func registerChargeStation(ctx context.Context, engine store.Engine, orgId, csId string, scheme int, password string, invalidUsername bool) error {
 	var profile store.SecurityProfile
 
 	switch scheme {
@@ -290,6 +300,7 @@ func registerChargeStation(ctx context.Context, engine store.Engine, csId string
 		SecurityProfile:        profile,
 		Base64SHA256Password:   b64sha256,
 		InvalidUsernameAllowed: invalidUsername,
+		OrgId:                  orgId,
 	})
 	if err != nil {
 		return err

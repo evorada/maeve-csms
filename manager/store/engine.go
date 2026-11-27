@@ -34,4 +34,5 @@ type Engine interface {
 	VariableMonitoringStore
 	ChargeStationEventStore
 	DeviceReportStore
+	TenantStore
 }

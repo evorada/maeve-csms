@@ -11,6 +11,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const CountConnectorsForOrgs = `-- name: CountConnectorsForOrgs :one
+SELECT COUNT(*)
+FROM connector_status c
+JOIN charge_stations s ON s.charge_station_id = c.charge_station_id
+WHERE c.connector_id > 0
+  AND s.org_id = ANY($1::uuid[])
+`
+
+func (q *Queries) CountConnectorsForOrgs(ctx context.Context, orgIds []pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, CountConnectorsForOrgs, orgIds)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const GetChargeStationStatus = `-- name: GetChargeStationStatus :one
 SELECT
     charge_station_id,

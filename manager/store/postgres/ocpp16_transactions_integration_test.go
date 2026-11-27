@@ -14,6 +14,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	clockTest "k8s.io/utils/clock/testing"
 )
 
@@ -31,6 +32,7 @@ func ocpp16StartHandler() ocpp16.StartTransactionHandler {
 	return ocpp16.StartTransactionHandler{
 		Clock:            clockTest.NewFakePassiveClock(ocpp16CsmsTime),
 		TokenStore:       testStore,
+		OrgResolver:      &tenancy.Resolver{Stations: testStore},
 		TransactionStore: testStore,
 		ReservationStore: testStore,
 	}
@@ -40,6 +42,7 @@ func ocpp16StopHandler() ocpp16.StopTransactionHandler {
 	return ocpp16.StopTransactionHandler{
 		Clock:            clockTest.NewFakePassiveClock(ocpp16CsmsTime),
 		TokenStore:       testStore,
+		OrgResolver:      &tenancy.Resolver{Stations: testStore},
 		TransactionStore: testStore,
 	}
 }
@@ -47,6 +50,7 @@ func ocpp16StopHandler() ocpp16.StopTransactionHandler {
 func ocpp16SetToken(t *testing.T, groupId *string) {
 	t.Helper()
 	require.NoError(t, testStore.SetToken(context.Background(), &store.Token{
+		OrgId:       store.LegacyOrgId,
 		CountryCode: "GB",
 		PartyId:     "TWK",
 		Type:        "RFID",

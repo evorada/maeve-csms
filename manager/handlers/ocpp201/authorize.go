@@ -19,7 +19,7 @@ type AuthorizeHandler struct {
 	CertificateValidationService services.CertificateValidationService
 }
 
-func (a AuthorizeHandler) HandleCall(ctx context.Context, _ string, request ocpp.Request) (ocpp.Response, error) {
+func (a AuthorizeHandler) HandleCall(ctx context.Context, chargeStationId string, request ocpp.Request) (ocpp.Response, error) {
 	span := trace.SpanFromContext(ctx)
 
 	req := request.(*types.AuthorizeRequestJson)
@@ -32,7 +32,7 @@ func (a AuthorizeHandler) HandleCall(ctx context.Context, _ string, request ocpp
 		span.SetAttributes(attribute.String("authorize.certificate", "none"))
 	}
 
-	idTokenInfo := a.TokenAuthService.Authorize(ctx, req.IdToken)
+	idTokenInfo := a.TokenAuthService.Authorize(ctx, chargeStationId, req.IdToken)
 
 	var certificateStatus *types.AuthorizeCertificateStatusEnumType
 	if idTokenInfo.Status == types.AuthorizationStatusEnumTypeAccepted {

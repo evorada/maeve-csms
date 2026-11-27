@@ -1,7 +1,22 @@
 [api]
 addr = ":9410"
+internal_addr = ":9412"
 org_name = "Example"
 host = "example.com"
+
+[api.auth]
+mode = "jwt"
+jwks_url = "https://platform.example.com/.well-known/jwks.json"
+issuer = "platform.example.com"
+audience = "maeve-test"
+min_refresh_interval = "10m"
+clock_skew = "2s"
+max_token_lifetime = "90s"
+
+[api.auth.dev]
+org_id = "0193b2c4-0000-7000-8000-00000000000b"
+org_scope = "self"
+perms = ["cpms.station.read", "cpms.token.read"]
 
 [transport]
 type = "mqtt"
@@ -17,6 +32,9 @@ ocpp16_enabled = false
 
 [jobs]
 reservation_expiry_interval = "30s"
+
+[tenancy]
+default_org_id = "0193b2c4-0000-7000-8000-00000000000a"
 
 [observability]
 log_format = "text"

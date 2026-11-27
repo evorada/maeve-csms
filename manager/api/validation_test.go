@@ -23,12 +23,7 @@ func TestValidationMiddlewareWithInvalidRequest(t *testing.T) {
 	engine := inmemory.NewStore(clock.RealClock{})
 
 	now := time.Now()
-	srv, err := api.NewServer(engine, clockTest.NewFakePassiveClock(now), nil)
-	require.NoError(t, err)
-
-	r := chi.NewRouter()
-	r.Use(api.ValidationMiddleware)
-	r.Mount("/", api.Handler(srv))
+	r := newSingleTenantRouter(t, engine, clockTest.NewFakePassiveClock(now), nil)
 	server := httptest.NewServer(r)
 	defer server.Close()
 
@@ -47,12 +42,7 @@ func TestValidationMiddlewareWithValidRequest(t *testing.T) {
 	engine := inmemory.NewStore(clock.RealClock{})
 
 	now := time.Now()
-	srv, err := api.NewServer(engine, clockTest.NewFakePassiveClock(now), nil)
-	require.NoError(t, err)
-
-	r := chi.NewRouter()
-	r.Use(api.ValidationMiddleware)
-	r.Mount("/", api.Handler(srv))
+	r := newSingleTenantRouter(t, engine, clockTest.NewFakePassiveClock(now), nil)
 	server := httptest.NewServer(r)
 	defer server.Close()
 
@@ -88,12 +78,7 @@ func TestValidationMiddlewareWithUnknownMethod(t *testing.T) {
 	engine := inmemory.NewStore(clock.RealClock{})
 
 	now := time.Now()
-	srv, err := api.NewServer(engine, clockTest.NewFakePassiveClock(now), nil)
-	require.NoError(t, err)
-
-	r := chi.NewRouter()
-	r.Use(api.ValidationMiddleware)
-	r.Mount("/", api.Handler(srv))
+	r := newSingleTenantRouter(t, engine, clockTest.NewFakePassiveClock(now), nil)
 	server := httptest.NewServer(r)
 	defer server.Close()
 

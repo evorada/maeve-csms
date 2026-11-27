@@ -14,6 +14,7 @@ import (
 
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/testutil"
 )
 
@@ -23,7 +24,7 @@ type failingTokenStore struct {
 	err error
 }
 
-func (s failingTokenStore) LookupToken(context.Context, string) (*store.Token, error) {
+func (s failingTokenStore) LookupTokenForOrg(context.Context, string, string) (*store.Token, error) {
 	return nil, s.err
 }
 
@@ -134,12 +135,13 @@ func TestAuthorizeIdTag(t *testing.T) {
 			engine := inmemory.NewStore(clk)
 			if tt.token != nil {
 				tt.token.Uid = "TAG1"
+				tt.token.OrgId = store.LegacyOrgId
 				require.NoError(t, engine.SetToken(context.Background(), tt.token))
 			}
 
 			tracer, exporter := testutil.GetTracer()
 			ctx, span := tracer.Start(context.Background(), "test")
-			got, err := authorizeIdTag(ctx, engine, clk, "TAG1")
+			got, err := authorizeIdTag(ctx, engine, &tenancy.Resolver{Stations: engine}, clk, "cs001", "TAG1")
 			span.End()
 			require.NoError(t, err)
 
@@ -165,7 +167,9 @@ func TestAuthorizeIdTagReturnsStoreError(t *testing.T) {
 	lookupErr := errors.New("token store is down")
 	clk := clockTest.NewFakePassiveClock(time.Now())
 
-	got, err := authorizeIdTag(context.Background(), failingTokenStore{err: lookupErr}, clk, "TAG1")
+	orgs := &tenancy.Resolver{Stations: inmemory.NewStore(clk)}
+
+	got, err := authorizeIdTag(context.Background(), failingTokenStore{err: lookupErr}, orgs, clk, "cs001", "TAG1")
 
 	assert.ErrorIs(t, err, lookupErr)
 	assert.Equal(t, idTagAuthorization{}, got)

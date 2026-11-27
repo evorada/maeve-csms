@@ -20,6 +20,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/services"
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	"k8s.io/utils/clock"
 )
@@ -27,6 +28,8 @@ import (
 func NewRouter(emitter transport.Emitter,
 	clk clock.PassiveClock,
 	engine store.Engine,
+	orgResolver tenancy.StationOrgResolver,
+	tenantConfig *tenancy.ConfigProvider,
 	certValidationService services.CertificateValidationService,
 	chargeStationCertProvider services.ChargeStationCertificateProvider,
 	contractCertProvider services.ContractCertificateProvider,
@@ -59,6 +62,7 @@ func NewRouter(emitter transport.Emitter,
 					SettingsStore:       engine,
 					StatusStore:         engine,
 					HeartbeatInterval:   int(heartbeatInterval.Seconds()),
+					TenantConfig:        tenantConfig,
 				},
 			},
 			"Heartbeat": {
@@ -83,8 +87,9 @@ func NewRouter(emitter transport.Emitter,
 				RequestSchema:  "ocpp16/Authorize.json",
 				ResponseSchema: "ocpp16/AuthorizeResponse.json",
 				Handler: AuthorizeHandler{
-					TokenStore: engine,
-					Clock:      clk,
+					TokenStore:  engine,
+					OrgResolver: orgResolver,
+					Clock:       clk,
 				},
 			},
 			"StartTransaction": {
@@ -94,6 +99,7 @@ func NewRouter(emitter transport.Emitter,
 				Handler: StartTransactionHandler{
 					Clock:            clk,
 					TokenStore:       engine,
+					OrgResolver:      orgResolver,
 					TransactionStore: engine,
 					ReservationStore: engine,
 				},
@@ -105,6 +111,7 @@ func NewRouter(emitter transport.Emitter,
 				Handler: StopTransactionHandler{
 					Clock:            clk,
 					TokenStore:       engine,
+					OrgResolver:      orgResolver,
 					TransactionStore: engine,
 				},
 			},
@@ -174,8 +181,9 @@ func NewRouter(emitter transport.Emitter,
 								ResponseSchema: "ocpp201/AuthorizeResponse.json",
 								Handler: handlers201.AuthorizeHandler{
 									TokenAuthService: &services.OcppTokenAuthService{
-										Clock:      clk,
-										TokenStore: engine,
+										Clock:       clk,
+										TokenStore:  engine,
+										OrgResolver: orgResolver,
 									},
 									CertificateValidationService: certValidationService,
 								},
@@ -214,8 +222,9 @@ func NewRouter(emitter transport.Emitter,
 								Handler: handlersHasToBe.AuthorizeHandler{
 									Handler201: handlers201.AuthorizeHandler{
 										TokenAuthService: &services.OcppTokenAuthService{
-											Clock:      clk,
-											TokenStore: engine,
+											Clock:       clk,
+											TokenStore:  engine,
+											OrgResolver: orgResolver,
 										},
 										CertificateValidationService: certValidationService,
 									},
@@ -373,7 +382,8 @@ func NewRouter(emitter transport.Emitter,
 				RequestSchema:  "ocpp16/RemoteStartTransaction.json",
 				ResponseSchema: "ocpp16/RemoteStartTransactionResponse.json",
 				Handler: RemoteStartTransactionHandler{
-					TokenStore: engine,
+					TokenStore:  engine,
+					OrgResolver: orgResolver,
 				},
 			},
 			"RemoteStopTransaction": {

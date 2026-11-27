@@ -46,6 +46,7 @@ func (o *OCPI) RegisterNewParty(ctx context.Context, url, token string) error {
 
 	err = o.store.SetRegistrationDetails(ctx, newToken, &store.OcpiRegistration{
 		Status: store.OcpiRegistrationStatusRegistered,
+		OrgId:  o.defaultOrgId,
 	})
 	if err != nil {
 		return err
