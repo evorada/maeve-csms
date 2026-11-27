@@ -4,6 +4,7 @@ package firestore
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -112,4 +113,29 @@ func TestStubsReturnErrNotImplemented(t *testing.T) {
 			assert.ErrorContains(t, err, name)
 		})
 	}
+}
+
+// The Firestore backend has no transaction that spans store calls: RunInTx only calls
+// fn, with the context it was given, and returns what fn returns.
+func TestRunInTxCallsFn(t *testing.T) {
+	type ctxKey struct{}
+	ctx := context.WithValue(context.Background(), ctxKey{}, "caller")
+	s := &Store{}
+
+	var transactor store.Transactor = s
+
+	calls := 0
+	err := transactor.RunInTx(ctx, func(fnCtx context.Context) error {
+		calls++
+		assert.Equal(t, "caller", fnCtx.Value(ctxKey{}))
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, calls)
+
+	errFn := errors.New("fn failed")
+	err = transactor.RunInTx(ctx, func(context.Context) error {
+		return errFn
+	})
+	assert.ErrorIs(t, err, errFn)
 }

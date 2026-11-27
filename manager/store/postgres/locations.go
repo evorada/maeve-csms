@@ -50,7 +50,7 @@ func (s *Store) SetLocation(ctx context.Context, location *store.Location) error
 		OrgID:        orgId,
 	}
 
-	_, err = s.writeQueries().SetLocation(ctx, params)
+	_, err = s.writeQueries(ctx).SetLocation(ctx, params)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// the query changes nothing when the id belongs to a location of another org
@@ -64,7 +64,7 @@ func (s *Store) SetLocation(ctx context.Context, location *store.Location) error
 
 // LookupLocation retrieves a location by its ID
 func (s *Store) LookupLocation(ctx context.Context, locationId string) (*store.Location, error) {
-	loc, err := s.readQueries().GetLocation(ctx, locationId)
+	loc, err := s.readQueries(ctx).GetLocation(ctx, locationId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -98,7 +98,7 @@ func (s *Store) ListLocations(ctx context.Context, offset int, limit int) ([]*st
 		Offset: offsetInt32,
 	}
 
-	locations, err := s.readQueries().ListAllLocations(ctx, params)
+	locations, err := s.readQueries(ctx).ListAllLocations(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list locations: %w", err)
 	}

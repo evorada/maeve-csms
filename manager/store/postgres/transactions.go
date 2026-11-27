@@ -16,7 +16,7 @@ import (
 
 // Transactions retrieves all transactions from the database
 func (s *Store) Transactions(ctx context.Context) ([]*store.Transaction, error) {
-	txns, err := s.readQueries().ListTransactions(ctx)
+	txns, err := s.readQueries(ctx).ListTransactions(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list transactions: %w", err)
 	}
@@ -41,7 +41,7 @@ const energyRegisterMeasurand = "Energy.Active.Import.Register"
 // Transaction ids are only unique per charge station: a transaction with the same id
 // on another charge station is not found.
 func (s *Store) FindTransaction(ctx context.Context, chargeStationId, transactionId string) (*store.Transaction, error) {
-	txn, err := s.readQueries().GetTransaction(ctx, GetTransactionParams{
+	txn, err := s.readQueries(ctx).GetTransaction(ctx, GetTransactionParams{
 		ChargeStationID: chargeStationId,
 		ID:              transactionId,
 	})
@@ -56,7 +56,7 @@ func (s *Store) FindTransaction(ctx context.Context, chargeStationId, transactio
 }
 
 func (s *Store) FindActiveTransaction(ctx context.Context, chargeStationId string) (*store.Transaction, error) {
-	txn, err := s.readQueries().FindActiveTransaction(ctx, chargeStationId)
+	txn, err := s.readQueries(ctx).FindActiveTransaction(ctx, chargeStationId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -108,7 +108,7 @@ func (s *Store) CreateTransaction(ctx context.Context, chargeStationId, transact
 		Offline:         offline,
 	}
 
-	_, err := s.writeQueries().CreateTransaction(ctx, params)
+	_, err := s.writeQueries(ctx).CreateTransaction(ctx, params)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// the insert does nothing when the transaction exists (ON CONFLICT DO NOTHING)
@@ -130,7 +130,7 @@ func (s *Store) CreateTransaction(ctx context.Context, chargeStationId, transact
 // getTransactionForUpdate retrieves the transaction of a charge station that is about to
 // be updated. It returns an error wrapping store.ErrNotFound if it does not exist.
 func (s *Store) getTransactionForUpdate(ctx context.Context, chargeStationId, transactionId string) (*Transaction, error) {
-	txn, err := s.readQueries().GetTransaction(ctx, GetTransactionParams{
+	txn, err := s.readQueries(ctx).GetTransaction(ctx, GetTransactionParams{
 		ChargeStationID: chargeStationId,
 		ID:              transactionId,
 	})
@@ -168,7 +168,7 @@ func (s *Store) UpdateTransaction(ctx context.Context, chargeStationId, transact
 		UpdatedSeqNo:    txn.UpdatedSeqNo + 1,
 	}
 
-	_, err = s.writeQueries().UpdateTransaction(ctx, updateParams)
+	_, err = s.writeQueries(ctx).UpdateTransaction(ctx, updateParams)
 	if err != nil {
 		return fmt.Errorf("failed to update transaction sequence: %w", err)
 	}
@@ -222,7 +222,7 @@ func (s *Store) EndTransaction(ctx context.Context, chargeStationId, transaction
 		UpdatedSeqNo:    txn.UpdatedSeqNo + 1,
 	}
 
-	_, err = s.writeQueries().UpdateTransaction(ctx, updateParams)
+	_, err = s.writeQueries(ctx).UpdateTransaction(ctx, updateParams)
 	if err != nil {
 		return fmt.Errorf("failed to end transaction: %w", err)
 	}
@@ -238,7 +238,7 @@ func (s *Store) UpdateTransactionDetails(ctx context.Context, chargeStationId, t
 		details = &store.TransactionDetails{}
 	}
 
-	rows, err := s.writeQueries().UpdateTransactionDetails(ctx, UpdateTransactionDetailsParams{
+	rows, err := s.writeQueries(ctx).UpdateTransactionDetails(ctx, UpdateTransactionDetailsParams{
 		ChargeStationID: chargeStationId,
 		ID:              transactionId,
 		EvseID:          toNullInt32(details.EvseId),
@@ -265,7 +265,7 @@ func (s *Store) UpdateTransactionDetails(ctx context.Context, chargeStationId, t
 // NextOcpp16TransactionId returns the next CSMS-assigned OCPP 1.6 transaction id
 // (1..2147483647, wrapping).
 func (s *Store) NextOcpp16TransactionId(ctx context.Context) (int, error) {
-	id, err := s.writeQueries().NextOcpp16TransactionId(ctx)
+	id, err := s.writeQueries(ctx).NextOcpp16TransactionId(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to allocate OCPP 1.6 transaction id: %w", err)
 	}
@@ -295,13 +295,13 @@ func (s *Store) addMeterValue(ctx context.Context, chargeStationId, transactionI
 		SampledValues:   sampledValuesJSON,
 	}
 
-	return s.writeQueries().AddMeterValues(ctx, params)
+	return s.writeQueries(ctx).AddMeterValues(ctx, params)
 }
 
 // UpdateTransactionCost stores the most recent running cost communicated via CostUpdated.
 // Uses a direct query rather than sqlc-generated code since last_cost was added via migration.
 func (s *Store) UpdateTransactionCost(ctx context.Context, chargeStationId, transactionId string, totalCost float64) error {
-	_, err := s.writePool().Exec(ctx,
+	_, err := s.db(ctx).Exec(ctx,
 		`UPDATE transactions SET last_cost = $1, updated_at = NOW() WHERE id = $2 AND charge_station_id = $3`,
 		totalCost, transactionId, chargeStationId)
 	if err != nil {
@@ -327,7 +327,7 @@ func (s *Store) ListTransactionsForChargeStation(ctx context.Context, chargeStat
 		params.EndDate = pgtype.Timestamp{Time: *endDate, Valid: true}
 	}
 
-	txns, err := s.readQueries().ListTransactionsFiltered(ctx, params)
+	txns, err := s.readQueries(ctx).ListTransactionsFiltered(ctx, params)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list transactions: %w", err)
 	}
@@ -345,7 +345,7 @@ func (s *Store) ListTransactionsForChargeStation(ctx context.Context, chargeStat
 		countParams.EndDate = pgtype.Timestamp{Time: *endDate, Valid: true}
 	}
 
-	total, err := s.readQueries().CountTransactionsFiltered(ctx, countParams)
+	total, err := s.readQueries(ctx).CountTransactionsFiltered(ctx, countParams)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count transactions: %w", err)
 	}
@@ -365,7 +365,7 @@ func (s *Store) ListTransactionsForChargeStation(ctx context.Context, chargeStat
 // Helper function to convert PostgreSQL Transaction to store.Transaction
 func (s *Store) toStoreTransaction(ctx context.Context, txn *Transaction) (*store.Transaction, error) {
 	// Retrieve meter values for this transaction
-	meterValueRecords, err := s.readQueries().GetMeterValues(ctx, GetMeterValuesParams{
+	meterValueRecords, err := s.readQueries(ctx).GetMeterValues(ctx, GetMeterValuesParams{
 		ChargeStationID: txn.ChargeStationID,
 		TransactionID:   txn.ID,
 	})

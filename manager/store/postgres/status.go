@@ -38,7 +38,7 @@ func (s *Store) SetChargeStationStatus(ctx context.Context, chargeStationId stri
 		serialNumber = pgtype.Text{String: *status.SerialNumber, Valid: true}
 	}
 
-	err := s.writeQueries().UpsertChargeStationStatus(ctx, UpsertChargeStationStatusParams{
+	err := s.writeQueries(ctx).UpsertChargeStationStatus(ctx, UpsertChargeStationStatusParams{
 		ChargeStationID: chargeStationId,
 		Connected:       status.Connected,
 		LastHeartbeat:   lastHeartbeat,
@@ -55,7 +55,7 @@ func (s *Store) SetChargeStationStatus(ctx context.Context, chargeStationId stri
 }
 
 func (s *Store) GetChargeStationStatus(ctx context.Context, chargeStationId string) (*store.ChargeStationStatus, error) {
-	row, err := s.readQueries().GetChargeStationStatus(ctx, chargeStationId)
+	row, err := s.readQueries(ctx).GetChargeStationStatus(ctx, chargeStationId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, fmt.Errorf("charge station %s not found", chargeStationId)
@@ -94,7 +94,7 @@ func (s *Store) GetChargeStationStatus(ctx context.Context, chargeStationId stri
 }
 
 func (s *Store) UpdateHeartbeat(ctx context.Context, chargeStationId string, timestamp time.Time) error {
-	err := s.writeQueries().UpdateHeartbeat(ctx, UpdateHeartbeatParams{
+	err := s.writeQueries(ctx).UpdateHeartbeat(ctx, UpdateHeartbeatParams{
 		ChargeStationID: chargeStationId,
 		LastHeartbeat:   pgtype.Timestamptz{Time: timestamp, Valid: true},
 	})
@@ -130,7 +130,7 @@ func (s *Store) SetConnectorStatus(ctx context.Context, chargeStationId string, 
 		currentTransactionId = pgtype.Text{String: *status.CurrentTransactionId, Valid: true}
 	}
 
-	err := s.writeQueries().UpsertConnectorStatus(ctx, UpsertConnectorStatusParams{
+	err := s.writeQueries(ctx).UpsertConnectorStatus(ctx, UpsertConnectorStatusParams{
 		ChargeStationID:      chargeStationId,
 		ConnectorID:          int32(connectorId),
 		Status:               string(status.Status),
@@ -149,7 +149,7 @@ func (s *Store) SetConnectorStatus(ctx context.Context, chargeStationId string, 
 }
 
 func (s *Store) GetConnectorStatus(ctx context.Context, chargeStationId string, connectorId int) (*store.ConnectorStatus, error) {
-	row, err := s.readQueries().GetConnectorStatus(ctx, GetConnectorStatusParams{
+	row, err := s.readQueries(ctx).GetConnectorStatus(ctx, GetConnectorStatusParams{
 		ChargeStationID: chargeStationId,
 		ConnectorID:     int32(connectorId),
 	})
@@ -192,7 +192,7 @@ func (s *Store) GetConnectorStatus(ctx context.Context, chargeStationId string, 
 }
 
 func (s *Store) ListConnectorStatuses(ctx context.Context, chargeStationId string) ([]*store.ConnectorStatus, error) {
-	rows, err := s.readQueries().ListConnectorStatuses(ctx, chargeStationId)
+	rows, err := s.readQueries(ctx).ListConnectorStatuses(ctx, chargeStationId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list connector statuses: %w", err)
 	}
@@ -249,7 +249,7 @@ func (s *Store) CountConnectorsForOrgs(ctx context.Context, orgIds []string) (in
 		ids[i] = id
 	}
 
-	count, err := s.readQueries().CountConnectorsForOrgs(ctx, ids)
+	count, err := s.readQueries(ctx).CountConnectorsForOrgs(ctx, ids)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count connectors: %w", err)
 	}

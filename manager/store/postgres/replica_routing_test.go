@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,6 +16,7 @@ import (
 func TestReadReplicaRouting(t *testing.T) {
 	// This test verifies that the Store correctly routes read and write operations
 	// to the appropriate connection pools
+	ctx := context.Background()
 
 	t.Run("without read replica", func(t *testing.T) {
 		store := &Store{
@@ -29,8 +31,8 @@ func TestReadReplicaRouting(t *testing.T) {
 		store.readPool = store.pool
 		store.readQ = store.q
 
-		readQ := store.readQueries()
-		writeQ := store.writeQueries()
+		readQ := store.readQueries(ctx)
+		writeQ := store.writeQueries(ctx)
 
 		assert.Equal(t, store.q, readQ, "read queries should use primary when no replica")
 		assert.Equal(t, store.q, writeQ, "write queries should use primary")
@@ -56,8 +58,8 @@ func TestReadReplicaRouting(t *testing.T) {
 			hasReadReplica: true,
 		}
 
-		readQ := store.readQueries()
-		writeQ := store.writeQueries()
+		readQ := store.readQueries(ctx)
+		writeQ := store.writeQueries(ctx)
 
 		// Verify correct routing
 		assert.Same(t, replicaQ, readQ, "read queries should use replica")
@@ -65,7 +67,44 @@ func TestReadReplicaRouting(t *testing.T) {
 		assert.Same(t, primaryPool, store.pool, "write pool should be primary")
 		assert.Same(t, replicaPool, store.readPool, "read pool should be replica")
 		assert.NotSame(t, store.pool, store.readPool, "pools should be different instances")
+		assert.Same(t, primaryPool, store.db(ctx), "statements outside a transaction should use primary")
 	})
+
+	t.Run("inside a transaction", func(t *testing.T) {
+		primaryPool := &pgxpool.Pool{}
+		replicaPool := &pgxpool.Pool{}
+
+		store := &Store{
+			pool:           primaryPool,
+			readPool:       replicaPool,
+			q:              New(primaryPool),
+			readQ:          New(replicaPool),
+			hasReadReplica: true,
+		}
+
+		// the routing only compares the transaction, it never runs a statement on it
+		tx := &routingTestTx{}
+		txCtx := withTx(ctx, tx)
+
+		require.Same(t, tx, txFrom(txCtx), "the context should carry the transaction")
+		require.Nil(t, txFrom(ctx), "a context without a transaction should carry none")
+
+		// reads must not go to the replica: it does not have what the transaction wrote
+		assert.Same(t, tx, store.readQueries(txCtx).db, "read queries should use the transaction")
+		assert.Same(t, tx, store.writeQueries(txCtx).db, "write queries should use the transaction")
+		assert.Same(t, tx, store.db(txCtx), "statements should use the transaction")
+
+		// the same store keeps the usual routing for a context without the transaction
+		assert.Same(t, replicaPool, store.readQueries(ctx).db, "read queries outside the transaction should use replica")
+		assert.Same(t, primaryPool, store.writeQueries(ctx).db, "write queries outside the transaction should use primary")
+		assert.Same(t, primaryPool, store.db(ctx), "statements outside the transaction should use primary")
+	})
+}
+
+// routingTestTx is a pgx.Tx that only has an identity: every method of the embedded nil
+// interface panics when it is called.
+type routingTestTx struct {
+	pgx.Tx
 }
 
 // TestNewStoreWithoutReplica tests store creation without read replica

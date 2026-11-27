@@ -34,7 +34,7 @@ func (s *Store) StoreMeterValues(ctx context.Context, chargeStationId string, ev
 		}
 
 		// Store the meter value
-		err = s.writeQueries().StoreMeterValue(ctx, StoreMeterValueParams{
+		err = s.writeQueries(ctx).StoreMeterValue(ctx, StoreMeterValueParams{
 			ChargeStationID: chargeStationId,
 			EvseID:          int32(evseId),
 			TransactionID:   txIdParam,
@@ -55,13 +55,13 @@ func (s *Store) GetMeterValues(ctx context.Context, chargeStationId string, evse
 	var err error
 
 	if limit > 0 {
-		rows, err = s.readQueries().GetMeterValuesByStationAndEvse(ctx, GetMeterValuesByStationAndEvseParams{
+		rows, err = s.readQueries(ctx).GetMeterValuesByStationAndEvse(ctx, GetMeterValuesByStationAndEvseParams{
 			ChargeStationID: chargeStationId,
 			EvseID:          int32(evseId),
 			Limit:           int32(limit),
 		})
 	} else {
-		rows, err = s.readQueries().GetAllMeterValuesByStation(ctx, GetAllMeterValuesByStationParams{
+		rows, err = s.readQueries(ctx).GetAllMeterValuesByStation(ctx, GetAllMeterValuesByStationParams{
 			ChargeStationID: chargeStationId,
 			EvseID:          int32(evseId),
 		})
@@ -131,7 +131,7 @@ func (s *Store) QueryMeterValues(ctx context.Context, filter store.MeterValuesFi
 	}
 
 	// Get paginated results
-	rows, err := s.readQueries().QueryMeterValues(ctx, params)
+	rows, err := s.readQueries(ctx).QueryMeterValues(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +144,7 @@ func (s *Store) QueryMeterValues(ctx context.Context, filter store.MeterValuesFi
 		StartTime:       params.StartTime,
 		EndTime:         params.EndTime,
 	}
-	total, err := s.readQueries().CountMeterValues(ctx, countParams)
+	total, err := s.readQueries(ctx).CountMeterValues(ctx, countParams)
 	if err != nil {
 		return nil, err
 	}

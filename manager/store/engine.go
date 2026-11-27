@@ -35,4 +35,5 @@ type Engine interface {
 	ChargeStationEventStore
 	DeviceReportStore
 	TenantStore
+	Transactor
 }
