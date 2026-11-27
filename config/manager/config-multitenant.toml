@@ -2,6 +2,11 @@
 addr = ":9410"
 internal_addr = ":9412"
 
+# Local runs have no console that mints tokens: every request to the API is accepted as
+# a caller with all permissions. The manager only starts in this mode with ENVIRONMENT=dev.
+[api.auth]
+mode = "dev"
+
 # Two tenants for manual runs without a console. The tenant of a station is the one that
 # has the host of the URL that the station connects to: ws://localhost:<port>/ws/<id> is
 # a station of dev1, ws://127.0.0.1:<port>/ws/<id> a station of dev2. A station is

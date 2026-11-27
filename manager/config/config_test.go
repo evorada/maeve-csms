@@ -16,10 +16,22 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/jobs"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
+	"github.com/thoughtworks/maeve-csms/manager/testutil"
 )
 
-func TestConfigure(t *testing.T) {
+// newTestConfig returns the default configuration with API authentication in dev mode,
+// so that it can be configured without a console.
+func newTestConfig(t *testing.T) *config.BaseConfig {
+	t.Helper()
+
+	t.Setenv("ENVIRONMENT", "dev")
 	cfg := clone.Clone(&config.DefaultConfig)
+	cfg.Api.Auth.Mode = "dev"
+	return cfg
+}
+
+func TestConfigure(t *testing.T) {
+	cfg := newTestConfig(t)
 	cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
 
 	settings, err := config.Configure(context.TODO(), cfg)
@@ -45,12 +57,13 @@ func TestConfigure(t *testing.T) {
 	assert.NotNil(t, settings.ContractCertProviderService)
 	assert.NotNil(t, settings.ChargeStationCertProviderService)
 	assert.NotNil(t, settings.TariffService)
+	assert.NotNil(t, settings.AuthVerifier)
 }
 
 func TestConfigureFirestoreStorage(t *testing.T) {
 	_ = os.Setenv("FIRESTORE_EMULATOR_HOST", "localhost:8080")
 
-	cfg := clone.Clone(&config.DefaultConfig)
+	cfg := newTestConfig(t)
 	cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
 	cfg.Storage.Type = "firestore"
 	cfg.Storage.FirestoreStorage = &config.FirestoreStorageConfig{
@@ -63,7 +76,7 @@ func TestConfigureFirestoreStorage(t *testing.T) {
 }
 
 func TestConfigureInMemoryStorage(t *testing.T) {
-	cfg := clone.Clone(&config.DefaultConfig)
+	cfg := newTestConfig(t)
 	cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
 	cfg.Storage.Type = "in_memory"
 
@@ -73,7 +86,7 @@ func TestConfigureInMemoryStorage(t *testing.T) {
 }
 
 func TestConfigureOcspContractCertValidator(t *testing.T) {
-	cfg := clone.Clone(&config.DefaultConfig)
+	cfg := newTestConfig(t)
 	cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
 
 	settings, err := config.Configure(context.TODO(), cfg)
@@ -87,7 +100,7 @@ func TestConfigureOpcpContractCertProvider(t *testing.T) {
 		_ = os.Unsetenv("TEST_OPCP_TOKEN")
 	}()
 
-	cfg := clone.Clone(&config.DefaultConfig)
+	cfg := newTestConfig(t)
 	cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
 	cfg.ContractCertProvider.Type = "opcp"
 	cfg.ContractCertProvider.Opcp = &config.OpcpContractCertProviderConfig{
@@ -106,7 +119,7 @@ func TestConfigureOpcpContractCertProvider(t *testing.T) {
 }
 
 func TestConfigureOcspContractCertProviderWithCompositeRootCertificateProvider(t *testing.T) {
-	cfg := clone.Clone(&config.DefaultConfig)
+	cfg := newTestConfig(t)
 	cfg.ContractCertValidator.Ocsp.RootCertProvider.Type = "composite"
 	cfg.ContractCertValidator.Ocsp.RootCertProvider.Composite = &config.CompositeRootCertProviderConfig{
 		Providers: []config.RootCertProviderConfig{
@@ -131,7 +144,7 @@ func TestConfigureOcspContractCertProviderWithCompositeRootCertificateProvider(t
 }
 
 func TestConfigureDefaultContractCertProvider(t *testing.T) {
-	cfg := clone.Clone(&config.DefaultConfig)
+	cfg := newTestConfig(t)
 	cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
 	cfg.ContractCertProvider.Type = "default"
 
@@ -146,7 +159,7 @@ func TestConfigureOpcpChargeStationCertProvider(t *testing.T) {
 		_ = os.Unsetenv("TEST_OPCP_TOKEN")
 	}()
 
-	cfg := clone.Clone(&config.DefaultConfig)
+	cfg := newTestConfig(t)
 	cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
 	cfg.ChargeStationCertProvider.Type = "opcp"
 	cfg.ChargeStationCertProvider.Opcp = &config.OpcpChargeStationCertProviderConfig{
@@ -165,7 +178,7 @@ func TestConfigureOpcpChargeStationCertProvider(t *testing.T) {
 }
 
 func TestConfigureLocalChargeStationCertProviderWithFile(t *testing.T) {
-	cfg := clone.Clone(&config.DefaultConfig)
+	cfg := newTestConfig(t)
 	cfg.ChargeStationCertProvider.Type = "local"
 	cfg.ChargeStationCertProvider.Local = &config.LocalChargeStationCertProviderConfig{
 		CertificateSource: &config.LocalSourceConfig{
@@ -184,7 +197,7 @@ func TestConfigureLocalChargeStationCertProviderWithFile(t *testing.T) {
 }
 
 func TestConfigureLocalChargeStationCertProviderWithGoogleCloudSecret(t *testing.T) {
-	cfg := clone.Clone(&config.DefaultConfig)
+	cfg := newTestConfig(t)
 	cfg.ChargeStationCertProvider.Type = "local"
 	cfg.ChargeStationCertProvider.Local = &config.LocalChargeStationCertProviderConfig{
 		CertificateSource: &config.LocalSourceConfig{
@@ -208,7 +221,7 @@ func TestConfigureDelegatingChargeStationCertProvider(t *testing.T) {
 		_ = os.Unsetenv("TEST_OPCP_TOKEN")
 	}()
 
-	cfg := clone.Clone(&config.DefaultConfig)
+	cfg := newTestConfig(t)
 	cfg.ChargeStationCertProvider.Type = "delegating"
 	cfg.ChargeStationCertProvider.Delegating = &config.DelegatingChargeStationCertProviderConfig{
 		V2G: &config.ChargeStationCertProviderConfig{
@@ -244,7 +257,7 @@ func TestConfigureDelegatingChargeStationCertProvider(t *testing.T) {
 }
 
 func TestConfigureDefaultChargeStationCertProvider(t *testing.T) {
-	cfg := clone.Clone(&config.DefaultConfig)
+	cfg := newTestConfig(t)
 	cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
 	cfg.ChargeStationCertProvider.Type = "default"
 
@@ -254,7 +267,7 @@ func TestConfigureDefaultChargeStationCertProvider(t *testing.T) {
 }
 
 func TestConfigureKwHTariffService(t *testing.T) {
-	cfg := clone.Clone(&config.DefaultConfig)
+	cfg := newTestConfig(t)
 	cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
 	cfg.TariffService.Type = "kwh"
 
@@ -265,7 +278,7 @@ func TestConfigureKwHTariffService(t *testing.T) {
 
 func TestConfigureReservationExpiryInterval(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
-		cfg := clone.Clone(&config.DefaultConfig)
+		cfg := newTestConfig(t)
 		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
 
 		settings, err := config.Configure(context.TODO(), cfg)
@@ -275,7 +288,7 @@ func TestConfigureReservationExpiryInterval(t *testing.T) {
 	})
 
 	t.Run("overridden", func(t *testing.T) {
-		cfg := clone.Clone(&config.DefaultConfig)
+		cfg := newTestConfig(t)
 		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
 		err := cfg.Load(strings.NewReader("[jobs]\nreservation_expiry_interval = \"90s\"\n"))
 		require.NoError(t, err)
@@ -293,7 +306,7 @@ func TestConfigureReservationExpiryInterval(t *testing.T) {
 		"empty":          "",
 	} {
 		t.Run(name, func(t *testing.T) {
-			cfg := clone.Clone(&config.DefaultConfig)
+			cfg := newTestConfig(t)
 			cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
 			cfg.Jobs.ReservationExpiryInterval = interval
 
@@ -306,7 +319,7 @@ func TestConfigureReservationExpiryInterval(t *testing.T) {
 
 func TestConfigureDefaultOrgId(t *testing.T) {
 	t.Run("default is the legacy org", func(t *testing.T) {
-		cfg := clone.Clone(&config.DefaultConfig)
+		cfg := newTestConfig(t)
 		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
 
 		settings, err := config.Configure(context.TODO(), cfg)
@@ -322,7 +335,7 @@ func TestConfigureDefaultOrgId(t *testing.T) {
 	})
 
 	t.Run("overridden", func(t *testing.T) {
-		cfg := clone.Clone(&config.DefaultConfig)
+		cfg := newTestConfig(t)
 		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
 		err := cfg.Load(strings.NewReader("[tenancy]\ndefault_org_id = \"0193b2c4-0000-7000-8000-00000000000a\"\n"))
 		require.NoError(t, err)
@@ -350,7 +363,7 @@ func TestConfigureDefaultOrgId(t *testing.T) {
 		"empty":      "",
 	} {
 		t.Run(name, func(t *testing.T) {
-			cfg := clone.Clone(&config.DefaultConfig)
+			cfg := newTestConfig(t)
 			cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
 			cfg.Tenancy.DefaultOrgId = orgId
 
@@ -383,7 +396,7 @@ hostnames = ["127.0.0.1", "dev2.example"]
 
 func TestConfigureTenancyMode(t *testing.T) {
 	newConfig := func(t *testing.T, toml string) *config.BaseConfig {
-		cfg := clone.Clone(&config.DefaultConfig)
+		cfg := newTestConfig(t)
 		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
 		require.NoError(t, cfg.Load(strings.NewReader(toml)))
 		return cfg
@@ -508,4 +521,206 @@ func TestConfigureTenancyMode(t *testing.T) {
 			assert.Nil(t, settings)
 		})
 	}
+}
+
+func TestConfigureApiAuth(t *testing.T) {
+	// the default configuration with the given TOML on top, without the dev mode of
+	// the other tests
+	newConfig := func(t *testing.T, toml string) *config.BaseConfig {
+		cfg := clone.Clone(&config.DefaultConfig)
+		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
+		require.NoError(t, cfg.Load(strings.NewReader(toml)))
+		return cfg
+	}
+
+	t.Run("the default is to verify tokens, which needs the key set of the console", func(t *testing.T) {
+		t.Setenv("ENVIRONMENT", "dev")
+		cfg := newConfig(t, "")
+		assert.Equal(t, "jwt", cfg.Api.Auth.Mode)
+		assert.Equal(t, "console", cfg.Api.Auth.Issuer)
+		assert.Equal(t, "maeve", cfg.Api.Auth.Audience)
+		assert.Equal(t, "5m", cfg.Api.Auth.MinRefreshInterval)
+		assert.Equal(t, "5s", cfg.Api.Auth.ClockSkew)
+		assert.Equal(t, "120s", cfg.Api.Auth.MaxTokenLifetime)
+
+		err := cfg.Validate()
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "JWKSURL")
+
+		settings, err := config.Configure(context.TODO(), cfg)
+		require.Error(t, err)
+		assert.Nil(t, settings)
+	})
+
+	t.Run("jwt mode without a key set URL", func(t *testing.T) {
+		cfg := newConfig(t, "[api.auth]\nmode = \"jwt\"\n")
+		err := cfg.Validate()
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "JWKSURL")
+	})
+
+	t.Run("what is not valid", func(t *testing.T) {
+		for name, toml := range map[string]string{
+			"unknown mode":          "[api.auth]\nmode = \"none\"\n",
+			"empty mode":            "[api.auth]\nmode = \"\"\njwks_url = \"https://console.example.com/jwks.json\"\n",
+			"key set URL is no URL": "[api.auth]\njwks_url = \"console\"\n",
+			"key set in a file":     "[api.auth]\njwks_url = \"file:///etc/jwks.json\"\n",
+			"no issuer":             "[api.auth]\njwks_url = \"https://console.example.com/jwks.json\"\nissuer = \"\"\n",
+			"no audience":           "[api.auth]\njwks_url = \"https://console.example.com/jwks.json\"\naudience = \"\"\n",
+			"dev org is not a UUID": "[api.auth]\nmode = \"dev\"\n[api.auth.dev]\norg_id = \"acme\"\n",
+			"unknown dev org scope": "[api.auth]\nmode = \"dev\"\n[api.auth.dev]\norg_scope = \"all\"\n",
+			"refresh interval typo": "[api.auth]\njwks_url = \"http://127.0.0.1:1/jwks.json\"\nmin_refresh_interval = \"soon\"\n",
+			"no refresh interval":   "[api.auth]\njwks_url = \"http://127.0.0.1:1/jwks.json\"\nmin_refresh_interval = \"0s\"\n",
+			"negative clock skew":   "[api.auth]\njwks_url = \"http://127.0.0.1:1/jwks.json\"\nclock_skew = \"-1s\"\n",
+			"clock skew typo":       "[api.auth]\njwks_url = \"http://127.0.0.1:1/jwks.json\"\nclock_skew = \"5\"\n",
+			"no token lifetime":     "[api.auth]\njwks_url = \"http://127.0.0.1:1/jwks.json\"\nmax_token_lifetime = \"0s\"\n",
+			"token lifetime typo":   "[api.auth]\njwks_url = \"http://127.0.0.1:1/jwks.json\"\nmax_token_lifetime = \"two minutes\"\n",
+			"user name in the URL":  "[api.auth]\njwks_url = \"http://manager@127.0.0.1:1/jwks.json\"\n",
+		} {
+			t.Run(name, func(t *testing.T) {
+				t.Setenv("ENVIRONMENT", "dev")
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+
+				settings, err := config.Configure(ctx, newConfig(t, toml))
+				require.Error(t, err)
+				assert.Nil(t, settings)
+			})
+		}
+	})
+
+	t.Run("dev mode needs ENVIRONMENT=dev", func(t *testing.T) {
+		for _, environment := range []string{"", "production", "development", "DEV"} {
+			t.Setenv("ENVIRONMENT", environment)
+			cfg := newConfig(t, "[api.auth]\nmode = \"dev\"\n")
+			require.NoError(t, cfg.Validate())
+
+			settings, err := config.Configure(context.TODO(), cfg)
+			require.Error(t, err, environment)
+			assert.ErrorContains(t, err, "ENVIRONMENT")
+			assert.Nil(t, settings)
+		}
+	})
+
+	t.Run("dev mode: the caller of every request by default", func(t *testing.T) {
+		t.Setenv("ENVIRONMENT", "dev")
+		settings, err := config.Configure(context.TODO(), newConfig(t, "[api.auth]\nmode = \"dev\"\n"))
+		require.NoError(t, err)
+
+		verifier, ok := settings.AuthVerifier.(tenancy.DevVerifier)
+		require.Truef(t, ok, "got a %T", settings.AuthVerifier)
+		assert.Equal(t, tenancy.Principal{
+			Subject:  "user:dev",
+			OrgId:    store.LegacyOrgId,
+			OrgScope: tenancy.OrgScopeSubtree,
+			Perms:    tenancy.AllPermissions,
+		}, verifier.Principal)
+
+		p, err := settings.AuthVerifier.Verify(context.TODO(), "")
+		require.NoError(t, err)
+		assert.Equal(t, store.LegacyOrgId, p.OrgId)
+		assert.True(t, p.Has(tenancy.PermStationWrite))
+		assert.False(t, p.IsService())
+	})
+
+	t.Run("dev mode: the org of the caller is the default org", func(t *testing.T) {
+		t.Setenv("ENVIRONMENT", "dev")
+		settings, err := config.Configure(context.TODO(), newConfig(t,
+			"[api.auth]\nmode = \"dev\"\n[tenancy]\ndefault_org_id = \"0193b2c4-0000-7000-8000-00000000000a\"\n"))
+		require.NoError(t, err)
+
+		p, err := settings.AuthVerifier.Verify(context.TODO(), "")
+		require.NoError(t, err)
+		assert.Equal(t, "0193b2c4-0000-7000-8000-00000000000a", p.OrgId)
+	})
+
+	t.Run("dev mode: a configured caller", func(t *testing.T) {
+		t.Setenv("ENVIRONMENT", "dev")
+		settings, err := config.Configure(context.TODO(), newConfig(t, `
+[api.auth]
+mode = "dev"
+
+[api.auth.dev]
+org_id = "0193b2c4-0000-7000-8000-00000000000b"
+org_scope = "self"
+perms = ["cpms.station.read"]
+`))
+		require.NoError(t, err)
+
+		p, err := settings.AuthVerifier.Verify(context.TODO(), "")
+		require.NoError(t, err)
+		assert.Equal(t, &tenancy.Principal{
+			Subject:  "user:dev",
+			OrgId:    "0193b2c4-0000-7000-8000-00000000000b",
+			OrgScope: tenancy.OrgScopeSelf,
+			Perms:    []string{tenancy.PermStationRead},
+		}, p)
+	})
+
+	t.Run("dev mode: a caller without permissions", func(t *testing.T) {
+		t.Setenv("ENVIRONMENT", "dev")
+		settings, err := config.Configure(context.TODO(), newConfig(t,
+			"[api.auth]\nmode = \"dev\"\n[api.auth.dev]\nperms = []\n"))
+		require.NoError(t, err)
+
+		p, err := settings.AuthVerifier.Verify(context.TODO(), "")
+		require.NoError(t, err)
+		assert.Empty(t, p.Perms)
+	})
+
+	t.Run("jwt mode verifies the tokens of the console", func(t *testing.T) {
+		// ENVIRONMENT=dev does not turn the verification off
+		t.Setenv("ENVIRONMENT", "dev")
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		console := testutil.NewConsole(t)
+
+		settings, err := config.Configure(ctx, newConfig(t, "[api.auth]\njwks_url = \""+console.JWKSURL()+"\"\n"))
+		require.NoError(t, err)
+		require.IsType(t, &tenancy.JWKSVerifier{}, settings.AuthVerifier)
+
+		p, err := settings.AuthVerifier.Verify(ctx, console.Token(time.Now()))
+		require.NoError(t, err)
+		assert.Equal(t, "user:alice", p.Subject)
+
+		_, err = settings.AuthVerifier.Verify(ctx, "")
+		assert.Equal(t, tenancy.ErrMissingToken, err)
+
+		expired := console.Claims(time.Now().Add(-10 * time.Minute))
+		_, err = settings.AuthVerifier.Verify(ctx, console.Sign(expired))
+		assert.ErrorIs(t, err, tenancy.ErrInvalidToken)
+
+		// a lifetime that the console does not use: longer than max_token_lifetime
+		longLived := console.Claims(time.Now())
+		longLived["exp"] = time.Now().Add(121 * time.Second).Unix()
+		_, err = settings.AuthVerifier.Verify(ctx, console.Sign(longLived))
+		assert.ErrorIs(t, err, tenancy.ErrInvalidToken)
+	})
+
+	t.Run("jwt mode pins the configured issuer and audience", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		console := testutil.NewConsole(t)
+
+		for _, pin := range []string{"issuer = \"console2\"", "audience = \"maeve2\""} {
+			settings, err := config.Configure(ctx, newConfig(t, "[api.auth]\njwks_url = \""+console.JWKSURL()+"\"\n"+pin+"\n"))
+			require.NoError(t, err)
+
+			_, err = settings.AuthVerifier.Verify(ctx, console.Token(time.Now()))
+			assert.ErrorIs(t, err, tenancy.ErrInvalidToken, pin)
+		}
+	})
+
+	t.Run("jwt mode starts without the console", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		console := testutil.NewConsole(t)
+		console.SetDown(true)
+
+		settings, err := config.Configure(ctx, newConfig(t, "[api.auth]\njwks_url = \""+console.JWKSURL()+"\"\n"))
+		require.NoError(t, err)
+
+		_, err = settings.AuthVerifier.Verify(ctx, console.Token(time.Now()))
+		assert.Equal(t, tenancy.ErrKeysUnavailable, err)
+	})
 }

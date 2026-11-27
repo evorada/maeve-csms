@@ -39,6 +39,17 @@ var DefaultConfig = BaseConfig{
 		WsPort:       80,
 		WssPort:      443,
 		OrgName:      "Thoughtworks",
+		Auth: AuthConfig{
+			Mode:               "jwt",
+			Issuer:             "console",
+			Audience:           "maeve",
+			MinRefreshInterval: "5m",
+			ClockSkew:          "5s",
+			MaxTokenLifetime:   "120s",
+			Dev: AuthDevConfig{
+				OrgScope: "subtree",
+			},
+		},
 	},
 	Transport: TransportConfig{
 		Type: "mqtt",

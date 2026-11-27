@@ -4,6 +4,20 @@ internal_addr = ":9412"
 org_name = "Example"
 host = "example.com"
 
+[api.auth]
+mode = "jwt"
+jwks_url = "https://console.example.com/.well-known/jwks.json"
+issuer = "console.example.com"
+audience = "maeve-test"
+min_refresh_interval = "10m"
+clock_skew = "2s"
+max_token_lifetime = "90s"
+
+[api.auth.dev]
+org_id = "0193b2c4-0000-7000-8000-00000000000b"
+org_scope = "self"
+perms = ["cpms.station.read", "cpms.token.read"]
+
 [transport]
 type = "mqtt"
 

@@ -28,6 +28,12 @@ paths:
       responses:
         '202':
           description: Accepted - availability change request submitted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -55,6 +61,12 @@ paths:
           description: Reset request accepted
         '400':
           description: Invalid request
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '500':
           description: Internal server error
   /cs/{csId}/unlock-connector:
@@ -78,5 +90,11 @@ paths:
           description: Unlock request accepted
         '400':
           description: Invalid request
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '500':
           description: Internal server error

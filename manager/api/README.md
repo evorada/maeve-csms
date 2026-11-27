@@ -4,7 +4,7 @@ The API is described by an OpenAPI spec that is split over several files:
 
 | File | Content |
 |---|---|
-| `api-spec.yaml` | Root document: `info`, `servers` and one `$ref` per path and per schema. It holds no inline definitions. |
+| `api-spec.yaml` | Root document: `info`, `servers`, the security scheme and one `$ref` per path and per schema. It holds no inline paths or schemas. |
 | `paths/<module>.yaml` | The operations, one file per module. |
 | `schemas/schemas.yaml` | All schemas. |
 | `api-spec.bundled.yaml` | Generated: the root with every `$ref` resolved. Do not edit. |

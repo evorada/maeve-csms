@@ -11,6 +11,8 @@ info:
 servers:
   - url: http://localhost:9410/api/v0
     description: The local development server
+security:
+  - consoleToken: []
 paths:
   /cs/{csId}:
     post:
@@ -36,6 +38,12 @@ paths:
       responses:
         '201':
           description: Created
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -67,6 +75,12 @@ paths:
       responses:
         '200':
           description: OK
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -106,6 +120,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -131,6 +151,12 @@ paths:
       responses:
         '200':
           description: OK
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -164,6 +190,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -191,6 +223,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChargeStationAuth'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -222,6 +260,12 @@ paths:
       responses:
         '200':
           description: OK
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -252,6 +296,12 @@ paths:
       responses:
         '202':
           description: Accepted - firmware update initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -279,6 +329,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FirmwareStatus'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -315,6 +371,12 @@ paths:
       responses:
         '202':
           description: Accepted - diagnostics request initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -342,6 +404,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DiagnosticsStatus'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -371,6 +439,12 @@ paths:
       responses:
         '202':
           description: Accepted - log request initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -404,6 +478,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LogStatus'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -436,6 +516,12 @@ paths:
           description: Accepted - reservation request initiated
         '400':
           description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
           content:
             application/json:
               schema:
@@ -477,6 +563,12 @@ paths:
       responses:
         '202':
           description: Accepted - cancellation request initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station or reservation
           content:
@@ -522,6 +614,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReservationList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -598,6 +696,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TransactionList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -639,6 +743,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TransactionDetail'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Transaction not found
           content:
@@ -673,6 +783,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChargeStationStatusResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -709,6 +825,12 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ConnectorStatusResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -744,6 +866,12 @@ paths:
       responses:
         '202':
           description: Accepted - remote start initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -773,6 +901,12 @@ paths:
       responses:
         '202':
           description: Accepted - remote stop initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -794,6 +928,12 @@ paths:
       responses:
         '201':
           description: Created
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -828,6 +968,12 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Token'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -854,6 +1000,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Token'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Not found
           content:
@@ -882,6 +1034,12 @@ paths:
       responses:
         '201':
           description: Created
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -909,6 +1067,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Certificate'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Not found
           content:
@@ -937,6 +1101,12 @@ paths:
       responses:
         '204':
           description: No content
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Not found
           content:
@@ -966,6 +1136,12 @@ paths:
       responses:
         '201':
           description: Created
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -994,6 +1170,12 @@ paths:
       responses:
         '201':
           description: Created
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -1027,6 +1209,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataTransferResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -1050,6 +1238,12 @@ paths:
       responses:
         '202':
           description: Accepted - cache clear request submitted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -1080,6 +1274,12 @@ paths:
       responses:
         '202':
           description: Accepted - availability change request submitted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -1151,6 +1351,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MeterValuesResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1184,6 +1390,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LocalListVersionResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station or no local list
           content:
@@ -1216,6 +1428,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LocalAuthorizationListResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station or no local list
           content:
@@ -1250,6 +1468,12 @@ paths:
       responses:
         '202':
           description: Accepted - operation queued
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1290,6 +1514,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConfigurationResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1329,6 +1559,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConfigurationChangeResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1375,6 +1611,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VariablesResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1414,6 +1656,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VariablesChangeResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1450,6 +1698,12 @@ paths:
       responses:
         '202':
           description: Accepted - message request queued
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station or OCPP version not supported
           content:
@@ -1485,6 +1739,12 @@ paths:
       responses:
         '202':
           description: Accepted - clear request queued
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station or OCPP version not supported
           content:
@@ -1525,6 +1785,12 @@ paths:
       responses:
         '202':
           description: Accepted - get request queued
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station or OCPP version not supported
           content:
@@ -1559,6 +1825,12 @@ paths:
       responses:
         '202':
           description: Accepted - charging profile request queued
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1608,6 +1880,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChargingProfileList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1660,6 +1938,12 @@ paths:
       responses:
         '202':
           description: Accepted - clear profile request queued
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1711,6 +1995,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CompositeSchedule'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1744,6 +2034,12 @@ paths:
           description: Reset request accepted
         '400':
           description: Invalid request
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '500':
           description: Internal server error
   /cs/{csId}/unlock-connector:
@@ -1767,6 +2063,12 @@ paths:
           description: Unlock request accepted
         '400':
           description: Invalid request
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '500':
           description: Internal server error
   /cs/{csId}/monitoring:
@@ -1797,6 +2099,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SetVariableMonitoringResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1832,6 +2140,12 @@ paths:
       responses:
         '202':
           description: Accepted - monitoring clear initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station or monitor
           content:
@@ -1867,6 +2181,12 @@ paths:
       responses:
         '202':
           description: Accepted - monitoring base configuration initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1903,6 +2223,12 @@ paths:
       responses:
         '202':
           description: Accepted - monitoring level configuration initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -1939,6 +2265,12 @@ paths:
       responses:
         '202':
           description: Accepted - monitoring report request initiated
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -2005,6 +2337,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EventsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -2064,6 +2402,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReportsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
           content:
@@ -2077,6 +2421,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/Status'
 components:
+  securitySchemes:
+    consoleToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   schemas:
     ChargeStationAuth:
       type: object

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/subnova/slog-exporter/slogtrace"
@@ -73,6 +74,76 @@ type Config struct {
 	// TenantResolver gives the identity of a charge station inside the manager and the
 	// org that owns it.
 	TenantResolver *tenancy.Resolver
+	// AuthVerifier says who the caller of an API request is.
+	AuthVerifier tenancy.Verifier
+}
+
+// devSubject is the caller of every API request in dev mode.
+const devSubject = "user:dev"
+
+// getAuthVerifier creates what authenticates the callers of the API: the verifier of
+// the tokens of the console, or in dev mode one that accepts every request.
+func getAuthVerifier(ctx context.Context, cfg *AuthConfig, defaultOrgId string) (tenancy.Verifier, error) {
+	switch cfg.Mode {
+	case "jwt":
+		minRefreshInterval, err := time.ParseDuration(cfg.MinRefreshInterval)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse api auth min refresh interval: %s", err)
+		}
+		if minRefreshInterval <= 0 {
+			return nil, fmt.Errorf("api auth min refresh interval must be positive: %s", cfg.MinRefreshInterval)
+		}
+		clockSkew, err := time.ParseDuration(cfg.ClockSkew)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse api auth clock skew: %s", err)
+		}
+		if clockSkew < 0 {
+			return nil, fmt.Errorf("api auth clock skew must not be negative: %s", cfg.ClockSkew)
+		}
+		maxTokenLifetime, err := time.ParseDuration(cfg.MaxTokenLifetime)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse api auth max token lifetime: %s", err)
+		}
+		if maxTokenLifetime <= 0 {
+			return nil, fmt.Errorf("api auth max token lifetime must be positive: %s", cfg.MaxTokenLifetime)
+		}
+
+		verifier, err := tenancy.NewJWKSVerifier(ctx, tenancy.JWKSVerifierConfig{
+			JWKSURL:            cfg.JWKSURL,
+			Issuer:             cfg.Issuer,
+			Audience:           cfg.Audience,
+			MinRefreshInterval: minRefreshInterval,
+			ClockSkew:          clockSkew,
+			MaxLifetime:        maxTokenLifetime,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create the api token verifier: %w", err)
+		}
+		return verifier, nil
+	case "dev":
+		if os.Getenv("ENVIRONMENT") != "dev" {
+			return nil, errors.New(`api auth mode "dev" needs the ENVIRONMENT environment variable to be "dev"`)
+		}
+
+		principal := tenancy.Principal{
+			Subject:  devSubject,
+			OrgId:    cfg.Dev.OrgId,
+			OrgScope: tenancy.OrgScope(cfg.Dev.OrgScope),
+			Perms:    cfg.Dev.Perms,
+		}
+		if principal.OrgId == "" {
+			principal.OrgId = defaultOrgId
+		}
+		if principal.Perms == nil {
+			principal.Perms = slices.Clone(tenancy.AllPermissions)
+		}
+
+		slog.Warn("API authentication disabled (dev mode)",
+			"sub", principal.Subject, "org", principal.OrgId, "org_scope", string(principal.OrgScope))
+		return tenancy.DevVerifier{Principal: principal}, nil
+	default:
+		return nil, fmt.Errorf("unknown api auth mode: %s", cfg.Mode)
+	}
 }
 
 // legacyOrgAssigner is implemented by the storage engines that store the org of a row.
@@ -187,6 +258,11 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, nil)))
 	default:
 		return nil, fmt.Errorf("unknown log format: %s", cfg.Observability.LogFormat)
+	}
+
+	c.AuthVerifier, err = getAuthVerifier(ctx, &cfg.Api.Auth, c.DefaultOrgId)
+	if err != nil {
+		return nil, err
 	}
 
 	httpClient, err := getHttpClient(cfg.Observability.TlsKeylogFile)

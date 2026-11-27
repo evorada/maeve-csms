@@ -24,6 +24,20 @@ func TestParseConfig(t *testing.T) {
 			WsPort:       80,
 			WssPort:      443,
 			OrgName:      "Example",
+			Auth: config.AuthConfig{
+				Mode:               "jwt",
+				JWKSURL:            "https://console.example.com/.well-known/jwks.json",
+				Issuer:             "console.example.com",
+				Audience:           "maeve-test",
+				MinRefreshInterval: "10m",
+				ClockSkew:          "2s",
+				MaxTokenLifetime:   "90s",
+				Dev: config.AuthDevConfig{
+					OrgId:    "0193b2c4-0000-7000-8000-00000000000b",
+					OrgScope: "self",
+					Perms:    []string{"cpms.station.read", "cpms.token.read"},
+				},
+			},
 		},
 		Transport: config.TransportConfig{
 			Type: "mqtt",
@@ -116,6 +130,26 @@ func TestParseConfig(t *testing.T) {
 
 func TestValidateConfig(t *testing.T) {
 	cfg := clone.Clone(&config.DefaultConfig)
+
+	// by default the callers of the API are authenticated with tokens of the console,
+	// and there is no default for where its keys are
+	assert.Equal(t, "jwt", cfg.Api.Auth.Mode)
 	err := cfg.Validate()
-	assert.NoError(t, err)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "JWKSURL")
+
+	cfg.Api.Auth.JWKSURL = "https://console.example.com/.well-known/jwks.json"
+	assert.NoError(t, cfg.Validate())
+}
+
+// The configurations for local runs must stay configurations that the manager accepts.
+func TestExampleConfigsAreValid(t *testing.T) {
+	for _, file := range []string{"config.toml", "config-inmemory.toml", "config-multitenant.toml"} {
+		t.Run(file, func(t *testing.T) {
+			cfg := clone.Clone(&config.DefaultConfig)
+			require.NoError(t, cfg.LoadFromFile("../../config/manager/"+file))
+			require.NoError(t, cfg.Validate())
+			assert.Equal(t, "dev", cfg.Api.Auth.Mode)
+		})
+	}
 }

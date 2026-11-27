@@ -10,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/thoughtworks/maeve-csms/manager/config"
 	"github.com/thoughtworks/maeve-csms/manager/server"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
@@ -56,7 +55,7 @@ func TestInternalHandlerServesTheGatewayLookups(t *testing.T) {
 func TestApiHandlerDoesNotServeTheInternalApi(t *testing.T) {
 	engine := inmemory.NewStore(clock.RealClock{})
 	require.NoError(t, engine.SetChargeStationAuth(context.Background(), "CP001", &store.ChargeStationAuth{}))
-	handler := server.NewApiHandler(config.ApiSettings{}, engine, nil, nil, store.LegacyOrgId)
+	handler := newApiHandler(engine, devVerifier)
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/_internal/v1/station-auth?host=localhost&stationId=CP001", nil))

@@ -23,6 +23,16 @@ Configuration is defined in TOML.
 | api           | addr                        | string | Address that API server will listen on, e.g. localhost:9410          |
 | api           | internal_addr               | string | Address that the internal listener will listen on. Default "localhost:9412". It serves the lookups of the gateway (`/_internal/v1`, see [the internal API](../internalapi/README.md)) without authentication, so it must only be reachable by the gateway |
 | api           | external_addr               | string | The Externally visible URL that the server is available on           |
+| api.auth      | mode                        | string | How the callers of `/api/v0` are authenticated: "jwt" (default) or "dev". See [API authentication](#api-authentication) |
+| api.auth      | jwks_url                    | string | URL of the key set (JWKS) with the public keys that sign the tokens of the console. Required in "jwt" mode; an http or https URL without credentials |
+| api.auth      | issuer                      | string | The only accepted issuer (`iss`) of a token. Default "console"      |
+| api.auth      | audience                    | string | The audience (`aud`) that a token must have. Default "maeve"         |
+| api.auth      | min_refresh_interval        | string | Shortest time between two requests for the key set, e.g. "5m" (the default) |
+| api.auth      | clock_skew                  | string | Leeway for the time claims of a token (`exp`, `iat`, `nbf`), e.g. "5s" (the default) |
+| api.auth      | max_token_lifetime          | string | Longest accepted time between `iat` and `exp` of a token, e.g. "120s" (the default) |
+| api.auth.dev  | org_id                      | string | "dev" mode: org (UUID) of the caller. Default: `default_org_id` of `[tenancy]` |
+| api.auth.dev  | org_scope                   | string | "dev" mode: "self" or "subtree" (default)                             |
+| api.auth.dev  | perms                       | array of strings | "dev" mode: permissions of the caller. Default: all permissions |
 | api           | org_name                    | string | The organization name to use when issuing client certificates        |
 | ocpp          | heartbeat_interval          | string | Frequency to request charge station heartbeat messages at, e.g. "5m" |
 | ocpp          | ocpp16_enabled              | bool   | Is OCPP 1.6 support enabled, e.g. "true"?                            |
@@ -35,6 +45,28 @@ Configuration is defined in TOML.
 | observability | log_format                  | string | Either "json" or "text"                                              |
 | observability | otel_collector_addr         | string | Address of the OpenTelemetry collector, e.g. "localhost:4317"        |
 | observability | tls_keylog_file             | string | File where TLS session keys will be written for use with Wireshark   |
+
+### API authentication
+
+Every request to `/api/v0` must carry a token of the console: `Authorization: Bearer <JWT>`. In "jwt" mode
+the manager only accepts a compact JWS that is signed with EdDSA by an Ed25519 key of the key set at `jwks_url`,
+with the configured issuer and audience, the claims `sub`, `jti`, `iat` and `exp` (not expired, not issued in the
+future, at most `max_token_lifetime` between `iat` and `exp`), `org` (a UUID) and `org_scope` ("self" or
+"subtree"); `perms` (a list of strings) and `act` are optional. Anything else is answered with `401`. The key set
+is loaded at startup and refreshed in the background; a token with an unknown key id makes the manager load it
+again, at most once per `min_refresh_interval`. While no key set could be loaded (the console may start after the
+manager) requests are answered with `503`.
+
+In "dev" mode nothing is verified: every request to `/api/v0`, with any token or with none, is accepted as the
+caller `user:dev` of `[api.auth.dev]`. The manager refuses to start in this mode unless the `ENVIRONMENT`
+environment variable is `dev`, and logs the warning `API authentication disabled (dev mode)` at every startup.
+Never use it on a deployment that others can reach.
+
+```toml
+[api.auth]
+mode = "jwt"
+jwks_url = "http://console.internal:8080/.well-known/jwks.json"
+```
 
 ### Bootstrap tenants
 

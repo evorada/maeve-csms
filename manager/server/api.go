@@ -14,6 +14,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/ocpi"
 	"github.com/thoughtworks/maeve-csms/manager/services"
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/unrolled/secure"
 	"k8s.io/utils/clock"
 
@@ -23,10 +24,27 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/templates"
 )
 
-// NewApiHandler creates the handler of the manager API. What is created through the API
-// and the admin pages belongs to defaultOrgId (see api.NewServer).
-func NewApiHandler(settings config.ApiSettings, engine store.Engine, ocpi ocpi.Api, csCertProvider services.ChargeStationCertificateProvider, defaultOrgId string) http.Handler {
-	apiServer, err := api.NewServer(engine, clock.RealClock{}, ocpi, defaultOrgId)
+// ApiDeps is what the handler of the API listener needs.
+type ApiDeps struct {
+	Settings       config.ApiSettings
+	Engine         store.Engine
+	Ocpi           ocpi.Api
+	CSCertProvider services.ChargeStationCertificateProvider
+	// Verifier authenticates the callers of /api/v0. It is required.
+	Verifier tenancy.Verifier
+	// DefaultOrgId is the org of what is created through the API and the admin pages
+	// (see api.NewServer).
+	DefaultOrgId string
+}
+
+// NewApiHandler creates the handler of the manager API. Every request to /api/v0 must
+// be accepted by d.Verifier; the other routes are served without authentication.
+func NewApiHandler(d ApiDeps) http.Handler {
+	if d.Verifier == nil {
+		panic("server: the api handler needs a verifier")
+	}
+
+	apiServer, err := api.NewServer(d.Engine, clock.RealClock{}, d.Ocpi, d.DefaultOrgId)
 	if err != nil {
 		panic(err)
 	}
@@ -47,13 +65,14 @@ func NewApiHandler(settings config.ApiSettings, engine store.Engine, ocpi ocpi.A
 
 	logger := middleware.RequestLogger(logFormatter{})
 
-	r.Use(middleware.Recoverer, secureMiddleware.Handler, cors.Default().Handler, api.ValidationMiddleware)
+	r.Use(middleware.Recoverer, secureMiddleware.Handler, cors.Default().Handler)
 	r.Get("/health", health)
-	r.Get("/transactions", transactions(engine))
+	r.Get("/transactions", transactions(d.Engine))
 	r.Handle("/metrics", promhttp.Handler())
 	r.Get("/api/openapi.json", getApiSwaggerJson)
-	r.With(logger).Mount("/api/v0", api.Handler(apiServer))
-	r.With(logger).Mount("/adminui", adminui.NewServer(settings.Host, settings.WsPort, settings.WssPort, settings.OrgName, engine, csCertProvider, defaultOrgId))
+	// a request is authenticated before anything else looks at it
+	r.With(logger, tenancy.Middleware(d.Verifier), logPrincipal, api.ValidationMiddleware).Mount("/api/v0", api.Handler(apiServer))
+	r.With(logger).Mount("/adminui", adminui.NewServer(d.Settings.Host, d.Settings.WsPort, d.Settings.WssPort, d.Settings.OrgName, d.Engine, d.CSCertProvider, d.DefaultOrgId))
 	return r
 }
 

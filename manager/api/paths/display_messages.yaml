@@ -27,6 +27,12 @@ paths:
       responses:
         '202':
           description: Accepted - message request queued
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station or OCPP version not supported
           content:
@@ -64,6 +70,12 @@ paths:
       responses:
         '202':
           description: Accepted - clear request queued
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station or OCPP version not supported
           content:
@@ -108,6 +120,12 @@ paths:
       responses:
         '202':
           description: Accepted - get request queued
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station or OCPP version not supported
           content:

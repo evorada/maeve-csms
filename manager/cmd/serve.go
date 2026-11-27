@@ -50,7 +50,14 @@ the gateway and send appropriate responses.`,
 		}()
 
 		apiServer := server.New("api", cfg.Api.Addr, nil,
-			server.NewApiHandler(settings.Api, settings.Storage, settings.OcpiApi, settings.ChargeStationCertProviderService, settings.DefaultOrgId))
+			server.NewApiHandler(server.ApiDeps{
+				Settings:       settings.Api,
+				Engine:         settings.Storage,
+				Ocpi:           settings.OcpiApi,
+				CSCertProvider: settings.ChargeStationCertProviderService,
+				Verifier:       settings.AuthVerifier,
+				DefaultOrgId:   settings.DefaultOrgId,
+			}))
 		internalServer := server.New("internal", cfg.Api.InternalAddr, nil,
 			server.NewInternalHandler(server.InternalDeps{Resolver: settings.TenantResolver, Engine: settings.Storage}))
 

@@ -11,6 +11,9 @@ info:
 servers:
 - url: http://localhost:9410/api/v0
   description: The local development server
+# Every operation needs a token that the console minted for the caller.
+security:
+- consoleToken: []
 paths:
   /cs/{csId}:
     $ref: 'paths/auth.yaml#/paths/~1cs~1{csId}'
@@ -113,6 +116,11 @@ paths:
   /cs/{csId}/reports:
     $ref: 'paths/monitoring.yaml#/paths/~1cs~1{csId}~1reports'
 components:
+  securitySchemes:
+    consoleToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   schemas:
     ChargeStationAuth:
       $ref: 'schemas/schemas.yaml#/components/schemas/ChargeStationAuth'
