@@ -6,7 +6,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/render"
 	"github.com/google/uuid"
@@ -108,10 +110,17 @@ func (s *Server) checkCommandPayload(version transport.OcppVersion, action strin
 
 // answerThroughQueue answers an operation that sends one command to the charge station
 // when the commands to the charge station go through the queue (queueFor): it queues
-// the action with the payload and answers the command with the status code. It reports
+// the action with the payload on behalf of a caller with the permission
+// cpms.connector.command and answers the command with the status code. It reports
 // whether it answered the request; when it did not, the operation answers in its own
 // way.
 func (s *Server) answerThroughQueue(w http.ResponseWriter, r *http.Request, csId string, code int, action string, payload any) bool {
+	return s.answerThroughQueueWithPermission(w, r, csId, tenancy.PermConnectorCommand, code, action, payload)
+}
+
+// answerThroughQueueWithPermission is answerThroughQueue for an operation whose caller
+// needs another permission (see enqueueWithPermission).
+func (s *Server) answerThroughQueueWithPermission(w http.ResponseWriter, r *http.Request, csId, permission string, code int, action string, payload any) bool {
 	queue, ok := s.useQueue(w, r, csId)
 	if !ok {
 		return true
@@ -119,10 +128,44 @@ func (s *Server) answerThroughQueue(w http.ResponseWriter, r *http.Request, csId
 	if !queue {
 		return false
 	}
-	if cmd := s.enqueueFor(w, r, csId, action, payload); cmd != nil {
+	if cmd := s.enqueueWithPermission(w, r, csId, permission, action, payload); cmd != nil {
 		s.renderQueued(w, r, code, cmd)
 	}
 	return true
+}
+
+// renderQueuedOperation answers a command that an operation answering an
+// OperationResponse queued: the operation id is the id of the command, the status is
+// Pending (the outcome is the result of the command), and Location names the command.
+func renderQueuedOperation(w http.ResponseWriter, r *http.Request, cmd *store.Command) {
+	setCommandLocation(w, cmd)
+	id := cmd.Id
+	status := OperationResponseStatusPending
+	render.Status(r, http.StatusAccepted)
+	render.JSON(w, r, &OperationResponse{OperationId: &id, Status: &status})
+}
+
+// randomRequestId returns a request id for a command whose caller gave none: a
+// non-negative 31-bit number, like the transaction ids that the manager gives OCPP 1.6
+// charge stations.
+func randomRequestId() int {
+	//#nosec G404 - a request id does not require a secure random number generator
+	return int(rand.Int31())
+}
+
+// ocppDateTime is a time of a request as OCPP sends it: RFC 3339, in the offset that
+// the caller gave, to the second.
+func ocppDateTime(t time.Time) string {
+	return t.Format(time.RFC3339)
+}
+
+// optionalOcppDateTime is ocppDateTime of an optional time.
+func optionalOcppDateTime(t *time.Time) *string {
+	if t == nil {
+		return nil
+	}
+	formatted := ocppDateTime(*t)
+	return &formatted
 }
 
 // renderQueued answers a command that an operation queued: Location names the command

@@ -2,12 +2,15 @@ paths:
   /cs/{csId}/local-list/version:
     get:
       summary: Get local authorization list version
-      description: 'Returns the current version number of the local authorization
-        list
+      description: |
+        Returns the current version number of the local authorization list
+        stored on the charge station, as the manager knows it.
 
-        stored on the charge station.
-
-        '
+        With `refresh=true` an OCPP 1.6 charge station is asked for the version instead:
+        the request queues a `GetLocalListVersion` command and answers 202 with the command;
+        the version is the result of the command. Refreshing needs the permission
+        `cpms.connector.command` as well. Other charge stations, and a manager whose storage
+        engine does not keep commands, answer what the manager knows.
       operationId: getLocalListVersion
       x-permission: cpms.station.read
       parameters:
@@ -17,6 +20,13 @@ paths:
         schema:
           type: string
           maxLength: 80
+      - name: refresh
+        in: query
+        description: Ask an OCPP 1.6 charge station for the version of its list
+        required: false
+        schema:
+          type: boolean
+          default: false
       responses:
         '200':
           description: Local list version response
@@ -24,6 +34,19 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/LocalListVersionResponse'
+        '202':
+          description: |
+            With `refresh=true`, for an OCPP 1.6 charge station: the `GetLocalListVersion`
+            command that asks the charge station
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Command'
         '401':
           description: Unauthorized
           content:
@@ -31,13 +54,23 @@ paths:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '403':
-          description: The caller does not have the permission of the operation
+          description: |
+            The caller does not have the permission of the operation, or asks for
+            `refresh=true` without the permission `cpms.connector.command`
           content:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station or no local list
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
           content:
             application/json:
               schema:

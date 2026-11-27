@@ -131,3 +131,24 @@ func TestFirmwareStatusNotificationHandler_UnknownStatus(t *testing.T) {
 	mockStore.AssertNotCalled(t, "GetFirmwareUpdateStatus")
 	mockStore.AssertNotCalled(t, "SetFirmwareUpdateStatus")
 }
+
+// The stores answer no status without an error when a charge station has none yet, e.g.
+// when it reports before the answer to UpdateFirmware is handled.
+func TestFirmwareStatusNotificationHandler_NoStatusInTheStore(t *testing.T) {
+	mockStore := new(MockFirmwareStore)
+	handler := handlers.FirmwareStatusNotificationHandler{
+		FirmwareStore: mockStore,
+	}
+
+	mockStore.On("GetFirmwareUpdateStatus", mock.Anything, "cs001").Return(nil, nil)
+	mockStore.On("SetFirmwareUpdateStatus", mock.Anything, "cs001", mock.MatchedBy(func(s *store.FirmwareUpdateStatus) bool {
+		return s.Status == store.FirmwareUpdateStatusDownloading && s.ChargeStationId == "cs001"
+	})).Return(nil)
+
+	resp, err := handler.HandleCall(context.Background(), "cs001", &types.FirmwareStatusNotificationJson{
+		Status: types.FirmwareStatusNotificationJsonStatusDownloading,
+	})
+	require.NoError(t, err)
+	assert.IsType(t, &types.FirmwareStatusNotificationResponseJson{}, resp)
+	mockStore.AssertExpectations(t)
+}

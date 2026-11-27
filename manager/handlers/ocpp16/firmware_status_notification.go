@@ -39,6 +39,10 @@ func (h FirmwareStatusNotificationHandler) HandleCall(ctx context.Context, charg
 		slog.Warn("failed to get existing firmware status, creating new entry",
 			"chargeStationId", chargeStationId,
 			"error", err)
+	}
+	if existing == nil {
+		// no status yet: the station can report before the answer to the request that
+		// started the firmware operation is handled, or without such a request
 		existing = &store.FirmwareUpdateStatus{
 			ChargeStationId: chargeStationId,
 		}

@@ -2,12 +2,15 @@ paths:
   /cs/{csId}/charging-profile:
     post:
       summary: Set charging profile
-      description: 'Sets a charging profile for a specific connector on the charge
-        station.
-
+      description: |
+        Sets a charging profile for a specific connector on the charge station.
         Used for smart charging, load balancing, and dynamic pricing.
 
-        '
+        For an OCPP 1.6 charge station the request becomes a `SetChargingProfile` command of
+        the command queue (`GET /commands/{commandId}`): it is sent when the charge station is
+        connected, the answer of the charge station is the result of the command, and the
+        profile is stored (and listed) only when the charge station accepts it. Other charge
+        stations get the profile stored at once.
       operationId: setChargingProfile
       x-permission: cpms.connector.command
       parameters:
@@ -24,7 +27,29 @@ paths:
               $ref: '../schemas/schemas.yaml#/components/schemas/SetChargingProfileRequest'
       responses:
         '202':
-          description: Accepted - charging profile request queued
+          description: |
+            Accepted - charging profile request queued.
+            For an OCPP 1.6 charge station the request is queued as a command, which is
+            the body, and `Location` names it. For other charge stations, and when the
+            storage engine of the manager does not keep commands, the body is empty.
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Command'
+        '400':
+          description: |
+            The request is not valid. For an OCPP 1.6 charge station the error starts with
+            `invalid_payload` (followed by the schema error) when the request does not make
+            a valid OCPP call.
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '401':
           description: Unauthorized
           content:
@@ -39,6 +64,14 @@ paths:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
           content:
             application/json:
               schema:
@@ -114,6 +147,15 @@ paths:
   /cs/{csId}/charging-profile/{profileId}:
     delete:
       summary: Clear charging profile
+      description: |
+        Clears the charging profile with the id, and with the other criteria that are
+        given, from the charge station.
+
+        For an OCPP 1.6 charge station the request becomes a `ClearChargingProfile`
+        command of the command queue (`GET /commands/{commandId}`): it is sent when the
+        charge station is connected, the answer of the charge station is the result of
+        the command, and the profiles are cleared in the manager only when the charge
+        station accepts. Other charge stations get them cleared at once.
       operationId: clearChargingProfile
       x-permission: cpms.connector.command
       parameters:
@@ -151,7 +193,20 @@ paths:
           minimum: 0
       responses:
         '202':
-          description: Accepted - clear profile request queued
+          description: |
+            Accepted - clear profile request queued.
+            For an OCPP 1.6 charge station the request is queued as a command, which is
+            the body, and `Location` names it. For other charge stations, and when the
+            storage engine of the manager does not keep commands, the body is empty.
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Command'
         '401':
           description: Unauthorized
           content:
@@ -166,6 +221,14 @@ paths:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
           content:
             application/json:
               schema:

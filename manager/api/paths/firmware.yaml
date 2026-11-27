@@ -2,15 +2,17 @@ paths:
   /cs/{csId}/firmware/update:
     post:
       summary: Trigger firmware update on charge station
-      description: 'Initiates a firmware update on the specified charge station. Supports
-        both regular
+      description: |
+        Initiates a firmware update on the specified charge station. Supports both regular
+        and signed firmware updates. The charge station will download and install the
+        firmware from the provided location.
 
-        and signed firmware updates. The charge station will download and install
-        the firmware
-
-        from the provided location.
-
-        '
+        For an OCPP 1.6 charge station the request becomes a command of the command queue
+        (`GET /commands/{commandId}`): `UpdateFirmware`, or `SignedUpdateFirmware` when both
+        `signature` and `signingCertificate` are given (only one of them is refused). Without
+        `retrieveDate` the firmware is retrieved at once. The command is sent when the charge
+        station is connected, and the answer of the charge station is the result of the
+        command.
       operationId: updateChargeStationFirmware
       x-permission: cpms.connector.command
       parameters:
@@ -28,7 +30,30 @@ paths:
               $ref: '../schemas/schemas.yaml#/components/schemas/FirmwareUpdateRequest'
       responses:
         '202':
-          description: Accepted - firmware update initiated
+          description: |
+            Accepted - firmware update initiated.
+            For an OCPP 1.6 charge station the request is queued as a command, which is
+            the body, and `Location` names it. For other charge stations, and when the
+            storage engine of the manager does not keep commands, the body is empty.
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Command'
+        '400':
+          description: |
+            The request is not valid. For an OCPP 1.6 charge station: only one of
+            `signature` and `signingCertificate` is given, or the error starts with
+            `invalid_payload` (followed by the schema error) when the request does not make a
+            valid OCPP call.
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '401':
           description: Unauthorized
           content:
@@ -43,6 +68,14 @@ paths:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
           content:
             application/json:
               schema:

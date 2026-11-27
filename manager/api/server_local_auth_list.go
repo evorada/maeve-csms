@@ -8,10 +8,22 @@ import (
 	"time"
 
 	"github.com/go-chi/render"
+	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 )
 
-func (s *Server) GetLocalListVersion(w http.ResponseWriter, r *http.Request, csId string) {
+// GetLocalListVersion answers the version of the local authorization list of the charge
+// station that the manager knows. With refresh, an OCPP 1.6 charge station is asked
+// for the version instead: a GetLocalListVersion command is queued and answered (202),
+// and the version is the result of the command. Refreshing sends a command, so it needs
+// the permission of the commands as well.
+func (s *Server) GetLocalListVersion(w http.ResponseWriter, r *http.Request, csId string, params GetLocalListVersionParams) {
+	if params.Refresh != nil && *params.Refresh &&
+		s.answerThroughQueue(w, r, csId, http.StatusAccepted, "GetLocalListVersion", &ocpp16.GetLocalListVersionJson{}) {
+		return
+	}
+
 	version, err := s.store.GetLocalListVersion(r.Context(), csId)
 	if err != nil {
 		_ = render.Render(w, r, ErrInternalError(err))
@@ -71,6 +83,12 @@ func (s *Server) GetLocalAuthorizationList(w http.ResponseWriter, r *http.Reques
 	_ = render.Render(w, r, resp)
 }
 
+// UpdateLocalAuthorizationList changes the local authorization list of the charge
+// station. For an OCPP 1.6 charge station it queues a SendLocalList command and answers
+// it: the result handler of SendLocalList keeps the list and its version when the charge
+// station accepts it. The caller needs the permission of the operation
+// (cpms.token.write), as for other charge stations, which get the list in the store at
+// once.
 func (s *Server) UpdateLocalAuthorizationList(w http.ResponseWriter, r *http.Request, csId string) {
 	req := new(UpdateLocalListRequest)
 	if err := render.Bind(r, req); err != nil {
@@ -82,6 +100,10 @@ func (s *Server) UpdateLocalAuthorizationList(w http.ResponseWriter, r *http.Req
 	if req.UpdateType != Full &&
 		req.UpdateType != Differential {
 		_ = render.Render(w, r, ErrInvalidRequest(fmt.Errorf("invalid update type: %s", req.UpdateType)))
+		return
+	}
+
+	if s.answerThroughQueueWithPermission(w, r, csId, tenancy.PermTokenWrite, http.StatusAccepted, "SendLocalList", sendLocalListOf(req)) {
 		return
 	}
 
@@ -119,6 +141,28 @@ func (s *Server) UpdateLocalAuthorizationList(w http.ResponseWriter, r *http.Req
 
 	// Return 202 Accepted - in a real implementation, this would trigger an OCPP SendLocalList call
 	w.WriteHeader(http.StatusAccepted)
+}
+
+// sendLocalListOf is the SendLocalList request of OCPP 1.6 that makes the change of the
+// local authorization list.
+func sendLocalListOf(req *UpdateLocalListRequest) *ocpp16.SendLocalListJson {
+	payload := &ocpp16.SendLocalListJson{
+		ListVersion: int(req.ListVersion),
+		UpdateType:  ocpp16.SendLocalListJsonUpdateType(req.UpdateType),
+	}
+	if req.LocalAuthorizationList != nil {
+		for _, entry := range *req.LocalAuthorizationList {
+			payload.LocalAuthorizationList = append(payload.LocalAuthorizationList, ocpp16.SendLocalListJsonLocalAuthorizationListEntry{
+				IdTag: entry.IdTag,
+				IdTagInfo: &ocpp16.SendLocalListJsonIdTagInfo{
+					Status:      ocpp16.SendLocalListJsonIdTagInfoStatus(entry.IdTagInfo.Status),
+					ExpiryDate:  optionalOcppDateTime(entry.IdTagInfo.ExpiryDate),
+					ParentIdTag: entry.IdTagInfo.ParentIdTag,
+				},
+			})
+		}
+	}
+	return payload
 }
 
 // Render implementations

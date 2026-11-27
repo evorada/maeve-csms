@@ -39,6 +39,10 @@ func (h DiagnosticsStatusNotificationHandler) HandleCall(ctx context.Context, ch
 		slog.Warn("failed to get existing diagnostics status, creating new entry",
 			"chargeStationId", chargeStationId,
 			"error", err)
+	}
+	if existing == nil {
+		// no status yet: the station can report before the answer to the request that
+		// started the diagnostics operation is handled, or without such a request
 		existing = &store.DiagnosticsStatus{
 			ChargeStationId: chargeStationId,
 		}

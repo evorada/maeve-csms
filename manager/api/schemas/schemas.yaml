@@ -119,7 +119,10 @@ components:
       properties:
         operationId:
           type: string
-          description: Unique identifier for tracking the operation status
+          description: |
+            Unique identifier for tracking the operation status. For an operation that
+            queues a command for an OCPP 1.6 charge station, the id of the command
+            (`GET /commands/{commandId}`).
         status:
           type: string
           description: Initial operation status
@@ -184,6 +187,19 @@ components:
         signingCertificate:
           type: string
           description: PEM encoded certificate used to sign the firmware
+        installDate:
+          type: string
+          format: date-time
+          description: |
+            Optional time at which the charge station installs the firmware. Signed
+            firmware updates of OCPP 1.6 charge stations only.
+        requestId:
+          type: integer
+          description: |
+            Id of the request of a signed firmware update of an OCPP 1.6 charge station,
+            which the charge station reports in its firmware status notifications. A
+            random id when not given. Signed firmware updates of OCPP 1.6 charge stations
+            only.
     FirmwareStatus:
       type: object
       description: Current firmware status of a charge station
@@ -262,7 +278,7 @@ components:
           description: Name of the diagnostics file being uploaded
     LogRequest:
       type: object
-      description: Request to upload logs from charge station (OCPP 2.0.1)
+      description: Request to upload logs from charge station (GetLog of the OCPP 1.6 security extension and of OCPP 2.0.1)
       required:
       - logType
       - requestId
