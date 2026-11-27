@@ -6,6 +6,8 @@ package postgres
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
@@ -48,6 +50,7 @@ type Querier interface {
 	DeleteRemoteStartTransactionRequest(ctx context.Context, chargeStationID string) error
 	DeleteRemoteStopTransactionRequest(ctx context.Context, chargeStationID string) error
 	DeleteResetRequest(ctx context.Context, chargeStationID string) error
+	DeleteTenantHostnames(ctx context.Context, orgID pgtype.UUID) error
 	DeleteToken(ctx context.Context, uid string) error
 	DeleteUnlockConnectorRequest(ctx context.Context, chargeStationID string) error
 	DeleteVariableMonitoring(ctx context.Context, arg DeleteVariableMonitoringParams) error
@@ -98,6 +101,13 @@ type Querier interface {
 	GetReservation(ctx context.Context, reservationID int32) (Reservation, error)
 	GetReservationByConnector(ctx context.Context, arg GetReservationByConnectorParams) (Reservation, error)
 	GetResetRequest(ctx context.Context, chargeStationID string) (ResetRequest, error)
+	// The path column is an ltree, which sqlc cannot type: it is always read as text and
+	// written through a text cast. The hostnames of a tenant are read with the tenant, in
+	// the same statement.
+	GetTenant(ctx context.Context, orgID pgtype.UUID) (GetTenantRow, error)
+	GetTenantByHost(ctx context.Context, hostname string) (GetTenantByHostRow, error)
+	GetTenantByOrgKey(ctx context.Context, orgKey string) (GetTenantByOrgKeyRow, error)
+	GetTenantIdentityForUpdate(ctx context.Context, orgID pgtype.UUID) (GetTenantIdentityForUpdateRow, error)
 	GetToken(ctx context.Context, uid string) (Token, error)
 	// Transactions are identified by (charge_station_id, id): ids are only unique per station.
 	GetTransaction(ctx context.Context, arg GetTransactionParams) (Transaction, error)
@@ -105,6 +115,8 @@ type Querier interface {
 	GetVariableMonitoring(ctx context.Context, arg GetVariableMonitoringParams) (VariableMonitoring, error)
 	InsertChargeStationEvent(ctx context.Context, arg InsertChargeStationEventParams) (int32, error)
 	InsertDeviceReport(ctx context.Context, arg InsertDeviceReportParams) (int32, error)
+	InsertTenant(ctx context.Context, arg InsertTenantParams) error
+	InsertTenantHostname(ctx context.Context, arg InsertTenantHostnameParams) error
 	ListAllLocations(ctx context.Context, arg ListAllLocationsParams) ([]Location, error)
 	ListCertificates(ctx context.Context) ([]Certificate, error)
 	ListChargeStationCertificateDeletions(ctx context.Context, arg ListChargeStationCertificateDeletionsParams) ([]ChargeStationCertificateDeletion, error)
@@ -129,6 +141,8 @@ type Querier interface {
 	ListOcpiPartiesForRole(ctx context.Context, role string) ([]OcpiParty, error)
 	ListRemoteStartTransactionRequests(ctx context.Context, arg ListRemoteStartTransactionRequestsParams) ([]RemoteStartTransactionRequest, error)
 	ListRemoteStopTransactionRequests(ctx context.Context, arg ListRemoteStopTransactionRequestsParams) ([]RemoteStopTransactionRequest, error)
+	ListSubtreeOrgIds(ctx context.Context, arg ListSubtreeOrgIdsParams) ([]pgtype.UUID, error)
+	ListTenants(ctx context.Context, arg ListTenantsParams) ([]ListTenantsRow, error)
 	ListTokens(ctx context.Context, arg ListTokensParams) ([]Token, error)
 	ListTransactions(ctx context.Context) ([]Transaction, error)
 	ListTransactionsFiltered(ctx context.Context, arg ListTransactionsFilteredParams) ([]Transaction, error)
@@ -155,12 +169,16 @@ type Querier interface {
 	SetRemoteStopTransactionRequest(ctx context.Context, arg SetRemoteStopTransactionRequestParams) (RemoteStopTransactionRequest, error)
 	// Reset Request
 	SetResetRequest(ctx context.Context, arg SetResetRequestParams) (ResetRequest, error)
+	SetTenantStatus(ctx context.Context, arg SetTenantStatusParams) (int64, error)
 	// Unlock Connector Request
 	SetUnlockConnectorRequest(ctx context.Context, arg SetUnlockConnectorRequestParams) (UnlockConnectorRequest, error)
 	StoreMeterValue(ctx context.Context, arg StoreMeterValueParams) error
 	UpdateChargeStationCertificate(ctx context.Context, arg UpdateChargeStationCertificateParams) (ChargeStationCertificate, error)
 	UpdateHeartbeat(ctx context.Context, arg UpdateHeartbeatParams) error
 	UpdateReservationStatus(ctx context.Context, arg UpdateReservationStatusParams) error
+	// The entitlement and config documents are only replaced by a document of the same or
+	// a newer version. The status, the slug and the org key are never changed here.
+	UpdateTenant(ctx context.Context, arg UpdateTenantParams) error
 	UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token, error)
 	UpdateTransaction(ctx context.Context, arg UpdateTransactionParams) (Transaction, error)
 	UpdateTransactionDetails(ctx context.Context, arg UpdateTransactionDetailsParams) (int64, error)

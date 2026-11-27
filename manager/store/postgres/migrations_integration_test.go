@@ -391,3 +391,98 @@ func TestMigration_AddChargeStationEventCategory_KeepsExistingEvents(t *testing.
 	require.True(t, hasCategoryIndex())
 	assert.Equal(t, map[string]string{"OldEvent": "device", "SecurityLogWasCleared": "device"}, categories())
 }
+
+// Migration 000034 creates the tenants and their hostnames, with the path of a tenant
+// as an ltree. It must apply on a database at the previous version, be reversible with
+// tenants in the tables, and apply again while the ltree extension is still there.
+func TestMigration_CreateTenants(t *testing.T) {
+	ctx := context.Background()
+
+	const (
+		versionBefore = 33
+		versionAfter  = 34
+	)
+
+	migrationConnString, pool := migrationTestDatabase(t, "maeve_migration_000034")
+
+	hasTable := func(table string) bool {
+		var exists bool
+		err := pool.QueryRow(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM information_schema.tables
+				WHERE table_schema = 'public' AND table_name = $1
+			)`, table).Scan(&exists)
+		require.NoError(t, err)
+		return exists
+	}
+	hasLtree := func() bool {
+		var exists bool
+		err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'ltree')`).Scan(&exists)
+		require.NoError(t, err)
+		return exists
+	}
+	insertTenants := func() {
+		_, err := pool.Exec(ctx, `
+			INSERT INTO tenants (org_id, parent_id, path, slug, org_key)
+			VALUES ('0193b2c4-0000-7000-8000-00000000000b', '0193b2c4-0000-7000-8000-00000000000a',
+			        '0193b2c400007000800000000000000a.0193b2c400007000800000000000000b', 'partner', 'part01'),
+			       ('0193b2c4-0000-7000-8000-00000000000c', '0193b2c4-0000-7000-8000-00000000000b',
+			        '0193b2c400007000800000000000000a.0193b2c400007000800000000000000b.0193b2c400007000800000000000000c', 'child', 'chld01')`)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `
+			INSERT INTO tenant_hostnames (hostname, org_id)
+			VALUES ('partner.ocpp.example.com', '0193b2c4-0000-7000-8000-00000000000b')`)
+		require.NoError(t, err)
+	}
+
+	migrateTo(t, migrationConnString, versionBefore)
+	require.False(t, hasTable("tenants"))
+	require.False(t, hasTable("tenant_hostnames"))
+	require.False(t, hasLtree())
+
+	// up: the tables are there, with their defaults, and paths can be searched by label
+	migrateTo(t, migrationConnString, versionAfter)
+	require.True(t, hasTable("tenants"))
+	require.True(t, hasTable("tenant_hostnames"))
+	insertTenants()
+
+	var status, parties, entitlements, config string
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT status, parties::text, entitlements::text, config::text FROM tenants WHERE slug = 'child'`).
+		Scan(&status, &parties, &entitlements, &config))
+	assert.Equal(t, "active", status)
+	assert.Equal(t, "[]", parties)
+	assert.Equal(t, "{}", entitlements)
+	assert.Equal(t, "{}", config)
+
+	var underPartner int
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM tenants WHERE path ~ '*.0193b2c400007000800000000000000b.*'::lquery`).Scan(&underPartner))
+	assert.Equal(t, 2, underPartner)
+
+	_, err := pool.Exec(ctx, `UPDATE tenants SET status = 'deleted' WHERE slug = 'child'`)
+	assert.Error(t, err, "status outside of active, suspended, cancelled")
+	_, err = pool.Exec(ctx, `
+		INSERT INTO tenant_hostnames (hostname, org_id)
+		VALUES ('partner.ocpp.example.com', '0193b2c4-0000-7000-8000-00000000000c')`)
+	assert.Error(t, err, "a hostname belongs to one tenant")
+
+	// down: the tables go, with their rows; the extension stays
+	migrateTo(t, migrationConnString, versionBefore)
+	require.False(t, hasTable("tenants"))
+	require.False(t, hasTable("tenant_hostnames"))
+	assert.True(t, hasLtree())
+
+	// up again, with the extension already installed
+	migrateUp(t, migrationConnString)
+	require.True(t, hasTable("tenants"))
+	require.True(t, hasTable("tenant_hostnames"))
+	insertTenants()
+
+	// the hostnames of a tenant go with the tenant
+	_, err = pool.Exec(ctx, `DELETE FROM tenants WHERE slug = 'partner'`)
+	require.NoError(t, err)
+	var hostnames int
+	require.NoError(t, pool.QueryRow(ctx, `SELECT COUNT(*) FROM tenant_hostnames`).Scan(&hostnames))
+	assert.Equal(t, 0, hostnames)
+}

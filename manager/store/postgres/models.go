@@ -358,6 +358,27 @@ type ResetRequest struct {
 	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
 
+type Tenant struct {
+	OrgID               pgtype.UUID        `db:"org_id" json:"org_id"`
+	ParentID            pgtype.UUID        `db:"parent_id" json:"parent_id"`
+	Path                string             `db:"path" json:"path"`
+	Slug                string             `db:"slug" json:"slug"`
+	OrgKey              string             `db:"org_key" json:"org_key"`
+	Parties             []byte             `db:"parties" json:"parties"`
+	EntitlementsVersion int64              `db:"entitlements_version" json:"entitlements_version"`
+	Entitlements        []byte             `db:"entitlements" json:"entitlements"`
+	ConfigVersion       int64              `db:"config_version" json:"config_version"`
+	Config              []byte             `db:"config" json:"config"`
+	Status              string             `db:"status" json:"status"`
+	CreatedAt           pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
+type TenantHostname struct {
+	Hostname string      `db:"hostname" json:"hostname"`
+	OrgID    pgtype.UUID `db:"org_id" json:"org_id"`
+}
+
 type Token struct {
 	ID           int64              `db:"id" json:"id"`
 	CountryCode  string             `db:"country_code" json:"country_code"`

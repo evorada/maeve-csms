@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
@@ -215,4 +216,22 @@ func fromPgTimestamptz(ts pgtype.Timestamptz) time.Time {
 		return time.Time{}
 	}
 	return ts.Time.UTC()
+}
+
+// pgUUID converts the text form of a UUID to pgtype.UUID
+func pgUUID(s string) (pgtype.UUID, error) {
+	u, err := uuid.Parse(s)
+	if err != nil {
+		return pgtype.UUID{}, err
+	}
+	return pgtype.UUID{Bytes: u, Valid: true}, nil
+}
+
+// uuidString converts pgtype.UUID to the canonical text form of the UUID (returns an
+// empty string for NULL)
+func uuidString(u pgtype.UUID) string {
+	if !u.Valid {
+		return ""
+	}
+	return uuid.UUID(u.Bytes).String()
 }

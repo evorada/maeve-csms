@@ -69,6 +69,10 @@ type Store struct {
 	chargeStationEventNextId         int
 	deviceReports                    map[string][]*store.DeviceReport
 	deviceReportNextId               int
+	tenants                          map[string]*store.Tenant // by org id
+	tenantsByHost                    map[string]string        // hostname to org id
+	tenantsByOrgKey                  map[string]string        // org key to org id
+	tenantsBySlug                    map[string]string        // slug to org id
 }
 
 func NewStore(clock clock.PassiveClock) *Store {
@@ -115,6 +119,10 @@ func NewStore(clock clock.PassiveClock) *Store {
 		chargeStationEventNextId:         1,
 		deviceReports:                    make(map[string][]*store.DeviceReport),
 		deviceReportNextId:               1,
+		tenants:                          make(map[string]*store.Tenant),
+		tenantsByHost:                    make(map[string]string),
+		tenantsByOrgKey:                  make(map[string]string),
+		tenantsBySlug:                    make(map[string]string),
 	}
 }
 
