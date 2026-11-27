@@ -75,4 +75,35 @@ in [config/mosquitto](../config/mosquitto)), start the gateway with `--transport
 instead of `--nats-url`, and set `[transport] type = "mqtt"` and `mqtt.urls = ["mqtt://mqtt:1883"]` in the
 manager configuration.
 
+## Connection events, keepalive and shutdown
+
+For every station websocket the gateway publishes connection events, so that the manager knows which stations are
+connected:
+* NATS: `<prefix>.conn.<org>.<station>` (tokens as above)
+* MQTT: `<prefix>/conn/<station key>`, on the connection of the station
+
+Each event is a JSON object: `type` (`connected`, `alive` or `disconnected`), `station_key`, `ocpp_version` (the
+websocket subprotocol), `connection_id` (random 128-bit hex, one per websocket), `gateway_id`, `at` (gateway clock,
+UTC), `remote_addr` (the first `X-Forwarded-For` entry with `--trust-proxy`), and on `disconnected` the websocket
+`close_code` (-1 when the socket ended without one) and the `reason`: `closed`, `ping_timeout` or `gateway_shutdown`.
+The events are best effort: when one cannot be published the gateway logs it, and the websocket and its OCPP messages
+carry on.
+
+The gateway pings every station every `--ws-ping-interval` and closes the websocket (1008) when the pong does not
+arrive within `--ws-pong-timeout`. While the gateway itself has not read the station's messages yet (the CSMS has not
+answered an earlier call), it waits for the pong again instead. An `alive` event is published every
+`--conn-alive-interval` while the station answers.
+
+On SIGINT or SIGTERM the gateway stops accepting connections, closes every station websocket with 1001 ("gateway
+shutdown"), waits up to `--shutdown-timeout` for the `disconnected` events, then closes the transport. On Kubernetes
+the pod's `terminationGracePeriodSeconds` must be longer than `--shutdown-timeout` (e.g. 30 s against 10 s).
+
+| Flag                    | Default   | Description                                                               |
+|-------------------------|-----------|---------------------------------------------------------------------------|
+| `--gateway-id`          | host name | Id of the gateway in the events (the pod name on Kubernetes)              |
+| `--ws-ping-interval`    | `30s`     | How often each station is pinged, `0` sends no pings                      |
+| `--ws-pong-timeout`     | `10s`     | How long the gateway waits for a pong before it closes the websocket      |
+| `--conn-alive-interval` | `2m`      | How often an `alive` event is published per websocket, `0` publishes none |
+| `--shutdown-timeout`    | `10s`     | How long a shutdown waits for the websockets to close                     |
+
 The authentication details for the charge station are read via the [manager](manager.md) API.

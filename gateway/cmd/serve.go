@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -43,8 +45,46 @@ type transportSettings struct {
 	natsSubjectPrefix string
 }
 
+// socketSettings are the flags of the keepalive and the connection events of the
+// station sockets, and of the shutdown.
+type socketSettings struct {
+	gatewayId       string
+	pingInterval    time.Duration
+	pongTimeout     time.Duration
+	aliveInterval   time.Duration
+	shutdownTimeout time.Duration
+}
+
+// validate rejects negative durations, and a ping without a pong timeout.
+func (s socketSettings) validate() error {
+	for flag, d := range map[string]time.Duration{
+		"--ws-ping-interval":    s.pingInterval,
+		"--ws-pong-timeout":     s.pongTimeout,
+		"--conn-alive-interval": s.aliveInterval,
+		"--shutdown-timeout":    s.shutdownTimeout,
+	} {
+		if d < 0 {
+			return fmt.Errorf("%s must not be negative", flag)
+		}
+	}
+	if s.pingInterval > 0 && s.pongTimeout == 0 {
+		return fmt.Errorf("--ws-pong-timeout must be positive while --ws-ping-interval is")
+	}
+	return nil
+}
+
+// options are the options of the websocket handler for the settings.
+func (s socketSettings) options() []server.WebsocketOpt {
+	return []server.WebsocketOpt{
+		server.WithGatewayId(s.gatewayId),
+		server.WithPing(s.pingInterval, s.pongTimeout),
+		server.WithAliveInterval(s.aliveInterval),
+	}
+}
+
 var (
 	transportFlags           transportSettings
+	socketFlags              socketSettings
 	wsAddr                   string
 	wssAddr                  string
 	statusAddr               string
@@ -157,6 +197,32 @@ func newTransport(settings transportSettings, tracer oteltrace.Tracer) (transpor
 	}
 }
 
+// serveUntilDone waits until a server fails or ctx is done (SIGINT or SIGTERM). Then it
+// stops accepting connections, closes the station sockets and waits for their
+// disconnected events, all within shutdownTimeout. The caller closes the transport
+// afterwards.
+func serveUntilDone(ctx context.Context, errCh <-chan error, shutdownSockets func(context.Context) error, shutdownTimeout time.Duration, wsServers ...*server.Server) error {
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+	}
+
+	slog.Info("shutting down: closing the station sockets", "timeout", shutdownTimeout)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	for _, srv := range wsServers {
+		if err := srv.Stop(shutdownCtx); err != nil {
+			slog.Warn("stopping the websocket server", "error", err)
+		}
+	}
+	if err := shutdownSockets(shutdownCtx); err != nil {
+		slog.Warn("closing the station sockets", "error", err)
+	}
+	return nil
+}
+
 // serveCmd represents the serve command
 var serveCmd = &cobra.Command{
 	Use:   "serve",
@@ -182,6 +248,12 @@ var serveCmd = &cobra.Command{
 		if registryCacheTTL < 0 || registryNegativeCacheTTL < 0 {
 			return fmt.Errorf("the registry cache TTLs must not be negative")
 		}
+		if err := socketFlags.validate(); err != nil {
+			return err
+		}
+
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
 
 		csmsTransport, err := newTransport(transportFlags, tracer)
 		if err != nil {
@@ -202,14 +274,14 @@ var serveCmd = &cobra.Command{
 			NegativeTTL: registryNegativeCacheTTL,
 		}
 		statusServer := server.New("status", statusAddr, nil, server.NewStatusHandler())
-		websocketHandler := server.NewWebsocketHandler(
+		websocketHandler, shutdownSockets := server.NewWebsocketHandlerWithShutdown(append(socketFlags.options(),
 			server.WithTransport(csmsTransport),
 			server.WithDeviceRegistry(deviceRegistry),
 			server.WithOrgNames(orgNames),
 			server.WithTrustProxyHeaders(trustProxyHeaders),
-			server.WithOtelTracer(tracer))
+			server.WithOtelTracer(tracer))...)
 		wsServer := server.New("ws", wsAddr, nil, websocketHandler)
-		var wssServer *server.Server
+		wsServers := []*server.Server{wsServer}
 
 		if wssAddr != "" {
 			if tlsServerCert == "" {
@@ -251,18 +323,17 @@ var serveCmd = &cobra.Command{
 				MinVersion:   tls.VersionTLS12,
 			}
 
-			wssServer = server.New("wss", wssAddr, tlsConfig, websocketHandler)
+			wsServers = append(wsServers, server.New("wss", wssAddr, tlsConfig, websocketHandler))
 		}
 
-		errCh := make(chan error, 1)
-		wsServer.Start(errCh)
-		if wssServer != nil {
-			wssServer.Start(errCh)
+		// room for an error of every server: none of them waits to report one
+		errCh := make(chan error, len(wsServers)+1)
+		for _, srv := range wsServers {
+			srv.Start(errCh)
 		}
 		statusServer.Start(errCh)
 
-		err = <-errCh
-		return err
+		return serveUntilDone(ctx, errCh, shutdownSockets, socketFlags.shutdownTimeout, wsServers...)
 	},
 }
 
@@ -312,4 +383,14 @@ func init() {
 		"The address of the open telemetry collector that will receive traces, e.g. localhost:4317")
 	serveCmd.Flags().StringVar(&logFormat, "log-format", "text",
 		"The format of the logs, one of [text, json]")
+	serveCmd.Flags().StringVar(&socketFlags.gatewayId, "gateway-id", server.DefaultGatewayId(),
+		"The id of this gateway in the connection events of the station sockets (default: the host name, the pod name on Kubernetes)")
+	serveCmd.Flags().DurationVar(&socketFlags.pingInterval, "ws-ping-interval", server.DefaultPingInterval,
+		"How often the gateway pings each charge station over its websocket, 0 to send no pings")
+	serveCmd.Flags().DurationVar(&socketFlags.pongTimeout, "ws-pong-timeout", server.DefaultPongTimeout,
+		"How long the gateway waits for the pong of a charge station before it closes the websocket")
+	serveCmd.Flags().DurationVar(&socketFlags.aliveInterval, "conn-alive-interval", server.DefaultAliveInterval,
+		"How often the gateway publishes an alive event for each open station websocket, 0 to publish none; must be well below the manager's connectivity.stale_after")
+	serveCmd.Flags().DurationVar(&socketFlags.shutdownTimeout, "shutdown-timeout", 10*time.Second,
+		"How long the gateway waits on SIGINT or SIGTERM for the station websockets to close and their disconnected events to be published")
 }

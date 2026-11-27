@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -39,6 +40,18 @@ type WebsocketHandler struct {
 	pipeOptions       []pipe.Opt
 	trustProxyHeaders bool
 	tracer            trace.Tracer
+	gatewayId         string
+	pingInterval      time.Duration
+	pongTimeout       time.Duration
+	aliveInterval     time.Duration
+
+	// mu guards shuttingDown, and handlers.Add against the wait of a shutdown
+	mu           sync.Mutex
+	shuttingDown bool
+	// handlers counts the connections that ServeHTTP serves
+	handlers sync.WaitGroup
+	// sockets holds the open station sockets by connection id
+	sockets sync.Map
 }
 
 type WebsocketOpt func(handler *WebsocketHandler)
@@ -129,7 +142,20 @@ func WithOtelTracer(tracer trace.Tracer) WebsocketOpt {
 }
 
 func NewWebsocketHandler(opts ...WebsocketOpt) http.Handler {
-	s := new(WebsocketHandler)
+	handler, _ := NewWebsocketHandlerWithShutdown(opts...)
+	return handler
+}
+
+// NewWebsocketHandlerWithShutdown is NewWebsocketHandler with the function that shuts
+// the handler down: it refuses new connections, closes every station socket with 1001
+// (going away), and waits until their handlers have published the disconnected events
+// and returned, at most until its ctx is done.
+func NewWebsocketHandlerWithShutdown(opts ...WebsocketOpt) (http.Handler, func(ctx context.Context) error) {
+	s := &WebsocketHandler{
+		pingInterval:  DefaultPingInterval,
+		pongTimeout:   DefaultPongTimeout,
+		aliveInterval: DefaultAliveInterval,
+	}
 
 	for _, opt := range opts {
 		opt(s)
@@ -144,7 +170,7 @@ func NewWebsocketHandler(opts ...WebsocketOpt) http.Handler {
 		r.Use(TLSOffload(s.deviceRegistry))
 	}
 	r.Handle("/ws/{id}", s)
-	return r
+	return r, s.shutdown
 }
 
 func ensureDefaults(handler *WebsocketHandler) {
@@ -159,6 +185,14 @@ func ensureDefaults(handler *WebsocketHandler) {
 	if handler.transport == nil {
 		handler.transport = mqtt.New(append([]mqtt.Opt{mqtt.WithTracer(handler.tracer)}, handler.mqttOpts...)...)
 	}
+
+	if handler.gatewayId == "" {
+		handler.gatewayId = DefaultGatewayId()
+	}
+
+	if handler.pongTimeout <= 0 {
+		handler.pongTimeout = DefaultPongTimeout
+	}
 }
 
 func (s *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -166,6 +200,14 @@ func (s *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	slog.Info("processing connection", "uri", r.RequestURI)
 
 	span := trace.SpanFromContext(r.Context())
+
+	if !s.startHandling() {
+		span.SetStatus(codes.Error, "gateway shutting down")
+		span.SetAttributes(semconv.HTTPStatusCode(http.StatusServiceUnavailable))
+		http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+		return
+	}
+	defer s.handlers.Done()
 
 	clientId := chi.URLParam(r, "id")
 	if err := validateStationId(clientId); err != nil {
@@ -273,7 +315,21 @@ func (s *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		protocol = "ocpp2.0.1"
 	}
 
-	span.SetAttributes(attribute.String("ocpp.protocol", protocol))
+	sock := &stationSocket{
+		conn:       wsConn,
+		opened:     time.Now(),
+		id:         newConnectionId(),
+		gatewayId:  s.gatewayId,
+		stationKey: stationKey,
+		protocol:   protocol,
+		remoteAddr: remoteAddr(r, s.trustProxyHeaders),
+	}
+	s.track(sock)
+	defer s.untrack(sock)
+
+	span.SetAttributes(
+		attribute.String("ocpp.protocol", protocol),
+		attribute.String("gateway.connection_id", sock.id))
 
 	p := pipe.NewPipe(s.pipeOptions...)
 	p.Start()
@@ -312,6 +368,14 @@ func (s *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	// the connection events of the socket, the pings and the alive events
+	watchCtx, stopWatching := context.WithCancel(ctx)
+	watching := make(chan struct{})
+	go func() {
+		defer close(watching)
+		s.watch(watchCtx, sock, session)
+	}()
+
 	// we've finished connecting... complete this span so we get to see the details in the trace
 	span.End()
 
@@ -322,7 +386,14 @@ func (s *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	goWriteToChargeStation(ctx, s.tracer, p.ChargeStationTx, wsConn, protocol, stationKey)
 
 	// read from the websocket and send to the CS Rx channel (CS Tx used for error)
-	readFromChargeStation(ctx, s.tracer, wsConn, p.ChargeStationRx, p.ChargeStationTx, protocol, stationKey)
+	readErr := readFromChargeStation(ctx, s.tracer, sock, p.ChargeStationRx, p.ChargeStationTx, protocol, stationKey)
+
+	// The socket has closed. The disconnected event follows the other events of the
+	// socket: the watch returns within the bounds of an event publication or a close
+	// handshake.
+	stopWatching()
+	<-watching
+	publish(session, sock.disconnectedEvent(readErr))
 }
 
 func getScheme(r *http.Request) string {
@@ -458,22 +529,24 @@ func write(ctx context.Context, tracer trace.Tracer, wsConn *websocket.Conn, pro
 	return wsConn.Write(newCtx, websocket.MessageText, data)
 }
 
-func readFromChargeStation(ctx context.Context, tracer trace.Tracer, wsConn *websocket.Conn, csRx, csTx chan *pipe.GatewayMessage, protocol, stationKey string) {
+// readFromChargeStation reads the messages of the station until the socket closes and
+// returns the error that ended the loop (nil when a read timed out).
+func readFromChargeStation(ctx context.Context, tracer trace.Tracer, sock *stationSocket, csRx, csTx chan *pipe.GatewayMessage, protocol, stationKey string) error {
 	for {
-		msg, err := read(ctx, tracer, wsConn, protocol, stationKey)
+		msg, err := read(ctx, tracer, sock.conn, protocol, stationKey)
 		if err != nil {
 			if msg != nil {
 				slog.Warn("sending error message to client", "err", err)
-				csTx <- msg
+				sock.toPipe(csTx, msg)
 				continue
 			}
 			// connection closed
-			break
+			return err
 		} else if msg != nil {
-			csRx <- msg
+			sock.toPipe(csRx, msg)
 		} else {
 			// deadline exceeded
-			break
+			return nil
 		}
 	}
 }

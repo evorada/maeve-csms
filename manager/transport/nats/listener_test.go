@@ -4,6 +4,7 @@ package nats_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"sync"
@@ -390,4 +391,216 @@ func TestListenerConnectFailsOnAClosedConnection(t *testing.T) {
 
 	_, err := natstransport.NewListener(conn).Connect(context.Background(), transport.OcppVersion16, nil, newRecorder().handler())
 	assert.ErrorIs(t, err, nats.ErrConnectionClosed)
+}
+
+// eventRecorder is a transport.ConnectionEventHandler that records the events it
+// handles.
+type eventRecorder struct {
+	mu  sync.Mutex
+	got []*transport.ConnectionEvent
+	ch  chan *transport.ConnectionEvent
+}
+
+func newEventRecorder() *eventRecorder {
+	return &eventRecorder{ch: make(chan *transport.ConnectionEvent, 1000)}
+}
+
+func (r *eventRecorder) HandleConnectionEvent(_ context.Context, ev *transport.ConnectionEvent) {
+	r.mu.Lock()
+	r.got = append(r.got, ev)
+	r.mu.Unlock()
+	r.ch <- ev
+}
+
+func (r *eventRecorder) count() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.got)
+}
+
+func (r *eventRecorder) next(t *testing.T) *transport.ConnectionEvent {
+	t.Helper()
+	select {
+	case ev := <-r.ch:
+		return ev
+	case <-time.After(waitTimeout):
+		t.Fatal("timeout waiting for a connection event to be handled")
+		return nil
+	}
+}
+
+// listenEvents listens for connection events and disconnects at the end of the test.
+func listenEvents(t *testing.T, conn *nats.Conn, handler transport.ConnectionEventHandler, opts ...natstransport.Opt[natstransport.Listener]) transport.Connection {
+	t.Helper()
+	c, err := natstransport.NewListener(conn, opts...).ListenConnectionEvents(context.Background(), handler)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, c.Disconnect(context.Background()))
+	})
+	return c
+}
+
+// publishEvent sends a connection event as the gateway does.
+func publishEvent(t *testing.T, conn *nats.Conn, subject string, ev transport.ConnectionEvent) {
+	t.Helper()
+	data, err := json.Marshal(ev)
+	require.NoError(t, err)
+	require.NoError(t, conn.Publish(subject, data))
+}
+
+// The JSON of the gateway, as gateway/transport/nats publishes it.
+const gatewayConnectionEvent = `{"type":"disconnected","station_key":"k7f2.CP.001","ocpp_version":"ocpp1.6",
+	"connection_id":"0123456789abcdef0123456789abcdef","gateway_id":"gw-1","at":"2026-11-27T12:00:00.123456789Z",
+	"remote_addr":"192.0.2.1:4711","close_code":1000,"reason":"closed"}`
+
+func TestListenConnectionEventsDecodesTheEventsOfTheGateway(t *testing.T) {
+	_, url := natstest.RunServer(t, false)
+	conn := connect(t, url)
+	rec := newEventRecorder()
+	listenEvents(t, conn, rec)
+
+	require.NoError(t, conn.Publish("ocpp.conn.k7f2.CP%2E001", []byte(gatewayConnectionEvent)))
+	assert.Equal(t, &transport.ConnectionEvent{
+		Type:         transport.ConnectionEventDisconnected,
+		StationKey:   "k7f2.CP.001",
+		OcppVersion:  "ocpp1.6",
+		ConnectionId: "0123456789abcdef0123456789abcdef",
+		GatewayId:    "gw-1",
+		At:           time.Date(2026, 11, 27, 12, 0, 0, 123456789, time.UTC),
+		RemoteAddr:   "192.0.2.1:4711",
+		CloseCode:    1000,
+		Reason:       transport.DisconnectReasonClosed,
+	}, rec.next(t))
+
+	// the handler gets the event of every station key, in both tenancy modes
+	want := map[string]bool{}
+	for _, v := range stationKeyVectors {
+		subject, err := natstransport.ConnSubject("ocpp", v.key)
+		require.NoError(t, err)
+		assert.Equal(t, "ocpp.conn."+v.orgToken+"."+v.stationToken, subject)
+		publishEvent(t, conn, subject, transport.ConnectionEvent{Type: transport.ConnectionEventConnected, StationKey: v.key})
+		want[v.key] = true
+	}
+	got := map[string]bool{}
+	for range stationKeyVectors {
+		got[rec.next(t).StationKey] = true
+	}
+	assert.Equal(t, want, got)
+}
+
+func TestListenConnectionEventsUsesTheSubjectPrefix(t *testing.T) {
+	_, url := natstest.RunServer(t, false)
+	conn := connect(t, url)
+	rec := newEventRecorder()
+	listenEvents(t, conn, rec, natstransport.WithSubjectPrefix[natstransport.Listener]("csms"))
+
+	publishEvent(t, conn, "ocpp.conn.k7f2.CP001", transport.ConnectionEvent{Type: "connected", StationKey: "k7f2.CP001", ConnectionId: "other prefix"})
+	publishEvent(t, conn, "csms.conn.k7f2.CP001", transport.ConnectionEvent{Type: "connected", StationKey: "k7f2.CP001", ConnectionId: "prefix"})
+	assert.Equal(t, "prefix", rec.next(t).ConnectionId)
+	require.NoError(t, conn.Flush())
+	time.Sleep(50 * time.Millisecond)
+	assert.Equal(t, 1, rec.count())
+}
+
+// An event whose station key is not the one of its subject, which a gateway that may
+// only publish for its own stations could otherwise use to report on other stations,
+// is dropped, as are events that cannot be decoded.
+func TestListenConnectionEventsDropsMismatchesAndMalformedEvents(t *testing.T) {
+	logs := captureLogs(t)
+	_, url := natstest.RunServer(t, false)
+	conn := connect(t, url)
+	rec := newEventRecorder()
+	listenEvents(t, conn, rec)
+
+	publishEvent(t, conn, "ocpp.conn.k7f2.CP001", transport.ConnectionEvent{Type: "connected", StationKey: "k7f2.CP002"})
+	publishEvent(t, conn, "ocpp.conn.k7f2.CP001", transport.ConnectionEvent{Type: "connected", StationKey: "CP001"})
+	require.NoError(t, conn.Publish("ocpp.conn.k7f2.CP001", []byte("not json")))
+	// tokens that the gateway would not produce
+	publishEvent(t, conn, "ocpp.conn.k7f2.CP%2e001", transport.ConnectionEvent{Type: "connected", StationKey: "k7f2.CP.001"})
+	publishEvent(t, conn, "ocpp.conn._.k7f2%2ECP001", transport.ConnectionEvent{Type: "connected", StationKey: "k7f2.CP001"})
+	publishEvent(t, conn, "ocpp.conn.k7f2.CP001", transport.ConnectionEvent{Type: "connected", StationKey: "k7f2.CP001", ConnectionId: "good"})
+
+	assert.Equal(t, "good", rec.next(t).ConnectionId)
+	require.NoError(t, conn.Flush())
+	time.Sleep(50 * time.Millisecond)
+	assert.Equal(t, 1, rec.count())
+	assert.Contains(t, logs.String(), "station key is not the one of its subject")
+	assert.Contains(t, logs.String(), "cannot be unmarshaled")
+	assert.Contains(t, logs.String(), "unexpected subject")
+}
+
+// The manager replicas share the events: each is handled once, and the events of one
+// station keep their order on the replica that handles them.
+func TestListenConnectionEventsInTheQueueGroup(t *testing.T) {
+	_, url := natstest.RunServer(t, false)
+	publisher := connect(t, url)
+
+	recorders := []*eventRecorder{newEventRecorder(), newEventRecorder()}
+	for _, rec := range recorders {
+		listenEvents(t, connect(t, url), rec, natstransport.WithWorkers(4))
+	}
+	// an OCPP listener in the same queue group does not take the events
+	ocpp := newRecorder()
+	listen(t, connect(t, url), transport.OcppVersion16, nil, ocpp.handler())
+
+	const events = 100
+	for i := 0; i < events; i++ {
+		key := fmt.Sprintf("k7f2.CP%03d", i%10)
+		subject, err := natstransport.ConnSubject("ocpp", key)
+		require.NoError(t, err)
+		publishEvent(t, publisher, subject, transport.ConnectionEvent{Type: "alive", StationKey: key, ConnectionId: strconv.Itoa(i)})
+	}
+	require.NoError(t, publisher.Flush())
+
+	require.Eventually(t, func() bool {
+		return recorders[0].count()+recorders[1].count() >= events
+	}, waitTimeout, 10*time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
+
+	seen := map[string]int{}
+	for _, rec := range recorders {
+		rec.mu.Lock()
+		last := map[string]int{}
+		for _, ev := range rec.got {
+			seen[ev.ConnectionId]++
+			n, err := strconv.Atoi(ev.ConnectionId)
+			require.NoError(t, err)
+			if previous, ok := last[ev.StationKey]; ok {
+				assert.Greater(t, n, previous, "events of %s out of order", ev.StationKey)
+			}
+			last[ev.StationKey] = n
+		}
+		rec.mu.Unlock()
+	}
+	assert.Len(t, seen, events)
+	for id, n := range seen {
+		assert.Equal(t, 1, n, "event %s handled %d times", id, n)
+	}
+	assert.Zero(t, ocpp.count())
+}
+
+func TestListenConnectionEventsStopsAfterDisconnect(t *testing.T) {
+	_, url := natstest.RunServer(t, false)
+	conn := connect(t, url)
+	rec := newEventRecorder()
+	c, err := natstransport.NewListener(conn).ListenConnectionEvents(context.Background(), rec)
+	require.NoError(t, err)
+
+	publishEvent(t, conn, "ocpp.conn.k7f2.CP001", transport.ConnectionEvent{Type: "connected", StationKey: "k7f2.CP001", ConnectionId: "before"})
+	assert.Equal(t, "before", rec.next(t).ConnectionId)
+
+	require.NoError(t, c.Disconnect(context.Background()))
+	publishEvent(t, conn, "ocpp.conn.k7f2.CP001", transport.ConnectionEvent{Type: "alive", StationKey: "k7f2.CP001", ConnectionId: "after"})
+	require.NoError(t, conn.Flush())
+	time.Sleep(100 * time.Millisecond)
+	assert.Equal(t, 1, rec.count())
+	assert.NoError(t, c.Disconnect(context.Background()))
+}
+
+func TestListenConnectionEventsFailsOnAClosedConnection(t *testing.T) {
+	_, url := natstest.RunServer(t, false)
+	conn := connect(t, url)
+	conn.Close()
+	_, err := natstransport.NewListener(conn).ListenConnectionEvents(context.Background(), newEventRecorder())
+	assert.Error(t, err)
 }

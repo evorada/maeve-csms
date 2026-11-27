@@ -28,9 +28,16 @@ const (
 	versionToken201 = "ocpp201"
 )
 
+// ConnToken is the second token of the subjects of the connection events.
+const ConnToken = "conn"
+
 // stationSubjectTokens is the number of tokens of a station subject:
 // <prefix>.<direction>.<version>.<org>.<station>.
 const stationSubjectTokens = 5
+
+// connSubjectTokens is the number of tokens of a connection event subject:
+// <prefix>.conn.<org>.<station>.
+const connSubjectTokens = 4
 
 // VersionToken maps transport.OcppVersion16 → "ocpp16" and OcppVersion201 →
 // "ocpp201". The OCPP versions contain dots, so they cannot be subject tokens.
@@ -129,6 +136,48 @@ func InWildcard(prefix string, v transport.OcppVersion) (string, error) {
 		return "", err
 	}
 	return strings.Join([]string{prefix, DirectionIn, ver, "*", "*"}, "."), nil
+}
+
+// ConnSubject is the subject of the connection events of the charge station with the
+// key: <prefix>.conn.<org>.<station>.
+func ConnSubject(prefix, key string) (string, error) {
+	if err := ValidatePrefix(prefix); err != nil {
+		return "", err
+	}
+	if key == "" {
+		return "", errors.New("empty station key")
+	}
+	org, station := EncodeStationKey(key)
+	return strings.Join([]string{prefix, ConnToken, org, station}, "."), nil
+}
+
+// ConnWildcard matches the connection events of all charge stations:
+// <prefix>.conn.*.*.
+func ConnWildcard(prefix string) (string, error) {
+	if err := ValidatePrefix(prefix); err != nil {
+		return "", err
+	}
+	return strings.Join([]string{prefix, ConnToken, "*", "*"}, "."), nil
+}
+
+// ParseConnSubject returns the station key of a subject made by ConnSubject. The
+// prefix is not checked against a configured one.
+func ParseConnSubject(subject string) (key string, err error) {
+	tokens := strings.Split(subject, ".")
+	if len(tokens) != connSubjectTokens {
+		return "", fmt.Errorf("subject %q has %d tokens, want %d", subject, len(tokens), connSubjectTokens)
+	}
+	if err := ValidatePrefix(tokens[0]); err != nil {
+		return "", fmt.Errorf("subject %q: %w", subject, err)
+	}
+	if tokens[1] != ConnToken {
+		return "", fmt.Errorf("subject %q is not a %s subject", subject, ConnToken)
+	}
+	key, err = DecodeStationKey(tokens[2], tokens[3])
+	if err != nil {
+		return "", fmt.Errorf("subject %q: %w", subject, err)
+	}
+	return key, nil
 }
 
 // ParseStationSubject splits a subject made by InSubject or OutSubject into its

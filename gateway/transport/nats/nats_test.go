@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/gateway/ocpp"
 	"github.com/thoughtworks/maeve-csms/gateway/pipe"
+	"github.com/thoughtworks/maeve-csms/gateway/transport"
 	natstransport "github.com/thoughtworks/maeve-csms/gateway/transport/nats"
 	"github.com/thoughtworks/maeve-csms/gateway/transport/nats/natstest"
 	"go.opentelemetry.io/otel"
@@ -188,6 +189,75 @@ func TestStationKeysAreEncodedInBothDirections(t *testing.T) {
 			})
 		}
 	}
+}
+
+// The connection events of a station are published on its conn subject, for every
+// station key in both tenancy modes.
+func TestSendConnectionEventPublishesOnTheConnSubject(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, csms := connectPair(t)
+	received := subscribe(t, csms, "csms.conn.>")
+	tr := natstransport.New(conn, natstransport.WithSubjectPrefix("csms"))
+
+	at := time.Date(2026, 11, 27, 12, 0, 0, 123456789, time.UTC)
+	for _, v := range stationKeyVectors {
+		t.Run(v.key, func(t *testing.T) {
+			session, err := tr.Open(ctx, v.key, "ocpp1.6", func(msg *pipe.GatewayMessage) {
+				t.Errorf("unexpected message for the station: %+v", msg)
+			})
+			require.NoError(t, err)
+			defer func() {
+				assert.NoError(t, session.Close(ctx))
+			}()
+
+			require.NoError(t, session.SendConnectionEvent(ctx, &transport.ConnectionEvent{
+				Type:         transport.ConnectionEventDisconnected,
+				StationKey:   v.key,
+				OcppVersion:  "ocpp1.6",
+				ConnectionId: "0123456789abcdef0123456789abcdef",
+				GatewayId:    "gw-1",
+				At:           at,
+				RemoteAddr:   "192.0.2.1:4711",
+				CloseCode:    1000,
+				Reason:       transport.DisconnectReasonClosed,
+			}))
+
+			msg := await(ctx, t, received)
+			assert.Equal(t, "csms.conn."+v.orgToken+"."+v.stationToken, msg.Subject)
+			key, err := natstransport.ParseConnSubject(msg.Subject)
+			require.NoError(t, err)
+			assert.Equal(t, v.key, key)
+			want, err := json.Marshal(map[string]any{
+				"type":          "disconnected",
+				"station_key":   v.key,
+				"ocpp_version":  "ocpp1.6",
+				"connection_id": "0123456789abcdef0123456789abcdef",
+				"gateway_id":    "gw-1",
+				"at":            "2026-11-27T12:00:00.123456789Z",
+				"remote_addr":   "192.0.2.1:4711",
+				"close_code":    1000,
+				"reason":        "closed",
+			})
+			require.NoError(t, err)
+			assert.JSONEq(t, string(want), string(msg.Data))
+		})
+	}
+}
+
+func TestSendConnectionEventFailsOnAClosedConnection(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, _ := connectPair(t)
+	session, err := natstransport.New(conn).Open(ctx, "k7f2.CP001", "ocpp1.6", func(*pipe.GatewayMessage) {})
+	require.NoError(t, err)
+	conn.Close()
+
+	err = session.SendConnectionEvent(ctx, &transport.ConnectionEvent{Type: transport.ConnectionEventAlive, StationKey: "k7f2.CP001"})
+	assert.ErrorIs(t, err, nats.ErrConnectionClosed)
+	assert.NoError(t, session.Close(ctx))
 }
 
 func TestOpenFailsForAnUnknownProtocolOrAnEmptyKey(t *testing.T) {

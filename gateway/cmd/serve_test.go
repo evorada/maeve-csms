@@ -4,7 +4,10 @@ package cmd
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"net/http"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -14,12 +17,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/gateway/ocpp"
 	"github.com/thoughtworks/maeve-csms/gateway/pipe"
+	"github.com/thoughtworks/maeve-csms/gateway/registry"
 	"github.com/thoughtworks/maeve-csms/gateway/server"
 	"github.com/thoughtworks/maeve-csms/gateway/transport"
 	"github.com/thoughtworks/maeve-csms/gateway/transport/mqtt"
 	natstransport "github.com/thoughtworks/maeve-csms/gateway/transport/nats"
 	"github.com/thoughtworks/maeve-csms/gateway/transport/nats/natstest"
 	"go.opentelemetry.io/otel/trace"
+	"nhooyr.io/websocket"
 )
 
 func TestTransportFlagDefaults(t *testing.T) {
@@ -37,6 +42,156 @@ func TestTransportFlagDefaults(t *testing.T) {
 		if assert.NotNil(t, f, "flag --%s", flag) {
 			assert.Equal(t, want, f.DefValue, "default of --%s", flag)
 		}
+	}
+}
+
+func TestSocketFlagDefaults(t *testing.T) {
+	for flag, want := range map[string]string{
+		"gateway-id":          server.DefaultGatewayId(),
+		"ws-ping-interval":    "30s",
+		"ws-pong-timeout":     "10s",
+		"conn-alive-interval": "2m0s",
+		"shutdown-timeout":    "10s",
+	} {
+		f := serveCmd.Flags().Lookup(flag)
+		if assert.NotNil(t, f, "flag --%s", flag) {
+			assert.Equal(t, want, f.DefValue, "default of --%s", flag)
+		}
+	}
+	assert.NotEmpty(t, server.DefaultGatewayId())
+}
+
+func TestSocketSettingsValidation(t *testing.T) {
+	valid := socketSettings{pingInterval: 30 * time.Second, pongTimeout: 10 * time.Second, aliveInterval: 2 * time.Minute, shutdownTimeout: 10 * time.Second}
+	assert.NoError(t, valid.validate())
+	assert.NoError(t, socketSettings{}.validate(), "no pings, no alive events, no wait")
+
+	for name, change := range map[string]func(*socketSettings){
+		"negative ping interval":     func(s *socketSettings) { s.pingInterval = -time.Second },
+		"negative pong timeout":      func(s *socketSettings) { s.pongTimeout = -time.Second },
+		"no pong timeout with pings": func(s *socketSettings) { s.pongTimeout = 0 },
+		"negative alive interval":    func(s *socketSettings) { s.aliveInterval = -time.Second },
+		"negative shutdown timeout":  func(s *socketSettings) { s.shutdownTimeout = -time.Second },
+	} {
+		t.Run(name, func(t *testing.T) {
+			settings := valid
+			change(&settings)
+			assert.Error(t, settings.validate())
+		})
+	}
+}
+
+// On a signal the gateway stops accepting connections, closes the station sockets with
+// 1001 and publishes their disconnected events; then it returns, and the caller closes
+// the transport.
+func TestServeUntilDoneShutsDownTheSockets(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	_, url := natstest.RunServer(t)
+	tr, err := newTransport(transportSettings{
+		kind:              "nats",
+		natsUrls:          []string{url},
+		natsName:          "maeve-gateway",
+		natsSubjectPrefix: "ocpp",
+	}, noopTracer())
+	require.NoError(t, err)
+
+	csms, err := nats.Connect(url)
+	require.NoError(t, err)
+	defer csms.Close()
+	events := make(chan *nats.Msg, 16)
+	_, err = csms.ChanSubscribe("ocpp.conn.>", events)
+	require.NoError(t, err)
+	require.NoError(t, csms.Flush())
+
+	reg := registry.NewMockRegistry()
+	reg.Add("127.0.0.1", &registry.ChargeStation{
+		ClientId:             "CP001",
+		StationKey:           "k7f2.CP001",
+		OrgKey:               "k7f2",
+		SecurityProfile:      registry.UnsecuredTransportWithBasicAuth,
+		Base64SHA256Password: "XohImNooBHFR0OVvjcYpJ3NgPQ1qq73WKhHvch0VQtg=", // "password"
+	})
+	settings := socketSettings{gatewayId: "gw-1", pingInterval: 30 * time.Second, pongTimeout: 10 * time.Second}
+	handler, shutdownSockets := server.NewWebsocketHandlerWithShutdown(append(settings.options(),
+		server.WithTransport(tr),
+		server.WithDeviceRegistry(reg))...)
+	wsServer := server.New("ws", "127.0.0.1:0", nil, handler)
+	errCh := make(chan error, 1)
+	wsServer.Start(errCh)
+
+	signalled, signal := context.WithCancel(ctx)
+	defer signal()
+	done := make(chan error, 1)
+	go func() {
+		done <- serveUntilDone(signalled, errCh, shutdownSockets, 5*time.Second, wsServer)
+	}()
+
+	dial := func() (*websocket.Conn, *http.Response, error) {
+		header := http.Header{}
+		header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("CP001:password")))
+		return websocket.Dial(ctx, "ws://"+wsServer.Addr()+"/ws/CP001", &websocket.DialOptions{
+			Subprotocols: []string{"ocpp1.6"},
+			HTTPHeader:   header,
+		})
+	}
+	conn, _, err := dial()
+	require.NoError(t, err)
+	closed := make(chan error, 1)
+	go func() {
+		_, _, err := conn.Read(ctx)
+		closed <- err
+	}()
+	assert.Equal(t, transport.ConnectionEventConnected, awaitConnectionEvent(ctx, t, events).Type)
+
+	signal()
+	select {
+	case err := <-done:
+		assert.NoError(t, err)
+	case <-ctx.Done():
+		t.Fatal("timeout waiting for the shutdown")
+	}
+	select {
+	case err := <-closed:
+		assert.Equal(t, websocket.StatusGoingAway, websocket.CloseStatus(err), "read: %v", err)
+	case <-ctx.Done():
+		t.Fatal("timeout waiting for the websocket to close")
+	}
+
+	// the disconnected event is published before the transport closes
+	require.NoError(t, tr.Close())
+	ev := awaitConnectionEvent(ctx, t, events)
+	assert.Equal(t, transport.ConnectionEventDisconnected, ev.Type)
+	assert.Equal(t, transport.DisconnectReasonGatewayShutdown, ev.Reason)
+	assert.Equal(t, "gw-1", ev.GatewayId)
+
+	// the server no longer accepts connections
+	_, _, err = dial()
+	assert.Error(t, err)
+}
+
+func TestServeUntilDoneReturnsTheErrorOfAServer(t *testing.T) {
+	errCh := make(chan error, 1)
+	errCh <- errors.New("listen failed")
+	err := serveUntilDone(context.Background(), errCh, func(context.Context) error {
+		t.Error("the sockets are shut down after a server error")
+		return nil
+	}, time.Second)
+	assert.EqualError(t, err, "listen failed")
+}
+
+func awaitConnectionEvent(ctx context.Context, t *testing.T, events chan *nats.Msg) transport.ConnectionEvent {
+	t.Helper()
+	select {
+	case m := <-events:
+		var ev transport.ConnectionEvent
+		require.NoError(t, json.Unmarshal(m.Data, &ev))
+		assert.Equal(t, "ocpp.conn.k7f2.CP001", m.Subject)
+		return ev
+	case <-ctx.Done():
+		t.Fatal("timeout waiting for a connection event")
+		return transport.ConnectionEvent{}
 	}
 }
 

@@ -2,8 +2,9 @@
 
 // Package mqtt is the transport of the gateway over an MQTT 5 broker. Every station
 // socket has a connection of its own to the broker, with the station key as client id:
-// the station's messages are published to <prefix>/in/<protocol>/<station key> and the
-// messages of the CSMS arrive on <prefix>/out/<protocol>/<station key>.
+// the station's messages are published to <prefix>/in/<protocol>/<station key>, the
+// messages of the CSMS arrive on <prefix>/out/<protocol>/<station key> and the
+// connection events of the socket are published to <prefix>/conn/<station key>.
 package mqtt
 
 import (
@@ -241,6 +242,27 @@ func (s *session) Send(ctx context.Context, msg *pipe.GatewayMessage) error {
 		return fmt.Errorf("marshaling message for publication: %w", err)
 	}
 	return publish(ctx, s.tracer, s.conn, s.prefix, s.protocol, s.stationKey, msg.MessageId, data)
+}
+
+// SendConnectionEvent publishes the event on the connection event topic of the
+// station, on the connection of the session.
+func (s *session) SendConnectionEvent(ctx context.Context, ev *transport.ConnectionEvent) error {
+	data, err := json.Marshal(ev)
+	if err != nil {
+		return fmt.Errorf("marshaling connection event: %w", err)
+	}
+	topic := fmt.Sprintf("%s/conn/%s", s.prefix, s.stationKey)
+	_, err = s.conn.Publish(ctx, &paho.Publish{
+		Topic:   topic,
+		Payload: data,
+		Properties: &paho.PublishProperties{
+			ContentType: "application/json",
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("publishing to %s: %w", topic, err)
+	}
+	return nil
 }
 
 // Done is closed when subscribing to the out topic fails.

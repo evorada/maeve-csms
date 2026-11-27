@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/gateway/ocpp"
 	"github.com/thoughtworks/maeve-csms/gateway/pipe"
+	"github.com/thoughtworks/maeve-csms/gateway/transport"
 	"github.com/thoughtworks/maeve-csms/gateway/transport/mqtt"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
@@ -142,6 +143,42 @@ func TestSessionSendsOnTheInTopicOfTheStation(t *testing.T) {
 	assert.Equal(t, "cs/in/ocpp1.6/# publish", span.Name)
 	assert.Equal(t, trace.SpanKindProducer, span.SpanKind)
 	assert.Equal(t, stationSpan.SpanContext().SpanID(), span.Parent.SpanID())
+}
+
+func TestSessionSendsConnectionEventsOnTheConnTopic(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	hook := newRecorder()
+	_, addr := startBroker(t, new(auth.AllowHook), hook)
+
+	tr := mqtt.New(mqtt.WithBrokerURLs(addr), mqtt.WithTopicPrefix("cs"))
+	session, err := tr.Open(ctx, "aaaa.CP.001", "ocpp2.0.1", func(msg *pipe.GatewayMessage) {
+		t.Errorf("unexpected message for the station: %+v", msg)
+	})
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, session.Close(ctx))
+	}()
+	await(ctx, t, hook.subscribed)
+
+	require.NoError(t, session.SendConnectionEvent(ctx, &transport.ConnectionEvent{
+		Type:         transport.ConnectionEventConnected,
+		StationKey:   "aaaa.CP.001",
+		OcppVersion:  "ocpp2.0.1",
+		ConnectionId: "0123456789abcdef0123456789abcdef",
+		GatewayId:    "gw-1",
+		At:           time.Date(2026, 11, 27, 12, 0, 0, 0, time.UTC),
+		RemoteAddr:   "192.0.2.1:4711",
+	}))
+
+	published := await(ctx, t, hook.published)
+	assert.Equal(t, "aaaa.CP.001", published.clientId)
+	assert.Equal(t, "cs/conn/aaaa.CP.001", published.packet.TopicName)
+	assert.Equal(t, "application/json", published.packet.Properties.ContentType)
+	assert.JSONEq(t, `{"type":"connected","station_key":"aaaa.CP.001","ocpp_version":"ocpp2.0.1",
+		"connection_id":"0123456789abcdef0123456789abcdef","gateway_id":"gw-1","at":"2026-11-27T12:00:00Z",
+		"remote_addr":"192.0.2.1:4711"}`, string(published.packet.Payload))
 }
 
 func TestOpenFailsWhenTheBrokerIsNotReachedWithinTheConnectTimeout(t *testing.T) {

@@ -37,6 +37,8 @@ const (
 	subscribeTimeout = 5 * time.Second
 )
 
+var _ transport.ConnectionEventListener = (*Listener)(nil)
+
 // Listener is an implementation of transport.Listener that receives the messages of
 // charge stations from <prefix>.in.<ocpp16|ocpp201>.<org>.<station> with core NATS.
 //
@@ -81,13 +83,71 @@ func (l *Listener) Connect(ctx context.Context, ocppVersion transport.OcppVersio
 		return nil, err
 	}
 
-	c := &connection{
-		listener:    l,
+	var subject, queueGroup string
+	if chargeStationId == nil {
+		subject, err = InWildcard(l.prefix, ocppVersion)
+		queueGroup = l.queueGroup
+	} else {
+		subject, err = InSubject(l.prefix, ocppVersion, *chargeStationId)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	r := &messageReceiver{
+		tracer:      l.tracer,
 		ocppVersion: ocppVersion,
 		spanName:    fmt.Sprintf("%s.%s.%s receive", l.prefix, DirectionIn, ver),
+		consumerId:  queueGroup,
 		handler:     handler,
-		queues:      make([]chan delivery, l.workers),
-		abort:       make(chan struct{}),
+	}
+	return l.subscribe(ctx, subject, queueGroup, r.receive)
+}
+
+// ListenConnectionEvents subscribes to the connection events of all charge stations on
+// <prefix>.conn.*.*, in the queue group of the listener, and returns once the server
+// has registered the subscription. The events of one charge station are handled in the
+// order they arrive, by the worker of the station. An event that cannot be decoded, or
+// whose station key is not the one of its subject, is logged and dropped.
+func (l *Listener) ListenConnectionEvents(ctx context.Context, handler transport.ConnectionEventHandler) (transport.Connection, error) {
+	subject, err := ConnWildcard(l.prefix)
+	if err != nil {
+		return nil, err
+	}
+	return l.subscribe(ctx, subject, l.queueGroup, func(m *nats.Msg) (delivery, bool) {
+		stationKey, err := ParseConnSubject(m.Subject)
+		if err != nil {
+			slog.Warn("dropping connection event with an unexpected subject", "subject", m.Subject, "err", err)
+			return delivery{}, false
+		}
+		var ev transport.ConnectionEvent
+		if err := json.Unmarshal(m.Data, &ev); err != nil {
+			slog.Warn("dropping connection event that cannot be unmarshaled", "subject", m.Subject, "err", err)
+			return delivery{}, false
+		}
+		if ev.StationKey != stationKey {
+			slog.Warn("dropping connection event whose station key is not the one of its subject",
+				"subject", m.Subject, "stationKey", ev.StationKey)
+			return delivery{}, false
+		}
+		return delivery{
+			stationKey: stationKey,
+			handle: func() {
+				handler.HandleConnectionEvent(context.Background(), &ev)
+			},
+		}, true
+	})
+}
+
+// subscribe starts the workers of a new connection and subscribes to the subject, in
+// the queue group unless it is empty. parse turns each message into the delivery for
+// the worker of its charge station, or drops it. subscribe returns once the server has
+// registered the subscription.
+func (l *Listener) subscribe(ctx context.Context, subject, queueGroup string, parse func(m *nats.Msg) (delivery, bool)) (transport.Connection, error) {
+	c := &connection{
+		subject: subject,
+		queues:  make([]chan delivery, l.workers),
+		abort:   make(chan struct{}),
 	}
 	for i := range c.queues {
 		c.queues[i] = make(chan delivery, workerQueueSize)
@@ -95,26 +155,21 @@ func (l *Listener) Connect(ctx context.Context, ocppVersion transport.OcppVersio
 		go c.work(c.queues[i])
 	}
 
-	if chargeStationId == nil {
-		subject, err := InWildcard(l.prefix, ocppVersion)
-		if err != nil {
-			c.stop()
-			return nil, err
+	receive := func(m *nats.Msg) {
+		d, ok := parse(m)
+		if ok && !c.enqueue(d) && d.dropped != nil {
+			d.dropped()
 		}
-		c.subject, c.consumerId = subject, l.queueGroup
-		c.sub, err = l.conn.QueueSubscribe(subject, l.queueGroup, c.receive)
+	}
+	var err error
+	if queueGroup != "" {
+		c.sub, err = l.conn.QueueSubscribe(subject, queueGroup, receive)
 		if err != nil {
 			c.stop()
-			return nil, fmt.Errorf("subscribing to %s in queue group %s: %w", subject, l.queueGroup, err)
+			return nil, fmt.Errorf("subscribing to %s in queue group %s: %w", subject, queueGroup, err)
 		}
 	} else {
-		subject, err := InSubject(l.prefix, ocppVersion, *chargeStationId)
-		if err != nil {
-			c.stop()
-			return nil, err
-		}
-		c.subject = subject
-		c.sub, err = l.conn.Subscribe(subject, c.receive)
+		c.sub, err = l.conn.Subscribe(subject, receive)
 		if err != nil {
 			c.stop()
 			return nil, fmt.Errorf("subscribing to %s: %w", subject, err)
@@ -131,50 +186,29 @@ func (l *Listener) Connect(ctx context.Context, ocppVersion transport.OcppVersio
 	return c, nil
 }
 
-// delivery is a received message on its way to a worker.
-type delivery struct {
-	ctx        context.Context // carries the receive span
-	span       trace.Span
-	stationKey string
-	msg        *transport.Message
-}
-
-// connection is one subscription and its workers.
-type connection struct {
-	listener    *Listener
+// messageReceiver turns the OCPP messages of the charge stations into deliveries.
+type messageReceiver struct {
+	tracer      trace.Tracer
 	ocppVersion transport.OcppVersion
 	spanName    string
 	consumerId  string
 	handler     transport.MessageHandler
-	subject     string
-	sub         *nats.Subscription
-
-	// mu is held for reading while a message is put on a queue and for writing while
-	// the queues are closed, so that nothing is sent on a closed queue.
-	mu     sync.RWMutex
-	closed bool
-	queues []chan delivery
-	// abort is closed when the connection stops: a message that waits for room in a
-	// queue is then dropped instead of holding up the stop.
-	abort    chan struct{}
-	stopOnce sync.Once
-	workers  sync.WaitGroup
 }
 
-// receive is the callback of the subscription. NATS calls it for one message at a
+// receive parses a message of the subscription. NATS calls it for one message at a
 // time, in the order the messages arrive.
-func (c *connection) receive(m *nats.Msg) {
+func (r *messageReceiver) receive(m *nats.Msg) (delivery, bool) {
 	direction, version, stationKey, err := ParseStationSubject(m.Subject)
-	if err == nil && (direction != DirectionIn || version != c.ocppVersion) {
-		err = fmt.Errorf("subject %q is not an %s subject of %s", m.Subject, DirectionIn, c.ocppVersion)
+	if err == nil && (direction != DirectionIn || version != r.ocppVersion) {
+		err = fmt.Errorf("subject %q is not an %s subject of %s", m.Subject, DirectionIn, r.ocppVersion)
 	}
 	if err != nil {
 		slog.Warn("dropping message with an unexpected subject", "subject", m.Subject, "err", err)
-		return
+		return delivery{}, false
 	}
 
 	ctx := otel.GetTextMapPropagator().Extract(context.Background(), headerCarrier(m.Header))
-	ctx, span := c.listener.tracer.Start(ctx, c.spanName,
+	ctx, span := r.tracer.Start(ctx, r.spanName,
 		trace.WithSpanKind(trace.SpanKindConsumer),
 		trace.WithAttributes(
 			semconv.MessagingSystem("nats"),
@@ -182,8 +216,8 @@ func (c *connection) receive(m *nats.Msg) {
 			semconv.MessagingOperationKey.String("receive"),
 			attribute.String("csId", stationKey),
 		))
-	if c.consumerId != "" {
-		span.SetAttributes(semconv.MessagingConsumerID(c.consumerId))
+	if r.consumerId != "" {
+		span.SetAttributes(semconv.MessagingConsumerID(r.consumerId))
 	}
 
 	var msg transport.Message
@@ -193,10 +227,10 @@ func (c *connection) receive(m *nats.Msg) {
 		span.SetStatus(codes.Error, "unable to unmarshal message")
 		span.End()
 		slog.Warn("unable to unmarshal message", "subject", m.Subject, "err", err)
-		return
+		return delivery{}, false
 	}
 
-	versionNumber, _ := strings.CutPrefix(string(c.ocppVersion), "ocpp")
+	versionNumber, _ := strings.CutPrefix(string(r.ocppVersion), "ocpp")
 	span.SetAttributes(
 		attribute.String("ocpp.version", versionNumber),
 		attribute.String(fmt.Sprintf("%s.action", msg.MessageType), msg.Action),
@@ -208,10 +242,43 @@ func (c *connection) receive(m *nats.Msg) {
 			attribute.String(fmt.Sprintf("%s.description", msg.MessageType), msg.ErrorDescription))
 	}
 
-	if !c.enqueue(delivery{ctx: ctx, span: span, stationKey: stationKey, msg: &msg}) {
-		span.SetStatus(codes.Error, "listener disconnected")
-		span.End()
-	}
+	return delivery{
+		stationKey: stationKey,
+		handle: func() {
+			r.handler.Handle(ctx, stationKey, &msg)
+			span.End()
+		},
+		dropped: func() {
+			span.SetStatus(codes.Error, "listener disconnected")
+			span.End()
+		},
+	}, true
+}
+
+// delivery is a received message on its way to a worker.
+type delivery struct {
+	stationKey string
+	// handle runs on the worker of the charge station
+	handle func()
+	// dropped, if set, runs instead of handle when the connection has stopped
+	dropped func()
+}
+
+// connection is one subscription and its workers.
+type connection struct {
+	subject string
+	sub     *nats.Subscription
+
+	// mu is held for reading while a message is put on a queue and for writing while
+	// the queues are closed, so that nothing is sent on a closed queue.
+	mu     sync.RWMutex
+	closed bool
+	queues []chan delivery
+	// abort is closed when the connection stops: a message that waits for room in a
+	// queue is then dropped instead of holding up the stop.
+	abort    chan struct{}
+	stopOnce sync.Once
+	workers  sync.WaitGroup
 }
 
 // enqueue puts a message on the queue of the worker of its charge station. It returns
@@ -240,8 +307,7 @@ func workerIndex(stationKey string, workers int) int {
 func (c *connection) work(queue <-chan delivery) {
 	defer c.workers.Done()
 	for d := range queue {
-		c.handler.Handle(d.ctx, d.stationKey, d.msg)
-		d.span.End()
+		d.handle()
 	}
 }
 

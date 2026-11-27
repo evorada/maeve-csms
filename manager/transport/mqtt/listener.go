@@ -23,6 +23,8 @@ import (
 	"golang.org/x/exp/slog"
 )
 
+var _ transport.ConnectionEventListener = (*Listener)(nil)
+
 type Listener struct {
 	connectionDetails
 	mqttGroup string
@@ -175,6 +177,82 @@ func (l *Listener) Connect(ctx context.Context, ocppVersion transport.OcppVersio
 	case <-readyCh:
 		return conn, nil
 	}
+}
+
+// ListenConnectionEvents subscribes to the connection events of all charge stations on
+// $share/<group>/<prefix>/conn/#, so that the manager replicas share them, and hands
+// them to the handler one at a time, in the order they arrive. The station key is the
+// last level of the topic: an event that cannot be decoded, or that names another
+// station, is logged and dropped. It returns once the subscription is up, or with an
+// error after the connect timeout.
+func (l *Listener) ListenConnectionEvents(ctx context.Context, handler transport.ConnectionEventHandler) (transport.Connection, error) {
+	ctx, cancel := context.WithTimeout(ctx, l.mqttConnectTimeout)
+	defer cancel()
+
+	clientId := fmt.Sprintf("%s-conn-%s", l.mqttGroup, randSeq(5))
+	topic := fmt.Sprintf("$share/%s/%s/conn/#", l.mqttGroup, l.mqttPrefix)
+
+	router := paho.NewSingleHandlerRouter(func(p *paho.Publish) {
+		topicParts := strings.Split(p.Topic, "/")
+		stationKey := topicParts[len(topicParts)-1]
+
+		var ev transport.ConnectionEvent
+		if err := json.Unmarshal(p.Payload, &ev); err != nil {
+			slog.Warn("dropping connection event that cannot be unmarshaled", "topic", p.Topic, "err", err)
+			return
+		}
+		if ev.StationKey != stationKey {
+			slog.Warn("dropping connection event whose station key is not the one of its topic",
+				"topic", p.Topic, "stationKey", ev.StationKey)
+			return
+		}
+		handler.HandleConnectionEvent(context.Background(), &ev)
+	})
+
+	// subscribed receives the outcome of the first subscription; later ones (after a
+	// reconnect) are only logged
+	subscribed := make(chan error, 1)
+	mqttConn, err := autopaho.NewConnection(context.Background(), autopaho.ClientConfig{
+		BrokerUrls:        l.mqttBrokerUrls,
+		KeepAlive:         l.mqttKeepAliveInterval,
+		ConnectRetryDelay: l.mqttConnectRetryDelay,
+		OnConnectionUp: func(manager *autopaho.ConnectionManager, connack *paho.Connack) {
+			subscribeCtx, cancel := context.WithTimeout(context.Background(), l.mqttConnectTimeout)
+			defer cancel()
+			_, err := manager.Subscribe(subscribeCtx, &paho.Subscribe{
+				Subscriptions: map[string]paho.SubscribeOptions{
+					topic: {},
+				},
+			})
+			if err != nil {
+				slog.Error("failed to subscribe to topic", "topic", topic, "err", err)
+			}
+			select {
+			case subscribed <- err:
+			default:
+			}
+		},
+		ClientConfig: paho.ClientConfig{
+			ClientID: clientId,
+			Router:   router,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	select {
+	case err = <-subscribed:
+	case <-ctx.Done():
+		err = fmt.Errorf("timeout waiting for the subscription to %s: %w", topic, ctx.Err())
+	}
+	if err != nil {
+		disconnectCtx, cancelDisconnect := context.WithTimeout(context.Background(), l.mqttConnectTimeout)
+		defer cancelDisconnect()
+		_ = mqttConn.Disconnect(disconnectCtx)
+		return nil, err
+	}
+	return &connection{mqttConn: mqttConn}, nil
 }
 
 type connection struct {

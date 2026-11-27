@@ -710,8 +710,16 @@ func startGatewayTLS(t *testing.T, clientCAs *x509.CertPool, opts ...server.Webs
 
 func serveGateway(t *testing.T, tlsConfig *tls.Config, opts ...server.WebsocketOpt) *httptest.Server {
 	t.Helper()
+	srv, _ := serveGatewayWithShutdown(t, tlsConfig, opts...)
+	return srv
+}
 
-	handler := server.NewWebsocketHandler(opts...)
+// serveGatewayWithShutdown is serveGateway that also returns the shutdown function of
+// the websocket handler.
+func serveGatewayWithShutdown(t *testing.T, tlsConfig *tls.Config, opts ...server.WebsocketOpt) (*httptest.Server, func(context.Context) error) {
+	t.Helper()
+
+	handler, shutdown := server.NewWebsocketHandlerWithShutdown(opts...)
 	var handling atomic.Int64
 	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handling.Add(1)
@@ -729,7 +737,7 @@ func serveGateway(t *testing.T, tlsConfig *tls.Config, opts ...server.WebsocketO
 		assert.Eventually(t, func() bool { return handling.Load() == 0 }, teardownTimeout, time.Millisecond,
 			"the gateway is still handling a connection at the end of the test: is a websocket left open?")
 	})
-	return srv
+	return srv, shutdown
 }
 
 // tenantStation returns a charge station of the tenant with the org key that
@@ -1221,7 +1229,13 @@ func TestSingleTenantStationKeepsItsTopics(t *testing.T) {
 	assert.Equal(t, brokerEvent{clientId: "cs.1", topic: "cs/out/ocpp2.0.1/cs.1"}, await(hook.subscribed))
 
 	require.NoError(t, conn.Write(ctx, websocket.MessageText, []byte(`[2,"1","Heartbeat",{}]`)))
-	assert.Equal(t, brokerEvent{clientId: "cs.1", topic: "cs/in/ocpp2.0.1/cs.1"}, await(hook.published))
+	// the call, and the connected event of the socket, which is published on its own
+	assert.ElementsMatch(t,
+		[]brokerEvent{
+			{clientId: "cs.1", topic: "cs/in/ocpp2.0.1/cs.1"},
+			{clientId: "cs.1", topic: "cs/conn/cs.1"},
+		},
+		[]brokerEvent{await(hook.published), await(hook.published)})
 }
 
 // The organisation names that the tenant of a charge station accepts in a client
@@ -1403,6 +1417,8 @@ func unreachableBroker(t *testing.T) *url.URL {
 // fakeTransport hands the sessions that the gateway opens to the test.
 type fakeTransport struct {
 	opened chan *fakeSession
+	// sendEvent, when set, publishes the connection events of the sessions
+	sendEvent func(ctx context.Context, ev *transport.ConnectionEvent) error
 }
 
 func (f *fakeTransport) Open(_ context.Context, stationKey, ocppProtocol string, deliver func(msg *pipe.GatewayMessage)) (transport.Session, error) {
@@ -1410,7 +1426,9 @@ func (f *fakeTransport) Open(_ context.Context, stationKey, ocppProtocol string,
 		stationKey: stationKey,
 		protocol:   ocppProtocol,
 		deliver:    deliver,
+		sendEvent:  f.sendEvent,
 		sent:       make(chan *pipe.GatewayMessage, 1),
+		events:     make(chan *transport.ConnectionEvent, 16),
 		done:       make(chan struct{}),
 		closed:     make(chan struct{}),
 	}
@@ -1426,13 +1444,26 @@ type fakeSession struct {
 	stationKey string
 	protocol   string
 	deliver    func(msg *pipe.GatewayMessage)
+	sendEvent  func(ctx context.Context, ev *transport.ConnectionEvent) error
 	sent       chan *pipe.GatewayMessage
+	events     chan *transport.ConnectionEvent
 	done       chan struct{}
 	closed     chan struct{}
 }
 
 func (s *fakeSession) Send(_ context.Context, msg *pipe.GatewayMessage) error {
 	s.sent <- msg
+	return nil
+}
+
+func (s *fakeSession) SendConnectionEvent(ctx context.Context, ev *transport.ConnectionEvent) error {
+	if s.sendEvent != nil {
+		return s.sendEvent(ctx, ev)
+	}
+	select {
+	case s.events <- ev:
+	default:
+	}
 	return nil
 }
 

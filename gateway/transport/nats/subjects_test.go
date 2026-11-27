@@ -199,3 +199,51 @@ func TestParseStationSubjectRejectsBadSubjects(t *testing.T) {
 		assert.Error(t, err, "subject %q", subject)
 	}
 }
+
+func TestConnSubject(t *testing.T) {
+	subject, err := natstransport.ConnSubject("ocpp", "k7f2.CP.001")
+	require.NoError(t, err)
+	assert.Equal(t, "ocpp.conn.k7f2.CP%2E001", subject)
+
+	subject, err = natstransport.ConnSubject("csms", "CP001")
+	require.NoError(t, err)
+	assert.Equal(t, "csms.conn._.CP001", subject)
+
+	_, err = natstransport.ConnSubject("ocpp", "")
+	assert.Error(t, err, "empty key")
+	for _, prefix := range []string{"", "a.b", "a b", "*", ">"} {
+		_, err = natstransport.ConnSubject(prefix, "k7f2.CP001")
+		assert.Error(t, err, "prefix %q", prefix)
+	}
+}
+
+func TestConnSubjectRoundTrip(t *testing.T) {
+	for _, v := range stationKeyVectors {
+		subject, err := natstransport.ConnSubject("ocpp", v.key)
+		require.NoError(t, err)
+		assert.Equal(t, "ocpp.conn."+v.orgToken+"."+v.stationToken, subject)
+		key, err := natstransport.ParseConnSubject(subject)
+		require.NoError(t, err, subject)
+		assert.Equal(t, v.key, key)
+	}
+}
+
+func TestParseConnSubjectRejectsBadSubjects(t *testing.T) {
+	for _, subject := range []string{
+		"",
+		"ocpp.conn.k7f2",
+		"ocpp.conn.k7f2.CP.001",
+		"x.ocpp.conn.k7f2.CP001",
+		"ocpp.conn.k7f2.",
+		"ocpp.in.k7f2.CP001",
+		"ocpp.in.ocpp16.k7f2.CP001",
+		"ocpp.conn.k7f2.CP%2",
+		"ocpp.conn.k7f2.CP%2e001",
+		"ocpp.conn.k 7f2.CP001",
+		"ocpp.conn.*.*",
+		"a.b.conn.k7f2.CP001",
+	} {
+		_, err := natstransport.ParseConnSubject(subject)
+		assert.Error(t, err, "subject %q", subject)
+	}
+}

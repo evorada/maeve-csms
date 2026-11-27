@@ -4,8 +4,9 @@
 // share one connection: the messages of a charge station are published on
 // <prefix>.in.<ocpp16|ocpp201>.<org token>.<station token> and the messages of the
 // CSMS arrive on <prefix>.out.<ocpp16|ocpp201>.<org token>.<station token>, with the
-// trace context in the W3C headers. subjects.go defines how a station key becomes the
-// two last tokens, as the manager does.
+// trace context in the W3C headers. The connection events of a station socket are
+// published on <prefix>.conn.<org token>.<station token>. subjects.go defines how a
+// station key becomes the two last tokens, as the manager does.
 package nats
 
 import (
@@ -90,6 +91,10 @@ func (t *Transport) Open(ctx context.Context, stationKey, ocppProtocol string, d
 	if err != nil {
 		return nil, fmt.Errorf("subject for station %q: %w", stationKey, err)
 	}
+	connSubject, err := ConnSubject(t.prefix, stationKey)
+	if err != nil {
+		return nil, fmt.Errorf("subject for station %q: %w", stationKey, err)
+	}
 
 	trace.SpanFromContext(ctx).SetAttributes(
 		attribute.String("nats.out_subject", outSubject),
@@ -137,6 +142,7 @@ func (t *Transport) Open(ctx context.Context, stationKey, ocppProtocol string, d
 		sub:         sub,
 		tracer:      t.tracer,
 		inSubject:   inSubject,
+		connSubject: connSubject,
 		publishName: fmt.Sprintf("%s.%s.%s publish", t.prefix, DirectionIn, ver),
 		stationKey:  stationKey,
 	}, nil
@@ -178,6 +184,7 @@ type session struct {
 	sub         *nats.Subscription
 	tracer      trace.Tracer
 	inSubject   string
+	connSubject string
 	publishName string
 	stationKey  string
 }
@@ -209,6 +216,21 @@ func (s *session) Send(ctx context.Context, msg *pipe.GatewayMessage) error {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "publish failed")
 		return fmt.Errorf("publishing to %s: %w", s.inSubject, err)
+	}
+	return nil
+}
+
+// SendConnectionEvent publishes the event on the connection event subject of the
+// station. Like every publication on the shared connection it does not wait for the
+// server: while the connection is reconnecting the event waits in the buffer of the
+// connection.
+func (s *session) SendConnectionEvent(_ context.Context, ev *transport.ConnectionEvent) error {
+	data, err := json.Marshal(ev)
+	if err != nil {
+		return fmt.Errorf("marshaling connection event: %w", err)
+	}
+	if err := s.conn.Publish(s.connSubject, data); err != nil {
+		return fmt.Errorf("publishing to %s: %w", s.connSubject, err)
 	}
 	return nil
 }
