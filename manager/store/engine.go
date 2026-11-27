@@ -39,4 +39,5 @@ type Engine interface {
 	Transactor
 	OutboxStore
 	CommandStore
+	AssetStore
 }

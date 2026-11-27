@@ -15,4 +15,10 @@ var (
 	ErrNotFound = errors.New("not found")
 	// ErrAlreadyExists is returned when a create would violate a uniqueness constraint.
 	ErrAlreadyExists = errors.New("already exists")
+	// ErrVersionConflict is returned when an optimistic update names a version that is not
+	// the stored version of the record any more.
+	ErrVersionConflict = errors.New("version conflict")
+	// ErrInUse is returned when a delete is refused because other records refer to the
+	// record.
+	ErrInUse = errors.New("in use")
 )

@@ -177,6 +177,69 @@ func TestStubsReturnErrNotImplemented(t *testing.T) {
 			_, err := s.DeleteCompletedCommandsBefore(ctx, time.Now(), 10)
 			return err
 		},
+		"CreateAssetLocation": func() error {
+			return s.CreateAssetLocation(ctx, &store.AssetLocation{})
+		},
+		"UpdateAssetLocation": func() error {
+			return s.UpdateAssetLocation(ctx, &store.AssetLocation{})
+		},
+		"LookupAssetLocation": func() error {
+			_, err := s.LookupAssetLocation(ctx, "loc001")
+			return err
+		},
+		"LookupAssetLocationByOcpiId": func() error {
+			_, err := s.LookupAssetLocationByOcpiId(ctx, "party001", "loc001")
+			return err
+		},
+		"ListAssetLocations": func() error {
+			_, _, err := s.ListAssetLocations(ctx, store.AssetLocationFilter{})
+			return err
+		},
+		"DeleteAssetLocation": func() error {
+			return s.DeleteAssetLocation(ctx, "loc001")
+		},
+		"CreateAssetEvse": func() error {
+			return s.CreateAssetEvse(ctx, &store.AssetEvse{})
+		},
+		"UpdateAssetEvse": func() error {
+			return s.UpdateAssetEvse(ctx, &store.AssetEvse{})
+		},
+		"LookupAssetEvse": func() error {
+			_, err := s.LookupAssetEvse(ctx, "evse001")
+			return err
+		},
+		"LookupAssetEvseByOcpp": func() error {
+			_, err := s.LookupAssetEvseByOcpp(ctx, "cs001", 1)
+			return err
+		},
+		"ListAssetEvsesForLocation": func() error {
+			_, err := s.ListAssetEvsesForLocation(ctx, "loc001")
+			return err
+		},
+		"ListAssetEvsesForStation": func() error {
+			_, err := s.ListAssetEvsesForStation(ctx, "cs001")
+			return err
+		},
+		"DeleteAssetEvse": func() error {
+			return s.DeleteAssetEvse(ctx, "evse001")
+		},
+		"CreateAssetConnector": func() error {
+			return s.CreateAssetConnector(ctx, &store.AssetConnector{})
+		},
+		"UpdateAssetConnector": func() error {
+			return s.UpdateAssetConnector(ctx, &store.AssetConnector{})
+		},
+		"LookupAssetConnector": func() error {
+			_, err := s.LookupAssetConnector(ctx, "connector001")
+			return err
+		},
+		"LookupAssetConnectorByOcpp": func() error {
+			_, err := s.LookupAssetConnectorByOcpp(ctx, "cs001", 1, 1)
+			return err
+		},
+		"DeleteAssetConnector": func() error {
+			return s.DeleteAssetConnector(ctx, "connector001")
+		},
 	}
 
 	for name, stub := range stubs {

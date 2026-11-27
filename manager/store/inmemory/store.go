@@ -81,6 +81,11 @@ type Store struct {
 	relayMu                          sync.Mutex // held by the relay batch that runs
 	// commands by the canonical text of their id (see commandKey)
 	commands map[string]*store.Command
+	// the asset model by the canonical text of the ids (see assetKey); EVSEs are stored
+	// without their connectors
+	assetLocations  map[string]*store.AssetLocation
+	assetEvses      map[string]*store.AssetEvse
+	assetConnectors map[string]*store.AssetConnector
 }
 
 func NewStore(clock clock.PassiveClock) *Store {
@@ -132,6 +137,9 @@ func NewStore(clock clock.PassiveClock) *Store {
 		tenantsByOrgKey:                  make(map[string]string),
 		tenantsBySlug:                    make(map[string]string),
 		commands:                         make(map[string]*store.Command),
+		assetLocations:                   make(map[string]*store.AssetLocation),
+		assetEvses:                       make(map[string]*store.AssetEvse),
+		assetConnectors:                  make(map[string]*store.AssetConnector),
 	}
 }
 
