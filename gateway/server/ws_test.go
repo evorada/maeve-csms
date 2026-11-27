@@ -35,6 +35,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/gateway/pipe"
 	"github.com/thoughtworks/maeve-csms/gateway/registry"
 	"github.com/thoughtworks/maeve-csms/gateway/server"
+	"github.com/thoughtworks/maeve-csms/gateway/transport"
 	"nhooyr.io/websocket"
 )
 
@@ -1346,6 +1347,150 @@ func TestCertificateOrganizationOfTheTenant(t *testing.T) {
 			require.NotNil(t, resp, "no answer from the gateway: %v", err)
 			assert.Equal(t, tc.want, resp.StatusCode)
 		})
+	}
+}
+
+// A charge station is turned away when the broker is not reached within the connect
+// timeout: the gateway closes its websocket and does not wait for the broker any
+// longer (startGateway fails the test when the handler has not returned).
+func TestUnreachableBrokerClosesTheWebsocket(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	reg := registry.NewMockRegistry()
+	reg.Add("a.example", tenantStation("aaaa", "CP001"))
+
+	srv := startGateway(t,
+		server.WithMqttBrokerUrl(unreachableBroker(t)),
+		server.WithMqttConnectSettings(300*time.Millisecond, 50*time.Millisecond, 0),
+		server.WithDeviceRegistry(reg))
+
+	conn, resp, err := dialStation(ctx, t, srv, "a.example", "CP001", "CP001", "password", nil)
+	require.NoError(t, err)
+	defer func() {
+		_ = conn.Close(websocket.StatusNormalClosure, "OK")
+	}()
+	assert.Equal(t, http.StatusSwitchingProtocols, resp.StatusCode)
+
+	_, _, err = conn.Read(ctx)
+	assert.Equal(t, websocket.StatusProtocolError, websocket.CloseStatus(err), "read: %v", err)
+}
+
+// unreachableBroker returns the URL of a broker that refuses every connection.
+func unreachableBroker(t *testing.T) *url.URL {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr, err := url.Parse("mqtt://" + l.Addr().String())
+	require.NoError(t, err)
+	require.NoError(t, l.Close())
+	return addr
+}
+
+// fakeTransport hands the sessions that the gateway opens to the test.
+type fakeTransport struct {
+	opened chan *fakeSession
+}
+
+func (f *fakeTransport) Open(_ context.Context, stationKey, ocppProtocol string, deliver func(msg *pipe.GatewayMessage)) (transport.Session, error) {
+	s := &fakeSession{
+		stationKey: stationKey,
+		protocol:   ocppProtocol,
+		deliver:    deliver,
+		sent:       make(chan *pipe.GatewayMessage, 1),
+		done:       make(chan struct{}),
+		closed:     make(chan struct{}),
+	}
+	f.opened <- s
+	return s, nil
+}
+
+func (f *fakeTransport) Close() error {
+	return nil
+}
+
+type fakeSession struct {
+	stationKey string
+	protocol   string
+	deliver    func(msg *pipe.GatewayMessage)
+	sent       chan *pipe.GatewayMessage
+	done       chan struct{}
+	closed     chan struct{}
+}
+
+func (s *fakeSession) Send(_ context.Context, msg *pipe.GatewayMessage) error {
+	s.sent <- msg
+	return nil
+}
+
+func (s *fakeSession) Done() <-chan struct{} {
+	return s.done
+}
+
+func (s *fakeSession) Close(context.Context) error {
+	close(s.closed)
+	return nil
+}
+
+func TestWebsocketHandlerUsesTheTransport(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	reg := registry.NewMockRegistry()
+	reg.Add("a.example", tenantStation("aaaa", "CP001"))
+
+	tr := &fakeTransport{opened: make(chan *fakeSession, 1)}
+	srv := startGateway(t,
+		server.WithTransport(tr),
+		// ignored next to a transport
+		server.WithMqttBrokerUrl(unreachableBroker(t)),
+		server.WithDeviceRegistry(reg))
+
+	conn, _, err := dialStation(ctx, t, srv, "a.example", "CP001", "CP001", "password", nil)
+	require.NoError(t, err)
+	defer func() {
+		_ = conn.Close(websocket.StatusNormalClosure, "OK")
+	}()
+
+	var session *fakeSession
+	select {
+	case session = <-tr.opened:
+	case <-ctx.Done():
+		t.Fatal("timeout waiting for the session")
+	}
+	assert.Equal(t, "aaaa.CP001", session.stationKey)
+	assert.Equal(t, "ocpp2.0.1", session.protocol)
+
+	// a call of the charge station is sent to the CSMS
+	require.NoError(t, conn.Write(ctx, websocket.MessageText, []byte(`[2,"1","Heartbeat",{}]`)))
+	select {
+	case msg := <-session.sent:
+		assert.Equal(t, ocpp.MessageTypeCall, msg.MessageType)
+		assert.Equal(t, "Heartbeat", msg.Action)
+		assert.Equal(t, "1", msg.MessageId)
+	case <-ctx.Done():
+		t.Fatal("timeout waiting for the call of the charge station")
+	}
+
+	// the answer of the CSMS reaches the charge station
+	session.deliver(&pipe.GatewayMessage{
+		Context:         context.Background(),
+		MessageType:     ocpp.MessageTypeCallResult,
+		MessageId:       "1",
+		ResponsePayload: json.RawMessage(`{"currentTime":"2026-11-27T12:00:00Z"}`),
+	})
+	_, data, err := conn.Read(ctx)
+	require.NoError(t, err)
+	assert.JSONEq(t, `[3,"1",{"currentTime":"2026-11-27T12:00:00Z"}]`, string(data))
+
+	// a session that breaks down closes the websocket, and the gateway closes the session
+	close(session.done)
+	_, _, err = conn.Read(ctx)
+	assert.Equal(t, websocket.StatusProtocolError, websocket.CloseStatus(err), "read: %v", err)
+	select {
+	case <-session.closed:
+	case <-ctx.Done():
+		t.Fatal("timeout waiting for the gateway to close the session")
 	}
 }
 
