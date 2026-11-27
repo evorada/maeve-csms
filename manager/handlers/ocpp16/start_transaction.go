@@ -41,8 +41,11 @@ const idTagTokenType = "ISO14443"
 // accepted is given to the CommandTracker (when there is one), which links it to the
 // remote start that asked for it; nothing the tracker does changes the answer.
 type StartTransactionHandler struct {
-	Clock            clock.PassiveClock
-	TokenStore       store.TokenStore
+	Clock      clock.PassiveClock
+	TokenStore store.TokenStore
+	// RegistryStore holds allow_any_token of the charge station: an unknown idTag is
+	// accepted when it is set. When RegistryStore is nil, no unknown idTag is accepted.
+	RegistryStore    store.ChargeStationRegistryStore
 	OrgResolver      tenancy.StationOrgResolver
 	TransactionStore store.TransactionStore
 	ReservationStore store.ReservationStore
@@ -56,7 +59,7 @@ func (t StartTransactionHandler) HandleCall(ctx context.Context, chargeStationId
 
 	slog.Info("starting transaction", slog.Any("request", req))
 
-	auth, err := authorizeIdTag(ctx, t.TokenStore, t.OrgResolver, t.Clock, chargeStationId, req.IdTag)
+	auth, err := authorizeIdTag(ctx, t.TokenStore, t.RegistryStore, t.OrgResolver, t.Clock, chargeStationId, req.IdTag)
 	if err != nil {
 		return nil, err
 	}

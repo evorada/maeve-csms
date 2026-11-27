@@ -17,6 +17,7 @@ type Querier interface {
 	ClaimUnpublishedOutboxEvents(ctx context.Context, limit int32) ([]OutboxEvent, error)
 	CountAssetEvsesForLocation(ctx context.Context, locationID pgtype.UUID) (int64, error)
 	CountChargeStationEvents(ctx context.Context, chargeStationID string) (int64, error)
+	CountChargeStationRecords(ctx context.Context, arg CountChargeStationRecordsParams) (int64, error)
 	// The same conditions as ListCommands.
 	CountCommands(ctx context.Context, arg CountCommandsParams) (int64, error)
 	CountConnectorsForOrgs(ctx context.Context, orgIds []pgtype.UUID) (int64, error)
@@ -96,6 +97,10 @@ type Querier interface {
 	GetChargeStationClearCache(ctx context.Context, chargeStationID string) (ChargeStationClearCache, error)
 	// Data Transfer
 	GetChargeStationDataTransfer(ctx context.Context, chargeStationID string) (ChargeStationDataTransfer, error)
+	// Registry: the record of a charge station with what it reported at its last boot.
+	// created_at and updated_at are TIMESTAMP columns written with NOW() in the time zone
+	// of the session; the cast reads them back as the same instant.
+	GetChargeStationRecord(ctx context.Context, chargeStationID string) (GetChargeStationRecordRow, error)
 	// Runtime
 	GetChargeStationRuntime(ctx context.Context, chargeStationID string) (ChargeStationRuntime, error)
 	// Settings
@@ -163,6 +168,9 @@ type Querier interface {
 	ListChargeStationClearCaches(ctx context.Context, arg ListChargeStationClearCachesParams) ([]ChargeStationClearCache, error)
 	ListChargeStationDataTransfers(ctx context.Context, arg ListChargeStationDataTransfersParams) ([]ChargeStationDataTransfer, error)
 	ListChargeStationEvents(ctx context.Context, arg ListChargeStationEventsParams) ([]ChargeStationEvent, error)
+	// The state and status lists are never NULL: an empty list selects every state or
+	// status. A station without a status row has never connected.
+	ListChargeStationRecords(ctx context.Context, arg ListChargeStationRecordsParams) ([]ListChargeStationRecordsRow, error)
 	ListChargeStationSettings(ctx context.Context, arg ListChargeStationSettingsParams) ([]ChargeStationSetting, error)
 	ListChargeStationTriggers(ctx context.Context, arg ListChargeStationTriggersParams) ([]ChargeStationTrigger, error)
 	ListCommands(ctx context.Context, arg ListCommandsParams) ([]Command, error)
@@ -223,6 +231,7 @@ type Querier interface {
 	SetChargeStationDataTransfer(ctx context.Context, arg SetChargeStationDataTransferParams) (ChargeStationDataTransfer, error)
 	SetChargeStationRuntime(ctx context.Context, arg SetChargeStationRuntimeParams) (ChargeStationRuntime, error)
 	SetChargeStationSettings(ctx context.Context, arg SetChargeStationSettingsParams) (ChargeStationSetting, error)
+	SetChargeStationState(ctx context.Context, arg SetChargeStationStateParams) (int64, error)
 	SetChargeStationTrigger(ctx context.Context, arg SetChargeStationTriggerParams) (ChargeStationTrigger, error)
 	SetCommandProgress(ctx context.Context, arg SetCommandProgressParams) (Command, error)
 	// Location ids are global. SetLocation returns no row, and changes nothing, when the
@@ -250,6 +259,7 @@ type Querier interface {
 	// An update that names a version that is not stored returns no row.
 	UpdateAssetLocation(ctx context.Context, arg UpdateAssetLocationParams) (AssetLocation, error)
 	UpdateChargeStationCertificate(ctx context.Context, arg UpdateChargeStationCertificateParams) (ChargeStationCertificate, error)
+	UpdateChargeStationRecord(ctx context.Context, arg UpdateChargeStationRecordParams) (pgtype.Timestamptz, error)
 	UpdateHeartbeat(ctx context.Context, arg UpdateHeartbeatParams) error
 	UpdateReservationStatus(ctx context.Context, arg UpdateReservationStatusParams) error
 	// The entitlement and config documents are only replaced by a document of the same or

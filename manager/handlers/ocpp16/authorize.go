@@ -16,11 +16,15 @@ import (
 )
 
 // AuthorizeHandler answers an Authorize.req with what the token store knows about the
-// idTag in the org of the charge station.
+// idTag in the org of the charge station. An unknown idTag is accepted when the charge
+// station accepts any token (allow_any_token in its registry record).
 type AuthorizeHandler struct {
-	TokenStore  store.TokenStore
-	OrgResolver tenancy.StationOrgResolver
-	Clock       clock.PassiveClock
+	TokenStore store.TokenStore
+	// RegistryStore holds allow_any_token of the charge station. When it is nil, no
+	// unknown idTag is accepted.
+	RegistryStore store.ChargeStationRegistryStore
+	OrgResolver   tenancy.StationOrgResolver
+	Clock         clock.PassiveClock
 }
 
 func (a AuthorizeHandler) HandleCall(ctx context.Context, chargeStationId string, request ocpp.Request) (ocpp.Response, error) {
@@ -28,7 +32,7 @@ func (a AuthorizeHandler) HandleCall(ctx context.Context, chargeStationId string
 
 	req := request.(*types.AuthorizeJson)
 
-	auth, err := authorizeIdTag(ctx, a.TokenStore, a.OrgResolver, a.Clock, chargeStationId, req.IdTag)
+	auth, err := authorizeIdTag(ctx, a.TokenStore, a.RegistryStore, a.OrgResolver, a.Clock, chargeStationId, req.IdTag)
 	if err != nil {
 		return nil, err
 	}

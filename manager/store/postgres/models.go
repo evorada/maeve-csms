@@ -74,13 +74,20 @@ type Certificate struct {
 }
 
 type ChargeStation struct {
-	ChargeStationID        string           `db:"charge_station_id" json:"charge_station_id"`
-	SecurityProfile        int32            `db:"security_profile" json:"security_profile"`
-	Base64Sha256Password   pgtype.Text      `db:"base64_sha256_password" json:"base64_sha256_password"`
-	InvalidUsernameAllowed bool             `db:"invalid_username_allowed" json:"invalid_username_allowed"`
-	CreatedAt              pgtype.Timestamp `db:"created_at" json:"created_at"`
-	UpdatedAt              pgtype.Timestamp `db:"updated_at" json:"updated_at"`
-	OrgID                  pgtype.UUID      `db:"org_id" json:"org_id"`
+	ChargeStationID        string             `db:"charge_station_id" json:"charge_station_id"`
+	SecurityProfile        int32              `db:"security_profile" json:"security_profile"`
+	Base64Sha256Password   pgtype.Text        `db:"base64_sha256_password" json:"base64_sha256_password"`
+	InvalidUsernameAllowed bool               `db:"invalid_username_allowed" json:"invalid_username_allowed"`
+	CreatedAt              pgtype.Timestamp   `db:"created_at" json:"created_at"`
+	UpdatedAt              pgtype.Timestamp   `db:"updated_at" json:"updated_at"`
+	OrgID                  pgtype.UUID        `db:"org_id" json:"org_id"`
+	LocationID             pgtype.UUID        `db:"location_id" json:"location_id"`
+	DisplayName            pgtype.Text        `db:"display_name" json:"display_name"`
+	MaxCapacityKw          pgtype.Numeric     `db:"max_capacity_kw" json:"max_capacity_kw"`
+	AllowAnyToken          bool               `db:"allow_any_token" json:"allow_any_token"`
+	State                  string             `db:"state" json:"state"`
+	StateChangedAt         pgtype.Timestamptz `db:"state_changed_at" json:"state_changed_at"`
+	StateReason            pgtype.Text        `db:"state_reason" json:"state_reason"`
 }
 
 type ChargeStationCertificate struct {
@@ -160,14 +167,19 @@ type ChargeStationEvent struct {
 }
 
 type ChargeStationRuntime struct {
-	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
-	OcppVersion     string           `db:"ocpp_version" json:"ocpp_version"`
-	Vendor          pgtype.Text      `db:"vendor" json:"vendor"`
-	Model           pgtype.Text      `db:"model" json:"model"`
-	SerialNumber    pgtype.Text      `db:"serial_number" json:"serial_number"`
-	FirmwareVersion pgtype.Text      `db:"firmware_version" json:"firmware_version"`
-	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
-	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ChargeStationID   string             `db:"charge_station_id" json:"charge_station_id"`
+	OcppVersion       string             `db:"ocpp_version" json:"ocpp_version"`
+	Vendor            pgtype.Text        `db:"vendor" json:"vendor"`
+	Model             pgtype.Text        `db:"model" json:"model"`
+	SerialNumber      pgtype.Text        `db:"serial_number" json:"serial_number"`
+	FirmwareVersion   pgtype.Text        `db:"firmware_version" json:"firmware_version"`
+	CreatedAt         pgtype.Timestamp   `db:"created_at" json:"created_at"`
+	UpdatedAt         pgtype.Timestamp   `db:"updated_at" json:"updated_at"`
+	Iccid             pgtype.Text        `db:"iccid" json:"iccid"`
+	Imsi              pgtype.Text        `db:"imsi" json:"imsi"`
+	MeterSerialNumber pgtype.Text        `db:"meter_serial_number" json:"meter_serial_number"`
+	MeterType         pgtype.Text        `db:"meter_type" json:"meter_type"`
+	LastBootAt        pgtype.Timestamptz `db:"last_boot_at" json:"last_boot_at"`
 }
 
 type ChargeStationSetting struct {

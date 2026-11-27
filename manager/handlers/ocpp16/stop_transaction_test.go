@@ -58,6 +58,7 @@ func newStopTransactionHandler(t *testing.T) (handlers.StopTransactionHandler, *
 	return handlers.StopTransactionHandler{
 		Clock:            clk,
 		TokenStore:       engine,
+		RegistryStore:    engine,
 		OrgResolver:      &tenancy.Resolver{Stations: engine},
 		TransactionStore: engine,
 		Tx:               engine,

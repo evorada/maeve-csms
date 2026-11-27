@@ -3,9 +3,11 @@
 package store
 
 import (
+	"bytes"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 )
@@ -68,4 +70,28 @@ func DecodeCursor(cursor string) (string, error) {
 		return "", fmt.Errorf("%w: %v", ErrInvalidCursor, err)
 	}
 	return id.String(), nil
+}
+
+// EncodeKeyCursor returns the cursor of the page that follows the record with the text
+// key lastKey, for the lists that are ordered by a key that is not a UUID (the charge
+// stations, by station key).
+func EncodeKeyCursor(lastKey string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(lastKey))
+}
+
+// DecodeKeyCursor returns the key after which a page starts: "" (before every key) for
+// "", the key that EncodeKeyCursor encoded otherwise. A cursor that EncodeKeyCursor
+// cannot have made is an error wrapping ErrInvalidCursor.
+func DecodeKeyCursor(cursor string) (string, error) {
+	if cursor == "" {
+		return "", nil
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrInvalidCursor, err)
+	}
+	if !utf8.Valid(raw) || bytes.IndexByte(raw, 0) >= 0 {
+		return "", fmt.Errorf("%w: not a key", ErrInvalidCursor)
+	}
+	return string(raw), nil
 }

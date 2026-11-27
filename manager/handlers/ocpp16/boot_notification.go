@@ -56,19 +56,28 @@ func (b BootNotificationHandler) HandleCall(ctx context.Context, chargeStationId
 		span.SetAttributes(attribute.String("boot.firmware", *req.FirmwareVersion))
 	}
 
+	now := b.Clock.Now()
+
+	// The identity that the station reports is recorded for the registry. The station is
+	// answered the same when it cannot be recorded: a failure is only logged.
 	err := b.RuntimeDetailsStore.SetChargeStationRuntimeDetails(ctx, chargeStationId, &store.ChargeStationRuntimeDetails{
-		OcppVersion:     "1.6",
-		FirmwareVersion: req.FirmwareVersion,
-		Model:           &req.ChargePointModel,
-		Vendor:          &req.ChargePointVendor,
-		SerialNumber:    req.ChargePointSerialNumber,
+		OcppVersion:       "1.6",
+		FirmwareVersion:   req.FirmwareVersion,
+		Model:             &req.ChargePointModel,
+		Vendor:            &req.ChargePointVendor,
+		SerialNumber:      req.ChargePointSerialNumber,
+		Iccid:             req.Iccid,
+		Imsi:              req.Imsi,
+		MeterSerialNumber: req.MeterSerialNumber,
+		MeterType:         req.MeterType,
+		LastBootAt:        &now,
 	})
 	if err != nil {
-		return nil, err
+		span.RecordError(err)
+		slog.Error("recording the boot identity of a charge station", "chargeStationId", chargeStationId, "err", err)
 	}
 
 	// Update charge station status
-	now := b.Clock.Now()
 	err = b.StatusStore.SetChargeStationStatus(ctx, chargeStationId, &store.ChargeStationStatus{
 		ChargeStationId: chargeStationId,
 		Connected:       true,

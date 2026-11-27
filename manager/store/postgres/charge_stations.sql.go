@@ -49,6 +49,24 @@ func (q *Queries) AddChargeStationCertificate(ctx context.Context, arg AddCharge
 	return i, err
 }
 
+const CountChargeStationRecords = `-- name: CountChargeStationRecords :one
+SELECT count(*) FROM charge_stations
+WHERE org_id = $1::uuid
+  AND (cardinality($2::text[]) = 0 OR state = ANY($2::text[]))
+`
+
+type CountChargeStationRecordsParams struct {
+	OrgID  pgtype.UUID `db:"org_id" json:"org_id"`
+	States []string    `db:"states" json:"states"`
+}
+
+func (q *Queries) CountChargeStationRecords(ctx context.Context, arg CountChargeStationRecordsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, CountChargeStationRecords, arg.OrgID, arg.States)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const DeleteChargeStationCertificateDeletion = `-- name: DeleteChargeStationCertificateDeletion :exec
 DELETE FROM charge_station_certificate_deletions WHERE charge_station_id = $1
 `
@@ -122,7 +140,7 @@ func (q *Queries) DeleteChargeStationTrigger(ctx context.Context, chargeStationI
 }
 
 const GetChargeStationAuth = `-- name: GetChargeStationAuth :one
-SELECT charge_station_id, security_profile, base64_sha256_password, invalid_username_allowed, created_at, updated_at, org_id FROM charge_stations WHERE charge_station_id = $1
+SELECT charge_station_id, security_profile, base64_sha256_password, invalid_username_allowed, created_at, updated_at, org_id, location_id, display_name, max_capacity_kw, allow_any_token, state, state_changed_at, state_reason FROM charge_stations WHERE charge_station_id = $1
 `
 
 // Auth
@@ -137,6 +155,13 @@ func (q *Queries) GetChargeStationAuth(ctx context.Context, chargeStationID stri
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.OrgID,
+		&i.LocationID,
+		&i.DisplayName,
+		&i.MaxCapacityKw,
+		&i.AllowAnyToken,
+		&i.State,
+		&i.StateChangedAt,
+		&i.StateReason,
 	)
 	return i, err
 }
@@ -241,8 +266,93 @@ func (q *Queries) GetChargeStationDataTransfer(ctx context.Context, chargeStatio
 	return i, err
 }
 
+const GetChargeStationRecord = `-- name: GetChargeStationRecord :one
+
+SELECT
+    cs.charge_station_id,
+    cs.org_id,
+    cs.location_id,
+    cs.display_name,
+    cs.max_capacity_kw,
+    cs.allow_any_token,
+    cs.state,
+    cs.state_changed_at,
+    cs.state_reason,
+    cs.created_at::timestamptz AS created_at,
+    cs.updated_at::timestamptz AS updated_at,
+    r.ocpp_version,
+    r.vendor,
+    r.model,
+    r.serial_number,
+    r.firmware_version,
+    r.iccid,
+    r.imsi,
+    r.meter_serial_number,
+    r.meter_type,
+    r.last_boot_at
+FROM charge_stations cs
+LEFT JOIN charge_station_runtime r ON r.charge_station_id = cs.charge_station_id
+WHERE cs.charge_station_id = $1
+`
+
+type GetChargeStationRecordRow struct {
+	ChargeStationID   string             `db:"charge_station_id" json:"charge_station_id"`
+	OrgID             pgtype.UUID        `db:"org_id" json:"org_id"`
+	LocationID        pgtype.UUID        `db:"location_id" json:"location_id"`
+	DisplayName       pgtype.Text        `db:"display_name" json:"display_name"`
+	MaxCapacityKw     pgtype.Numeric     `db:"max_capacity_kw" json:"max_capacity_kw"`
+	AllowAnyToken     bool               `db:"allow_any_token" json:"allow_any_token"`
+	State             string             `db:"state" json:"state"`
+	StateChangedAt    pgtype.Timestamptz `db:"state_changed_at" json:"state_changed_at"`
+	StateReason       pgtype.Text        `db:"state_reason" json:"state_reason"`
+	CreatedAt         pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	OcppVersion       pgtype.Text        `db:"ocpp_version" json:"ocpp_version"`
+	Vendor            pgtype.Text        `db:"vendor" json:"vendor"`
+	Model             pgtype.Text        `db:"model" json:"model"`
+	SerialNumber      pgtype.Text        `db:"serial_number" json:"serial_number"`
+	FirmwareVersion   pgtype.Text        `db:"firmware_version" json:"firmware_version"`
+	Iccid             pgtype.Text        `db:"iccid" json:"iccid"`
+	Imsi              pgtype.Text        `db:"imsi" json:"imsi"`
+	MeterSerialNumber pgtype.Text        `db:"meter_serial_number" json:"meter_serial_number"`
+	MeterType         pgtype.Text        `db:"meter_type" json:"meter_type"`
+	LastBootAt        pgtype.Timestamptz `db:"last_boot_at" json:"last_boot_at"`
+}
+
+// Registry: the record of a charge station with what it reported at its last boot.
+// created_at and updated_at are TIMESTAMP columns written with NOW() in the time zone
+// of the session; the cast reads them back as the same instant.
+func (q *Queries) GetChargeStationRecord(ctx context.Context, chargeStationID string) (GetChargeStationRecordRow, error) {
+	row := q.db.QueryRow(ctx, GetChargeStationRecord, chargeStationID)
+	var i GetChargeStationRecordRow
+	err := row.Scan(
+		&i.ChargeStationID,
+		&i.OrgID,
+		&i.LocationID,
+		&i.DisplayName,
+		&i.MaxCapacityKw,
+		&i.AllowAnyToken,
+		&i.State,
+		&i.StateChangedAt,
+		&i.StateReason,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.OcppVersion,
+		&i.Vendor,
+		&i.Model,
+		&i.SerialNumber,
+		&i.FirmwareVersion,
+		&i.Iccid,
+		&i.Imsi,
+		&i.MeterSerialNumber,
+		&i.MeterType,
+		&i.LastBootAt,
+	)
+	return i, err
+}
+
 const GetChargeStationRuntime = `-- name: GetChargeStationRuntime :one
-SELECT charge_station_id, ocpp_version, vendor, model, serial_number, firmware_version, created_at, updated_at FROM charge_station_runtime WHERE charge_station_id = $1
+SELECT charge_station_id, ocpp_version, vendor, model, serial_number, firmware_version, created_at, updated_at, iccid, imsi, meter_serial_number, meter_type, last_boot_at FROM charge_station_runtime WHERE charge_station_id = $1
 `
 
 // Runtime
@@ -258,6 +368,11 @@ func (q *Queries) GetChargeStationRuntime(ctx context.Context, chargeStationID s
 		&i.FirmwareVersion,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Iccid,
+		&i.Imsi,
+		&i.MeterSerialNumber,
+		&i.MeterType,
+		&i.LastBootAt,
 	)
 	return i, err
 }
@@ -551,6 +666,145 @@ func (q *Queries) ListChargeStationDataTransfers(ctx context.Context, arg ListCh
 	return items, nil
 }
 
+const ListChargeStationRecords = `-- name: ListChargeStationRecords :many
+
+SELECT
+    cs.charge_station_id,
+    cs.org_id,
+    cs.location_id,
+    cs.display_name,
+    cs.max_capacity_kw,
+    cs.allow_any_token,
+    cs.state,
+    cs.state_changed_at,
+    cs.state_reason,
+    cs.created_at::timestamptz AS created_at,
+    cs.updated_at::timestamptz AS updated_at,
+    r.ocpp_version,
+    r.vendor,
+    r.model,
+    r.serial_number,
+    r.firmware_version,
+    r.iccid,
+    r.imsi,
+    r.meter_serial_number,
+    r.meter_type,
+    r.last_boot_at
+FROM charge_stations cs
+LEFT JOIN charge_station_runtime r ON r.charge_station_id = cs.charge_station_id
+LEFT JOIN charge_station_status st ON st.charge_station_id = cs.charge_station_id
+WHERE cs.org_id = ANY($1::uuid[])
+  AND ($2::uuid IS NULL OR cs.location_id = $2::uuid)
+  AND (cardinality($3::text[]) = 0 OR cs.state = ANY($3::text[]))
+  AND ($4::text IS NULL OR lower(r.vendor) = lower($4::text))
+  AND ($5::text IS NULL OR lower(r.model) = lower($5::text))
+  AND ($6::boolean IS NULL OR COALESCE(st.connected, false) = $6::boolean)
+  AND (cardinality($7::text[]) = 0 OR EXISTS (
+        SELECT 1 FROM connector_status s
+        WHERE s.charge_station_id = cs.charge_station_id
+          AND s.status = ANY($7::text[])))
+  AND ($8::text IS NULL
+       OR cs.charge_station_id ILIKE '%' || $8::text || '%'
+       OR cs.display_name ILIKE '%' || $8::text || '%'
+       OR r.serial_number ILIKE '%' || $8::text || '%'
+       OR r.iccid ILIKE '%' || $8::text || '%')
+  AND cs.charge_station_id > $9::text
+ORDER BY cs.charge_station_id
+LIMIT $10
+`
+
+type ListChargeStationRecordsParams struct {
+	OrgIds     []pgtype.UUID `db:"org_ids" json:"org_ids"`
+	LocationID pgtype.UUID   `db:"location_id" json:"location_id"`
+	States     []string      `db:"states" json:"states"`
+	Vendor     pgtype.Text   `db:"vendor" json:"vendor"`
+	Model      pgtype.Text   `db:"model" json:"model"`
+	Connected  pgtype.Bool   `db:"connected" json:"connected"`
+	Statuses   []string      `db:"statuses" json:"statuses"`
+	Query      pgtype.Text   `db:"query" json:"query"`
+	AfterKey   string        `db:"after_key" json:"after_key"`
+	RowLimit   int32         `db:"row_limit" json:"row_limit"`
+}
+
+type ListChargeStationRecordsRow struct {
+	ChargeStationID   string             `db:"charge_station_id" json:"charge_station_id"`
+	OrgID             pgtype.UUID        `db:"org_id" json:"org_id"`
+	LocationID        pgtype.UUID        `db:"location_id" json:"location_id"`
+	DisplayName       pgtype.Text        `db:"display_name" json:"display_name"`
+	MaxCapacityKw     pgtype.Numeric     `db:"max_capacity_kw" json:"max_capacity_kw"`
+	AllowAnyToken     bool               `db:"allow_any_token" json:"allow_any_token"`
+	State             string             `db:"state" json:"state"`
+	StateChangedAt    pgtype.Timestamptz `db:"state_changed_at" json:"state_changed_at"`
+	StateReason       pgtype.Text        `db:"state_reason" json:"state_reason"`
+	CreatedAt         pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	OcppVersion       pgtype.Text        `db:"ocpp_version" json:"ocpp_version"`
+	Vendor            pgtype.Text        `db:"vendor" json:"vendor"`
+	Model             pgtype.Text        `db:"model" json:"model"`
+	SerialNumber      pgtype.Text        `db:"serial_number" json:"serial_number"`
+	FirmwareVersion   pgtype.Text        `db:"firmware_version" json:"firmware_version"`
+	Iccid             pgtype.Text        `db:"iccid" json:"iccid"`
+	Imsi              pgtype.Text        `db:"imsi" json:"imsi"`
+	MeterSerialNumber pgtype.Text        `db:"meter_serial_number" json:"meter_serial_number"`
+	MeterType         pgtype.Text        `db:"meter_type" json:"meter_type"`
+	LastBootAt        pgtype.Timestamptz `db:"last_boot_at" json:"last_boot_at"`
+}
+
+// The state and status lists are never NULL: an empty list selects every state or
+// status. A station without a status row has never connected.
+func (q *Queries) ListChargeStationRecords(ctx context.Context, arg ListChargeStationRecordsParams) ([]ListChargeStationRecordsRow, error) {
+	rows, err := q.db.Query(ctx, ListChargeStationRecords,
+		arg.OrgIds,
+		arg.LocationID,
+		arg.States,
+		arg.Vendor,
+		arg.Model,
+		arg.Connected,
+		arg.Statuses,
+		arg.Query,
+		arg.AfterKey,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListChargeStationRecordsRow{}
+	for rows.Next() {
+		var i ListChargeStationRecordsRow
+		if err := rows.Scan(
+			&i.ChargeStationID,
+			&i.OrgID,
+			&i.LocationID,
+			&i.DisplayName,
+			&i.MaxCapacityKw,
+			&i.AllowAnyToken,
+			&i.State,
+			&i.StateChangedAt,
+			&i.StateReason,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.OcppVersion,
+			&i.Vendor,
+			&i.Model,
+			&i.SerialNumber,
+			&i.FirmwareVersion,
+			&i.Iccid,
+			&i.Imsi,
+			&i.MeterSerialNumber,
+			&i.MeterType,
+			&i.LastBootAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const ListChargeStationSettings = `-- name: ListChargeStationSettings :many
 SELECT charge_station_id, settings, created_at, updated_at FROM charge_station_settings
 WHERE charge_station_id > $1
@@ -679,7 +933,7 @@ SET security_profile = EXCLUDED.security_profile,
     invalid_username_allowed = EXCLUDED.invalid_username_allowed,
     org_id = COALESCE($5::uuid, charge_stations.org_id),
     updated_at = NOW()
-RETURNING charge_station_id, security_profile, base64_sha256_password, invalid_username_allowed, created_at, updated_at, org_id
+RETURNING charge_station_id, security_profile, base64_sha256_password, invalid_username_allowed, created_at, updated_at, org_id, location_id, display_name, max_capacity_kw, allow_any_token, state, state_changed_at, state_reason
 `
 
 type SetChargeStationAuthParams struct {
@@ -709,6 +963,13 @@ func (q *Queries) SetChargeStationAuth(ctx context.Context, arg SetChargeStation
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.OrgID,
+		&i.LocationID,
+		&i.DisplayName,
+		&i.MaxCapacityKw,
+		&i.AllowAnyToken,
+		&i.State,
+		&i.StateChangedAt,
+		&i.StateReason,
 	)
 	return i, err
 }
@@ -916,25 +1177,38 @@ func (q *Queries) SetChargeStationDataTransfer(ctx context.Context, arg SetCharg
 }
 
 const SetChargeStationRuntime = `-- name: SetChargeStationRuntime :one
-INSERT INTO charge_station_runtime (charge_station_id, ocpp_version, vendor, model, serial_number, firmware_version)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO charge_station_runtime (
+    charge_station_id, ocpp_version, vendor, model, serial_number, firmware_version,
+    iccid, imsi, meter_serial_number, meter_type, last_boot_at
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (charge_station_id) DO UPDATE
 SET ocpp_version = EXCLUDED.ocpp_version,
     vendor = EXCLUDED.vendor,
     model = EXCLUDED.model,
     serial_number = EXCLUDED.serial_number,
     firmware_version = EXCLUDED.firmware_version,
+    iccid = EXCLUDED.iccid,
+    imsi = EXCLUDED.imsi,
+    meter_serial_number = EXCLUDED.meter_serial_number,
+    meter_type = EXCLUDED.meter_type,
+    last_boot_at = EXCLUDED.last_boot_at,
     updated_at = NOW()
-RETURNING charge_station_id, ocpp_version, vendor, model, serial_number, firmware_version, created_at, updated_at
+RETURNING charge_station_id, ocpp_version, vendor, model, serial_number, firmware_version, created_at, updated_at, iccid, imsi, meter_serial_number, meter_type, last_boot_at
 `
 
 type SetChargeStationRuntimeParams struct {
-	ChargeStationID string      `db:"charge_station_id" json:"charge_station_id"`
-	OcppVersion     string      `db:"ocpp_version" json:"ocpp_version"`
-	Vendor          pgtype.Text `db:"vendor" json:"vendor"`
-	Model           pgtype.Text `db:"model" json:"model"`
-	SerialNumber    pgtype.Text `db:"serial_number" json:"serial_number"`
-	FirmwareVersion pgtype.Text `db:"firmware_version" json:"firmware_version"`
+	ChargeStationID   string             `db:"charge_station_id" json:"charge_station_id"`
+	OcppVersion       string             `db:"ocpp_version" json:"ocpp_version"`
+	Vendor            pgtype.Text        `db:"vendor" json:"vendor"`
+	Model             pgtype.Text        `db:"model" json:"model"`
+	SerialNumber      pgtype.Text        `db:"serial_number" json:"serial_number"`
+	FirmwareVersion   pgtype.Text        `db:"firmware_version" json:"firmware_version"`
+	Iccid             pgtype.Text        `db:"iccid" json:"iccid"`
+	Imsi              pgtype.Text        `db:"imsi" json:"imsi"`
+	MeterSerialNumber pgtype.Text        `db:"meter_serial_number" json:"meter_serial_number"`
+	MeterType         pgtype.Text        `db:"meter_type" json:"meter_type"`
+	LastBootAt        pgtype.Timestamptz `db:"last_boot_at" json:"last_boot_at"`
 }
 
 func (q *Queries) SetChargeStationRuntime(ctx context.Context, arg SetChargeStationRuntimeParams) (ChargeStationRuntime, error) {
@@ -945,6 +1219,11 @@ func (q *Queries) SetChargeStationRuntime(ctx context.Context, arg SetChargeStat
 		arg.Model,
 		arg.SerialNumber,
 		arg.FirmwareVersion,
+		arg.Iccid,
+		arg.Imsi,
+		arg.MeterSerialNumber,
+		arg.MeterType,
+		arg.LastBootAt,
 	)
 	var i ChargeStationRuntime
 	err := row.Scan(
@@ -956,6 +1235,11 @@ func (q *Queries) SetChargeStationRuntime(ctx context.Context, arg SetChargeStat
 		&i.FirmwareVersion,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Iccid,
+		&i.Imsi,
+		&i.MeterSerialNumber,
+		&i.MeterType,
+		&i.LastBootAt,
 	)
 	return i, err
 }
@@ -983,6 +1267,29 @@ func (q *Queries) SetChargeStationSettings(ctx context.Context, arg SetChargeSta
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const SetChargeStationState = `-- name: SetChargeStationState :execrows
+UPDATE charge_stations
+SET state = $1::text,
+    state_reason = $2::text,
+    state_changed_at = NOW(),
+    updated_at = NOW()
+WHERE charge_station_id = $3
+`
+
+type SetChargeStationStateParams struct {
+	State           string      `db:"state" json:"state"`
+	StateReason     pgtype.Text `db:"state_reason" json:"state_reason"`
+	ChargeStationID string      `db:"charge_station_id" json:"charge_station_id"`
+}
+
+func (q *Queries) SetChargeStationState(ctx context.Context, arg SetChargeStationStateParams) (int64, error) {
+	result, err := q.db.Exec(ctx, SetChargeStationState, arg.State, arg.StateReason, arg.ChargeStationID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const SetChargeStationTrigger = `-- name: SetChargeStationTrigger :one
@@ -1062,4 +1369,36 @@ func (q *Queries) UpdateChargeStationCertificate(ctx context.Context, arg Update
 		&i.SendAfter,
 	)
 	return i, err
+}
+
+const UpdateChargeStationRecord = `-- name: UpdateChargeStationRecord :one
+UPDATE charge_stations
+SET location_id = $1::uuid,
+    display_name = $2::text,
+    max_capacity_kw = $3::float8,
+    allow_any_token = $4::boolean,
+    updated_at = NOW()
+WHERE charge_station_id = $5
+RETURNING updated_at::timestamptz
+`
+
+type UpdateChargeStationRecordParams struct {
+	LocationID      pgtype.UUID   `db:"location_id" json:"location_id"`
+	DisplayName     pgtype.Text   `db:"display_name" json:"display_name"`
+	MaxCapacityKw   pgtype.Float8 `db:"max_capacity_kw" json:"max_capacity_kw"`
+	AllowAnyToken   bool          `db:"allow_any_token" json:"allow_any_token"`
+	ChargeStationID string        `db:"charge_station_id" json:"charge_station_id"`
+}
+
+func (q *Queries) UpdateChargeStationRecord(ctx context.Context, arg UpdateChargeStationRecordParams) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, UpdateChargeStationRecord,
+		arg.LocationID,
+		arg.DisplayName,
+		arg.MaxCapacityKw,
+		arg.AllowAnyToken,
+		arg.ChargeStationID,
+	)
+	var updated_at pgtype.Timestamptz
+	err := row.Scan(&updated_at)
+	return updated_at, err
 }

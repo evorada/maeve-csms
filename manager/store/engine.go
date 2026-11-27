@@ -40,4 +40,5 @@ type Engine interface {
 	OutboxStore
 	CommandStore
 	AssetStore
+	ChargeStationRegistryStore
 }

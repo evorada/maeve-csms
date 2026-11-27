@@ -240,6 +240,24 @@ func TestStubsReturnErrNotImplemented(t *testing.T) {
 		"DeleteAssetConnector": func() error {
 			return s.DeleteAssetConnector(ctx, "connector001")
 		},
+		"LookupChargeStation": func() error {
+			_, err := s.LookupChargeStation(ctx, "cs001")
+			return err
+		},
+		"UpdateChargeStation": func() error {
+			return s.UpdateChargeStation(ctx, &store.ChargeStation{StationKey: "cs001"})
+		},
+		"SetChargeStationState": func() error {
+			return s.SetChargeStationState(ctx, "cs001", store.StationStateDecommissioned, nil)
+		},
+		"ListChargeStations": func() error {
+			_, _, err := s.ListChargeStations(ctx, store.ChargeStationFilter{})
+			return err
+		},
+		"CountChargeStations": func() error {
+			_, err := s.CountChargeStations(ctx, "org001")
+			return err
+		},
 	}
 
 	for name, stub := range stubs {

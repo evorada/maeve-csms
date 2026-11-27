@@ -141,7 +141,7 @@ func TestAuthorizeIdTag(t *testing.T) {
 
 			tracer, exporter := testutil.GetTracer()
 			ctx, span := tracer.Start(context.Background(), "test")
-			got, err := authorizeIdTag(ctx, engine, &tenancy.Resolver{Stations: engine}, clk, "cs001", "TAG1")
+			got, err := authorizeIdTag(ctx, engine, engine, &tenancy.Resolver{Stations: engine}, clk, "cs001", "TAG1")
 			span.End()
 			require.NoError(t, err)
 
@@ -169,7 +169,7 @@ func TestAuthorizeIdTagReturnsStoreError(t *testing.T) {
 
 	orgs := &tenancy.Resolver{Stations: inmemory.NewStore(clk)}
 
-	got, err := authorizeIdTag(context.Background(), failingTokenStore{err: lookupErr}, orgs, clk, "cs001", "TAG1")
+	got, err := authorizeIdTag(context.Background(), failingTokenStore{err: lookupErr}, nil, orgs, clk, "cs001", "TAG1")
 
 	assert.ErrorIs(t, err, lookupErr)
 	assert.Equal(t, idTagAuthorization{}, got)

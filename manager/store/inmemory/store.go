@@ -86,6 +86,9 @@ type Store struct {
 	assetLocations  map[string]*store.AssetLocation
 	assetEvses      map[string]*store.AssetEvse
 	assetConnectors map[string]*store.AssetConnector
+	// the registry records by station key, without their org (the org of the auth
+	// details) and runtime details (chargeStationRuntimeDetails)
+	chargeStations map[string]*store.ChargeStation
 }
 
 func NewStore(clock clock.PassiveClock) *Store {
@@ -140,6 +143,7 @@ func NewStore(clock clock.PassiveClock) *Store {
 		assetLocations:                   make(map[string]*store.AssetLocation),
 		assetEvses:                       make(map[string]*store.AssetEvse),
 		assetConnectors:                  make(map[string]*store.AssetConnector),
+		chargeStations:                   make(map[string]*store.ChargeStation),
 	}
 }
 
@@ -254,6 +258,7 @@ func (s *Store) SetChargeStationAuth(_ context.Context, chargeStationId string, 
 		}
 	}
 	s.chargeStationAuth[chargeStationId] = auth
+	s.registerChargeStation(chargeStationId)
 	return nil
 }
 
@@ -389,14 +394,14 @@ func (s *Store) ListChargeStationInstallCertificates(_ context.Context, pageSize
 func (s *Store) SetChargeStationRuntimeDetails(_ context.Context, chargeStationId string, details *store.ChargeStationRuntimeDetails) error {
 	s.Lock()
 	defer s.Unlock()
-	s.chargeStationRuntimeDetails[chargeStationId] = details
+	s.chargeStationRuntimeDetails[chargeStationId] = copyRuntimeDetails(details)
 	return nil
 }
 
 func (s *Store) LookupChargeStationRuntimeDetails(_ context.Context, chargeStationId string) (*store.ChargeStationRuntimeDetails, error) {
 	s.Lock()
 	defer s.Unlock()
-	return s.chargeStationRuntimeDetails[chargeStationId], nil
+	return copyRuntimeDetails(s.chargeStationRuntimeDetails[chargeStationId]), nil
 }
 
 func (s *Store) SetChargeStationTriggerMessage(ctx context.Context, chargeStationId string, triggerMessage *store.ChargeStationTriggerMessage) error {

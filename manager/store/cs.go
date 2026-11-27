@@ -59,12 +59,21 @@ type ChargeStationSettingsStore interface {
 	DeleteChargeStationSettings(ctx context.Context, chargeStationId string) error
 }
 
+// ChargeStationRuntimeDetails is what a charge station reported about itself when it
+// last booted. Firestore stores the OCPP version only.
 type ChargeStationRuntimeDetails struct {
 	OcppVersion     string
 	FirmwareVersion *string
 	Model           *string
 	Vendor          *string
 	SerialNumber    *string
+	// Iccid and Imsi identify the SIM card of the modem of the station.
+	Iccid             *string
+	Imsi              *string
+	MeterSerialNumber *string
+	MeterType         *string
+	// LastBootAt is when the CSMS received the last BootNotification of the station.
+	LastBootAt *time.Time
 }
 
 type ChargeStationRuntimeDetailsStore interface {

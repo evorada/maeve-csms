@@ -42,3 +42,26 @@ func TestCursor(t *testing.T) {
 		assert.ErrorIs(t, err, store.ErrInvalidCursor, invalid)
 	}
 }
+
+func TestKeyCursor(t *testing.T) {
+	afterKey, err := store.DecodeKeyCursor("")
+	require.NoError(t, err)
+	assert.Equal(t, "", afterKey, "the first page starts before every key")
+
+	for _, key := range []string{"k7f2.CP001", "cs001", "ünïcödé/ key"} {
+		cursor := store.EncodeKeyCursor(key)
+		assert.NotContains(t, cursor, key, "opaque")
+		afterKey, err = store.DecodeKeyCursor(cursor)
+		require.NoError(t, err)
+		assert.Equal(t, key, afterKey)
+	}
+
+	for _, invalid := range []string{
+		"not a cursor!",
+		base64.RawURLEncoding.EncodeToString([]byte{0xff, 0xfe}),  // not UTF-8
+		base64.RawURLEncoding.EncodeToString([]byte("cs\x00001")), // NUL, which no text column holds
+	} {
+		_, err := store.DecodeKeyCursor(invalid)
+		assert.ErrorIs(t, err, store.ErrInvalidCursor, invalid)
+	}
+}

@@ -60,6 +60,7 @@ func newStartTransactionHandler(t *testing.T) (handlers.StartTransactionHandler,
 	return handlers.StartTransactionHandler{
 		Clock:            clk,
 		TokenStore:       engine,
+		RegistryStore:    engine,
 		OrgResolver:      &tenancy.Resolver{Stations: engine},
 		TransactionStore: engine,
 		ReservationStore: engine,

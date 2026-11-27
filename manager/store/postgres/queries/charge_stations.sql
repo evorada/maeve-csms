@@ -45,14 +45,22 @@ DELETE FROM charge_station_settings WHERE charge_station_id = $1;
 SELECT * FROM charge_station_runtime WHERE charge_station_id = $1;
 
 -- name: SetChargeStationRuntime :one
-INSERT INTO charge_station_runtime (charge_station_id, ocpp_version, vendor, model, serial_number, firmware_version)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO charge_station_runtime (
+    charge_station_id, ocpp_version, vendor, model, serial_number, firmware_version,
+    iccid, imsi, meter_serial_number, meter_type, last_boot_at
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (charge_station_id) DO UPDATE
 SET ocpp_version = EXCLUDED.ocpp_version,
     vendor = EXCLUDED.vendor,
     model = EXCLUDED.model,
     serial_number = EXCLUDED.serial_number,
     firmware_version = EXCLUDED.firmware_version,
+    iccid = EXCLUDED.iccid,
+    imsi = EXCLUDED.imsi,
+    meter_serial_number = EXCLUDED.meter_serial_number,
+    meter_type = EXCLUDED.meter_type,
+    last_boot_at = EXCLUDED.last_boot_at,
     updated_at = NOW()
 RETURNING *;
 
@@ -228,3 +236,105 @@ SELECT * FROM charge_station_certificate_deletions
 WHERE charge_station_id > $1
 ORDER BY charge_station_id ASC
 LIMIT $2;
+
+-- Registry: the record of a charge station with what it reported at its last boot.
+-- created_at and updated_at are TIMESTAMP columns written with NOW() in the time zone
+-- of the session; the cast reads them back as the same instant.
+
+-- name: GetChargeStationRecord :one
+SELECT
+    cs.charge_station_id,
+    cs.org_id,
+    cs.location_id,
+    cs.display_name,
+    cs.max_capacity_kw,
+    cs.allow_any_token,
+    cs.state,
+    cs.state_changed_at,
+    cs.state_reason,
+    cs.created_at::timestamptz AS created_at,
+    cs.updated_at::timestamptz AS updated_at,
+    r.ocpp_version,
+    r.vendor,
+    r.model,
+    r.serial_number,
+    r.firmware_version,
+    r.iccid,
+    r.imsi,
+    r.meter_serial_number,
+    r.meter_type,
+    r.last_boot_at
+FROM charge_stations cs
+LEFT JOIN charge_station_runtime r ON r.charge_station_id = cs.charge_station_id
+WHERE cs.charge_station_id = $1;
+
+-- name: UpdateChargeStationRecord :one
+UPDATE charge_stations
+SET location_id = sqlc.narg('location_id')::uuid,
+    display_name = sqlc.narg('display_name')::text,
+    max_capacity_kw = sqlc.narg('max_capacity_kw')::float8,
+    allow_any_token = sqlc.arg('allow_any_token')::boolean,
+    updated_at = NOW()
+WHERE charge_station_id = sqlc.arg('charge_station_id')
+RETURNING updated_at::timestamptz;
+
+-- name: SetChargeStationState :execrows
+UPDATE charge_stations
+SET state = sqlc.arg('state')::text,
+    state_reason = sqlc.narg('state_reason')::text,
+    state_changed_at = NOW(),
+    updated_at = NOW()
+WHERE charge_station_id = sqlc.arg('charge_station_id');
+
+-- The state and status lists are never NULL: an empty list selects every state or
+-- status. A station without a status row has never connected.
+
+-- name: ListChargeStationRecords :many
+SELECT
+    cs.charge_station_id,
+    cs.org_id,
+    cs.location_id,
+    cs.display_name,
+    cs.max_capacity_kw,
+    cs.allow_any_token,
+    cs.state,
+    cs.state_changed_at,
+    cs.state_reason,
+    cs.created_at::timestamptz AS created_at,
+    cs.updated_at::timestamptz AS updated_at,
+    r.ocpp_version,
+    r.vendor,
+    r.model,
+    r.serial_number,
+    r.firmware_version,
+    r.iccid,
+    r.imsi,
+    r.meter_serial_number,
+    r.meter_type,
+    r.last_boot_at
+FROM charge_stations cs
+LEFT JOIN charge_station_runtime r ON r.charge_station_id = cs.charge_station_id
+LEFT JOIN charge_station_status st ON st.charge_station_id = cs.charge_station_id
+WHERE cs.org_id = ANY(sqlc.arg('org_ids')::uuid[])
+  AND (sqlc.narg('location_id')::uuid IS NULL OR cs.location_id = sqlc.narg('location_id')::uuid)
+  AND (cardinality(sqlc.arg('states')::text[]) = 0 OR cs.state = ANY(sqlc.arg('states')::text[]))
+  AND (sqlc.narg('vendor')::text IS NULL OR lower(r.vendor) = lower(sqlc.narg('vendor')::text))
+  AND (sqlc.narg('model')::text IS NULL OR lower(r.model) = lower(sqlc.narg('model')::text))
+  AND (sqlc.narg('connected')::boolean IS NULL OR COALESCE(st.connected, false) = sqlc.narg('connected')::boolean)
+  AND (cardinality(sqlc.arg('statuses')::text[]) = 0 OR EXISTS (
+        SELECT 1 FROM connector_status s
+        WHERE s.charge_station_id = cs.charge_station_id
+          AND s.status = ANY(sqlc.arg('statuses')::text[])))
+  AND (sqlc.narg('query')::text IS NULL
+       OR cs.charge_station_id ILIKE '%' || sqlc.narg('query')::text || '%'
+       OR cs.display_name ILIKE '%' || sqlc.narg('query')::text || '%'
+       OR r.serial_number ILIKE '%' || sqlc.narg('query')::text || '%'
+       OR r.iccid ILIKE '%' || sqlc.narg('query')::text || '%')
+  AND cs.charge_station_id > sqlc.arg('after_key')::text
+ORDER BY cs.charge_station_id
+LIMIT sqlc.arg('row_limit');
+
+-- name: CountChargeStationRecords :one
+SELECT count(*) FROM charge_stations
+WHERE org_id = sqlc.arg('org_id')::uuid
+  AND (cardinality(sqlc.arg('states')::text[]) = 0 OR state = ANY(sqlc.arg('states')::text[]));

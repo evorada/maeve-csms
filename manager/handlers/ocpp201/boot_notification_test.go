@@ -5,6 +5,7 @@ package ocpp201_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -57,8 +58,99 @@ func TestBootNotificationHandler(t *testing.T) {
 	details, err := engine.LookupChargeStationRuntimeDetails(context.Background(), "cs001")
 	require.NoError(t, err)
 	assert.Equal(t, store.ChargeStationRuntimeDetails{
-		OcppVersion: "2.0.1",
+		OcppVersion:  "2.0.1",
+		Model:        makePtr("testy"),
+		Vendor:       makePtr(""),
+		SerialNumber: makePtr("cs001"),
+		LastBootAt:   &now,
 	}, *details)
+}
+
+// The identity that a station reports at boot is recorded for the registry: vendor,
+// model, serial number, firmware, the SIM card of its modem and the time of the boot.
+func TestBootNotificationRecordsTheIdentityOfTheStation(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 11, 28, 9, 30, 0, 0, time.UTC)
+	engine := inmemory.NewStore(clock.RealClock{})
+	require.NoError(t, engine.SetChargeStationAuth(ctx, "k7f2.CP001", &store.ChargeStationAuth{}))
+	handler := handlers.BootNotificationHandler{
+		Clock:               clockTest.NewFakePassiveClock(now),
+		RuntimeDetailsStore: engine,
+		HeartbeatInterval:   10,
+	}
+
+	_, err := handler.HandleCall(ctx, "k7f2.CP001", &types.BootNotificationRequestJson{
+		ChargingStation: types.ChargingStationType{
+			VendorName:      "Acme",
+			Model:           "Volt 22",
+			SerialNumber:    makePtr("SN-1001"),
+			FirmwareVersion: makePtr("1.2.3"),
+			Modem: &types.ModemType{
+				Iccid: makePtr("89340711000000000019"),
+				Imsi:  makePtr("214070000000001"),
+			},
+		},
+		Reason: types.BootReasonEnumTypePowerUp,
+	})
+	require.NoError(t, err)
+
+	want := &store.ChargeStationRuntimeDetails{
+		OcppVersion:     "2.0.1",
+		FirmwareVersion: makePtr("1.2.3"),
+		Model:           makePtr("Volt 22"),
+		Vendor:          makePtr("Acme"),
+		SerialNumber:    makePtr("SN-1001"),
+		Iccid:           makePtr("89340711000000000019"),
+		Imsi:            makePtr("214070000000001"),
+		LastBootAt:      &now,
+	}
+	record, err := engine.LookupChargeStation(ctx, "k7f2.CP001")
+	require.NoError(t, err)
+	require.NotNil(t, record)
+	assert.Equal(t, want, record.Runtime)
+
+	// a modem without a SIM card, and a station without a modem
+	for _, modem := range []*types.ModemType{{}, nil} {
+		_, err := handler.HandleCall(ctx, "k7f2.CP001", &types.BootNotificationRequestJson{
+			ChargingStation: types.ChargingStationType{VendorName: "Acme", Model: "Volt 22", Modem: modem},
+			Reason:          types.BootReasonEnumTypePowerUp,
+		})
+		require.NoError(t, err)
+		details, err := engine.LookupChargeStationRuntimeDetails(ctx, "k7f2.CP001")
+		require.NoError(t, err)
+		assert.Nil(t, details.Iccid)
+		assert.Nil(t, details.Imsi)
+	}
+}
+
+// failingRuntimeStore fails every write of the runtime details.
+type failingRuntimeStore struct {
+	store.ChargeStationRuntimeDetailsStore
+}
+
+func (failingRuntimeStore) SetChargeStationRuntimeDetails(context.Context, string, *store.ChargeStationRuntimeDetails) error {
+	return errors.New("database is down")
+}
+
+func TestBootNotificationIsAcceptedWhenTheIdentityCannotBeRecorded(t *testing.T) {
+	now := time.Date(2026, 11, 28, 9, 30, 0, 0, time.UTC)
+	handler := handlers.BootNotificationHandler{
+		Clock:               clockTest.NewFakePassiveClock(now),
+		RuntimeDetailsStore: failingRuntimeStore{},
+		HeartbeatInterval:   10,
+	}
+
+	got, err := handler.HandleCall(context.Background(), "k7f2.CP001", &types.BootNotificationRequestJson{
+		ChargingStation: types.ChargingStationType{VendorName: "Acme", Model: "Volt 22"},
+		Reason:          types.BootReasonEnumTypePowerUp,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, &types.BootNotificationResponseJson{
+		CurrentTime: "2026-11-28T09:30:00Z",
+		Status:      types.RegistrationStatusEnumTypeAccepted,
+		Interval:    10,
+	}, got)
 }
 
 func TestBootNotificationHeartbeatIntervalOfTheTenant(t *testing.T) {

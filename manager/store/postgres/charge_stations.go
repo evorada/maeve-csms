@@ -158,12 +158,17 @@ func (s *Store) DeleteChargeStationSettings(ctx context.Context, chargeStationId
 
 func (s *Store) SetChargeStationRuntimeDetails(ctx context.Context, chargeStationId string, details *store.ChargeStationRuntimeDetails) error {
 	params := SetChargeStationRuntimeParams{
-		ChargeStationID: chargeStationId,
-		OcppVersion:     details.OcppVersion,
-		Vendor:          toPgText(details.Vendor),
-		Model:           toPgText(details.Model),
-		SerialNumber:    toPgText(details.SerialNumber),
-		FirmwareVersion: toPgText(details.FirmwareVersion),
+		ChargeStationID:   chargeStationId,
+		OcppVersion:       details.OcppVersion,
+		Vendor:            toPgText(details.Vendor),
+		Model:             toPgText(details.Model),
+		SerialNumber:      toPgText(details.SerialNumber),
+		FirmwareVersion:   toPgText(details.FirmwareVersion),
+		Iccid:             toPgText(details.Iccid),
+		Imsi:              toPgText(details.Imsi),
+		MeterSerialNumber: toPgText(details.MeterSerialNumber),
+		MeterType:         toPgText(details.MeterType),
+		LastBootAt:        toNullTimestamptz(details.LastBootAt),
 	}
 
 	_, err := s.writeQueries(ctx).SetChargeStationRuntime(ctx, params)
@@ -184,11 +189,16 @@ func (s *Store) LookupChargeStationRuntimeDetails(ctx context.Context, chargeSta
 	}
 
 	return &store.ChargeStationRuntimeDetails{
-		OcppVersion:     runtime.OcppVersion,
-		FirmwareVersion: fromPgText(runtime.FirmwareVersion),
-		Model:           fromPgText(runtime.Model),
-		Vendor:          fromPgText(runtime.Vendor),
-		SerialNumber:    fromPgText(runtime.SerialNumber),
+		OcppVersion:       runtime.OcppVersion,
+		FirmwareVersion:   fromPgText(runtime.FirmwareVersion),
+		Model:             fromPgText(runtime.Model),
+		Vendor:            fromPgText(runtime.Vendor),
+		SerialNumber:      fromPgText(runtime.SerialNumber),
+		Iccid:             fromPgText(runtime.Iccid),
+		Imsi:              fromPgText(runtime.Imsi),
+		MeterSerialNumber: fromPgText(runtime.MeterSerialNumber),
+		MeterType:         fromPgText(runtime.MeterType),
+		LastBootAt:        fromNullTimestamptz(runtime.LastBootAt),
 	}, nil
 }
 

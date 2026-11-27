@@ -4,6 +4,7 @@ package ocpp201
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/thoughtworks/maeve-csms/manager/store"
@@ -45,11 +46,25 @@ func (b BootNotificationHandler) HandleCall(ctx context.Context, chargeStationId
 		span.SetAttributes(attribute.String("boot.firmware", *req.ChargingStation.FirmwareVersion))
 	}
 
-	err := b.RuntimeDetailsStore.SetChargeStationRuntimeDetails(ctx, chargeStationId, &store.ChargeStationRuntimeDetails{
-		OcppVersion: "2.0.1",
-	})
+	// The identity that the station reports is recorded for the registry. The station is
+	// answered the same when it cannot be recorded: a failure is only logged.
+	now := b.Clock.Now()
+	details := &store.ChargeStationRuntimeDetails{
+		OcppVersion:     "2.0.1",
+		FirmwareVersion: req.ChargingStation.FirmwareVersion,
+		Model:           &req.ChargingStation.Model,
+		Vendor:          &req.ChargingStation.VendorName,
+		SerialNumber:    req.ChargingStation.SerialNumber,
+		LastBootAt:      &now,
+	}
+	if modem := req.ChargingStation.Modem; modem != nil {
+		details.Iccid = modem.Iccid
+		details.Imsi = modem.Imsi
+	}
+	err := b.RuntimeDetailsStore.SetChargeStationRuntimeDetails(ctx, chargeStationId, details)
 	if err != nil {
-		return nil, err
+		span.RecordError(err)
+		slog.Error("recording the boot identity of a charge station", "chargeStationId", chargeStationId, "err", err)
 	}
 
 	return &types.BootNotificationResponseJson{
