@@ -15,6 +15,9 @@ group = "manager"
 heartbeat_interval = "10m"
 ocpp16_enabled = false
 
+[jobs]
+reservation_expiry_interval = "30s"
+
 [observability]
 log_format = "text"
 otel_collector_addr = "localhost:4317"

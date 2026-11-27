@@ -23,6 +23,7 @@ type BaseConfig struct {
 	ContractCertProvider      ContractCertProviderConfig      `mapstructure:"contract_cert_provider" toml:"contract_cert_provider" validate:"required"`
 	ChargeStationCertProvider ChargeStationCertProviderConfig `mapstructure:"charge_station_cert_provider" toml:"charge_station_cert_provider" validate:"required"`
 	TariffService             TariffServiceConfig             `mapstructure:"tariff_service" toml:"tariff_service" validate:"required"`
+	Jobs                      JobsConfig                      `mapstructure:"jobs" toml:"jobs"`
 	Ocpi                      *OcpiConfig                     `mapstructure:"ocpi,omitempty" toml:"ocpi,omitempty"`
 }
 
@@ -78,6 +79,9 @@ var DefaultConfig = BaseConfig{
 	},
 	TariffService: TariffServiceConfig{
 		Type: "kwh",
+	},
+	Jobs: JobsConfig{
+		ReservationExpiryInterval: "1m",
 	},
 }
 
