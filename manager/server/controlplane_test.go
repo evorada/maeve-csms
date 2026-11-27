@@ -362,3 +362,87 @@ func TestControlPlaneHealthChecksAStorageEngineThatHasAHealthCheck(t *testing.T)
 		})
 	}
 }
+
+// A tenant that the console suspends cannot create or change anything through the API
+// from that moment on, and can again from the moment it is resumed: the API does not
+// wait until the resolver forgets what it knows about the tenant.
+func TestSuspendingATenantStopsItsWritesThroughTheApiAtOnce(t *testing.T) {
+	ctx := context.Background()
+	engine := inmemory.NewStore(clock.RealClock{})
+	require.NoError(t, engine.PutTenant(ctx, &store.Tenant{
+		OrgId: orgA, Path: store.OrgPathLabel(orgA), Slug: "tenant-aaaa", OrgKey: "aaaa", Hostnames: []string{"a.example.com"},
+	}))
+	require.NoError(t, engine.SetChargeStationAuth(ctx, stationOfA, &store.ChargeStationAuth{SecurityProfile: store.TLSWithBasicAuth, OrgId: orgA}))
+
+	// one resolver behind both listeners, as in the manager. It keeps a tenant for an
+	// hour: only the control plane makes it read the tenant again.
+	resolver := &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine, DefaultOrgId: store.LegacyOrgId, CacheTTL: time.Hour}
+	console, verifier := newConsoleVerifier(t)
+	internal := server.NewInternalHandler(server.InternalDeps{Resolver: resolver, Engine: engine, Verifier: verifier})
+	apiHandler := server.NewApiHandler(server.ApiDeps{
+		Engine:   engine,
+		Verifier: verifier,
+		Scoper:   &tenancy.Scoper{Mode: tenancy.ModeMulti, Tenants: engine, Resolver: resolver, DefaultOrgId: store.LegacyOrgId},
+	})
+
+	provisioner := serviceToken(console, "svc:provisioner", tenancy.PermTenantManage)
+	claims := console.Claims(time.Now())
+	claims["org"] = orgA
+	claims["org_scope"] = "self"
+	claims["perms"] = tenancy.ManifestPermissions
+	operator := console.Sign(claims)
+
+	call := func(method, path, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, "/api/v0"+path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+operator)
+		rr := httptest.NewRecorder()
+		apiHandler.ServeHTTP(rr, req)
+		return rr
+	}
+	setToken := func(uid string) *httptest.ResponseRecorder {
+		return call(http.MethodPost, "/token", `{"countryCode":"GB","partyId":"TWK","type":"RFID","uid":"`+uid+
+			`","contractId":"GBTWK012345678V","issuer":"TWK","valid":true,"cacheMode":"ALWAYS"}`)
+	}
+	register := func() *httptest.ResponseRecorder {
+		return call(http.MethodPost, "/cs/"+stationOfA, `{"securityProfile":2}`)
+	}
+	setStatus := func(action string, want controlplane.TenantStateStatus) {
+		t.Helper()
+		rr := send(internal, controlPlaneRoute{http.MethodPost, controlplane.BasePath + "/tenants/" + orgA + ":" + action}, provisioner)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		var state controlplane.TenantState
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &state))
+		require.Equal(t, want, state.Status)
+	}
+	const suspended = `{"status":"Forbidden","error":"tenant_suspended"}`
+
+	// the resolver knows the tenant as active from now on
+	require.Equal(t, http.StatusCreated, setToken("BEFORE").Code)
+	require.Equal(t, http.StatusCreated, register().Code)
+
+	setStatus("suspend", controlplane.TenantStateStatusSuspended)
+
+	for name, rr := range map[string]*httptest.ResponseRecorder{"a token": setToken("WHILE"), "a charge station": register()} {
+		require.Equal(t, http.StatusForbidden, rr.Code, name)
+		assert.JSONEq(t, suspended, rr.Body.String(), name)
+	}
+	token, err := engine.LookupTokenForOrg(ctx, orgA, "WHILE")
+	require.NoError(t, err)
+	assert.Nil(t, token)
+
+	// reading and commands go on, and the gateway still lets the charge station in
+	assert.Equal(t, http.StatusOK, call(http.MethodGet, "/token", "").Code)
+	assert.Equal(t, http.StatusOK, call(http.MethodGet, "/cs/"+stationOfA+"/auth", "").Code)
+	assert.Equal(t, http.StatusAccepted, call(http.MethodPost, "/cs/"+stationOfA+"/reset", `{"type":"Soft"}`).Code)
+	assert.Equal(t, http.StatusOK, get(internal, "/_internal/v1/station-auth?host=a.example.com&stationId=CP001", "").Code)
+
+	// suspending again changes nothing
+	setStatus("suspend", controlplane.TenantStateStatusSuspended)
+	require.Equal(t, http.StatusForbidden, setToken("WHILE").Code)
+
+	setStatus("resume", controlplane.TenantStateStatusActive)
+
+	require.Equal(t, http.StatusCreated, setToken("AFTER").Code)
+	require.Equal(t, http.StatusCreated, register().Code)
+}

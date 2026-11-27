@@ -36,6 +36,13 @@ The API is described by an OpenAPI spec that is split over several files:
    parameter `csId` (`/cs/{csId}/...`): `api.AuthzMiddleware` answers `404` for a charge station outside the
    scope of the caller before the operation runs. Any other operation scopes what it reads and writes itself,
    with the `tenancy.Scoper` of the server.
+
+   An operation that creates or changes something that a tenant owns has one of `tenancy.WritePermissions` and
+   is answered with `403` and the error `tenant_suspended` while that tenant is suspended: on a charge station
+   by `api.AuthzMiddleware`, anywhere else by `Server.targetOrg`, which gives the operation the org that it
+   writes to. `refusedForSuspendedTenant` in `authz_test.go` lists these operations, so add the new one there
+   and name `tenant_suspended` in the description of its `403`. Reading and commands to a charge station
+   (`cpms.connector.command`) never depend on the status of a tenant.
 4. Run `make api-generate` in `manager/` and commit the changed source files together with
    `api-spec.bundled.yaml` and `api.gen.go`. Never edit those two files by hand.
 

@@ -39,8 +39,8 @@ type Resolver struct {
 	DefaultOrgId string
 	// Clock times the cache. Nil is the real clock.
 	Clock clock.PassiveClock
-	// CacheTTL is how long a tenant that was found by host or by org key is kept
-	// (DefaultCacheTTL when not positive). A lookup that finds no tenant is not kept.
+	// CacheTTL is how long a tenant that was found by host, by org key or by org id is
+	// kept (DefaultCacheTTL when not positive). A lookup that finds no tenant is not kept.
 	CacheTTL time.Duration
 
 	mu sync.Mutex
@@ -125,6 +125,27 @@ func (r *Resolver) TenantForStationKey(ctx context.Context, stationKey string) (
 	})
 	if err != nil {
 		return nil, fmt.Errorf("lookup tenant of station key %s: %w", stationKey, err)
+	}
+	return tenant, nil
+}
+
+// TenantByOrgId returns the tenant of an org. It returns nil in single mode and for an
+// org that is not a tenant here. The tenant is kept like one that was found by host or
+// by org key, so its status can be as old as CacheTTL unless Invalidate was called for
+// the org. The tenant is shared with the cache of the resolver and must not be changed.
+func (r *Resolver) TenantByOrgId(ctx context.Context, orgId string) (*store.Tenant, error) {
+	if !r.multi() {
+		return nil, nil
+	}
+	orgId = normalizeOrgId(orgId)
+	if orgId == "" {
+		return nil, nil
+	}
+	tenant, err := r.lookupTenant("org:"+orgId, func(tenants store.TenantStore) (*store.Tenant, error) {
+		return tenants.GetTenant(ctx, orgId)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("lookup tenant of org %s: %w", orgId, err)
 	}
 	return tenant, nil
 }

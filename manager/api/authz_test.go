@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -727,5 +728,335 @@ func TestStationKeyIsCheckedAsTheOperationGetsIt(t *testing.T) {
 			require.Equal(t, http.StatusNoContent, rr.Code)
 			assert.Equal(t, []string{tt.wantCsId}, server.csIds)
 		})
+	}
+}
+
+// suspendedBody is the one answer to a write for a tenant that is suspended.
+const suspendedBody = `{"status":"Forbidden","error":"tenant_suspended"}`
+
+// refusedForSuspendedTenant lists the operations that are refused while the tenant
+// that they write for is suspended: the ones that create or change something that the
+// tenant owns. Everything else stays possible: reading, commands to a charge station
+// and what does not belong to a tenant. A new operation that writes needs a line here:
+// what a suspended tenant cannot do is a decision, not a default.
+var refusedForSuspendedTenant = []string{
+	"DELETE /cs/{csId}/certificate",
+	"DELETE /cs/{csId}/display-message/{messageId}",
+	"DELETE /cs/{csId}/monitoring/{monitorId}",
+	"PATCH /cs/{csId}/configuration",
+	"PATCH /cs/{csId}/variables",
+	"POST /cs/{csId}",
+	"POST /cs/{csId}/certificates",
+	"POST /cs/{csId}/display-message",
+	"POST /cs/{csId}/local-list",
+	"POST /cs/{csId}/monitoring",
+	"POST /cs/{csId}/monitoring/base",
+	"POST /cs/{csId}/monitoring/level",
+	"POST /cs/{csId}/reconfigure",
+	"POST /location/{locationId}",
+	"POST /token",
+}
+
+// setTenantStatus changes the status of a tenant like the control plane does: the
+// resolver is told to forget the tenant.
+func (m *multiTenant) setTenantStatus(t *testing.T, orgId string, status store.TenantStatus) {
+	t.Helper()
+	found, err := m.engine.SetTenantStatus(context.Background(), orgId, status)
+	require.NoError(t, err)
+	require.True(t, found)
+	m.scoper.Resolver.Invalidate(orgId)
+}
+
+func TestSuspendedTenantCannotWrite(t *testing.T) {
+	ctx := context.Background()
+	m := newMultiTenant(t)
+	index := permissionIndex(t)
+	// the operations of the manager, and a spy in their place
+	r := m.router(t)
+	spied, next := newSpyRouter(m.scoper, index, "")
+	callerOfA := callerOf(orgA, tenancy.OrgScopeSelf)
+	// what the writes that pick their org themselves are sent
+	bodies := map[string]string{
+		"POST /token":                 tokenBody("NEWTOKEN", ""),
+		"POST /location/{locationId}": locationBody("New location", ""),
+	}
+
+	m.setTenantStatus(t, orgA, store.TenantStatusSuspended)
+
+	t.Run("every operation with a write permission that is not a read is refused", func(t *testing.T) {
+		var writes []string
+		for operation, permission := range index {
+			if tenancy.WritePermissions[permission] && !strings.HasPrefix(operation, http.MethodGet+" ") {
+				writes = append(writes, operation)
+			}
+		}
+		assert.ElementsMatch(t, refusedForSuspendedTenant, writes)
+	})
+
+	for operation := range index {
+		t.Run(operation, func(t *testing.T) {
+			method, path := target(operation, stationOfA)
+			next.calls = 0
+
+			if !slices.Contains(refusedForSuspendedTenant, operation) {
+				rr := serve(spied, as(callerOfA, method, path, ""))
+				require.Equal(t, http.StatusNoContent, rr.Code, rr.Body.String())
+				assert.Equal(t, 1, next.calls, "the operation must run")
+				return
+			}
+
+			rr := serve(r, as(callerOfA, method, path, bodies[operation]))
+			require.Equal(t, http.StatusForbidden, rr.Code, rr.Body.String())
+			assert.JSONEq(t, suspendedBody, rr.Body.String())
+			if strings.Contains(operation, "{csId}") {
+				// refused before the operation is reached
+				rr = serve(spied, as(callerOfA, method, path, ""))
+				require.Equal(t, http.StatusForbidden, rr.Code, rr.Body.String())
+				assert.JSONEq(t, suspendedBody, rr.Body.String())
+				assert.Zero(t, next.calls, "the operation must not run")
+			}
+		})
+	}
+
+	t.Run("a charge station cannot be registered", func(t *testing.T) {
+		rr := serve(r, as(callerOfA, http.MethodPost, "/cs/aaaa.NEW", `{"securityProfile":2}`))
+		require.Equal(t, http.StatusForbidden, rr.Code, rr.Body.String())
+		assert.JSONEq(t, suspendedBody, rr.Body.String())
+		// not even with an id that would be refused
+		rr = serve(r, as(callerOfA, http.MethodPost, "/cs/aaaa.NOT%20VALID", `{"securityProfile":2}`))
+		require.Equal(t, http.StatusForbidden, rr.Code, rr.Body.String())
+	})
+
+	t.Run("nothing was written", func(t *testing.T) {
+		token, err := m.engine.LookupTokenForOrg(ctx, orgA, "NEWTOKEN")
+		require.NoError(t, err)
+		assert.Nil(t, token)
+		location, err := m.engine.LookupLocation(ctx, "1")
+		require.NoError(t, err)
+		assert.Nil(t, location)
+		auth, err := m.engine.LookupChargeStationAuth(ctx, "aaaa.NEW")
+		require.NoError(t, err)
+		assert.Nil(t, auth)
+		auth, err = m.engine.LookupChargeStationAuth(ctx, stationOfA)
+		require.NoError(t, err)
+		assert.Equal(t, &store.ChargeStationAuth{SecurityProfile: store.TLSWithBasicAuth, OrgId: orgA}, auth)
+	})
+
+	t.Run("reading through the operations of the manager", func(t *testing.T) {
+		require.NoError(t, m.engine.SetToken(ctx, storedToken(orgA, "ONLYA", "of A")))
+		for _, path := range []string{"/token", "/token/ONLYA", "/cs/" + stationOfA + "/auth"} {
+			rr := serve(r, as(callerOfA, http.MethodGet, path, ""))
+			assert.Equal(t, http.StatusOK, rr.Code, "%s: %s", path, rr.Body.String())
+		}
+	})
+}
+
+func TestSuspensionStopsTheWritesForTheSuspendedTenantAndNoOther(t *testing.T) {
+	ctx := context.Background()
+	m := newMultiTenant(t)
+	index := permissionIndex(t)
+	r := m.router(t)
+	spied, next := newSpyRouter(m.scoper, index, "")
+	callerOfA := callerOf(orgA, tenancy.OrgScopeSelf)
+	callerOfB := callerOf(orgB, tenancy.OrgScopeSelf)
+	callerOfC := callerOf(orgC, tenancy.OrgScopeSubtree)
+	partner := callerOf(orgPartner, tenancy.OrgScopeSubtree)
+	const configuration = "/configuration"
+
+	// the tenants are known to the resolver before one of them is suspended
+	rr := serve(r, as(callerOfA, http.MethodPost, "/token", tokenBody("BEFORE", "")))
+	require.Equal(t, http.StatusCreated, rr.Code, rr.Body.String())
+	rr = serve(spied, as(callerOfA, http.MethodPatch, "/cs/"+stationOfA+configuration, ""))
+	require.Equal(t, http.StatusNoContent, rr.Code, rr.Body.String())
+
+	m.setTenantStatus(t, orgA, store.TenantStatusSuspended)
+
+	tests := map[string]struct {
+		req        *http.Request
+		wantStatus int
+		wantBody   string
+	}{
+		"the suspended tenant":                             {as(callerOfA, http.MethodPost, "/token", tokenBody("T1", "")), http.StatusForbidden, suspendedBody},
+		"the suspended tenant names itself":                {as(callerOfA, http.MethodPost, "/token", tokenBody("T2", orgA)), http.StatusForbidden, suspendedBody},
+		"a partner for the suspended tenant":               {as(partner, http.MethodPost, "/token", tokenBody("T3", orgA)), http.StatusForbidden, suspendedBody},
+		"a partner for the suspended tenant, a location":   {as(partner, http.MethodPost, "/location/loc-a", locationBody("Of A", orgA)), http.StatusForbidden, suspendedBody},
+		"a partner for another tenant":                     {as(partner, http.MethodPost, "/token", tokenBody("T4", orgB)), http.StatusCreated, ""},
+		"a partner for another tenant, a location":         {as(partner, http.MethodPost, "/location/loc-b", locationBody("Of B", orgB)), http.StatusCreated, ""},
+		"another tenant":                                   {as(callerOfB, http.MethodPost, "/token", tokenBody("T5", "")), http.StatusCreated, ""},
+		"a caller that may not reach the suspended tenant": {as(callerOfC, http.MethodPost, "/token", tokenBody("T6", orgA)), http.StatusNotFound, notFoundBody},
+		"the suspended tenant for another tenant":          {as(callerOfA, http.MethodPost, "/token", tokenBody("T7", orgB)), http.StatusNotFound, notFoundBody},
+		"the suspended tenant without the permission": {
+			as(withPerms(callerOf(orgA, tenancy.OrgScopeSelf), tenancy.PermTokenRead), http.MethodPost, "/token", tokenBody("T8", "")),
+			http.StatusForbidden, `{"status":"Forbidden","error":"missing permission cpms.token.write"}`,
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			rr := serve(r, test.req)
+			require.Equal(t, test.wantStatus, rr.Code, rr.Body.String())
+			if test.wantBody != "" {
+				assert.JSONEq(t, test.wantBody, rr.Body.String())
+			}
+		})
+	}
+
+	t.Run("only the tokens and locations of the other tenant were written", func(t *testing.T) {
+		tokens, err := m.engine.ListTokens(ctx, 0, 100)
+		require.NoError(t, err)
+		var got []string
+		for _, token := range tokens {
+			got = append(got, token.OrgId+"/"+token.Uid)
+		}
+		assert.ElementsMatch(t, []string{orgA + "/BEFORE", orgB + "/T4", orgB + "/T5"}, got)
+		location, err := m.engine.LookupLocation(ctx, "loc-a")
+		require.NoError(t, err)
+		assert.Nil(t, location)
+		location, err = m.engine.LookupLocation(ctx, "loc-b")
+		require.NoError(t, err)
+		require.NotNil(t, location)
+		assert.Equal(t, orgB, location.OrgId)
+	})
+
+	// a write to a charge station: 0 is that the operation was not reached
+	stationTests := map[string]struct {
+		caller     *tenancy.Principal
+		csId       string
+		wantStatus int
+		wantBody   string
+	}{
+		"the suspended tenant":                             {callerOfA, stationOfA, http.StatusForbidden, suspendedBody},
+		"a partner for the suspended tenant":               {partner, stationOfA, http.StatusForbidden, suspendedBody},
+		"a partner for another tenant":                     {partner, stationOfB, http.StatusNoContent, ""},
+		"another tenant":                                   {callerOfB, stationOfB, http.StatusNoContent, ""},
+		"a caller that may not reach the suspended tenant": {callerOfC, stationOfA, http.StatusNotFound, notFoundBody},
+		"the suspended tenant for another tenant":          {callerOfA, stationOfB, http.StatusNotFound, notFoundBody},
+	}
+	for name, test := range stationTests {
+		t.Run("a charge station: "+name, func(t *testing.T) {
+			next.calls = 0
+			rr := serve(spied, as(test.caller, http.MethodPatch, "/cs/"+test.csId+configuration, ""))
+			require.Equal(t, test.wantStatus, rr.Code, rr.Body.String())
+			if test.wantBody != "" {
+				assert.JSONEq(t, test.wantBody, rr.Body.String())
+			}
+			assert.Equal(t, test.wantStatus == http.StatusNoContent, next.calls == 1)
+		})
+	}
+
+	t.Run("a cancelled tenant cannot write either", func(t *testing.T) {
+		m.setTenantStatus(t, orgC, store.TenantStatusCancelled)
+		rr := serve(r, as(callerOfC, http.MethodPost, "/token", tokenBody("T9", "")))
+		require.Equal(t, http.StatusForbidden, rr.Code, rr.Body.String())
+		assert.JSONEq(t, suspendedBody, rr.Body.String())
+	})
+
+	t.Run("a resumed tenant writes again", func(t *testing.T) {
+		m.setTenantStatus(t, orgA, store.TenantStatusActive)
+
+		rr := serve(r, as(callerOfA, http.MethodPost, "/token", tokenBody("AFTER", "")))
+		require.Equal(t, http.StatusCreated, rr.Code, rr.Body.String())
+		rr = serve(r, as(callerOfA, http.MethodPost, "/location/loc-a", locationBody("Of A", "")))
+		require.Equal(t, http.StatusCreated, rr.Code, rr.Body.String())
+		rr = serve(r, as(callerOfA, http.MethodPost, "/cs/aaaa.NEW", `{"securityProfile":2}`))
+		require.Equal(t, http.StatusCreated, rr.Code, rr.Body.String())
+		next.calls = 0
+		rr = serve(spied, as(callerOfA, http.MethodPatch, "/cs/"+stationOfA+configuration, ""))
+		require.Equal(t, http.StatusNoContent, rr.Code, rr.Body.String())
+		assert.Equal(t, 1, next.calls)
+
+		token, err := m.engine.LookupTokenForOrg(ctx, orgA, "AFTER")
+		require.NoError(t, err)
+		assert.NotNil(t, token)
+	})
+}
+
+// failingTenants cannot read a tenant by its org id.
+type failingTenants struct {
+	store.TenantStore
+}
+
+func (failingTenants) GetTenant(context.Context, string) (*store.Tenant, error) {
+	return nil, errors.New("database is down: host db-1.internal")
+}
+
+func TestWriteIsRefusedWhenTheStatusOfTheTenantCannotBeRead(t *testing.T) {
+	ctx := context.Background()
+	m := newMultiTenant(t)
+	m.scoper.Resolver.Tenants = failingTenants{m.engine}
+	index := permissionIndex(t)
+	r := m.router(t)
+	spied, next := newSpyRouter(m.scoper, index, "")
+	callerOfA := callerOf(orgA, tenancy.OrgScopeSelf)
+	const internalErrorBody = `{"status":"Internal Server Error"}`
+
+	for name, rr := range map[string]*httptest.ResponseRecorder{
+		"a charge station": serve(spied, as(callerOfA, http.MethodPatch, "/cs/"+stationOfA+"/configuration", "")),
+		"a token":          serve(r, as(callerOfA, http.MethodPost, "/token", tokenBody("NEWTOKEN", ""))),
+		"a location":       serve(r, as(callerOfA, http.MethodPost, "/location/loc-a", locationBody("Of A", ""))),
+	} {
+		require.Equal(t, http.StatusInternalServerError, rr.Code, name)
+		// neither written nor reported as suspended, and the reason is not for the caller
+		assert.JSONEq(t, internalErrorBody, rr.Body.String(), name)
+	}
+	assert.Zero(t, next.calls)
+	token, err := m.engine.LookupTokenForOrg(ctx, orgA, "NEWTOKEN")
+	require.NoError(t, err)
+	assert.Nil(t, token)
+	location, err := m.engine.LookupLocation(ctx, "loc-a")
+	require.NoError(t, err)
+	assert.Nil(t, location)
+
+	// reading and commands do not need the status
+	for _, operation := range []string{"GET /cs/{csId}/status", "POST /cs/{csId}/reset", "POST /cs/{csId}/stop-transaction", "GET /token"} {
+		next.calls = 0
+		method, path := target(operation, stationOfA)
+		rr := serve(spied, as(callerOfA, method, path, ""))
+		require.Equal(t, http.StatusNoContent, rr.Code, operation)
+		assert.Equal(t, 1, next.calls, operation)
+	}
+}
+
+func TestSingleModeDoesNotLookAtTheStatusOfATenant(t *testing.T) {
+	ctx := context.Background()
+	c := clockTest.NewFakePassiveClock(time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC))
+	engine := inmemory.NewStore(c)
+	// the control plane stores tenants in single mode too
+	require.NoError(t, engine.PutTenant(ctx, &store.Tenant{OrgId: testOrgId, Path: store.OrgPathLabel(testOrgId), Slug: "tenant-t", OrgKey: "tttt"}))
+	found, err := engine.SetTenantStatus(ctx, testOrgId, store.TenantStatusSuspended)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.NoError(t, engine.SetChargeStationAuth(ctx, "CP001", &store.ChargeStationAuth{OrgId: testOrgId}))
+	scoper := &tenancy.Scoper{
+		Mode:         tenancy.ModeSingle,
+		Tenants:      engine,
+		Resolver:     &tenancy.Resolver{Tenants: engine, Stations: engine, DefaultOrgId: testOrgId},
+		DefaultOrgId: testOrgId,
+	}
+	r := newRouter(t, engine, c, nil, scoper, func(r *http.Request) *tenancy.Principal {
+		p, _ := tenancy.FromContext(r.Context())
+		return p
+	})
+	spied, next := newSpyRouter(scoper, permissionIndex(t), "")
+	p := callerOf(testOrgId, tenancy.OrgScopeSubtree)
+
+	rr := serve(r, as(p, http.MethodPost, "/token", tokenBody("NEWTOKEN", "")))
+	require.Equal(t, http.StatusCreated, rr.Code, rr.Body.String())
+	rr = serve(spied, as(p, http.MethodPatch, "/cs/CP001/configuration", ""))
+	require.Equal(t, http.StatusNoContent, rr.Code, rr.Body.String())
+	assert.Equal(t, 1, next.calls)
+}
+
+func TestSpecSaysWhichOperationsASuspendedTenantCannotCall(t *testing.T) {
+	swagger, err := api.GetSwagger()
+	require.NoError(t, err)
+
+	for path, item := range swagger.Paths.Map() {
+		for method, operation := range item.Operations() {
+			forbidden := operation.Responses.Value("403")
+			require.NotNil(t, forbidden, "%s %s", method, path)
+			require.NotNil(t, forbidden.Value.Description, "%s %s", method, path)
+			assert.Equal(t, slices.Contains(refusedForSuspendedTenant, method+" "+path),
+				strings.Contains(*forbidden.Value.Description, "tenant_suspended"), "%s %s", method, path)
+		}
 	}
 }

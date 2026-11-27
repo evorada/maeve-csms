@@ -264,3 +264,69 @@ func TestAuthorizeReturnsOrgResolverError(t *testing.T) {
 	assert.ErrorIs(t, err, resolveErr)
 	assert.Nil(t, resp)
 }
+
+// The status of a tenant only stops what is created or changed through the API: the
+// charge stations of a suspended tenant authorize and charge like any other.
+func TestStationOfASuspendedTenantStillAuthorizesAndCharges(t *testing.T) {
+	const orgA = "0193b2c4-0000-7000-8000-0000000000a1"
+	ctx := context.Background()
+	now, err := time.Parse(time.RFC3339, authorizeClockTime)
+	require.NoError(t, err)
+	clk := clockTest.NewFakePassiveClock(now)
+	engine := inmemory.NewStore(clk)
+	require.NoError(t, engine.PutTenant(ctx, &store.Tenant{
+		OrgId: orgA, Path: store.OrgPathLabel(orgA), Slug: "tenant-a", OrgKey: "aaaa", Hostnames: []string{"a.example"},
+	}))
+	token := rfidToken("MYRFIDCARD")
+	token.OrgId = orgA
+	require.NoError(t, engine.SetToken(ctx, token))
+	// the first charge station is registered, the second is only known by the org key
+	// that its station key starts with
+	stations := []string{"aaaa.cs001", "aaaa.cs002"}
+	require.NoError(t, engine.SetChargeStationAuth(ctx, stations[0], &store.ChargeStationAuth{OrgId: orgA}))
+	resolver := &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine}
+	idTag := "MYRFIDCARD"
+
+	for _, status := range []store.TenantStatus{store.TenantStatusSuspended, store.TenantStatusCancelled} {
+		found, err := engine.SetTenantStatus(ctx, orgA, status)
+		require.NoError(t, err)
+		require.True(t, found)
+		resolver.Invalidate(orgA)
+
+		for _, chargeStationId := range stations {
+			name := string(status) + " " + chargeStationId
+
+			resp, err := handlers.AuthorizeHandler{TokenStore: engine, OrgResolver: resolver, Clock: clk}.
+				HandleCall(ctx, chargeStationId, &types.AuthorizeJson{IdTag: idTag})
+			require.NoError(t, err, name)
+			assert.Equal(t, types.AuthorizeResponseJsonIdTagInfoStatusAccepted, resp.(*types.AuthorizeResponseJson).IdTagInfo.Status, name)
+
+			started := startTransaction(t, handlers.StartTransactionHandler{
+				Clock: clk, TokenStore: engine, OrgResolver: resolver, TransactionStore: engine, ReservationStore: engine,
+			}, chargeStationId, startTransactionRequest(idTag))
+			require.Equal(t, types.StartTransactionResponseJsonIdTagInfoStatusAccepted, started.IdTagInfo.Status, name)
+
+			_, err = handlers.MeterValuesHandler{TransactionStore: engine, MeterValuesStore: engine}.
+				HandleCall(ctx, chargeStationId, &types.MeterValuesJson{
+					ConnectorId:   2,
+					TransactionId: &started.TransactionId,
+					MeterValue: []types.MeterValuesJsonMeterValueElem{{
+						Timestamp: authorizeClockTime,
+						SampledValue: []types.MeterValuesJsonMeterValueElemSampledValueElem{
+							meterValuesSample("150", types.MeterValuesJsonMeterValueElemSampledValueElemMeasurandEnergyActiveImportRegister, types.MeterValuesJsonMeterValueElemSampledValueElemUnitWh),
+						},
+					}},
+				})
+			require.NoError(t, err, name)
+
+			resp, err = handlers.StopTransactionHandler{Clock: clk, TokenStore: engine, OrgResolver: resolver, TransactionStore: engine}.
+				HandleCall(ctx, chargeStationId, &types.StopTransactionJson{
+					IdTag: &idTag, MeterStop: 200, Timestamp: authorizeClockTime, TransactionId: started.TransactionId,
+				})
+			require.NoError(t, err, name)
+			stopped := resp.(*types.StopTransactionResponseJson)
+			require.NotNil(t, stopped.IdTagInfo, name)
+			assert.Equal(t, types.StopTransactionResponseJsonIdTagInfoStatusAccepted, stopped.IdTagInfo.Status, name)
+		}
+	}
+}

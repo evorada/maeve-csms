@@ -37,6 +37,17 @@ var AllPermissions = []string{
 	PermMessageLogReadSensitive,
 }
 
+// WritePermissions are the permissions of the operations that create or change what a
+// tenant owns. A suspended tenant cannot call an operation with one of them, unless the
+// operation only reads. PermConnectorCommand is not one of them: commands to a charge
+// station stay possible, because they can affect a driver on site. PermCertificateWrite
+// and PermOcpiConnection are not either: what they cover does not belong to a tenant.
+var WritePermissions = map[string]bool{
+	PermStationWrite: true,
+	PermTariffWrite:  true,
+	PermTokenWrite:   true,
+}
+
 // ManifestPermissions lists the permissions that the console can give to the callers of
 // the API: every permission but PermTenantManage, which is only for the services of the
 // console that call the control plane.

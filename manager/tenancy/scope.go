@@ -20,6 +20,9 @@ var (
 	// ErrOrgRequired is returned when a caller that has no org of its own here must
 	// name the org of what it creates.
 	ErrOrgRequired = errors.New("orgId is required")
+	// ErrTenantSuspended is returned for an org whose tenant is suspended or cancelled:
+	// nothing may be created or changed for it through the API.
+	ErrTenantSuspended = errors.New("tenant suspended")
 )
 
 // Scoper says which orgs a caller may reach and which org owns a charge station.
@@ -173,6 +176,42 @@ func (s *Scoper) TargetOrg(ctx context.Context, p *Principal, requested string) 
 		return "", ErrOrgRequired
 	}
 	return "", ErrOutOfScope
+}
+
+// CheckWritable returns ErrTenantSuspended when nothing may be created or changed for
+// the org through the API, because its tenant is suspended or cancelled. An org that is
+// not a tenant here is writable, and so is every org in single mode. Any other error
+// means that the status of the tenant could not be read: the caller must not write then.
+//
+// It is only for what a caller of the API creates or changes. Reading, commands to a
+// charge station and the messages of the charge stations themselves never depend on
+// the status of a tenant.
+//
+// The status comes from the cache of the resolver: a change through the control plane
+// of this manager is seen at once, a change through another instance after the cache
+// TTL of the resolver.
+func (s *Scoper) CheckWritable(ctx context.Context, orgId string) error {
+	if s == nil {
+		return errors.New("no scoper")
+	}
+	if s.Mode != ModeMulti {
+		return nil
+	}
+	if s.Resolver == nil {
+		return errors.New("no tenant resolver")
+	}
+	tenant, err := s.Resolver.TenantByOrgId(ctx, orgId)
+	if err != nil {
+		return err
+	}
+	if tenant == nil {
+		return nil
+	}
+	switch tenant.Status {
+	case store.TenantStatusSuspended, store.TenantStatusCancelled:
+		return ErrTenantSuspended
+	}
+	return nil
 }
 
 func (s *Scoper) defaultOrgId() string {

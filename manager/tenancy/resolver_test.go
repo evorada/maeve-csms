@@ -103,7 +103,16 @@ type countingTenants struct {
 	store.TenantStore
 	byHost   int
 	byOrgKey int
+	byOrgId  int
 	err      error
+}
+
+func (c *countingTenants) GetTenant(ctx context.Context, orgId string) (*store.Tenant, error) {
+	c.byOrgId++
+	if c.err != nil {
+		return nil, c.err
+	}
+	return c.TenantStore.GetTenant(ctx, orgId)
 }
 
 func (c *countingTenants) GetTenantByHost(ctx context.Context, host string) (*store.Tenant, error) {
@@ -507,5 +516,108 @@ func TestOrgIdForStationFallsBackToTheTenantOfTheKeyPrefix(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, defaultOrg, got)
 		assert.Equal(t, before, tenants.byOrgKey)
+	})
+}
+
+func TestTenantByOrgId(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("single mode has no tenants", func(t *testing.T) {
+		resolver, tenants, _, _ := newMultiResolver(t)
+		resolver.Mode = tenancy.ModeSingle
+
+		tenant, err := resolver.TenantByOrgId(ctx, orgA)
+		require.NoError(t, err)
+		assert.Nil(t, tenant)
+		assert.Zero(t, tenants.byOrgId)
+	})
+
+	t.Run("the tenant is kept until the cache expires", func(t *testing.T) {
+		resolver, tenants, engine, fakeClock := newMultiResolver(t)
+
+		tenant, err := resolver.TenantByOrgId(ctx, orgB)
+		require.NoError(t, err)
+		require.NotNil(t, tenant)
+		assert.Equal(t, orgB, tenant.OrgId)
+		assert.Equal(t, store.TenantStatusActive, tenant.Status)
+
+		found, err := engine.SetTenantStatus(ctx, orgB, store.TenantStatusSuspended)
+		require.NoError(t, err)
+		require.True(t, found)
+
+		// the org id is looked up whatever its case
+		tenant, err = resolver.TenantByOrgId(ctx, strings.ToUpper(orgB))
+		require.NoError(t, err)
+		require.NotNil(t, tenant)
+		assert.Equal(t, store.TenantStatusActive, tenant.Status)
+		assert.Equal(t, 1, tenants.byOrgId)
+
+		fakeClock.Step(30 * time.Second)
+		tenant, err = resolver.TenantByOrgId(ctx, orgB)
+		require.NoError(t, err)
+		require.NotNil(t, tenant)
+		assert.Equal(t, store.TenantStatusSuspended, tenant.Status)
+		assert.Equal(t, 2, tenants.byOrgId)
+	})
+
+	t.Run("Invalidate drops the tenant", func(t *testing.T) {
+		resolver, tenants, engine, _ := newMultiResolver(t)
+
+		_, err := resolver.TenantByOrgId(ctx, orgA)
+		require.NoError(t, err)
+		_, err = resolver.TenantByOrgId(ctx, orgB)
+		require.NoError(t, err)
+		require.Equal(t, 2, tenants.byOrgId)
+
+		found, err := engine.SetTenantStatus(ctx, orgB, store.TenantStatusSuspended)
+		require.NoError(t, err)
+		require.True(t, found)
+		resolver.Invalidate(orgB)
+
+		tenant, err := resolver.TenantByOrgId(ctx, orgB)
+		require.NoError(t, err)
+		require.NotNil(t, tenant)
+		assert.Equal(t, store.TenantStatusSuspended, tenant.Status)
+		assert.Equal(t, 3, tenants.byOrgId)
+
+		// the entries of the other tenants stay
+		_, err = resolver.TenantByOrgId(ctx, orgA)
+		require.NoError(t, err)
+		assert.Equal(t, 3, tenants.byOrgId)
+	})
+
+	t.Run("an org that is not a tenant", func(t *testing.T) {
+		resolver, tenants, engine, _ := newMultiResolver(t)
+
+		for _, orgId := range []string{defaultOrg, store.LegacyOrgId, ""} {
+			tenant, err := resolver.TenantByOrgId(ctx, orgId)
+			require.NoError(t, err, orgId)
+			assert.Nil(t, tenant, orgId)
+		}
+		// the store is not asked about no org at all
+		assert.Equal(t, 2, tenants.byOrgId)
+
+		// that there is no tenant is not kept: the tenant is found once it exists
+		require.NoError(t, engine.PutTenant(ctx, &store.Tenant{
+			OrgId: defaultOrg, Path: store.OrgPathLabel(defaultOrg), Slug: "tenant-d", OrgKey: "dddd",
+		}))
+		tenant, err := resolver.TenantByOrgId(ctx, defaultOrg)
+		require.NoError(t, err)
+		require.NotNil(t, tenant)
+		assert.Equal(t, defaultOrg, tenant.OrgId)
+	})
+
+	t.Run("a failure of the tenant store is returned and not kept", func(t *testing.T) {
+		resolver, tenants, _, _ := newMultiResolver(t)
+		tenants.err = errors.New("database is down")
+
+		tenant, err := resolver.TenantByOrgId(ctx, orgA)
+		require.ErrorIs(t, err, tenants.err)
+		assert.Nil(t, tenant)
+
+		tenants.err = nil
+		tenant, err = resolver.TenantByOrgId(ctx, orgA)
+		require.NoError(t, err)
+		require.NotNil(t, tenant)
 	})
 }

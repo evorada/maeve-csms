@@ -42,7 +42,7 @@ Configuration is defined in TOML.
 | jobs          | reservation_expiry_interval | string | How often reservations past their expiry date are expired, e.g. "1m" |
 | tenancy       | default_org_id              | string | Org (UUID) that owns the data from before orgs and everything created without a tenant. Default "00000000-0000-0000-0000-000000000000" (the legacy org). With PostgreSQL storage, the rows of the legacy org are moved to this org at startup; a token of the legacy org stays there when this org already has a token with the same country code, party id and UID (a warning in the log names it) |
 | tenancy       | mode                        | string | Either "single" (default) or "multi". In single mode a charge station is known by the id it connects with and the host it connects to is ignored. In multi mode the host names the tenant, a charge station is known as `{org_key}.{stationId}` and a host that no tenant has is refused. Multi mode needs PostgreSQL or in-memory storage |
-| tenancy       | cache_ttl                   | string | How long a tenant that was looked up by host or org key is kept in memory, e.g. "30s" (the default) |
+| tenancy       | cache_ttl                   | string | How long a tenant that was looked up by host, org key or org id is kept in memory, e.g. "30s" (the default). It is also how long another instance of the manager takes to see that the console suspended or resumed a tenant |
 | tenancy       | bootstrap_tenants           | array of tables | Tenants that are created or updated at startup, for deployments without a console that provisions them. Only allowed in multi mode. See [Bootstrap tenants](#bootstrap-tenants) |
 | observability | log_format                  | string | Either "json" or "text"                                              |
 | observability | otel_collector_addr         | string | Address of the OpenTelemetry collector, e.g. "localhost:4317"        |
@@ -73,6 +73,13 @@ and only reaches the data of the orgs in its scope. With `[tenancy] mode = "sing
 it is a tenant here). A charge station, a token or an org outside the scope is answered like one that does not
 exist (`404`). In "dev" mode with `mode = "multi"` set `[api.auth.dev] org_id` to the org of a tenant: the
 default org is not a tenant, so the dev caller would reach nothing.
+
+While the console has suspended a tenant (`mode = "multi"`), the operations that create or change what the
+tenant owns (the ones with the permission `cpms.station.write`, `cpms.token.write` or `cpms.tariff.write`
+that do not only read) are answered with `403` and the error `tenant_suspended`. Reading and commands to
+charge stations (`cpms.connector.command`) stay possible, and the charge stations of the tenant connect,
+authorize and charge as before. The instance of the manager that the console called applies a suspension or a
+resumption at once, any other instance within `[tenancy] cache_ttl`.
 
 ```toml
 [api.auth]

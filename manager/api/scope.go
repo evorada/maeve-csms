@@ -24,10 +24,14 @@ func (s *Server) caller(w http.ResponseWriter, r *http.Request) (*tenancy.Princi
 	return p, true
 }
 
-// targetOrg returns the org of something that the caller creates: the requested org,
-// or the org of the caller when none is requested. When the caller may not create it
-// there the request is answered and false is reported: an org outside the scope of the
-// caller is answered like something that does not exist.
+// targetOrg returns the org of something that the caller creates or changes: the
+// requested org, or the org of the caller when none is requested. When the caller may
+// not write there the request is answered and false is reported: an org outside the
+// scope of the caller is answered like something that does not exist (404), an org in
+// its scope whose tenant is suspended with 403 and the error tenant_suspended.
+//
+// It is only for operations that write: reading never depends on the status of a
+// tenant.
 func (s *Server) targetOrg(w http.ResponseWriter, r *http.Request, requested *openapi_types.UUID) (string, bool) {
 	p, ok := s.caller(w, r)
 	if !ok {
@@ -40,6 +44,10 @@ func (s *Server) targetOrg(w http.ResponseWriter, r *http.Request, requested *op
 	orgId, err := s.scoper.TargetOrg(r.Context(), p, requestedOrgId)
 	if err != nil {
 		renderScopeError(w, r, err)
+		return "", false
+	}
+	if err := s.scoper.CheckWritable(r.Context(), orgId); err != nil {
+		renderNotWritable(w, r, err)
 		return "", false
 	}
 	return orgId, true

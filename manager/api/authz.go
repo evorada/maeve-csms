@@ -30,6 +30,10 @@ const stationParam = "csId"
 // does not exist yet.
 const registerStationOperation = http.MethodPost + " /cs/{" + stationParam + "}"
 
+// errorTenantSuspended is the error of the 403 that answers a write for a tenant that
+// is suspended.
+const errorTenantSuspended = "tenant_suspended"
+
 // BuildPermissionIndex maps every operation of the spec, as "METHOD /spec/path", to
 // the permission in its x-permission field. It fails when an operation has no
 // permission or one that is not in tenancy.AllPermissions.
@@ -72,6 +76,11 @@ func BuildPermissionIndex(swagger *openapi3.T) (map[string]string, error) {
 // (403), and a charge station that the caller may not reach, which is answered exactly
 // like a charge station that does not exist (404). The org of the charge station is
 // read from the store, never from the request, and before anything else happens.
+//
+// An operation that creates or changes something of a charge station (see writes) is
+// refused with 403 and the error tenant_suspended while the tenant that owns the
+// charge station is suspended. Reading and commands to the charge station are not. An
+// operation without a charge station checks this itself (Server.targetOrg).
 //
 // The next handler finds the org of the charge station in its context
 // (tenancy.StationOrgFromContext) and a scope cache (tenancy.WithScopeCache).
@@ -135,6 +144,13 @@ func AuthzMiddleware(scoper *tenancy.Scoper, index map[string]string, basePath s
 					_ = render.Render(w, r, ErrNotFound)
 					return
 				}
+				if writes(r.Method, permission) {
+					// only a caller that may reach the tenant learns that it is suspended
+					if err := scoper.CheckWritable(ctx, orgId); err != nil {
+						renderNotWritable(w, r, err)
+						return
+					}
+				}
 				if register && !exists && scoper.Mode == tenancy.ModeMulti {
 					// only a caller that may reach the tenant learns what is wrong
 					// with the id
@@ -151,6 +167,24 @@ func AuthzMiddleware(scoper *tenancy.Scoper, index map[string]string, basePath s
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// writes reports whether an operation creates or changes something that a tenant owns:
+// its permission is one of tenancy.WritePermissions and it is not a read. Reading with
+// a write permission (the auth details of a charge station) is still reading.
+func writes(method, permission string) bool {
+	return tenancy.WritePermissions[permission] && method != http.MethodGet && method != http.MethodHead
+}
+
+// renderNotWritable answers a write that tenancy.Scoper.CheckWritable refused: 403 with
+// the error tenant_suspended for a suspended tenant. When the status of the tenant
+// could not be read the write is refused as well (500): the reason goes to the log.
+func renderNotWritable(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, tenancy.ErrTenantSuspended) {
+		_ = render.Render(w, r, ErrForbidden(errorTenantSuspended))
+		return
+	}
+	authzFailed(w, r, err)
 }
 
 // routeOperation returns the operation that the request was routed to, as

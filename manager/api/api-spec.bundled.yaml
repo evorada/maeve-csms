@@ -46,7 +46,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Status'
         '403':
-          description: The caller does not have the permission of the operation
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
           content:
             application/json:
               schema:
@@ -96,7 +96,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Status'
         '403':
-          description: The caller does not have the permission of the operation
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
           content:
             application/json:
               schema:
@@ -198,7 +198,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Status'
         '403':
-          description: The caller does not have the permission of the operation
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
           content:
             application/json:
               schema:
@@ -250,7 +250,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Status'
         '403':
-          description: The caller does not have the permission of the operation
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
           content:
             application/json:
               schema:
@@ -1156,7 +1156,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Status'
         '403':
-          description: The caller does not have the permission of the operation
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
           content:
             application/json:
               schema:
@@ -1473,7 +1473,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Status'
         '403':
-          description: The caller does not have the permission of the operation
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
           content:
             application/json:
               schema:
@@ -1850,7 +1850,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Status'
         '403':
-          description: The caller does not have the permission of the operation
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
           content:
             application/json:
               schema:
@@ -1955,7 +1955,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Status'
         '403':
-          description: The caller does not have the permission of the operation
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
           content:
             application/json:
               schema:
@@ -2066,7 +2066,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Status'
         '403':
-          description: The caller does not have the permission of the operation
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
           content:
             application/json:
               schema:
@@ -2115,7 +2115,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Status'
         '403':
-          description: The caller does not have the permission of the operation
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
           content:
             application/json:
               schema:
@@ -2163,7 +2163,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Status'
         '403':
-          description: The caller does not have the permission of the operation
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
           content:
             application/json:
               schema:
@@ -2591,7 +2591,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Status'
         '403':
-          description: The caller does not have the permission of the operation
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
           content:
             application/json:
               schema:
@@ -2639,7 +2639,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Status'
         '403':
-          description: The caller does not have the permission of the operation
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
           content:
             application/json:
               schema:
@@ -2687,7 +2687,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Status'
         '403':
-          description: The caller does not have the permission of the operation
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
           content:
             application/json:
               schema:
@@ -2736,7 +2736,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Status'
         '403':
-          description: The caller does not have the permission of the operation
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
           content:
             application/json:
               schema:

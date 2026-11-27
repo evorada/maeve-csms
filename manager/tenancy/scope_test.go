@@ -342,3 +342,78 @@ func TestStationOrgInContext(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, orgA, orgId)
 }
+
+func TestScoperCheckWritable(t *testing.T) {
+	ctx := context.Background()
+	setStatus := func(t *testing.T, engine *inmemory.Store, orgId string, status store.TenantStatus) {
+		t.Helper()
+		found, err := engine.SetTenantStatus(ctx, orgId, status)
+		require.NoError(t, err)
+		require.True(t, found)
+	}
+
+	t.Run("multi mode", func(t *testing.T) {
+		scoper, _, engine := newMultiScoper(t)
+		setStatus(t, engine, orgB, store.TenantStatusSuspended)
+		setStatus(t, engine, orgC, store.TenantStatusCancelled)
+
+		assert.NoError(t, scoper.CheckWritable(ctx, orgA), "an active tenant")
+		assert.ErrorIs(t, scoper.CheckWritable(ctx, orgB), tenancy.ErrTenantSuspended, "a suspended tenant")
+		assert.ErrorIs(t, scoper.CheckWritable(ctx, strings.ToUpper(orgB)), tenancy.ErrTenantSuspended, "the org id in another case")
+		assert.ErrorIs(t, scoper.CheckWritable(ctx, orgC), tenancy.ErrTenantSuspended, "a cancelled tenant")
+		assert.NoError(t, scoper.CheckWritable(ctx, orgPartner), "an org that is not a tenant")
+		assert.NoError(t, scoper.CheckWritable(ctx, defaultOrg), "the default org")
+		assert.NoError(t, scoper.CheckWritable(ctx, store.LegacyOrgId), "the legacy org")
+
+		// an org id that is no UUID cannot be looked up
+		err := scoper.CheckWritable(ctx, "not-an-org")
+		require.Error(t, err)
+		assert.NotErrorIs(t, err, tenancy.ErrTenantSuspended)
+	})
+
+	t.Run("single mode never looks at the tenants", func(t *testing.T) {
+		scoper, _, engine := newMultiScoper(t)
+		scoper.Mode = tenancy.ModeSingle
+		scoper.Resolver.Mode = tenancy.ModeSingle
+		setStatus(t, engine, orgB, store.TenantStatusSuspended)
+
+		assert.NoError(t, scoper.CheckWritable(ctx, orgB))
+
+		// not even with a resolver that would
+		scoper.Resolver.Mode = tenancy.ModeMulti
+		assert.NoError(t, scoper.CheckWritable(ctx, orgB))
+	})
+
+	t.Run("a resumed tenant is writable again once the resolver forgot it", func(t *testing.T) {
+		scoper, _, engine := newMultiScoper(t)
+		require.NoError(t, scoper.CheckWritable(ctx, orgB))
+
+		// the resolver keeps a tenant: it must be told about a change
+		setStatus(t, engine, orgB, store.TenantStatusSuspended)
+		require.NoError(t, scoper.CheckWritable(ctx, orgB))
+		scoper.Resolver.Invalidate(orgB)
+		require.ErrorIs(t, scoper.CheckWritable(ctx, orgB), tenancy.ErrTenantSuspended)
+
+		setStatus(t, engine, orgB, store.TenantStatusActive)
+		require.ErrorIs(t, scoper.CheckWritable(ctx, orgB), tenancy.ErrTenantSuspended)
+		scoper.Resolver.Invalidate(orgB)
+		assert.NoError(t, scoper.CheckWritable(ctx, orgB))
+	})
+
+	t.Run("a status that cannot be read is an error and not a suspension", func(t *testing.T) {
+		scoper, _, engine := newMultiScoper(t)
+		failure := errors.New("database is down")
+		scoper.Resolver.Tenants = &countingTenants{TenantStore: engine, err: failure}
+
+		for _, orgId := range []string{orgA, orgPartner} {
+			err := scoper.CheckWritable(ctx, orgId)
+			require.ErrorIs(t, err, failure, orgId)
+			assert.NotErrorIs(t, err, tenancy.ErrTenantSuspended, orgId)
+		}
+
+		scoper.Resolver = nil
+		err := scoper.CheckWritable(ctx, orgA)
+		require.Error(t, err)
+		assert.NotErrorIs(t, err, tenancy.ErrTenantSuspended)
+	})
+}
