@@ -309,3 +309,85 @@ func TestMigration_AddTokenExpiresAt_KeepsExistingTokens(t *testing.T) {
 	require.NoError(t, pool.QueryRow(ctx, `SELECT COUNT(*) FROM tokens WHERE expires_at IS NOT NULL`).Scan(&expiring))
 	assert.Equal(t, 0, expiring)
 }
+
+// Migration 000033 adds the category of a charge station event. Events stored before
+// the migration are device events, and the migration must be reversible with events
+// in the table.
+func TestMigration_AddChargeStationEventCategory_KeepsExistingEvents(t *testing.T) {
+	ctx := context.Background()
+
+	const (
+		versionBefore = 32
+		versionAfter  = 33
+	)
+
+	migrationConnString, pool := migrationTestDatabase(t, "maeve_migration_000033")
+
+	hasCategory := func() bool {
+		var exists bool
+		err := pool.QueryRow(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM information_schema.columns
+				WHERE table_name = 'charge_station_event' AND column_name = 'category'
+			)`).Scan(&exists)
+		require.NoError(t, err)
+		return exists
+	}
+	hasCategoryIndex := func() bool {
+		var exists bool
+		err := pool.QueryRow(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM pg_indexes
+				WHERE tablename = 'charge_station_event' AND indexname = 'idx_cs_event_category'
+			)`).Scan(&exists)
+		require.NoError(t, err)
+		return exists
+	}
+	categories := func() map[string]string {
+		rows, err := pool.Query(ctx, `SELECT event_type, category FROM charge_station_event`)
+		require.NoError(t, err)
+		defer rows.Close()
+		got := map[string]string{}
+		for rows.Next() {
+			var eventType, category string
+			require.NoError(t, rows.Scan(&eventType, &category))
+			got[eventType] = category
+		}
+		require.NoError(t, rows.Err())
+		return got
+	}
+
+	migrateTo(t, migrationConnString, versionBefore)
+	require.False(t, hasCategory())
+	_, err := pool.Exec(ctx, `INSERT INTO charge_stations (charge_station_id, security_profile) VALUES ('cs001', 0)`)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO charge_station_event (charge_station_id, timestamp, event_type)
+		VALUES ('cs001', '2026-11-27T08:30:00Z', 'OldEvent')`)
+	require.NoError(t, err)
+
+	// up: the event that was there is a device event
+	migrateTo(t, migrationConnString, versionAfter)
+	require.True(t, hasCategory())
+	require.True(t, hasCategoryIndex())
+	assert.Equal(t, map[string]string{"OldEvent": "device"}, categories())
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO charge_station_event (charge_station_id, timestamp, event_type, category)
+		VALUES ('cs001', '2026-11-27T08:31:00Z', 'SecurityLogWasCleared', 'security')`)
+	require.NoError(t, err)
+
+	// down: both events stay, without their category
+	migrateTo(t, migrationConnString, versionBefore)
+	require.False(t, hasCategory())
+	require.False(t, hasCategoryIndex())
+	var count int
+	require.NoError(t, pool.QueryRow(ctx, `SELECT COUNT(*) FROM charge_station_event`).Scan(&count))
+	assert.Equal(t, 2, count)
+
+	// up again with events in the table
+	migrateUp(t, migrationConnString)
+	require.True(t, hasCategory())
+	require.True(t, hasCategoryIndex())
+	assert.Equal(t, map[string]string{"OldEvent": "device", "SecurityLogWasCleared": "device"}, categories())
+}

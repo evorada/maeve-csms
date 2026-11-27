@@ -3836,6 +3836,16 @@ components:
         eventType:
           type: string
           description: Type of event (e.g., FirmwareUpdated, Rebooted, SecurityLogWasCleared)
+        category:
+          type: string
+          enum:
+            - device
+            - security
+            - log_status
+          description: |
+            Which kind of station message the event comes from: `device` for a device model event,
+            `security` for a SecurityEventNotification, `log_status` for an OCPP 1.6 LogStatusNotification.
+            Left out when the storage backend does not record it.
         techCode:
           type: string
           description: Technical error/info code

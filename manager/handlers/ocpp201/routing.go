@@ -157,7 +157,10 @@ func NewRouter(emitter transport.Emitter,
 				NewRequest:     func() ocpp.Request { return new(ocpp201.SecurityEventNotificationRequestJson) },
 				RequestSchema:  "ocpp201/SecurityEventNotificationRequest.json",
 				ResponseSchema: "ocpp201/SecurityEventNotificationResponse.json",
-				Handler:        SecurityEventNotificationHandler{},
+				Handler: SecurityEventNotificationHandler{
+					Clock:      clk,
+					EventStore: engine,
+				},
 			},
 			"DataTransfer": {
 				NewRequest:     func() ocpp.Request { return new(ocpp201.DataTransferRequestJson) },

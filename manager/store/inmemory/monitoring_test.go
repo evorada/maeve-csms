@@ -119,6 +119,37 @@ func TestAddAndListChargeStationEvents(t *testing.T) {
 	assert.Len(t, events, 1)
 }
 
+func TestChargeStationEventCategory(t *testing.T) {
+	clock := testclock.NewFakeClock(time.Now())
+	s := inmemory.NewStore(clock)
+	ctx := context.Background()
+
+	uncategorised := &store.ChargeStationEvent{Timestamp: time.Now(), EventType: "Alert"}
+	for _, event := range []*store.ChargeStationEvent{
+		{Timestamp: time.Now(), EventType: "SecurityLogWasCleared", Category: store.ChargeStationEventCategorySecurity},
+		{Timestamp: time.Now(), EventType: "LogStatusNotification", Category: store.ChargeStationEventCategoryLogStatus},
+		{Timestamp: time.Now(), EventType: "Threshold", Category: store.ChargeStationEventCategoryDevice},
+		uncategorised,
+	} {
+		require.NoError(t, s.AddChargeStationEvent(ctx, "cs001", event))
+	}
+
+	events, total, err := s.ListChargeStationEvents(ctx, "cs001", 0, 10)
+	require.NoError(t, err)
+	require.Equal(t, 4, total)
+	got := map[string]store.ChargeStationEventCategory{}
+	for _, event := range events {
+		got[event.EventType] = event.Category
+	}
+	assert.Equal(t, map[string]store.ChargeStationEventCategory{
+		"SecurityLogWasCleared": store.ChargeStationEventCategorySecurity,
+		"LogStatusNotification": store.ChargeStationEventCategoryLogStatus,
+		"Threshold":             store.ChargeStationEventCategoryDevice,
+		// an event without a category is a device event
+		"Alert": store.ChargeStationEventCategoryDevice,
+	}, got)
+}
+
 func TestAddAndListDeviceReports(t *testing.T) {
 	clock := testclock.NewFakeClock(time.Now())
 	s := inmemory.NewStore(clock)

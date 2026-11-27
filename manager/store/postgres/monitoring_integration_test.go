@@ -89,6 +89,45 @@ func TestChargeStationEvent_AddAndList(t *testing.T) {
 	assert.Equal(t, "Alert", results[0].EventType)
 }
 
+func TestChargeStationEvent_Category(t *testing.T) {
+	defer truncateAll(t)
+	ctx := context.Background()
+
+	for _, csId := range []string{"cs001", "cs002"} {
+		require.NoError(t, testStore.SetChargeStationAuth(ctx, csId, &store.ChargeStationAuth{
+			SecurityProfile: store.UnsecuredTransportWithBasicAuth,
+		}))
+	}
+
+	timestamp := time.Now().UTC().Truncate(time.Second)
+	for _, event := range []*store.ChargeStationEvent{
+		{Timestamp: timestamp, EventType: "SecurityLogWasCleared", Category: store.ChargeStationEventCategorySecurity},
+		{Timestamp: timestamp, EventType: "LogStatusNotification", Category: store.ChargeStationEventCategoryLogStatus},
+		{Timestamp: timestamp, EventType: "Threshold", Category: store.ChargeStationEventCategoryDevice},
+		{Timestamp: timestamp, EventType: "Alert"},
+	} {
+		require.NoError(t, testStore.AddChargeStationEvent(ctx, "cs001", event))
+	}
+	require.NoError(t, testStore.AddChargeStationEvent(ctx, "cs002", &store.ChargeStationEvent{
+		Timestamp: timestamp, EventType: "FirmwareUpdated", Category: store.ChargeStationEventCategorySecurity,
+	}))
+
+	events, total, err := testStore.ListChargeStationEvents(ctx, "cs001", 0, 10)
+	require.NoError(t, err)
+	require.Equal(t, 4, total)
+	got := map[string]store.ChargeStationEventCategory{}
+	for _, event := range events {
+		got[event.EventType] = event.Category
+	}
+	assert.Equal(t, map[string]store.ChargeStationEventCategory{
+		"SecurityLogWasCleared": store.ChargeStationEventCategorySecurity,
+		"LogStatusNotification": store.ChargeStationEventCategoryLogStatus,
+		"Threshold":             store.ChargeStationEventCategoryDevice,
+		// an event without a category is a device event
+		"Alert": store.ChargeStationEventCategoryDevice,
+	}, got)
+}
+
 func TestDeviceReport_AddAndList(t *testing.T) {
 	defer truncateAll(t)
 	ctx := context.Background()

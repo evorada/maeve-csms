@@ -97,6 +97,7 @@ type ChargeStationEvent struct {
 	VariableID      pgtype.Text        `db:"variable_id" json:"variable_id"`
 	Cleared         bool               `db:"cleared" json:"cleared"`
 	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	Category        string             `db:"category" json:"category"`
 }
 
 type ChargeStationRuntime struct {

@@ -1659,6 +1659,9 @@ func (s *Store) AddChargeStationEvent(_ context.Context, chargeStationId string,
 	event.CreatedAt = s.clock.Now()
 
 	eventCopy := *event
+	if eventCopy.Category == "" {
+		eventCopy.Category = store.ChargeStationEventCategoryDevice
+	}
 	s.chargeStationEvents[chargeStationId] = append(s.chargeStationEvents[chargeStationId], &eventCopy)
 	return nil
 }

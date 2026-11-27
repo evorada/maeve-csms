@@ -92,9 +92,10 @@ INSERT INTO charge_station_event (
     component_id,
     variable_id,
     cleared,
+    category,
     created_at
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
 RETURNING id
 `
 
@@ -108,6 +109,7 @@ type InsertChargeStationEventParams struct {
 	ComponentID     pgtype.Text        `db:"component_id" json:"component_id"`
 	VariableID      pgtype.Text        `db:"variable_id" json:"variable_id"`
 	Cleared         bool               `db:"cleared" json:"cleared"`
+	Category        string             `db:"category" json:"category"`
 }
 
 func (q *Queries) InsertChargeStationEvent(ctx context.Context, arg InsertChargeStationEventParams) (int32, error) {
@@ -121,6 +123,7 @@ func (q *Queries) InsertChargeStationEvent(ctx context.Context, arg InsertCharge
 		arg.ComponentID,
 		arg.VariableID,
 		arg.Cleared,
+		arg.Category,
 	)
 	var id int32
 	err := row.Scan(&id)
@@ -163,7 +166,7 @@ func (q *Queries) InsertDeviceReport(ctx context.Context, arg InsertDeviceReport
 
 const ListChargeStationEvents = `-- name: ListChargeStationEvents :many
 SELECT id, charge_station_id, timestamp, event_type, tech_code, tech_info,
-       event_data, component_id, variable_id, cleared, created_at
+       event_data, component_id, variable_id, cleared, created_at, category
 FROM charge_station_event
 WHERE charge_station_id = $1
 ORDER BY timestamp DESC
@@ -197,6 +200,7 @@ func (q *Queries) ListChargeStationEvents(ctx context.Context, arg ListChargeSta
 			&i.VariableID,
 			&i.Cleared,
 			&i.CreatedAt,
+			&i.Category,
 		); err != nil {
 			return nil, err
 		}

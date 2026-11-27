@@ -1452,3 +1452,125 @@ func TestListReservationsRendersEveryReservationStatus(t *testing.T) {
 		assert.Containsf(t, statusSchema.Enum, string(status), "reservation status %s is not in the API schema", status)
 	}
 }
+
+func TestChargeStationEventsReturnCategory(t *testing.T) {
+	server, r, engine, c := setupServer(t)
+	defer server.Close()
+	ctx := context.Background()
+
+	require.NoError(t, engine.SetChargeStationAuth(ctx, "cs001", &store.ChargeStationAuth{
+		SecurityProfile: store.TLSWithBasicAuth,
+	}))
+
+	// a security event and a log status change, as the station reports them
+	techInfo := "wrong password"
+	_, err := ocpp16.SecurityEventNotificationHandler{Clock: c, EventStore: engine}.HandleCall(ctx, "cs001",
+		&types.SecurityEventNotificationJson{
+			Timestamp: "2026-11-27T08:15:30Z",
+			Type:      "FailedToAuthenticateAtCentralSystem",
+			TechInfo:  &techInfo,
+		})
+	require.NoError(t, err)
+	requestId := 7
+	_, err = ocpp16.LogStatusNotificationHandler{Clock: c, FirmwareStore: engine, EventStore: engine}.HandleCall(ctx, "cs001",
+		&types.LogStatusNotificationJson{
+			Status:    types.UploadLogStatusEnumTypeUploading,
+			RequestId: &requestId,
+		})
+	require.NoError(t, err)
+	// an event that is stored without a category
+	require.NoError(t, engine.AddChargeStationEvent(ctx, "cs001", &store.ChargeStationEvent{
+		Timestamp: c.Now(),
+		EventType: "Threshold",
+	}))
+
+	got := new(api.EventsResponse)
+	getJson(t, r, "/cs/cs001/events", got)
+	assert.Equal(t, 3, got.Total)
+	require.Len(t, got.Events, 3)
+	events := map[string]api.ChargeStationEvent{}
+	for _, event := range got.Events {
+		events[event.EventType] = event
+	}
+
+	security := api.ChargeStationEventCategorySecurity
+	logStatus := api.ChargeStationEventCategoryLogStatus
+	device := api.ChargeStationEventCategoryDevice
+	logStatusData := `{"status":"Uploading","requestId":7}`
+	assert.Equal(t, map[string]api.ChargeStationEvent{
+		"FailedToAuthenticateAtCentralSystem": {
+			Timestamp: time.Date(2026, 11, 27, 8, 15, 30, 0, time.UTC),
+			EventType: "FailedToAuthenticateAtCentralSystem",
+			TechInfo:  &techInfo,
+			Category:  &security,
+		},
+		"LogStatusNotification": {
+			Timestamp: c.Now(),
+			EventType: "LogStatusNotification",
+			EventData: &logStatusData,
+			Category:  &logStatus,
+		},
+		"Threshold": {
+			Timestamp: c.Now(),
+			EventType: "Threshold",
+			Category:  &device,
+		},
+	}, events)
+
+	// the log status change is also the current log status of the station
+	gotLogStatus := new(api.LogStatus)
+	getJson(t, r, "/cs/cs001/logs/status", gotLogStatus)
+	lastUpdate := c.Now()
+	assert.Equal(t, &api.LogStatus{
+		Status:     api.Uploading,
+		RequestId:  &requestId,
+		LastUpdate: &lastUpdate,
+	}, gotLogStatus)
+}
+
+// uncategorisedEventStore lists events the way a backend that does not store the
+// category of an event does.
+type uncategorisedEventStore struct {
+	store.Engine
+}
+
+func (s uncategorisedEventStore) ListChargeStationEvents(ctx context.Context, chargeStationId string, offset int, limit int) ([]*store.ChargeStationEvent, int, error) {
+	events, total, err := s.Engine.ListChargeStationEvents(ctx, chargeStationId, offset, limit)
+	uncategorised := make([]*store.ChargeStationEvent, 0, len(events))
+	for _, event := range events {
+		eventCopy := *event
+		eventCopy.Category = ""
+		uncategorised = append(uncategorised, &eventCopy)
+	}
+	return uncategorised, total, err
+}
+
+func TestChargeStationEventsLeaveOutUnknownCategory(t *testing.T) {
+	c := clockTest.NewFakePassiveClock(time.Now().UTC())
+	engine := uncategorisedEventStore{Engine: inmemory.NewStore(c)}
+	srv, err := api.NewServer(engine, c, ocpi.NewOCPI(engine, nil, "GB", "TWK"))
+	require.NoError(t, err)
+	r := chi.NewRouter()
+	r.Use(api.ValidationMiddleware)
+	r.Mount("/", api.Handler(srv))
+	ctx := context.Background()
+
+	require.NoError(t, engine.SetChargeStationAuth(ctx, "cs001", &store.ChargeStationAuth{
+		SecurityProfile: store.TLSWithBasicAuth,
+	}))
+	require.NoError(t, engine.AddChargeStationEvent(ctx, "cs001", &store.ChargeStationEvent{
+		Timestamp: c.Now(),
+		EventType: "SecurityLogWasCleared",
+		Category:  store.ChargeStationEventCategorySecurity,
+	}))
+
+	got := map[string]any{}
+	getJson(t, r, "/cs/cs001/events", &got)
+	events, ok := got["events"].([]any)
+	require.True(t, ok, "events: %v", got["events"])
+	require.Len(t, events, 1)
+	event, ok := events[0].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "SecurityLogWasCleared", event["eventType"])
+	assert.NotContains(t, event, "category")
+}

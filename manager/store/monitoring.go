@@ -33,7 +33,21 @@ type VariableMonitoringConfig struct {
 	CreatedAt         time.Time
 }
 
-// ChargeStationEvent represents an event reported by a charge station
+// ChargeStationEventCategory tells which kind of station message an event comes from
+type ChargeStationEventCategory string
+
+const (
+	// ChargeStationEventCategoryDevice is a device model event (OCPP 2.0.1 NotifyEvent).
+	// It is the category of an event that is stored without one.
+	ChargeStationEventCategoryDevice ChargeStationEventCategory = "device"
+	// ChargeStationEventCategorySecurity is a SecurityEventNotification
+	ChargeStationEventCategorySecurity ChargeStationEventCategory = "security"
+	// ChargeStationEventCategoryLogStatus is an OCPP 1.6 LogStatusNotification
+	ChargeStationEventCategoryLogStatus ChargeStationEventCategory = "log_status"
+)
+
+// ChargeStationEvent represents an event reported by a charge station.
+// Category is empty when the backend does not store it (Firestore).
 type ChargeStationEvent struct {
 	Id              int
 	ChargeStationId string
@@ -45,6 +59,7 @@ type ChargeStationEvent struct {
 	ComponentId     *string
 	VariableId      *string
 	Cleared         bool
+	Category        ChargeStationEventCategory
 	CreatedAt       time.Time
 }
 
