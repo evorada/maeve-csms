@@ -291,6 +291,14 @@ func TestStubsReturnErrNotImplemented(t *testing.T) {
 		"RejectChargeStation": func() error {
 			return s.RejectChargeStation(ctx, "cs001", "")
 		},
+		"ListInventory": func() error {
+			_, _, err := s.ListInventory(ctx, "org001", store.InventoryStation, false, store.PageRequest{})
+			return err
+		},
+		"CountInventory": func() error {
+			_, err := s.CountInventory(ctx, "org001", store.InventoryStation, false)
+			return err
+		},
 	}
 
 	for name, stub := range stubs {

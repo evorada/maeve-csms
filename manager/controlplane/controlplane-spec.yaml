@@ -8,9 +8,10 @@ info:
 
     Every request needs a token that the platform minted for one of its services: the
     subject starts with `svc:` and the permissions contain `cpms.tenant.manage`. Only
-    `GET /events` looks at the org of the token: it returns the events of that org and,
-    with the org scope `subtree`, of the orgs below it. A transfer of a resource also
-    needs the permission `cpms.station.write`.
+    `GET /events` and `GET /tenants/{orgId}/inventory` look at the org of the token: they
+    reach that org and, with the org scope `subtree`, the orgs below it that are tenants
+    of the manager. A transfer of a resource also needs the permission
+    `cpms.station.write`, the inventory of a tenant the permission `cpms.station.read`.
   version: 1.0.0
 servers:
   - url: /_control/v1
@@ -195,6 +196,96 @@ paths:
           $ref: '#/components/responses/TenantNotFound'
         '501':
           $ref: '#/components/responses/NotImplemented'
+  /tenants/{orgId}/inventory:
+    parameters:
+      - $ref: '#/components/parameters/OrgId'
+    get:
+      operationId: getInventory
+      summary: List what a tenant owns
+      description: |
+        Returns how many resources of a type the org owns and a page of them, with their
+        ids and URNs, so that the platform can reconcile them with the usage facts. Only
+        the resources whose own org is `orgId` count, never those of the orgs below it; a
+        charge station that was transferred counts in its new org only. The org must be
+        the org of the token or, with the org scope `subtree`, a tenant below it.
+
+        The ids, which a page is ordered by (byte by byte), depend on the type:
+        - `station`: the station key
+        - `connector`: `{station_key}#{ocpp_evse_id}` when its EVSE has one connector
+          (always so for OCPP 1.6), `{station_key}#{ocpp_evse_id}.{ocpp_connector_id}`
+          when it has more; the subject of the connector in the usage facts
+        - `location`: the id of the location
+        - `token`: `{country_code}*{party_id}*{uid}`
+      parameters:
+        - name: type
+          in: query
+          required: true
+          description: The type of the resources
+          schema:
+            type: string
+            enum:
+              - station
+              - connector
+              - location
+              - token
+        - name: include_inactive
+          in: query
+          description: |
+            Also list the resources that are inactive: the decommissioned charge stations,
+            the connectors of an EVSE that is `REMOVED` or of a charge station that is not
+            active (pending or decommissioned), and the tokens that are not valid.
+            Locations are never inactive.
+          schema:
+            type: boolean
+            default: false
+        - name: limit
+          in: query
+          description: The most resources of the page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 5000
+            default: 1000
+        - name: cursor
+          in: query
+          description: '`next_cursor` of the previous page; the first page without it'
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The count and a page of the resources
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Inventory'
+        '400':
+          description: |
+            The org id is not a UUID, or a parameter is not valid (`type` missing or not
+            one of the types, `limit`, `cursor`, `include_inactive`); `field` names it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: The caller is not a platform service with the permissions `cpms.tenant.manage` and `cpms.station.read`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: There is no such tenant, or the org is not one that the token reaches
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '501':
+          description: The storage of the manager keeps no inventory
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /events:
     get:
       operationId: listEvents
@@ -807,6 +898,66 @@ components:
           type: array
           description: The tariffs of the old org that the moved connectors and the location referred to, which are cleared
           items:
+            type: string
+    Inventory:
+      type: object
+      required:
+        - org_id
+        - type
+        - as_of
+        - count
+        - items
+        - next_cursor
+      properties:
+        org_id:
+          type: string
+          format: uuid
+          x-go-type: string
+        type:
+          type: string
+          enum:
+            - station
+            - connector
+            - location
+            - token
+        as_of:
+          type: string
+          format: date-time
+          description: When the manager read the inventory
+        count:
+          type: integer
+          description: How many resources of the type the org owns (with the inactive ones when `include_inactive`), not the size of the page
+        items:
+          type: array
+          description: The resources of the page, ordered by id
+          items:
+            $ref: '#/components/schemas/InventoryItem'
+        next_cursor:
+          type: string
+          nullable: true
+          description: The cursor of the next page; null after the last page
+    InventoryItem:
+      type: object
+      required:
+        - id
+        - urn
+        - attrs
+      properties:
+        id:
+          type: string
+        urn:
+          type: string
+          description: '`urn:cpms:<org_id>:<type>/<id>`'
+        attrs:
+          type: object
+          description: |
+            A few attributes of the resource, by type:
+            - `station`: `state` (`pending`, `active` or `decommissioned`) and, when it has
+              one, `location_id`
+            - `connector`: `station_key`, `evse_uid` and `connector_uid`
+            - `location`: `ocpi_id`, `party_ref` and `publish` (`true` or `false`)
+            - `token`: `type` and `valid` (`true` or `false`)
+          additionalProperties:
             type: string
     ErrorDetail:
       type: object

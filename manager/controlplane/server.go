@@ -58,6 +58,8 @@ type Server struct {
 	// Commands cancels the commands that are queued for a charge station that is
 	// transferred. Nil when the storage keeps no commands.
 	Commands *commands.Service
+	// Inventory lists what the org of a tenant owns. Nil answers an inventory with 501.
+	Inventory store.InventoryStore
 }
 
 var _ ServerInterface = (*Server)(nil)

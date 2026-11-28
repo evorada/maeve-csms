@@ -25,6 +25,10 @@ type Querier interface {
 	CountCommands(ctx context.Context, arg CountCommandsParams) (int64, error)
 	CountConnectorsForOrgs(ctx context.Context, orgIds []pgtype.UUID) (int64, error)
 	CountDeviceReports(ctx context.Context, chargeStationID string) (int64, error)
+	CountInventoryConnectors(ctx context.Context, arg CountInventoryConnectorsParams) (int64, error)
+	CountInventoryLocations(ctx context.Context, orgID pgtype.UUID) (int64, error)
+	CountInventoryStations(ctx context.Context, arg CountInventoryStationsParams) (int64, error)
+	CountInventoryTokens(ctx context.Context, arg CountInventoryTokensParams) (int64, error)
 	CountMeterValues(ctx context.Context, arg CountMeterValuesParams) (int64, error)
 	CountTransactionsFiltered(ctx context.Context, arg CountTransactionsFilteredParams) (int64, error)
 	// A connector belongs to the org of its EVSE. Returns no row when there is no such EVSE.
@@ -190,6 +194,20 @@ type Querier interface {
 	ListDisplayMessagesByStateAndPriority(ctx context.Context, arg ListDisplayMessagesByStateAndPriorityParams) ([]DisplayMessage, error)
 	ListExpiredQueuedCommands(ctx context.Context, arg ListExpiredQueuedCommandsParams) ([]Command, error)
 	ListFirmwareUpdateRequests(ctx context.Context, arg ListFirmwareUpdateRequestsParams) ([]FirmwareUpdateRequest, error)
+	// The id of a connector is its subject key (store.ConnectorSubjectKey): the station key
+	// and the OCPP EVSE id, followed by the OCPP connector id when the EVSE has more than
+	// one connector.
+	ListInventoryConnectors(ctx context.Context, arg ListInventoryConnectorsParams) ([]ListInventoryConnectorsRow, error)
+	// Locations have no inactive state.
+	ListInventoryLocations(ctx context.Context, arg ListInventoryLocationsParams) ([]ListInventoryLocationsRow, error)
+	// The inventory of an org: what it owns itself (org_id), never what the orgs below it
+	// own. A page holds the items whose id sorts after after_id, byte by byte (COLLATE "C",
+	// as the other backends compare), and row_limit items at most. Without include_inactive
+	// the decommissioned stations, the connectors of a REMOVED EVSE or of a station that is
+	// not active, and the tokens that are not valid are left out.
+	ListInventoryStations(ctx context.Context, arg ListInventoryStationsParams) ([]ListInventoryStationsRow, error)
+	// The id of a token is {country_code}*{party_id}*{uid} (store.TokenInventoryId).
+	ListInventoryTokens(ctx context.Context, arg ListInventoryTokensParams) ([]ListInventoryTokensRow, error)
 	ListLocations(ctx context.Context, arg ListLocationsParams) ([]Location, error)
 	ListLogRequests(ctx context.Context, arg ListLogRequestsParams) ([]LogRequest, error)
 	ListOcpiPartiesForRole(ctx context.Context, role string) ([]OcpiParty, error)

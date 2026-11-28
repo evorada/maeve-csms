@@ -86,6 +86,7 @@ func NewInternalHandler(d InternalDeps) http.Handler {
 		Events:       d.Events,
 		Entitlements: d.Entitlements,
 		Commands:     d.Commands,
+		Inventory:    d.Engine,
 	}
 	if d.Resolver != nil {
 		controlPlane.Mode = d.Resolver.Mode

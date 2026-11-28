@@ -66,7 +66,7 @@ func controlPlaneRoutes(t *testing.T, orgId string) []controlPlaneRoute {
 	}
 	sort.Strings(specified)
 	require.Equal(t, specified, registered)
-	require.Len(t, registered, 8, "a new operation: check that the tests of the control plane cover it")
+	require.Len(t, registered, 9, "a new operation: check that the tests of the control plane cover it")
 
 	result := make([]controlPlaneRoute, 0, len(registered)+1)
 	for _, route := range registered {
@@ -75,6 +75,10 @@ func controlPlaneRoutes(t *testing.T, orgId string) []controlPlaneRoute {
 		// the route of the spec: the whole URN is encoded
 		target = strings.ReplaceAll(target, "{urn}", strings.ReplaceAll(url.PathEscape("urn:cpms:"+orgId+":station/aaaa.CP001"), ":", "%3A"))
 		require.NotContains(t, target, "{", "a parameter that this test does not know")
+		// the inventory needs the type of the resources
+		if strings.HasSuffix(target, "/inventory") {
+			target += "?type=station"
+		}
 		result = append(result, controlPlaneRoute{method: method, target: target})
 	}
 	// the same transfer through the route that reads the path itself
@@ -93,6 +97,12 @@ func transferTarget(urn string) string {
 // permission to write charge stations besides the one to manage tenants.
 func isTransfer(route controlPlaneRoute) bool {
 	return strings.HasSuffix(route.target, ":transfer")
+}
+
+// isInventory reports whether the route is the inventory of a tenant, which needs the
+// permission to read charge stations besides the one to manage tenants.
+func isInventory(route controlPlaneRoute) bool {
+	return strings.Contains(route.target, "/inventory?")
 }
 
 // serviceToken returns a token of the platform for one of its services.
@@ -195,7 +205,7 @@ func TestControlPlaneRefusesEveryCallerButAPlatformServiceThatMayManageTenants(t
 		token := serviceToken(platform, "svc:provisioner", tenancy.PermTenantManage)
 		for _, route := range routes {
 			rr := send(handler, route, token)
-			if isTransfer(route) {
+			if isTransfer(route) || isInventory(route) {
 				assert.Equal(t, http.StatusForbidden, rr.Code, "%s %s: %s", route.method, route.target, rr.Body.String())
 				assert.JSONEq(t, `{"status":"Forbidden","error":"forbidden"}`, rr.Body.String())
 				continue
@@ -212,6 +222,35 @@ func TestControlPlaneRefusesEveryCallerButAPlatformServiceThatMayManageTenants(t
 		rr = send(handler, controlPlaneRoute{http.MethodGet, controlplane.BasePath + "/no-such-path"}, token)
 		assert.Equal(t, http.StatusNotFound, rr.Code)
 	})
+}
+
+func TestControlPlaneServesTheInventoryOfTheOrgOfTheToken(t *testing.T) {
+	handler, platform, engine := newMultiTenantInternalHandler(t)
+	require.NoError(t, engine.SetChargeStationAuth(context.Background(), "aaaa.CP001", &store.ChargeStationAuth{
+		SecurityProfile: store.TLSWithBasicAuth,
+		OrgId:           orgA,
+	}))
+	reader := func(orgId string) string {
+		claims := platform.Claims(time.Now())
+		claims["sub"] = "svc:inventory"
+		claims["org"] = orgId
+		claims["org_scope"] = string(tenancy.OrgScopeSelf)
+		claims["perms"] = []string{tenancy.PermTenantManage, tenancy.PermStationRead}
+		return platform.Sign(claims)
+	}
+	route := controlPlaneRoute{http.MethodGet, controlplane.BasePath + "/tenants/" + orgA + "/inventory?type=station"}
+
+	rr := send(handler, route, reader(orgA))
+	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+	var answer controlplane.Inventory
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &answer))
+	assert.Equal(t, 1, answer.Count)
+	assert.Equal(t, []controlplane.InventoryItem{{
+		Id: "aaaa.CP001", Urn: "urn:cpms:" + orgA + ":station/aaaa.CP001", Attrs: map[string]string{"state": "active"},
+	}}, answer.Items)
+
+	rr = send(handler, route, reader(testutil.PlatformOrgId))
+	assert.Equal(t, http.StatusNotFound, rr.Code, "an org that the token does not reach")
 }
 
 func TestControlPlaneChangesWhatTheGatewayLookupsAnswer(t *testing.T) {

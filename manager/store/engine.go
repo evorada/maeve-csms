@@ -41,4 +41,5 @@ type Engine interface {
 	CommandStore
 	AssetStore
 	ChargeStationRegistryStore
+	InventoryStore
 }

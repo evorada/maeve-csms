@@ -73,7 +73,7 @@ func (s *Server) ListEvents(w http.ResponseWriter, r *http.Request, params ListE
 	}
 	orgIds, err := s.Scoper.OrgIds(r.Context(), p)
 	if err != nil {
-		s.eventsError(w, "find the orgs of the caller", err)
+		s.readError(w, "find the orgs of the caller", err)
 		return
 	}
 
@@ -91,7 +91,7 @@ func (s *Server) ListEvents(w http.ResponseWriter, r *http.Request, params ListE
 		Limit:             limit,
 	})
 	if err != nil {
-		s.eventsError(w, "list the events", err)
+		s.readError(w, "list the events", err)
 		return
 	}
 	for _, ev := range listed {
@@ -111,9 +111,9 @@ func shortEventType(name string) (string, bool) {
 	return eventType, slices.Contains(events.AllTypes, eventType)
 }
 
-// eventsError answers a request for events that the store could not serve. What the
-// store said only goes to the log.
-func (s *Server) eventsError(w http.ResponseWriter, action string, err error) {
+// readError answers a read (of events, of an inventory) that the store could not serve.
+// What the store said only goes to the log.
+func (s *Server) readError(w http.ResponseWriter, action string, err error) {
 	if errors.Is(err, store.ErrNotImplemented) {
 		writeError(w, http.StatusNotImplemented, codeNotImplemented)
 		return

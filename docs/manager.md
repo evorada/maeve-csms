@@ -28,7 +28,10 @@ administration API (`/api/openapi.json`), all without authentication. It also se
 control plane (`/_control/v1`, specified in
 [`controlplane-spec.yaml`](../manager/controlplane/controlplane-spec.yaml)), through
 which the platform creates, updates, suspends and resumes tenants, reads the domain
-events of its orgs again (`GET /_control/v1/events`) and transfers a charge station to
+events of its orgs again (`GET /_control/v1/events`), lists what a tenant owns
+(`GET /_control/v1/tenants/{orgId}/inventory?type=station|connector|location|token`,
+which also needs the permission `cpms.station.read` and, like the events, a token that
+reaches the org) and transfers a charge station to
 another org (`POST /_control/v1/resources/{urn}:transfer`, which also needs the
 permission `cpms.station.write`): the only part of the
 listener that needs a token, and the token must be one of a platform service (subject
