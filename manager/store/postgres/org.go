@@ -26,6 +26,7 @@ var assignLegacyOrgStatements = []string{
 	       WHERE other.org_id = $1 AND other.country_code = tokens.country_code
 	         AND other.party_id = tokens.party_id AND other.uid = tokens.uid)`,
 	`UPDATE transactions SET org_id = $1 WHERE org_id = $2`,
+	`UPDATE meter_values SET org_id = $1 WHERE org_id = $2`,
 	`UPDATE reservations SET org_id = $1 WHERE org_id = $2`,
 	`UPDATE charging_profiles SET org_id = $1 WHERE org_id = $2`,
 	`UPDATE ocpi_registrations SET org_id = $1 WHERE org_id = $2`,

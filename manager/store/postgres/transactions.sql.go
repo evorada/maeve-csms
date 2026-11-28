@@ -36,16 +36,18 @@ func (q *Queries) AddMeterValues(ctx context.Context, arg AddMeterValuesParams) 
 const CountTransactionsFiltered = `-- name: CountTransactionsFiltered :one
 SELECT COUNT(*) FROM transactions
 WHERE charge_station_id = $1
-    AND ($2::text IS NULL 
-        OR ($2::text = 'active' AND stop_timestamp IS NULL)
-        OR ($2::text = 'completed' AND stop_timestamp IS NOT NULL)
-        OR $2::text = 'all')
-    AND ($3::timestamp IS NULL OR start_timestamp >= $3::timestamp)
-    AND ($4::timestamp IS NULL OR start_timestamp <= $4::timestamp)
+    AND (cardinality($2::uuid[]) = 0 OR org_id = ANY($2::uuid[]))
+    AND ($3::text IS NULL 
+        OR ($3::text = 'active' AND stop_timestamp IS NULL)
+        OR ($3::text = 'completed' AND stop_timestamp IS NOT NULL)
+        OR $3::text = 'all')
+    AND ($4::timestamp IS NULL OR start_timestamp >= $4::timestamp)
+    AND ($5::timestamp IS NULL OR start_timestamp <= $5::timestamp)
 `
 
 type CountTransactionsFilteredParams struct {
 	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
+	OrgIds          []pgtype.UUID    `db:"org_ids" json:"org_ids"`
 	Status          pgtype.Text      `db:"status" json:"status"`
 	StartDate       pgtype.Timestamp `db:"start_date" json:"start_date"`
 	EndDate         pgtype.Timestamp `db:"end_date" json:"end_date"`
@@ -54,6 +56,7 @@ type CountTransactionsFilteredParams struct {
 func (q *Queries) CountTransactionsFiltered(ctx context.Context, arg CountTransactionsFilteredParams) (int64, error) {
 	row := q.db.QueryRow(ctx, CountTransactionsFiltered,
 		arg.ChargeStationID,
+		arg.OrgIds,
 		arg.Status,
 		arg.StartDate,
 		arg.EndDate,
@@ -285,14 +288,16 @@ func (q *Queries) ListTransactions(ctx context.Context) ([]Transaction, error) {
 }
 
 const ListTransactionsFiltered = `-- name: ListTransactionsFiltered :many
+
 SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id FROM transactions
 WHERE charge_station_id = $1
-    AND ($4::text IS NULL 
-        OR ($4::text = 'active' AND stop_timestamp IS NULL)
-        OR ($4::text = 'completed' AND stop_timestamp IS NOT NULL)
-        OR $4::text = 'all')
-    AND ($5::timestamp IS NULL OR start_timestamp >= $5::timestamp)
-    AND ($6::timestamp IS NULL OR start_timestamp <= $6::timestamp)
+    AND (cardinality($4::uuid[]) = 0 OR org_id = ANY($4::uuid[]))
+    AND ($5::text IS NULL 
+        OR ($5::text = 'active' AND stop_timestamp IS NULL)
+        OR ($5::text = 'completed' AND stop_timestamp IS NOT NULL)
+        OR $5::text = 'all')
+    AND ($6::timestamp IS NULL OR start_timestamp >= $6::timestamp)
+    AND ($7::timestamp IS NULL OR start_timestamp <= $7::timestamp)
 ORDER BY start_timestamp DESC
 LIMIT $2 OFFSET $3
 `
@@ -301,16 +306,19 @@ type ListTransactionsFilteredParams struct {
 	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
 	Limit           int32            `db:"limit" json:"limit"`
 	Offset          int32            `db:"offset" json:"offset"`
+	OrgIds          []pgtype.UUID    `db:"org_ids" json:"org_ids"`
 	Status          pgtype.Text      `db:"status" json:"status"`
 	StartDate       pgtype.Timestamp `db:"start_date" json:"start_date"`
 	EndDate         pgtype.Timestamp `db:"end_date" json:"end_date"`
 }
 
+// The transactions of a charge station, of the given orgs: no org is every org.
 func (q *Queries) ListTransactionsFiltered(ctx context.Context, arg ListTransactionsFilteredParams) ([]Transaction, error) {
 	rows, err := q.db.Query(ctx, ListTransactionsFiltered,
 		arg.ChargeStationID,
 		arg.Limit,
 		arg.Offset,
+		arg.OrgIds,
 		arg.Status,
 		arg.StartDate,
 		arg.EndDate,

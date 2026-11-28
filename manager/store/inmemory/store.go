@@ -57,7 +57,7 @@ type Store struct {
 	localAuthListVersions            map[string]int
 	localAuthListEntries             map[string]map[string]*store.LocalAuthListEntry
 	reservations                     map[int]*store.Reservation
-	meterValues                      map[meterValueKey][]store.StoredMeterValue
+	meterValues                      map[meterValueKey][]storedMeterValue
 	displayMessages                  map[string]map[int]*store.DisplayMessage
 	resetRequests                    map[string]*store.ResetRequest
 	unlockConnectorRequests          map[string]*store.UnlockConnectorRequest
@@ -121,7 +121,7 @@ func NewStore(clock clock.PassiveClock) *Store {
 		localAuthListVersions:            make(map[string]int),
 		localAuthListEntries:             make(map[string]map[string]*store.LocalAuthListEntry),
 		reservations:                     make(map[int]*store.Reservation),
-		meterValues:                      make(map[meterValueKey][]store.StoredMeterValue),
+		meterValues:                      make(map[meterValueKey][]storedMeterValue),
 		displayMessages:                  make(map[string]map[int]*store.DisplayMessage),
 		resetRequests:                    make(map[string]*store.ResetRequest),
 		unlockConnectorRequests:          make(map[string]*store.UnlockConnectorRequest),
@@ -260,6 +260,20 @@ func (s *Store) SetChargeStationAuth(_ context.Context, chargeStationId string, 
 	s.chargeStationAuth[chargeStationId] = auth
 	s.registerChargeStation(chargeStationId)
 	return nil
+}
+
+// orgIdSet returns the orgs of a filter in their canonical form. An org id that is not a
+// UUID is an error, as it is for PostgreSQL.
+func orgIdSet(orgIds []string) (map[string]bool, error) {
+	orgs := make(map[string]bool, len(orgIds))
+	for _, orgId := range orgIds {
+		id, err := canonicalOrgId(orgId)
+		if err != nil {
+			return nil, err
+		}
+		orgs[id] = true
+	}
+	return orgs, nil
 }
 
 // orgIdForStation returns the org that owns a charge station: the org it was registered
@@ -771,13 +785,24 @@ func (s *Store) NextOcpp16TransactionId(_ context.Context) (int, error) {
 	return s.ocpp16TransactionSeq, nil
 }
 
-func (s *Store) ListTransactionsForChargeStation(_ context.Context, chargeStationId, status string, startDate, endDate *time.Time, limit, offset int) ([]*store.Transaction, int64, error) {
+// ListTransactionsForChargeStation lists a page of the transactions of a charge station
+// and counts them. With orgIds, only the transactions of these orgs are listed and
+// counted.
+func (s *Store) ListTransactionsForChargeStation(_ context.Context, chargeStationId, status string, startDate, endDate *time.Time, limit, offset int, orgIds []string) ([]*store.Transaction, int64, error) {
+	orgs, err := orgIdSet(orgIds)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list transactions: %w", err)
+	}
+
 	s.Lock()
 	defer s.Unlock()
 
 	var allTransactions []*store.Transaction
 	for _, txn := range s.transactions {
 		if txn.ChargeStationId == chargeStationId {
+			if len(orgs) > 0 && !orgs[stationOrgId(txn.OrgId)] {
+				continue
+			}
 			isActive := txn.EndedSeqNo == 0
 			if status == "active" && !isActive {
 				continue

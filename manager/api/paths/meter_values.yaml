@@ -4,7 +4,10 @@ paths:
       summary: Get meter values from charge station
       description: "Retrieves historical meter values (energy consumption, power,\
         \ voltage, etc.) \nreported by the charge station. Supports filtering and\
-        \ pagination.\n"
+        \ pagination.\nOnly the meter values of the orgs that the caller may reach\
+        \ are returned and counted in `total`: a meter value belongs to the org of\
+        \ its transaction or, without a transaction, to the org that owned the charge\
+        \ station when it was received.\n"
       operationId: getMeterValues
       x-permission: cpms.session.read
       parameters:

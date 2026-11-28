@@ -159,7 +159,7 @@ func TestOcpp16Events_StartWhoseEventFailsStoresNothing(t *testing.T) {
 	})
 
 	require.ErrorIs(t, err, errAppendFailed)
-	transactions, total, err := testStore.ListTransactionsForChargeStation(ctx, "cs001", "", nil, nil, 10, 0)
+	transactions, total, err := testStore.ListTransactionsForChargeStation(ctx, "cs001", "", nil, nil, 10, 0, nil)
 	require.NoError(t, err)
 	assert.Empty(t, transactions, "no transaction without its event")
 	assert.Zero(t, total)

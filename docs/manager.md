@@ -35,7 +35,11 @@ reaches the org) and transfers a charge station to
 another org (`POST /_control/v1/resources/{urn}:transfer`, which also needs the
 permission `cpms.station.write`): the only part of the
 listener that needs a token, and the token must be one of a platform service (subject
-`svc:...`) with the permission `cpms.tenant.manage`. The legacy pages `/transactions` (the transactions of every
+`svc:...`) with the permission `cpms.tenant.manage`. A transfer leaves the sessions of
+the charge station with the org that owned it when they started: their events go to that
+org, also for a session that still runs, and the administration API shows the
+transactions and the meter values of the charge station only to a caller that reaches
+their org. The legacy pages `/transactions` (the transactions of every
 organization) and `/adminui` (registers charge stations and tokens) are off by default;
 `enable_transactions_page` and `enable_admin_ui` in `[api]` serve them on the internal
 listener, for local development only. The local `docker-compose.yml` publishes the

@@ -4,6 +4,7 @@ package inmemory
 
 import (
 	"context"
+	"fmt"
 	"sort"
 
 	"github.com/thoughtworks/maeve-csms/manager/store"
@@ -14,7 +15,14 @@ type meterValueKey struct {
 	evseId          int
 }
 
-// StoreMeterValues stores meter values received from a charge station.
+// storedMeterValue is a meter value with the org that owns it.
+type storedMeterValue struct {
+	store.StoredMeterValue
+	orgId string
+}
+
+// StoreMeterValues stores meter values received from a charge station. They belong to
+// the org of their transaction when it is known, else to the org of the charge station.
 func (s *Store) StoreMeterValues(_ context.Context, chargeStationId string, evseId int, transactionId string, meterValues []store.MeterValue) error {
 	s.Lock()
 	defer s.Unlock()
@@ -25,16 +33,26 @@ func (s *Store) StoreMeterValues(_ context.Context, chargeStationId string, evse
 	}
 
 	if s.meterValues == nil {
-		s.meterValues = make(map[meterValueKey][]store.StoredMeterValue)
+		s.meterValues = make(map[meterValueKey][]storedMeterValue)
+	}
+
+	orgId := s.orgIdForStation(chargeStationId)
+	if transactionId != "" {
+		if transaction := s.getTransaction(chargeStationId, transactionId); transaction != nil {
+			orgId = transaction.OrgId
+		}
 	}
 
 	// Append new meter values
 	for _, mv := range meterValues {
-		s.meterValues[key] = append(s.meterValues[key], store.StoredMeterValue{
-			ChargeStationId: chargeStationId,
-			EvseId:          evseId,
-			TransactionId:   transactionId,
-			MeterValue:      mv,
+		s.meterValues[key] = append(s.meterValues[key], storedMeterValue{
+			StoredMeterValue: store.StoredMeterValue{
+				ChargeStationId: chargeStationId,
+				EvseId:          evseId,
+				TransactionId:   transactionId,
+				MeterValue:      mv,
+			},
+			orgId: orgId,
 		})
 	}
 
@@ -57,19 +75,24 @@ func (s *Store) GetMeterValues(_ context.Context, chargeStationId string, evseId
 	}
 
 	values := s.meterValues[key]
-	if values == nil {
-		return []store.StoredMeterValue{}, nil
-	}
-
 	if limit > 0 && len(values) > limit {
-		return values[:limit], nil
+		values = values[:limit]
 	}
 
-	return values, nil
+	result := make([]store.StoredMeterValue, len(values))
+	for i, mv := range values {
+		result[i] = mv.StoredMeterValue
+	}
+	return result, nil
 }
 
 // QueryMeterValues retrieves meter values with advanced filtering and pagination.
 func (s *Store) QueryMeterValues(_ context.Context, filter store.MeterValuesFilter) (*store.MeterValuesResult, error) {
+	orgs, err := orgIdSet(filter.OrgIds)
+	if err != nil {
+		return nil, fmt.Errorf("query meter values: %w", err)
+	}
+
 	s.Lock()
 	defer s.Unlock()
 
@@ -83,6 +106,9 @@ func (s *Store) QueryMeterValues(_ context.Context, filter store.MeterValuesFilt
 
 		for _, mv := range values {
 			// Apply filters
+			if len(orgs) > 0 && !orgs[stationOrgId(mv.orgId)] {
+				continue
+			}
 			if filter.ConnectorId != nil && mv.EvseId != *filter.ConnectorId {
 				continue
 			}
@@ -96,7 +122,7 @@ func (s *Store) QueryMeterValues(_ context.Context, filter store.MeterValuesFilt
 				continue
 			}
 
-			allValues = append(allValues, mv)
+			allValues = append(allValues, mv.StoredMeterValue)
 		}
 	}
 

@@ -164,7 +164,10 @@ func (s *Store) updateTransaction(ctx context.Context, chargeStationId, transact
 	return nil
 }
 
-func (s *Store) ListTransactionsForChargeStation(ctx context.Context, chargeStationId, status string, startDate, endDate *time.Time, limit, offset int) ([]*store.Transaction, int64, error) {
+// ListTransactionsForChargeStation lists the transactions of a charge station. Firestore
+// does not keep the org of a transaction: orgIds is not looked at, and the transactions
+// of every org are listed.
+func (s *Store) ListTransactionsForChargeStation(ctx context.Context, chargeStationId, status string, startDate, endDate *time.Time, limit, offset int, _ []string) ([]*store.Transaction, int64, error) {
 	query := s.client.Collection("Transaction").Where("chargeStationId", "==", chargeStationId)
 
 	docs, err := query.Documents(ctx).GetAll()

@@ -16,6 +16,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/thoughtworks/maeve-csms/manager/api"
 	"github.com/thoughtworks/maeve-csms/manager/commands"
 	"github.com/thoughtworks/maeve-csms/manager/controlplane"
 	"github.com/thoughtworks/maeve-csms/manager/events"
@@ -208,9 +209,35 @@ func sessionEventOrgs(t *testing.T) []string {
 	return found
 }
 
+// historyApi returns the routes of a multi-tenant API server on the PostgreSQL store,
+// behind the authorisation of the manager, for a caller of the org with every
+// permission.
+func historyApi(t *testing.T, orgId string) http.Handler {
+	t.Helper()
+	scoper := &tenancy.Scoper{
+		Mode:     tenancy.ModeMulti,
+		Tenants:  testStore,
+		Resolver: &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: testStore, Stations: testStore},
+	}
+	srv, err := api.NewServer(testStore, clock.RealClock{}, nil, events.NopEmitter{}, api.WithScoper(scoper))
+	require.NoError(t, err)
+	swagger, err := api.GetSwagger()
+	require.NoError(t, err)
+	permissions, err := api.BuildPermissionIndex(swagger)
+	require.NoError(t, err)
+	routes := api.HandlerWithOptions(srv, api.ChiServerOptions{
+		Middlewares: []api.MiddlewareFunc{api.AuthzMiddleware(scoper, permissions, "")},
+	})
+	caller := &tenancy.Principal{Subject: "user:test", OrgId: orgId, OrgScope: tenancy.OrgScopeSelf, Perms: tenancy.AllPermissions}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		routes.ServeHTTP(w, r.WithContext(tenancy.WithPrincipal(r.Context(), caller)))
+	})
+}
+
 // A session that runs while its charge station is transferred stays with the org that
 // started it: the transaction keeps its org, and so do the events of the rest of the
-// session.
+// session. The new owner of the charge station does not see it in the history of the
+// charge station.
 func TestTransfer_ARunningSessionStaysWithItsOrg(t *testing.T) {
 	defer truncateAll(t)
 	ctx := context.Background()
@@ -300,4 +327,51 @@ func TestTransfer_ARunningSessionStaysWithItsOrg(t *testing.T) {
 		event(events.TypeSessionCompleted, transferToOrg, after),
 	}, sessionEventOrgs(t))
 	require.Zero(t, fixture.Events.OutsideTx(), "every event is emitted inside a store transaction")
+
+	t.Run("the history of the new owner is without the sessions of the old owner", func(t *testing.T) {
+		newOwner := historyApi(t, transferToOrg)
+		rr := callAssetApi(newOwner, http.MethodGet, "/cs/"+transferKey+"/transactions", "")
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		var list api.TransactionList
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &list))
+		assert.Equal(t, int64(1), list.Total)
+		require.Len(t, list.Transactions, 1)
+		assert.Equal(t, ocpp16.ConvertToUUID(after), list.Transactions[0].TransactionId)
+
+		rr = callAssetApi(newOwner, http.MethodGet, "/cs/"+transferKey+"/transaction/"+ocpp16.ConvertToUUID(after), "")
+		assert.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		unknown := callAssetApi(newOwner, http.MethodGet, "/cs/"+transferKey+"/transaction/"+ocpp16.ConvertToUUID(999999), "")
+		require.Equal(t, http.StatusNotFound, unknown.Code, unknown.Body.String())
+		for _, transactionId := range []int{before, running} {
+			rr = callAssetApi(newOwner, http.MethodGet, "/cs/"+transferKey+"/transaction/"+ocpp16.ConvertToUUID(transactionId), "")
+			assert.Equal(t, http.StatusNotFound, rr.Code, rr.Body.String())
+			assert.Equal(t, unknown.Body.String(), rr.Body.String(), "like a transaction that does not exist")
+		}
+
+		// the meter values of the running session, also the ones that came after the
+		// transfer, are with its transaction
+		rr = callAssetApi(newOwner, http.MethodGet, "/cs/"+transferKey+"/meter-values", "")
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		var meterValues api.MeterValuesResponse
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &meterValues))
+		assert.Equal(t, 1, meterValues.Total)
+		require.Len(t, meterValues.MeterValues, 1)
+		assert.Equal(t, ptr(ocpp16.ConvertToUUID(after)), meterValues.MeterValues[0].TransactionId)
+
+		// the old owner does not reach the charge station any more
+		oldOwner := historyApi(t, transferFromOrg)
+		for _, target := range []string{"/transactions", "/transaction/" + ocpp16.ConvertToUUID(running), "/meter-values"} {
+			rr = callAssetApi(oldOwner, http.MethodGet, "/cs/"+transferKey+target, "")
+			assert.Equal(t, http.StatusNotFound, rr.Code, target)
+		}
+
+		// its sessions are still there, with their meter values
+		ofOldOwner, total, err := testStore.ListTransactionsForChargeStation(ctx, transferKey, "all", nil, nil, 10, 0, []string{transferFromOrg})
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), total)
+		assert.Len(t, ofOldOwner, 2)
+		stored, err := testStore.QueryMeterValues(ctx, store.MeterValuesFilter{ChargeStationId: transferKey, OrgIds: []string{transferFromOrg}, Limit: 10})
+		require.NoError(t, err)
+		assert.Equal(t, 2, stored.Total)
+	})
 }

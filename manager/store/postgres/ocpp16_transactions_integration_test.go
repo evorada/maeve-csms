@@ -200,7 +200,7 @@ func TestOcpp16Transaction_StartAndStop(t *testing.T) {
 	assert.Equal(t, []store.SampledValue{ocpp16Sample("Sample.Periodic", 3_000_004_000)}, got.MeterValues[1].SampledValues)
 	assert.Equal(t, []store.SampledValue{kWhEndSample}, got.MeterValues[2].SampledValues)
 
-	completed, total, err := testStore.ListTransactionsForChargeStation(ctx, "cs001", "completed", nil, nil, 10, 0)
+	completed, total, err := testStore.ListTransactionsForChargeStation(ctx, "cs001", "completed", nil, nil, 10, 0, nil)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), total)
 	assert.Len(t, completed, 1)
@@ -352,7 +352,7 @@ func TestOcpp16Transaction_StopOfUnknownTransaction(t *testing.T) {
 		{Timestamp: "2026-11-26T10:30:00Z", SampledValues: []store.SampledValue{ocpp16Sample("Transaction.End", 2500)}},
 	}, got.MeterValues)
 
-	active, total, err := testStore.ListTransactionsForChargeStation(ctx, "cs001", "active", nil, nil, 10, 0)
+	active, total, err := testStore.ListTransactionsForChargeStation(ctx, "cs001", "active", nil, nil, 10, 0, nil)
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), total)
 	assert.Empty(t, active)

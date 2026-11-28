@@ -92,7 +92,8 @@ func (s *Server) lookupStation(ctx context.Context, stationKey string) (*store.C
 
 // stationOrgIds returns the orgs whose charge stations the caller may list: the orgs in
 // its scope and, with the default org, the legacy org, whose charge stations belong to
-// the default org (tenancy.StationOrgId).
+// the default org (tenancy.StationOrgId). They are also the orgs of what takes its org
+// from a charge station, the transactions and the meter values (Server.sessionOrgIds).
 func (s *Server) stationOrgIds(ctx context.Context, p *tenancy.Principal) ([]string, error) {
 	orgIds, err := s.scoper.OrgIds(ctx, p)
 	if err != nil {
@@ -593,7 +594,7 @@ func (s *Server) stationCharging(ctx context.Context, stationKey string) (bool, 
 			return true, nil
 		}
 	}
-	_, active, err := s.store.ListTransactionsForChargeStation(ctx, stationKey, "active", nil, nil, 1, 0)
+	_, active, err := s.store.ListTransactionsForChargeStation(ctx, stationKey, "active", nil, nil, 1, 0, nil)
 	if err != nil {
 		return false, fmt.Errorf("active transactions of %s: %w", stationKey, err)
 	}

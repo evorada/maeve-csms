@@ -40,6 +40,12 @@ func TestCountConnectorsForOrgs(t *testing.T) {
 	})
 }
 
+func TestHistoryPerOrg(t *testing.T) {
+	storetest.TestHistoryPerOrg(t, func(t *testing.T) store.Engine {
+		return inmemory.NewStore(clock.RealClock{})
+	})
+}
+
 func TestLookupTokenPrefersTheMostRecentlyUpdatedToken(t *testing.T) {
 	const orgId = "0193b2c4-0000-7000-8000-0000000000a1"
 	ctx := context.Background()

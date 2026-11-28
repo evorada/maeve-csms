@@ -249,6 +249,21 @@ func optionalOrgId(orgId string) (pgtype.UUID, error) {
 	return id, nil
 }
 
+// orgIdArray converts the org ids of a filter to an array parameter. No org is an empty
+// array: the queries read it as "every org", while a nil slice would be NULL, which
+// matches nothing.
+func orgIdArray(orgIds []string) ([]pgtype.UUID, error) {
+	ids := make([]pgtype.UUID, len(orgIds))
+	for i, orgId := range orgIds {
+		id, err := pgUUID(orgId)
+		if err != nil {
+			return nil, fmt.Errorf("invalid org id %q: %w", orgId, err)
+		}
+		ids[i] = id
+	}
+	return ids, nil
+}
+
 // orgIdOrLegacy converts the text form of an org id to pgtype.UUID. An empty org id
 // (not known) is the legacy org.
 func orgIdOrLegacy(orgId string) (pgtype.UUID, error) {

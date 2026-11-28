@@ -5,13 +5,16 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
-// StoreMeterValues stores meter values received from a charge station.
+// StoreMeterValues stores meter values received from a charge station. They belong to
+// the org of their transaction when it is known, else to the org of the charge station
+// (see the StoreMeterValue query).
 func (s *Store) StoreMeterValues(ctx context.Context, chargeStationId string, evseId int, transactionId string, meterValues []store.MeterValue) error {
 	for _, mv := range meterValues {
 		// Marshal sampled values to JSON
@@ -102,8 +105,13 @@ func (s *Store) GetMeterValues(ctx context.Context, chargeStationId string, evse
 
 // QueryMeterValues retrieves meter values with advanced filtering and pagination.
 func (s *Store) QueryMeterValues(ctx context.Context, filter store.MeterValuesFilter) (*store.MeterValuesResult, error) {
+	orgIds, err := orgIdArray(filter.OrgIds)
+	if err != nil {
+		return nil, fmt.Errorf("query meter values: %w", err)
+	}
 	params := QueryMeterValuesParams{
 		ChargeStationID: filter.ChargeStationId,
+		OrgIds:          orgIds,
 		Limit:           int32(filter.Limit),
 		Offset:          int32(filter.Offset),
 	}
@@ -139,6 +147,7 @@ func (s *Store) QueryMeterValues(ctx context.Context, filter store.MeterValuesFi
 	// Get total count for the same filters (without limit/offset)
 	countParams := CountMeterValuesParams{
 		ChargeStationID: params.ChargeStationID,
+		OrgIds:          params.OrgIds,
 		ConnectorID:     params.ConnectorID,
 		TransactionID:   params.TransactionID,
 		StartTime:       params.StartTime,

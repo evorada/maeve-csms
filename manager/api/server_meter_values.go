@@ -11,10 +11,20 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
+// GetMeterValues answers a page of the meter values of the charge station that belong
+// to the orgs that the caller may reach: a meter value belongs to the org of its
+// transaction or, without a transaction, to the org that owned the charge station when
+// it was received. The total counts those only.
 func (s *Server) GetMeterValues(w http.ResponseWriter, r *http.Request, csId string, params GetMeterValuesParams) {
+	orgIds, ok := s.sessionOrgIds(w, r)
+	if !ok {
+		return
+	}
+
 	// Build filter from query parameters
 	filter := store.MeterValuesFilter{
 		ChargeStationId: csId,
+		OrgIds:          orgIds,
 		ConnectorId:     params.ConnectorId,
 		TransactionId:   params.TransactionId,
 		Limit:           100, // default
@@ -38,10 +48,15 @@ func (s *Server) GetMeterValues(w http.ResponseWriter, r *http.Request, csId str
 		filter.Offset = *params.Offset
 	}
 
-	result, err := s.store.QueryMeterValues(r.Context(), filter)
-	if err != nil {
-		_ = render.Render(w, r, ErrInternalError(err))
-		return
+	// no org is every org for the store: a caller that reaches no org gets nothing
+	result := &store.MeterValuesResult{}
+	if len(orgIds) > 0 {
+		var err error
+		result, err = s.store.QueryMeterValues(r.Context(), filter)
+		if err != nil {
+			_ = render.Render(w, r, ErrInternalError(err))
+			return
+		}
 	}
 
 	// Convert store types to API types
