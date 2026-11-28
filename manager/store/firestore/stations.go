@@ -5,6 +5,7 @@ package firestore
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
@@ -30,4 +31,12 @@ func (s *Store) ListChargeStations(context.Context, store.ChargeStationFilter) (
 
 func (s *Store) CountChargeStations(context.Context, string, ...store.StationState) (int, error) {
 	return 0, fmt.Errorf("CountChargeStations: %w", store.ErrNotImplemented)
+}
+
+func (s *Store) RecordOnboardingConnection(context.Context, string, string, string, string, int, time.Time) (bool, error) {
+	return false, fmt.Errorf("RecordOnboardingConnection: %w", store.ErrNotImplemented)
+}
+
+func (s *Store) RecordOnboardingBoot(context.Context, string, time.Time) (*store.StationOnboarding, bool, error) {
+	return nil, false, fmt.Errorf("RecordOnboardingBoot: %w", store.ErrNotImplemented)
 }

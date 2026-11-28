@@ -137,9 +137,27 @@ func TestStationAuthUnknownHost(t *testing.T) {
 	}
 }
 
+// putTenantConfig gives a tenant of multiTenantHandler a config document. Call it before
+// the first request: the handler keeps the tenants that it read.
+func putTenantConfig(t *testing.T, engine *inmemory.Store, orgId, config string) {
+	t.Helper()
+	ctx := context.Background()
+	tenant, err := engine.GetTenant(ctx, orgId)
+	require.NoError(t, err)
+	require.NotNil(t, tenant)
+	tenant.ConfigVersion++
+	tenant.Config = json.RawMessage(config)
+	require.NoError(t, engine.PutTenant(ctx, tenant))
+}
+
+const preregisteredOnly = `{"version":1,"onboarding_mode":"preregistered_only"}`
+
 func TestStationAuthUnknownStation(t *testing.T) {
 	ctx := context.Background()
 	handler, engine := multiTenantHandler(t)
+	// tenants that do not onboard the stations that are not registered
+	putTenantConfig(t, engine, orgA, preregisteredOnly)
+	putTenantConfig(t, engine, orgB, preregisteredOnly)
 	// a station that only tenant B has, and one from before tenants (plain key)
 	require.NoError(t, engine.SetChargeStationAuth(ctx, "bbbb.CP002", &store.ChargeStationAuth{Base64SHA256Password: passwordB, OrgId: orgB}))
 	require.NoError(t, engine.SetChargeStationAuth(ctx, "CP003", &store.ChargeStationAuth{Base64SHA256Password: passwordPlain}))
@@ -546,6 +564,12 @@ func TestOnlyLookupsAreServed(t *testing.T) {
 	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch} {
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, httptest.NewRequest(method, stationAuthUrl("a.example", "CP001"), nil))
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code, method)
+	}
+
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodDelete, http.MethodPatch} {
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, httptest.NewRequest(method, "/station-onboarding?host=a.example&stationId=CP999", nil))
 		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code, method)
 	}
 

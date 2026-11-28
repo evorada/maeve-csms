@@ -1693,8 +1693,12 @@ func (s *Store) CountConnectorsForOrgs(_ context.Context, orgIds []string) (int,
 
 	count := 0
 	for chargeStationId, connectors := range s.connectorStatuses {
-		// a status of a charge station that is not registered belongs to no org
+		// a status of a charge station that is not registered belongs to no org, and one
+		// that is not active has no connectors in use
 		if s.chargeStationAuth[chargeStationId] == nil || !wanted[strings.ToLower(s.orgIdForStation(chargeStationId))] {
+			continue
+		}
+		if registered := s.chargeStations[chargeStationId]; registered != nil && registered.State != store.StationStateActive {
 			continue
 		}
 		for connectorId := range connectors {

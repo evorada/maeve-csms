@@ -267,6 +267,14 @@ func TestStubsReturnErrNotImplemented(t *testing.T) {
 			_, err := s.CountChargeStations(ctx, "org001")
 			return err
 		},
+		"RecordOnboardingConnection": func() error {
+			_, err := s.RecordOnboardingConnection(ctx, "cs001", "org001", "ws", "open", 50, time.Now())
+			return err
+		},
+		"RecordOnboardingBoot": func() error {
+			_, _, err := s.RecordOnboardingBoot(ctx, "cs001", time.Now())
+			return err
+		},
 	}
 
 	for name, stub := range stubs {

@@ -159,6 +159,20 @@ func TestPayloadFieldNames(t *testing.T) {
 			payload: events.StationDecommissionedData{StationKey: "k7f2.CP001", StationId: "CP001", Actor: "svc:maeve"},
 			want:    `{"station_key":"k7f2.CP001","station_id":"CP001","location_id":null,"reason":null,"actor":"svc:maeve"}`,
 		},
+		"station.pending": {
+			payload: events.StationPendingData{StationKey: "k7f2.CP001", StationId: "CP001", Vendor: "Acme", Model: "Volt 22",
+				SerialNumber: ptr("SN-1"), FirmwareVersion: ptr("1.2.3"), Iccid: ptr("89340711000000000019"), Imsi: ptr("214070000000001"),
+				FirstSeenAt: payloadTime, Transport: "ws", Credential: "open"},
+			want: `{"station_key":"k7f2.CP001","station_id":"CP001","vendor":"Acme","model":"Volt 22","serial_number":"SN-1",` +
+				`"firmware_version":"1.2.3","iccid":"89340711000000000019","imsi":"214070000000001",` +
+				`"first_seen_at":"2026-11-27T10:30:00Z","transport":"ws","credential":"open"}`,
+		},
+		"station.pending without the optional fields": {
+			payload: events.StationPendingData{StationKey: "k7f2.CP001", StationId: "CP001", Vendor: "Acme", Model: "Volt 22",
+				FirstSeenAt: payloadTime, Transport: "wss", Credential: "onboarding_password"},
+			want: `{"station_key":"k7f2.CP001","station_id":"CP001","vendor":"Acme","model":"Volt 22",` +
+				`"first_seen_at":"2026-11-27T10:30:00Z","transport":"wss","credential":"onboarding_password"}`,
+		},
 		"location.updated of a location": {
 			payload: events.LocationUpdatedData{LocationId: "0193b2c4-0000-7000-8000-000000000001", OcpiId: "LOC1",
 				PartyRef: "cpo-1", Change: events.LocationChangeUpdated, PublishChanged: true},
@@ -186,11 +200,11 @@ func TestStationActorAndConnectorResourceId(t *testing.T) {
 
 // Every type of the catalogue is one that the emitter accepts.
 func TestAllTypesCanBeEmitted(t *testing.T) {
-	assert.Len(t, events.AllTypes, 11)
+	assert.Len(t, events.AllTypes, 12)
 	assert.Equal(t, []string{
 		"station.registered", "station.connected", "station.disconnected", "connector.status_changed",
 		"session.started", "session.updated", "session.completed", "command.completed", "command.progress",
-		"location.updated", "station.decommissioned",
+		"location.updated", "station.decommissioned", "station.pending",
 	}, events.AllTypes)
 
 	s := inmemory.NewStore(clocktest.NewFakePassiveClock(testNow))

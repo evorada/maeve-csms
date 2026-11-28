@@ -8,6 +8,7 @@ import (
 	"math"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/thoughtworks/maeve-csms/manager/store"
@@ -53,6 +54,7 @@ func (s *Store) chargeStationRecord(registered *store.ChargeStation) *store.Char
 	record.DisplayName = clonePtr(registered.DisplayName)
 	record.MaxCapacityKw = clonePtr(registered.MaxCapacityKw)
 	record.StateReason = clonePtr(registered.StateReason)
+	record.Onboarding = copyOnboarding(registered.Onboarding)
 	record.Runtime = copyRuntimeDetails(s.chargeStationRuntimeDetails[registered.StationKey])
 	return &record
 }
@@ -231,6 +233,92 @@ func (s *Store) CountChargeStations(_ context.Context, orgId string, states ...s
 	return count, nil
 }
 
+func (s *Store) RecordOnboardingConnection(_ context.Context, stationKey, orgId, transport, credential string, maxPending int, at time.Time) (bool, error) {
+	profile, ok := store.OnboardingSecurityProfile(transport)
+	if !ok {
+		return false, fmt.Errorf("record onboarding connection of %s: unknown transport %q", stationKey, transport)
+	}
+	if !store.ValidOnboardingCredential(credential) {
+		return false, fmt.Errorf("record onboarding connection of %s: unknown credential %q", stationKey, credential)
+	}
+	org, err := uuid.Parse(orgId)
+	if err != nil {
+		return false, fmt.Errorf("record onboarding connection of %s: invalid org id %q: %w", stationKey, orgId, err)
+	}
+	at = at.UTC()
+
+	s.Lock()
+	defer s.Unlock()
+	if registered := s.chargeStations[stationKey]; registered != nil {
+		if registered.State != store.StationStatePending {
+			return false, fmt.Errorf("record onboarding connection of %s: the station is %s: %w", stationKey, registered.State, store.ErrInvalidState)
+		}
+		if registered.Onboarding == nil {
+			registered.Onboarding = &store.StationOnboarding{FirstSeenAt: at, Status: store.OnboardingAwaitingApproval}
+		}
+		registered.Onboarding.LastSeenAt = at
+		registered.Onboarding.Transport = transport
+		registered.Onboarding.Credential = credential
+		registered.UpdatedAt = s.clock.Now().UTC()
+		return false, nil
+	}
+	if s.chargeStationAuth[stationKey] != nil {
+		// auth details always come with a record; a station that has them is registered
+		return false, fmt.Errorf("record onboarding connection of %s: the station is registered: %w", stationKey, store.ErrInvalidState)
+	}
+
+	pending := 0
+	for key, registered := range s.chargeStations {
+		if registered.State == store.StationStatePending && stationOrgId(s.orgIdForStation(key)) == org.String() {
+			pending++
+		}
+	}
+	if pending >= maxPending {
+		return false, fmt.Errorf("record onboarding connection of %s: org %s has %d pending stations: %w", stationKey, org, pending, store.ErrLimitExceeded)
+	}
+
+	now := s.clock.Now().UTC()
+	s.chargeStationAuth[stationKey] = &store.ChargeStationAuth{SecurityProfile: profile, OrgId: org.String()}
+	s.chargeStations[stationKey] = &store.ChargeStation{
+		StationKey:     stationKey,
+		State:          store.StationStatePending,
+		StateChangedAt: now,
+		Onboarding: &store.StationOnboarding{
+			FirstSeenAt: at,
+			LastSeenAt:  at,
+			Transport:   transport,
+			Credential:  credential,
+			Status:      store.OnboardingAwaitingApproval,
+		},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	return true, nil
+}
+
+func (s *Store) RecordOnboardingBoot(_ context.Context, stationKey string, at time.Time) (*store.StationOnboarding, bool, error) {
+	at = at.UTC()
+	s.Lock()
+	defer s.Unlock()
+	registered := s.chargeStations[stationKey]
+	if registered == nil {
+		return nil, false, fmt.Errorf("record onboarding boot of %s: %w", stationKey, store.ErrNotFound)
+	}
+	if registered.State != store.StationStatePending {
+		return nil, false, fmt.Errorf("record onboarding boot of %s: the station is %s: %w", stationKey, registered.State, store.ErrInvalidState)
+	}
+	if registered.Onboarding == nil {
+		registered.Onboarding = &store.StationOnboarding{FirstSeenAt: at, Status: store.OnboardingAwaitingApproval}
+	}
+	onboarding := registered.Onboarding
+	onboarding.LastSeenAt = at
+	notify := onboarding.NotifiedAt == nil
+	if notify {
+		onboarding.NotifiedAt = &at
+	}
+	return copyOnboarding(onboarding), notify, nil
+}
+
 // stationOrgId returns the canonical (lowercase) form of an org id that is a UUID, as
 // PostgreSQL returns it, and any other org id as it is.
 func stationOrgId(orgId string) string {
@@ -238,6 +326,17 @@ func stationOrgId(orgId string) string {
 		return u.String()
 	}
 	return orgId
+}
+
+func copyOnboarding(onboarding *store.StationOnboarding) *store.StationOnboarding {
+	if onboarding == nil {
+		return nil
+	}
+	copied := *onboarding
+	copied.NotifiedAt = clonePtr(onboarding.NotifiedAt)
+	copied.Error = clonePtr(onboarding.Error)
+	copied.CommandId = clonePtr(onboarding.CommandId)
+	return &copied
 }
 
 func copyRuntimeDetails(details *store.ChargeStationRuntimeDetails) *store.ChargeStationRuntimeDetails {

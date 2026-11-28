@@ -85,6 +85,11 @@ func (c *CachingRegistry) LookupCertificate(ctx context.Context, certHash string
 	return c.Inner.LookupCertificate(ctx, certHash)
 }
 
+// RecordOnboardingConnection is never kept: it passes through to the inner registry.
+func (c *CachingRegistry) RecordOnboardingConnection(ctx context.Context, host, clientId, transport, credential string) error {
+	return c.Inner.RecordOnboardingConnection(ctx, host, clientId, transport, credential)
+}
+
 func (c *CachingRegistry) now() time.Time {
 	if c.Clock != nil {
 		return c.Clock()
@@ -165,6 +170,10 @@ func copyOf(cs *ChargeStation) *ChargeStation {
 	cp := *cs
 	if cs.AcceptedCertOrgNames != nil {
 		cp.AcceptedCertOrgNames = append([]string{}, cs.AcceptedCertOrgNames...)
+	}
+	if cs.Onboarding != nil {
+		onboarding := *cs.Onboarding
+		cp.Onboarding = &onboarding
 	}
 	return &cp
 }

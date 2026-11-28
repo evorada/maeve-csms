@@ -568,3 +568,63 @@ func TestOcppTokenAuthServiceReturnsUnknownIfTheOrgOfTheStationIsNotFound(t *tes
 
 	assert.Equal(t, ocpp201.IdTokenInfoType{Status: ocpp201.AuthorizationStatusEnumTypeUnknown}, tokenInfo)
 }
+
+// registryFailure is a registry that cannot be read.
+type registryFailure struct {
+	store.ChargeStationRegistryStore
+}
+
+func (registryFailure) LookupChargeStation(context.Context, string) (*store.ChargeStation, error) {
+	return nil, errors.New("database is down")
+}
+
+// No token is accepted at a station that may not charge: a pending or decommissioned
+// one. An active station, and a station without a record, are not affected.
+func TestOcppTokenAuthServiceAcceptsNoTokenAtAStationThatMayNotCharge(t *testing.T) {
+	ctx := context.Background()
+	const orgId = "0193b2c4-0000-7000-8000-0000000000a1"
+	clock := fakeclock.NewFakePassiveClock(time.Now())
+	engine := inmemory.NewStore(clock)
+	require.NoError(t, engine.SetToken(ctx, &store.Token{
+		OrgId: orgId, CountryCode: "GB", PartyId: "TWK", Type: "RFID", Uid: "MYRFIDCARD", ContractId: "GBTWK012345678V",
+		Issuer: "Thoughtworks", Valid: true, CacheMode: store.CacheModeAlways,
+	}))
+	_, err := engine.RecordOnboardingConnection(ctx, "aaaa.PENDING", orgId, store.OnboardingTransportWs, store.OnboardingCredentialOpen, 50, time.Now())
+	require.NoError(t, err)
+	require.NoError(t, engine.SetChargeStationAuth(ctx, "aaaa.ACTIVE", &store.ChargeStationAuth{OrgId: orgId}))
+	require.NoError(t, engine.SetChargeStationAuth(ctx, "aaaa.RETIRED", &store.ChargeStationAuth{OrgId: orgId}))
+	require.NoError(t, engine.DecommissionChargeStation(ctx, "aaaa.RETIRED", nil))
+
+	service := services.OcppTokenAuthService{
+		TokenStore:  engine,
+		OrgResolver: &tenancy.Resolver{Stations: engine},
+		Clock:       clock,
+		Registry:    engine,
+	}
+	tokens := []ocpp201.IdTokenType{
+		{Type: ocpp201.IdTokenEnumTypeISO14443, IdToken: "MYRFIDCARD"},
+		{Type: ocpp201.IdTokenEnumTypeCentral, IdToken: "anything"},
+		{Type: ocpp201.IdTokenEnumTypeNoAuthorization},
+	}
+	for _, token := range tokens {
+		for _, station := range []string{"aaaa.PENDING", "aaaa.RETIRED"} {
+			assert.Equal(t, ocpp201.IdTokenInfoType{Status: ocpp201.AuthorizationStatusEnumTypeInvalid},
+				service.Authorize(ctx, station, token), "%s at %s", token.Type, station)
+		}
+		assert.Equal(t, ocpp201.AuthorizationStatusEnumTypeAccepted, service.Authorize(ctx, "aaaa.ACTIVE", token).Status, token.Type)
+	}
+
+	// the answer at an active station, and at a station without a record, is the one
+	// without a registry
+	withoutRegistry := service
+	withoutRegistry.Registry = nil
+	for _, token := range tokens {
+		for _, station := range []string{"aaaa.ACTIVE", "aaaa.NEW"} {
+			assert.Equal(t, withoutRegistry.Authorize(ctx, station, token), service.Authorize(ctx, station, token), "%s at %s", token.Type, station)
+		}
+	}
+
+	// a registry that cannot be read accepts nothing
+	service.Registry = registryFailure{}
+	assert.Equal(t, ocpp201.IdTokenInfoType{Status: ocpp201.AuthorizationStatusEnumTypeUnknown}, service.Authorize(ctx, "aaaa.ACTIVE", tokens[0]))
+}

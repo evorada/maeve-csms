@@ -67,6 +67,37 @@ func (q *Queries) CountChargeStationRecords(ctx context.Context, arg CountCharge
 	return count, err
 }
 
+const CreatePendingChargeStation = `-- name: CreatePendingChargeStation :execrows
+INSERT INTO charge_stations (
+    charge_station_id, security_profile, invalid_username_allowed, org_id, state, onboarding
+) VALUES (
+    $1, $2, false, $3::uuid,
+    'pending', $4::jsonb
+)
+ON CONFLICT (charge_station_id) DO NOTHING
+`
+
+type CreatePendingChargeStationParams struct {
+	ChargeStationID string      `db:"charge_station_id" json:"charge_station_id"`
+	SecurityProfile int32       `db:"security_profile" json:"security_profile"`
+	OrgID           pgtype.UUID `db:"org_id" json:"org_id"`
+	Onboarding      []byte      `db:"onboarding" json:"onboarding"`
+}
+
+// A station that was registered at the same moment is left as it is (no row).
+func (q *Queries) CreatePendingChargeStation(ctx context.Context, arg CreatePendingChargeStationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, CreatePendingChargeStation,
+		arg.ChargeStationID,
+		arg.SecurityProfile,
+		arg.OrgID,
+		arg.Onboarding,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const DeleteChargeStationCertificateDeletion = `-- name: DeleteChargeStationCertificateDeletion :exec
 DELETE FROM charge_station_certificate_deletions WHERE charge_station_id = $1
 `
@@ -140,7 +171,7 @@ func (q *Queries) DeleteChargeStationTrigger(ctx context.Context, chargeStationI
 }
 
 const GetChargeStationAuth = `-- name: GetChargeStationAuth :one
-SELECT charge_station_id, security_profile, base64_sha256_password, invalid_username_allowed, created_at, updated_at, org_id, location_id, display_name, max_capacity_kw, allow_any_token, state, state_changed_at, state_reason FROM charge_stations WHERE charge_station_id = $1
+SELECT charge_station_id, security_profile, base64_sha256_password, invalid_username_allowed, created_at, updated_at, org_id, location_id, display_name, max_capacity_kw, allow_any_token, state, state_changed_at, state_reason, onboarding, pending_base64_sha256_password, shared_credentials FROM charge_stations WHERE charge_station_id = $1
 `
 
 // Auth
@@ -162,6 +193,9 @@ func (q *Queries) GetChargeStationAuth(ctx context.Context, chargeStationID stri
 		&i.State,
 		&i.StateChangedAt,
 		&i.StateReason,
+		&i.Onboarding,
+		&i.PendingBase64Sha256Password,
+		&i.SharedCredentials,
 	)
 	return i, err
 }
@@ -266,6 +300,24 @@ func (q *Queries) GetChargeStationDataTransfer(ctx context.Context, chargeStatio
 	return i, err
 }
 
+const GetChargeStationOnboardingForUpdate = `-- name: GetChargeStationOnboardingForUpdate :one
+SELECT state, onboarding FROM charge_stations
+WHERE charge_station_id = $1
+FOR UPDATE
+`
+
+type GetChargeStationOnboardingForUpdateRow struct {
+	State      string `db:"state" json:"state"`
+	Onboarding []byte `db:"onboarding" json:"onboarding"`
+}
+
+func (q *Queries) GetChargeStationOnboardingForUpdate(ctx context.Context, chargeStationID string) (GetChargeStationOnboardingForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, GetChargeStationOnboardingForUpdate, chargeStationID)
+	var i GetChargeStationOnboardingForUpdateRow
+	err := row.Scan(&i.State, &i.Onboarding)
+	return i, err
+}
+
 const GetChargeStationRecord = `-- name: GetChargeStationRecord :one
 
 SELECT
@@ -278,6 +330,8 @@ SELECT
     cs.state,
     cs.state_changed_at,
     cs.state_reason,
+    cs.onboarding,
+    cs.shared_credentials,
     cs.created_at::timestamptz AS created_at,
     cs.updated_at::timestamptz AS updated_at,
     r.ocpp_version,
@@ -305,6 +359,8 @@ type GetChargeStationRecordRow struct {
 	State             string             `db:"state" json:"state"`
 	StateChangedAt    pgtype.Timestamptz `db:"state_changed_at" json:"state_changed_at"`
 	StateReason       pgtype.Text        `db:"state_reason" json:"state_reason"`
+	Onboarding        []byte             `db:"onboarding" json:"onboarding"`
+	SharedCredentials bool               `db:"shared_credentials" json:"shared_credentials"`
 	CreatedAt         pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 	OcppVersion       pgtype.Text        `db:"ocpp_version" json:"ocpp_version"`
@@ -335,6 +391,8 @@ func (q *Queries) GetChargeStationRecord(ctx context.Context, chargeStationID st
 		&i.State,
 		&i.StateChangedAt,
 		&i.StateReason,
+		&i.Onboarding,
+		&i.SharedCredentials,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.OcppVersion,
@@ -678,6 +736,8 @@ SELECT
     cs.state,
     cs.state_changed_at,
     cs.state_reason,
+    cs.onboarding,
+    cs.shared_credentials,
     cs.created_at::timestamptz AS created_at,
     cs.updated_at::timestamptz AS updated_at,
     r.ocpp_version,
@@ -736,6 +796,8 @@ type ListChargeStationRecordsRow struct {
 	State             string             `db:"state" json:"state"`
 	StateChangedAt    pgtype.Timestamptz `db:"state_changed_at" json:"state_changed_at"`
 	StateReason       pgtype.Text        `db:"state_reason" json:"state_reason"`
+	Onboarding        []byte             `db:"onboarding" json:"onboarding"`
+	SharedCredentials bool               `db:"shared_credentials" json:"shared_credentials"`
 	CreatedAt         pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 	OcppVersion       pgtype.Text        `db:"ocpp_version" json:"ocpp_version"`
@@ -782,6 +844,8 @@ func (q *Queries) ListChargeStationRecords(ctx context.Context, arg ListChargeSt
 			&i.State,
 			&i.StateChangedAt,
 			&i.StateReason,
+			&i.Onboarding,
+			&i.SharedCredentials,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.OcppVersion,
@@ -882,6 +946,23 @@ func (q *Queries) ListChargeStationTriggers(ctx context.Context, arg ListChargeS
 	return items, nil
 }
 
+const LockOrgOnboarding = `-- name: LockOrgOnboarding :exec
+SELECT pg_advisory_xact_lock($1::int, hashtext($2::text))
+`
+
+type LockOrgOnboardingParams struct {
+	LockClass int32  `db:"lock_class" json:"lock_class"`
+	OrgID     string `db:"org_id" json:"org_id"`
+}
+
+// Serialises the onboarding connections of one org until the transaction ends, so that
+// its pending stations are counted and created one connection at a time. lock_class is
+// a constant of the store that names this lock (see LockStationCommands).
+func (q *Queries) LockOrgOnboarding(ctx context.Context, arg LockOrgOnboardingParams) error {
+	_, err := q.db.Exec(ctx, LockOrgOnboarding, arg.LockClass, arg.OrgID)
+	return err
+}
+
 const LookupChargeStationCertificateDeletion = `-- name: LookupChargeStationCertificateDeletion :one
 SELECT charge_station_id, hash_algorithm, issuer_name_hash, issuer_key_hash, serial_number, deletion_status, send_after, created_at FROM charge_station_certificate_deletions WHERE charge_station_id = $1
 `
@@ -922,26 +1003,30 @@ func (q *Queries) LookupChargeStationCertificateQuery(ctx context.Context, charg
 const SetChargeStationAuth = `-- name: SetChargeStationAuth :one
 
 INSERT INTO charge_stations (
-    charge_station_id, security_profile, base64_sha256_password, invalid_username_allowed, org_id
+    charge_station_id, security_profile, base64_sha256_password, invalid_username_allowed, org_id,
+    pending_base64_sha256_password
 ) VALUES (
     $1, $2, $3, $4,
-    COALESCE($5::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+    COALESCE($5::uuid, '00000000-0000-0000-0000-000000000000'::uuid),
+    $6
 )
 ON CONFLICT (charge_station_id) DO UPDATE
 SET security_profile = EXCLUDED.security_profile,
     base64_sha256_password = EXCLUDED.base64_sha256_password,
     invalid_username_allowed = EXCLUDED.invalid_username_allowed,
+    pending_base64_sha256_password = EXCLUDED.pending_base64_sha256_password,
     org_id = COALESCE($5::uuid, charge_stations.org_id),
     updated_at = NOW()
-RETURNING charge_station_id, security_profile, base64_sha256_password, invalid_username_allowed, created_at, updated_at, org_id, location_id, display_name, max_capacity_kw, allow_any_token, state, state_changed_at, state_reason
+RETURNING charge_station_id, security_profile, base64_sha256_password, invalid_username_allowed, created_at, updated_at, org_id, location_id, display_name, max_capacity_kw, allow_any_token, state, state_changed_at, state_reason, onboarding, pending_base64_sha256_password, shared_credentials
 `
 
 type SetChargeStationAuthParams struct {
-	ChargeStationID        string      `db:"charge_station_id" json:"charge_station_id"`
-	SecurityProfile        int32       `db:"security_profile" json:"security_profile"`
-	Base64Sha256Password   pgtype.Text `db:"base64_sha256_password" json:"base64_sha256_password"`
-	InvalidUsernameAllowed bool        `db:"invalid_username_allowed" json:"invalid_username_allowed"`
-	OrgID                  pgtype.UUID `db:"org_id" json:"org_id"`
+	ChargeStationID             string      `db:"charge_station_id" json:"charge_station_id"`
+	SecurityProfile             int32       `db:"security_profile" json:"security_profile"`
+	Base64Sha256Password        pgtype.Text `db:"base64_sha256_password" json:"base64_sha256_password"`
+	InvalidUsernameAllowed      bool        `db:"invalid_username_allowed" json:"invalid_username_allowed"`
+	OrgID                       pgtype.UUID `db:"org_id" json:"org_id"`
+	PendingBase64Sha256Password pgtype.Text `db:"pending_base64_sha256_password" json:"pending_base64_sha256_password"`
 }
 
 // SetChargeStationAuth without an org (NULL) registers a new charge station in the
@@ -953,6 +1038,7 @@ func (q *Queries) SetChargeStationAuth(ctx context.Context, arg SetChargeStation
 		arg.Base64Sha256Password,
 		arg.InvalidUsernameAllowed,
 		arg.OrgID,
+		arg.PendingBase64Sha256Password,
 	)
 	var i ChargeStation
 	err := row.Scan(
@@ -970,6 +1056,9 @@ func (q *Queries) SetChargeStationAuth(ctx context.Context, arg SetChargeStation
 		&i.State,
 		&i.StateChangedAt,
 		&i.StateReason,
+		&i.Onboarding,
+		&i.PendingBase64Sha256Password,
+		&i.SharedCredentials,
 	)
 	return i, err
 }
@@ -1174,6 +1263,23 @@ func (q *Queries) SetChargeStationDataTransfer(ctx context.Context, arg SetCharg
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const SetChargeStationOnboarding = `-- name: SetChargeStationOnboarding :exec
+UPDATE charge_stations
+SET onboarding = $1::jsonb,
+    updated_at = NOW()
+WHERE charge_station_id = $2
+`
+
+type SetChargeStationOnboardingParams struct {
+	Onboarding      []byte `db:"onboarding" json:"onboarding"`
+	ChargeStationID string `db:"charge_station_id" json:"charge_station_id"`
+}
+
+func (q *Queries) SetChargeStationOnboarding(ctx context.Context, arg SetChargeStationOnboardingParams) error {
+	_, err := q.db.Exec(ctx, SetChargeStationOnboarding, arg.Onboarding, arg.ChargeStationID)
+	return err
 }
 
 const SetChargeStationRuntime = `-- name: SetChargeStationRuntime :one

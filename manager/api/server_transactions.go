@@ -265,6 +265,9 @@ func (s *Server) RemoteStartTransaction(w http.ResponseWriter, r *http.Request, 
 	}) {
 		return
 	}
+	if s.refusedUnlessChargingAllowed(w, r, csId) {
+		return
+	}
 
 	runtime, err := s.store.LookupChargeStationRuntimeDetails(r.Context(), csId)
 	if err != nil {

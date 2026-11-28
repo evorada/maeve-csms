@@ -179,7 +179,14 @@ func chargeStationFromRow(row GetChargeStationRecordRow) (*store.ChargeStation, 
 		StateReason:    fromPgText(row.StateReason),
 		CreatedAt:      fromPgTimestamptz(row.CreatedAt),
 		UpdatedAt:      fromPgTimestamptz(row.UpdatedAt),
+
+		SharedCredentials: row.SharedCredentials,
 	}
+	onboarding, err := unmarshalOnboarding(row.Onboarding)
+	if err != nil {
+		return nil, fmt.Errorf("charge station %s: %w", row.ChargeStationID, err)
+	}
+	cs.Onboarding = onboarding
 	if row.MaxCapacityKw.Valid {
 		kw, err := row.MaxCapacityKw.Float64Value()
 		if err != nil {

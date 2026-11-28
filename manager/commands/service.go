@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/schemas"
+	"github.com/thoughtworks/maeve-csms/manager/stations"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	"golang.org/x/exp/slog"
@@ -26,7 +27,23 @@ var (
 	ErrUnknownOcppVersion = errors.New("station OCPP version unknown")
 	ErrInvalidExpiry      = errors.New("expiry out of range")
 	ErrNotCancellable     = errors.New("command is not queued")
+	// ErrStationNotActive is the error of a command that would start charging (see
+	// StartsCharging) for a station that may not charge: a pending or decommissioned one.
+	ErrStationNotActive = errors.New("station is not active")
 )
+
+// chargingActions are the actions that start charging or keep a connector for it.
+var chargingActions = map[string]bool{
+	"RemoteStartTransaction":  true, // OCPP 1.6
+	"RequestStartTransaction": true, // OCPP 2.0.1
+	"ReserveNow":              true, // both
+}
+
+// StartsCharging reports whether a command of the action starts charging, or reserves a
+// connector for it.
+func StartsCharging(action string) bool {
+	return chargingActions[action]
+}
 
 // Preprocessor changes a command before it is checked and stored: it may rewrite its
 // payload or set its progress. The command already has its id and creation time.
@@ -44,7 +61,11 @@ type Service struct {
 	Events events.Emitter
 	// RuntimeDetails gives the OCPP version of a station when the command names none.
 	RuntimeDetails store.ChargeStationRuntimeDetailsStore
-	Dispatcher     *Dispatcher
+	// Registry holds the state of the stations: a command that starts charging is refused
+	// for a station that may not charge (ErrStationNotActive). When it is nil every
+	// station may charge.
+	Registry   store.ChargeStationRegistryStore
+	Dispatcher *Dispatcher
 	// SchemaFS holds the schemas of the requests.
 	SchemaFS fs.FS
 	Clock    clock.PassiveClock
@@ -96,6 +117,16 @@ func (s *Service) Enqueue(ctx context.Context, cmd *store.Command) (*store.Comma
 	spec, ok := Lookup(transport.OcppVersion(c.OcppVersion), c.Action)
 	if !ok {
 		return nil, fmt.Errorf("%w: %s for %s", ErrUnknownAction, c.Action, c.OcppVersion)
+	}
+
+	if StartsCharging(c.Action) {
+		allowed, err := stations.ChargingAllowed(ctx, s.Registry, c.StationKey)
+		if err != nil {
+			return nil, fmt.Errorf("looking up the state of %s: %w", c.StationKey, err)
+		}
+		if !allowed {
+			return nil, fmt.Errorf("%w: %s may not charge, %s is refused", ErrStationNotActive, c.StationKey, c.Action)
+		}
 	}
 
 	for _, preprocessor := range s.Preprocessors {

@@ -28,6 +28,8 @@ func (s *Store) SetChargeStationAuth(ctx context.Context, csId string, csAuth *s
 		Base64Sha256Password:   toNullableText(csAuth.Base64SHA256Password),
 		InvalidUsernameAllowed: csAuth.InvalidUsernameAllowed,
 		OrgID:                  orgId,
+
+		PendingBase64Sha256Password: toNullableText(csAuth.PendingBase64SHA256Password),
 	}
 
 	_, err = s.writeQueries(ctx).SetChargeStationAuth(ctx, params)
@@ -57,6 +59,8 @@ func (s *Store) LookupChargeStationAuth(ctx context.Context, csId string) (*stor
 		Base64SHA256Password:   fromNullableText(cs.Base64Sha256Password),
 		InvalidUsernameAllowed: cs.InvalidUsernameAllowed,
 		OrgId:                  uuidString(cs.OrgID),
+
+		PendingBase64SHA256Password: fromNullableText(cs.PendingBase64Sha256Password),
 	}, nil
 }
 

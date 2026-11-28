@@ -7,15 +7,18 @@ SELECT * FROM charge_stations WHERE charge_station_id = $1;
 
 -- name: SetChargeStationAuth :one
 INSERT INTO charge_stations (
-    charge_station_id, security_profile, base64_sha256_password, invalid_username_allowed, org_id
+    charge_station_id, security_profile, base64_sha256_password, invalid_username_allowed, org_id,
+    pending_base64_sha256_password
 ) VALUES (
     $1, $2, $3, $4,
-    COALESCE(sqlc.narg('org_id')::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+    COALESCE(sqlc.narg('org_id')::uuid, '00000000-0000-0000-0000-000000000000'::uuid),
+    sqlc.narg('pending_base64_sha256_password')
 )
 ON CONFLICT (charge_station_id) DO UPDATE
 SET security_profile = EXCLUDED.security_profile,
     base64_sha256_password = EXCLUDED.base64_sha256_password,
     invalid_username_allowed = EXCLUDED.invalid_username_allowed,
+    pending_base64_sha256_password = EXCLUDED.pending_base64_sha256_password,
     org_id = COALESCE(sqlc.narg('org_id')::uuid, charge_stations.org_id),
     updated_at = NOW()
 RETURNING *;
@@ -252,6 +255,8 @@ SELECT
     cs.state,
     cs.state_changed_at,
     cs.state_reason,
+    cs.onboarding,
+    cs.shared_credentials,
     cs.created_at::timestamptz AS created_at,
     cs.updated_at::timestamptz AS updated_at,
     r.ocpp_version,
@@ -306,6 +311,8 @@ SELECT
     cs.state,
     cs.state_changed_at,
     cs.state_reason,
+    cs.onboarding,
+    cs.shared_credentials,
     cs.created_at::timestamptz AS created_at,
     cs.updated_at::timestamptz AS updated_at,
     r.ocpp_version,
@@ -344,3 +351,30 @@ LIMIT sqlc.arg('row_limit');
 SELECT count(*) FROM charge_stations
 WHERE org_id = sqlc.arg('org_id')::uuid
   AND (cardinality(sqlc.arg('states')::text[]) = 0 OR state = ANY(sqlc.arg('states')::text[]));
+
+-- Serialises the onboarding connections of one org until the transaction ends, so that
+-- its pending stations are counted and created one connection at a time. lock_class is
+-- a constant of the store that names this lock (see LockStationCommands).
+-- name: LockOrgOnboarding :exec
+SELECT pg_advisory_xact_lock(sqlc.arg('lock_class')::int, hashtext(sqlc.arg('org_id')::text));
+
+-- name: GetChargeStationOnboardingForUpdate :one
+SELECT state, onboarding FROM charge_stations
+WHERE charge_station_id = $1
+FOR UPDATE;
+
+-- A station that was registered at the same moment is left as it is (no row).
+-- name: CreatePendingChargeStation :execrows
+INSERT INTO charge_stations (
+    charge_station_id, security_profile, invalid_username_allowed, org_id, state, onboarding
+) VALUES (
+    sqlc.arg('charge_station_id'), sqlc.arg('security_profile'), false, sqlc.arg('org_id')::uuid,
+    'pending', sqlc.arg('onboarding')::jsonb
+)
+ON CONFLICT (charge_station_id) DO NOTHING;
+
+-- name: SetChargeStationOnboarding :exec
+UPDATE charge_stations
+SET onboarding = sqlc.arg('onboarding')::jsonb,
+    updated_at = NOW()
+WHERE charge_station_id = sqlc.arg('charge_station_id');

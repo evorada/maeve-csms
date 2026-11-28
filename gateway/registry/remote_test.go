@@ -264,6 +264,8 @@ func TestLookupChargeStationRefusesAnAnswerThatDoesNotFitTheStation(t *testing.T
 		"org key in upper case":          `{"orgKey":"AAAA","stationKey":"AAAA.cs001","securityProfile":1,"base64SHA256Password":"DEADBEEF"}`,
 		"org key that is too short":      `{"orgKey":"aaa","stationKey":"aaa.cs001","securityProfile":1,"base64SHA256Password":"DEADBEEF"}`,
 		"org key that is too long":       `{"orgKey":"aaaaaaaaa","stationKey":"aaaaaaaaa.cs001","securityProfile":1,"base64SHA256Password":"DEADBEEF"}`,
+		"onboarding of another station":  `{"orgKey":"aaaa","stationKey":"aaaa.cs002","onboarding":{"openSp1":true,"base64SHA256Password":"DEADBEEF"}}`,
+		"onboarding of another tenant":   `{"orgKey":"aaaa","stationKey":"bbbb.cs001","onboarding":{"openSp1":true,"base64SHA256Password":"DEADBEEF"}}`,
 	}
 	for name, body := range bodies {
 		t.Run(name, func(t *testing.T) {

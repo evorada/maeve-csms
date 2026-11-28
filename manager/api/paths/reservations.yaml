@@ -72,9 +72,10 @@ paths:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '409':
           description: |
-            The reservation id is in use by a reservation of another charge station, or
-            the OCPP version of the charge station could not be found when the command was
-            queued (error `station_version_unknown`)
+            The reservation id is in use by a reservation of another charge station, the
+            OCPP version of the charge station could not be found when the command was
+            queued (error `station_version_unknown`), or the charge station may not charge
+            because it is pending or decommissioned (error `station_not_active`)
           content:
             application/json:
               schema:

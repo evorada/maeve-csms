@@ -118,6 +118,7 @@ func newCommandsFixture(t *testing.T) *commandsFixture {
 		Tx:             m.engine,
 		Events:         domainEvents,
 		RuntimeDetails: m.engine,
+		Registry:       m.engine,
 		Dispatcher:     dispatcher,
 		SchemaFS:       schemas.OcppSchemas,
 		Clock:          m.clock,

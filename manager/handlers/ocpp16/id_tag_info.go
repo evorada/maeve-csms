@@ -108,6 +108,19 @@ func authorizeIdTag(ctx context.Context, tokens store.TokenStore, registry store
 	return auth, nil
 }
 
+// chargingAllowed reports whether a transaction may start at the charge station (see
+// stations.ChargingAllowed). When it may not, the span says so.
+func chargingAllowed(ctx context.Context, registry store.ChargeStationRegistryStore, chargeStationId string) (bool, error) {
+	allowed, err := stations.ChargingAllowed(ctx, registry, chargeStationId)
+	if err != nil {
+		return false, err
+	}
+	if !allowed {
+		trace.SpanFromContext(ctx).SetAttributes(attribute.Bool("authorize.charging_not_allowed", true))
+	}
+	return allowed, nil
+}
+
 // acceptsAnyToken reports whether the charge station accepts idTags that the token
 // store does not know.
 func acceptsAnyToken(ctx context.Context, registry store.ChargeStationRegistryStore, chargeStationId string) (bool, error) {

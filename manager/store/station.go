@@ -30,6 +30,79 @@ func (s StationState) Valid() bool {
 	return false
 }
 
+// OnboardingStatus is where the approval of a pending station is.
+type OnboardingStatus string
+
+const (
+	// OnboardingAwaitingApproval is a pending station that nobody has approved yet.
+	OnboardingAwaitingApproval OnboardingStatus = "awaiting_approval"
+	// OnboardingApproving is a pending station whose new password is being sent to it.
+	OnboardingApproving OnboardingStatus = "approving"
+	// OnboardingCredentialsFailed is a pending station that did not take its new password.
+	OnboardingCredentialsFailed OnboardingStatus = "credentials_failed"
+)
+
+// The transports that a pending station connects with.
+const (
+	OnboardingTransportWs  = "ws"  // no TLS
+	OnboardingTransportWss = "wss" // TLS
+)
+
+// The credentials that a pending station connects with.
+const (
+	// OnboardingCredentialOpen is a connection without TLS and without a password, which
+	// a tenant can allow for the onboarding of its stations.
+	OnboardingCredentialOpen = "open"
+	// OnboardingCredentialOnboardingPassword is the onboarding password of the tenant.
+	OnboardingCredentialOnboardingPassword = "onboarding_password"
+	// OnboardingCredentialPendingPassword is the new password of the station whose
+	// approval is in flight.
+	OnboardingCredentialPendingPassword = "pending_password"
+)
+
+// OnboardingSecurityProfile returns the security profile of a pending station that
+// connects with a transport: profile 1 (no TLS) for ws, profile 2 (TLS) for wss. ok is
+// false for any other transport.
+func OnboardingSecurityProfile(transport string) (profile SecurityProfile, ok bool) {
+	switch transport {
+	case OnboardingTransportWs:
+		return UnsecuredTransportWithBasicAuth, true
+	case OnboardingTransportWss:
+		return TLSWithBasicAuth, true
+	}
+	return 0, false
+}
+
+// ValidOnboardingCredential reports whether credential is one of the credentials that a
+// pending station connects with.
+func ValidOnboardingCredential(credential string) bool {
+	switch credential {
+	case OnboardingCredentialOpen, OnboardingCredentialOnboardingPassword, OnboardingCredentialPendingPassword:
+		return true
+	}
+	return false
+}
+
+// StationOnboarding is what the CSMS knows about a pending station: a station that
+// connected without being registered.
+type StationOnboarding struct {
+	FirstSeenAt time.Time
+	// LastSeenAt is the time of the last connection or BootNotification of the station.
+	LastSeenAt time.Time
+	// Transport is the transport of the last connection (OnboardingTransportWs/Wss).
+	Transport string
+	// Credential is what the station gave on its last connection (OnboardingCredential*).
+	Credential string
+	Status     OnboardingStatus
+	// NotifiedAt is when the station.pending event of the station was emitted; nil
+	// before. It is emitted once while the station is pending.
+	NotifiedAt *time.Time
+	// Error says why the station did not take its new password.
+	Error *string
+	// CommandId is the command that sends the new password to the station.
+	CommandId *string
+}
+
 // ChargeStation is the registry record of a charge station: what the operator knows
 // about it on top of its authentication details (ChargeStationAuth).
 type ChargeStation struct {
@@ -42,6 +115,12 @@ type ChargeStation struct {
 	State          StationState
 	StateChangedAt time.Time
 	StateReason    *string
+	// Onboarding is what is known about a pending station; nil for the stations that
+	// were registered.
+	Onboarding *StationOnboarding
+	// SharedCredentials is set for a station that was approved with the onboarding
+	// password of its tenant, which other stations know too.
+	SharedCredentials bool
 	// Runtime is what the station reported when it booted, read-only (nil before its
 	// first boot). It is written with SetChargeStationRuntimeDetails.
 	Runtime   *ChargeStationRuntimeDetails
@@ -91,4 +170,24 @@ type ChargeStationRegistryStore interface {
 	// CountChargeStations counts the stations of the org that are in one of the states
 	// (every state when none is given).
 	CountChargeStations(ctx context.Context, orgId string, states ...StationState) (int, error)
+	// RecordOnboardingConnection records that a station that was not registered by an
+	// operator connected at the time at, to a host of the org orgId, with the transport
+	// and the credential (OnboardingTransport*, OnboardingCredential*). A station that
+	// does not exist is created in state pending, in the org, with the security profile
+	// of the transport (OnboardingSecurityProfile), no password and an onboarding that
+	// awaits approval; created is true then. A pending station gets the time, transport
+	// and credential of the connection as its last ones.
+	//
+	// A new station while the org has maxPending or more pending stations is
+	// ErrLimitExceeded, and nothing is written. A station that exists and is not pending
+	// (registered, approved or decommissioned) is ErrInvalidState: it is never made
+	// pending.
+	RecordOnboardingConnection(ctx context.Context, stationKey, orgId, transport, credential string, maxPending int, at time.Time) (created bool, err error)
+	// RecordOnboardingBoot records a BootNotification of a pending station at the time
+	// at: LastSeenAt becomes at and, when the station.pending event of the station has not
+	// been emitted (NotifiedAt is nil), NotifiedAt becomes at too and notify is true. Of
+	// the boots of one station that are recorded at the same time, one at most gets
+	// notify. It returns the onboarding as it is stored now. A station that does not
+	// exist is ErrNotFound, one that is not pending ErrInvalidState.
+	RecordOnboardingBoot(ctx context.Context, stationKey string, at time.Time) (onboarding *StationOnboarding, notify bool, err error)
 }

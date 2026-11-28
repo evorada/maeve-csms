@@ -122,7 +122,8 @@ resumption at once, any other instance within `[tenancy] cache_ttl`.
 The entitlements that the platform sends with a tenant (`mode = "multi"`) can limit its connectors with
 `cpms.connectors.max`. While the `enforcement` of that limit is `hard`, a new charge station is not registered
 (`POST /api/v0/cs/{csId}` is answered with `403` and an error that starts with `entitlement_limit_exceeded`)
-once the connectors that the charge stations of the tenant have reported use up the limit. A limit with the
+once the connectors that the active charge stations of the tenant have reported use up the limit (a pending or
+decommissioned charge station takes up nothing). A limit with the
 `scope` `subtree` is shared by the org in its `pool_org_id` and the tenants below that org. A `soft` limit
 refuses nothing, and a changed limit applies to the next request on every instance of the manager. Only
 registering a new charge station is limited: the charge stations that are registered connect, report
@@ -143,10 +144,15 @@ the platform called, within `[tenancy] cache_ttl` on any other instance, and for
 | `accepted_cert_org_names`  | The organisation names (`O`) that the gateway accepts in the client certificate of a charge station of the tenant (OCPP security profile 3, `securityProfile` `2`), instead of its `--org-name`. The first name is the organization of the client certificates that the admin pages issue | empty: the organisation is not checked |
 | `heartbeat_interval_s`     | The interval in the answer to a BootNotification of a charge station of the tenant, 60 to 86400 seconds | `[ocpp] heartbeat_interval` |
 | `default_tariff_ref`       | Stored for the tariffs; not applied yet | none |
-| `onboarding_mode`          | Stored for the onboarding of charge stations that are not registered (`pending_approval` or `preregistered_only`); not applied yet | `pending_approval` |
+| `onboarding_mode`          | A charge station that connects to a host of the tenant without being registered: `pending_approval` admits it as a pending station that cannot charge until it is approved, `preregistered_only` refuses it (as before there was onboarding) | `pending_approval` |
+| `onboarding_open_sp1`      | With `pending_approval`: such a station may connect without TLS and without a password (OCPP security profile 1) | `true` |
+| `onboarding_password_sha256` | With `pending_approval`: the base64 encoded SHA-256 hash of the onboarding password, with which such a station may connect (any username, with or without TLS) | none |
+| `onboarding_max_pending`   | The most pending charge stations of the tenant, 0 to 10000; a new one beyond it is refused (the gateway answers `429`) | `50` |
+| `onboarding_boot_interval_s` | The interval in the answer `Pending` to a BootNotification of a pending charge station, 10 to 86400 seconds | `60` |
 
 A tenant that was never sent a config has the defaults, and so has an org that is not a tenant and every org
-in `mode = "single"`.
+in `mode = "single"`. The onboarding of charge stations that are not registered only exists for a tenant: in
+`mode = "single"`, and for a tenant whose stored config cannot be read, such a station is refused.
 
 What that means for client certificates: for a charge station of a tenant the `--org-name` of the gateway no
 longer applies, and a tenant whose `accepted_cert_org_names` is empty or missing (also a tenant without a

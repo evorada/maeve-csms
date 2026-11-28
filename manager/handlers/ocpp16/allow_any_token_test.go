@@ -140,8 +140,10 @@ func TestAuthorizeReturnsRegistryError(t *testing.T) {
 	assert.ErrorIs(t, err, registryErr)
 	assert.Nil(t, resp)
 
-	// the registry is only read for an unknown token
-	assert.Equal(t, types.AuthorizeResponseJsonIdTagInfoStatusAccepted, authorize(t, ah, "MYRFIDCARD").IdTagInfo.Status)
+	// the state of the station is read for every idTag: a known one fails the same way
+	resp, err = ah.HandleCall(context.Background(), "cs001", &types.AuthorizeJson{IdTag: "MYRFIDCARD"})
+	assert.ErrorIs(t, err, registryErr)
+	assert.Nil(t, resp)
 }
 
 func TestStartTransactionWithAllowAnyToken(t *testing.T) {

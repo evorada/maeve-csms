@@ -171,6 +171,7 @@ func getCommandService(settings commands.Config, storageType string, engine stor
 		Tx:             engine,
 		Events:         domainEvents,
 		RuntimeDetails: engine,
+		Registry:       engine,
 		Dispatcher:     dispatcher,
 		SchemaFS:       schemas.OcppSchemas,
 		Clock:          clock.RealClock{},

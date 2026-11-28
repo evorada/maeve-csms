@@ -29,6 +29,8 @@ type Querier interface {
 	CreateAssetEvse(ctx context.Context, arg CreateAssetEvseParams) (AssetEvse, error)
 	CreateAssetLocation(ctx context.Context, arg CreateAssetLocationParams) (AssetLocation, error)
 	CreateOrUpdateDisplayMessage(ctx context.Context, arg CreateOrUpdateDisplayMessageParams) error
+	// A station that was registered at the same moment is left as it is (no row).
+	CreatePendingChargeStation(ctx context.Context, arg CreatePendingChargeStationParams) (int64, error)
 	// The reservation belongs to the org of its charge station, or to the legacy org when
 	// the charge station is not registered.
 	CreateReservation(ctx context.Context, arg CreateReservationParams) error
@@ -98,6 +100,7 @@ type Querier interface {
 	GetChargeStationClearCache(ctx context.Context, chargeStationID string) (ChargeStationClearCache, error)
 	// Data Transfer
 	GetChargeStationDataTransfer(ctx context.Context, chargeStationID string) (ChargeStationDataTransfer, error)
+	GetChargeStationOnboardingForUpdate(ctx context.Context, chargeStationID string) (GetChargeStationOnboardingForUpdateRow, error)
 	// Registry: the record of a charge station with what it reported at its last boot.
 	// created_at and updated_at are TIMESTAMP columns written with NOW() in the time zone
 	// of the session; the cast reads them back as the same instant.
@@ -199,6 +202,10 @@ type Querier interface {
 	ListTransactions(ctx context.Context) ([]Transaction, error)
 	ListTransactionsFiltered(ctx context.Context, arg ListTransactionsFilteredParams) ([]Transaction, error)
 	ListVariableMonitoring(ctx context.Context, arg ListVariableMonitoringParams) ([]VariableMonitoring, error)
+	// Serialises the onboarding connections of one org until the transaction ends, so that
+	// its pending stations are counted and created one connection at a time. lock_class is
+	// a constant of the store that names this lock (see LockStationCommands).
+	LockOrgOnboarding(ctx context.Context, arg LockOrgOnboardingParams) error
 	// Serialises the claims of one station until the transaction ends. The two-key form of
 	// the advisory lock has a key space of its own, apart from the one-key locks (such as
 	// the outbox relay lock); lock_class is a constant of the store that names this lock.
@@ -234,6 +241,7 @@ type Querier interface {
 	SetChargeStationChangeAvailability(ctx context.Context, arg SetChargeStationChangeAvailabilityParams) (ChargeStationChangeAvailability, error)
 	SetChargeStationClearCache(ctx context.Context, arg SetChargeStationClearCacheParams) (ChargeStationClearCache, error)
 	SetChargeStationDataTransfer(ctx context.Context, arg SetChargeStationDataTransferParams) (ChargeStationDataTransfer, error)
+	SetChargeStationOnboarding(ctx context.Context, arg SetChargeStationOnboardingParams) error
 	SetChargeStationRuntime(ctx context.Context, arg SetChargeStationRuntimeParams) (ChargeStationRuntime, error)
 	SetChargeStationSettings(ctx context.Context, arg SetChargeStationSettingsParams) (ChargeStationSetting, error)
 	SetChargeStationState(ctx context.Context, arg SetChargeStationStateParams) (int64, error)

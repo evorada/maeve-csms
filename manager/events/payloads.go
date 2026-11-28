@@ -187,3 +187,23 @@ type StationDecommissionedData struct {
 	Reason     *string `json:"reason"`
 	Actor      string  `json:"actor"`
 }
+
+// StationPendingData is the payload of station.pending: a station that is not registered
+// connected, booted and waits for approval; it cannot charge until then. It is emitted at
+// the first BootNotification of the station while it is pending. Vendor, model and the
+// optional fields are what the station reported in that BootNotification; FirstSeenAt,
+// Transport ("ws" | "wss") and Credential ("open" | "onboarding_password" |
+// "pending_password") are those of its connections.
+type StationPendingData struct {
+	StationKey      string    `json:"station_key"`
+	StationId       string    `json:"station_id"`
+	Vendor          string    `json:"vendor"`
+	Model           string    `json:"model"`
+	SerialNumber    *string   `json:"serial_number,omitempty"`
+	FirmwareVersion *string   `json:"firmware_version,omitempty"`
+	Iccid           *string   `json:"iccid,omitempty"`
+	Imsi            *string   `json:"imsi,omitempty"`
+	FirstSeenAt     time.Time `json:"first_seen_at"`
+	Transport       string    `json:"transport"`
+	Credential      string    `json:"credential"`
+}

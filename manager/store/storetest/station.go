@@ -423,4 +423,6 @@ func TestChargeStationRegistryStore(t *testing.T, newStore func(t *testing.T) st
 		_, err := s.CountChargeStations(ctx, "not-a-uuid")
 		assert.Error(t, err)
 	})
+
+	testStationOnboarding(t, newStore)
 }

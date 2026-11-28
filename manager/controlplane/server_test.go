@@ -247,7 +247,8 @@ func TestManifest(t *testing.T) {
 		"cpms.command.completed",
 		"cpms.command.progress",
 		"cpms.location.updated",
-		"cpms.station.decommissioned"
+		"cpms.station.decommissioned",
+		"cpms.station.pending"
 	]`, string(manifest.Events))
 	// an empty list, not null
 	assert.JSONEq(t, `[]`, string(manifest.Meters))

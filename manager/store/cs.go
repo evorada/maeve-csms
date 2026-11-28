@@ -16,9 +16,13 @@ const (
 )
 
 type ChargeStationAuth struct {
-	SecurityProfile        SecurityProfile
-	Base64SHA256Password   string
-	InvalidUsernameAllowed bool
+	SecurityProfile      SecurityProfile
+	Base64SHA256Password string
+	// PendingBase64SHA256Password is the hash of the new password of a station while the
+	// station is being told to use it; the station may connect with either password
+	// until then. Firestore does not store it: it always reads as "".
+	PendingBase64SHA256Password string
+	InvalidUsernameAllowed      bool
 	// OrgId is the org (UUID) that owns the charge station. Setting the auth details
 	// without an org registers a new charge station in LegacyOrgId and leaves the org
 	// of a charge station that is already registered as it is. Firestore does not

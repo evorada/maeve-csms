@@ -41,6 +41,16 @@ const (
 	maxHeartbeatIntervalS = 86400
 )
 
+// The defaults and limits of the onboarding settings, as in the schema.
+const (
+	DefaultOnboardingMaxPending   = 50
+	DefaultOnboardingBootInterval = 60 * time.Second
+
+	maxOnboardingMaxPending   = 10000
+	minOnboardingBootInterval = 10
+	maxOnboardingBootInterval = 86400
+)
+
 // TenantConfig is the config document of a tenant. The zero value, and a nil pointer,
 // stand for a tenant that has not set anything: the methods give the defaults.
 type TenantConfig struct {
@@ -55,6 +65,16 @@ type TenantConfig struct {
 	DefaultTariffRef   *string `json:"default_tariff_ref,omitempty"`
 	// OnboardingMode is pending_approval or preregistered_only; see Onboarding.
 	OnboardingMode string `json:"onboarding_mode,omitempty"`
+	// OnboardingOpenSP1 lets a station that is not registered connect for its onboarding
+	// without TLS and without a password; see OnboardingWithoutPassword.
+	OnboardingOpenSP1 *bool `json:"onboarding_open_sp1,omitempty"`
+	// OnboardingPasswordSHA256 is the base64 encoded SHA-256 hash of the password with
+	// which a station that is not registered may connect for its onboarding.
+	OnboardingPasswordSHA256 string `json:"onboarding_password_sha256,omitempty"`
+	// OnboardingMaxPending is 0 to 10000; see OnboardingMaxPendingStations.
+	OnboardingMaxPending *int `json:"onboarding_max_pending,omitempty"`
+	// OnboardingBootIntervalS is 10 to 86400; see OnboardingBootInterval.
+	OnboardingBootIntervalS *int `json:"onboarding_boot_interval_s,omitempty"`
 }
 
 // SecurityProfile returns the security profile of a charge station that is registered
@@ -79,6 +99,50 @@ func (c *TenantConfig) Onboarding() string {
 		return OnboardingPreregisteredOnly
 	}
 	return OnboardingPendingApproval
+}
+
+// OnboardingWithoutPassword reports whether a station that is not registered may connect
+// for its onboarding without TLS and without a password (true unless the tenant turned
+// it off).
+func (c *TenantConfig) OnboardingWithoutPassword() bool {
+	return c == nil || c.OnboardingOpenSP1 == nil || *c.OnboardingOpenSP1
+}
+
+// OnboardingPassword returns the base64 encoded SHA-256 hash of the onboarding password
+// of the tenant, "" when it has none.
+func (c *TenantConfig) OnboardingPassword() string {
+	if c == nil {
+		return ""
+	}
+	return c.OnboardingPasswordSHA256
+}
+
+// OnboardingMaxPendingStations returns the most stations of the tenant that may wait for
+// approval at the same time: DefaultOnboardingMaxPending unless the tenant set a number
+// inside the limits of the schema.
+func (c *TenantConfig) OnboardingMaxPendingStations() int {
+	if c == nil || c.OnboardingMaxPending == nil {
+		return DefaultOnboardingMaxPending
+	}
+	maxPending := *c.OnboardingMaxPending
+	if maxPending < 0 || maxPending > maxOnboardingMaxPending {
+		return DefaultOnboardingMaxPending
+	}
+	return maxPending
+}
+
+// OnboardingBootInterval returns how long a station that waits for approval waits before
+// its next BootNotification: DefaultOnboardingBootInterval unless the tenant set an
+// interval inside the limits of the schema.
+func (c *TenantConfig) OnboardingBootInterval() time.Duration {
+	if c == nil || c.OnboardingBootIntervalS == nil {
+		return DefaultOnboardingBootInterval
+	}
+	seconds := *c.OnboardingBootIntervalS
+	if seconds < minOnboardingBootInterval || seconds > maxOnboardingBootInterval {
+		return DefaultOnboardingBootInterval
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 // HeartbeatInterval returns the heartbeat interval of the charge stations of the

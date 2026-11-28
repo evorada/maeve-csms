@@ -187,9 +187,17 @@ func TestControlPlaneChangesWhatTheGatewayLookupsAnswer(t *testing.T) {
 	handler, platform, _ := newMultiTenantInternalHandler(t)
 	token := serviceToken(platform, "svc:provisioner", tenancy.PermTenantManage)
 	// the answer for a charge station that is not registered says whether its host
-	// belongs to a tenant
+	// belongs to a tenant: such a tenant onboards the station (the default), otherwise
+	// the host is not known
+	const onboarding = "onboarding"
 	lookup := func(host string) string {
 		rr := get(handler, "/_internal/v1/station-auth?host="+host+"&stationId=CP001", "")
+		if rr.Code == http.StatusOK {
+			var answer internalapi.StationAuthResponse
+			require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &answer))
+			require.NotNil(t, answer.Onboarding)
+			return onboarding
+		}
 		require.Equal(t, http.StatusNotFound, rr.Code)
 		var answer internalapi.StatusResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &answer))
@@ -197,13 +205,13 @@ func TestControlPlaneChangesWhatTheGatewayLookupsAnswer(t *testing.T) {
 	}
 
 	// the lookup keeps the tenant of the host from now on
-	require.Equal(t, internalapi.ErrorUnknownStation, lookup("a.example.com"))
+	require.Equal(t, onboarding, lookup("a.example.com"))
 	require.Equal(t, internalapi.ErrorUnknownHost, lookup("changed.example.com"))
 
 	rr := send(handler, controlPlaneRoute{http.MethodPut, controlplane.BasePath + "/tenants/" + orgA}, token)
 	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
 
-	assert.Equal(t, internalapi.ErrorUnknownStation, lookup("changed.example.com"))
+	assert.Equal(t, onboarding, lookup("changed.example.com"))
 	assert.Equal(t, internalapi.ErrorUnknownHost, lookup("a.example.com"), "the host that the tenant gave up must not be answered from the cache")
 }
 

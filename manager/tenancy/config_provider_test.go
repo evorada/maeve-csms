@@ -134,6 +134,11 @@ func TestConfigProviderInSingleModeHasTheDefaults(t *testing.T) {
 			require.NoError(t, err)
 			assert.False(t, known)
 			assert.Nil(t, names)
+
+			stored, ok, err := provider.StoredConfigForOrg(ctx, orgA)
+			require.NoError(t, err)
+			assert.False(t, ok)
+			assert.Nil(t, stored)
 		})
 	}
 	// single mode never reads a tenant
@@ -216,8 +221,39 @@ func TestConfigProviderFallsBackWhenTheStoredConfigCannotBeRead(t *testing.T) {
 			require.NoError(t, err)
 			assert.False(t, known)
 			assert.Nil(t, names)
+
+			// nor a stored config
+			stored, ok, err := provider.StoredConfigForOrg(ctx, orgA)
+			require.NoError(t, err)
+			assert.False(t, ok)
+			assert.Nil(t, stored)
 		})
 	}
+}
+
+func TestConfigProviderStoredConfigForOrg(t *testing.T) {
+	ctx := context.Background()
+	resolver, _, engine, _ := newMultiResolver(t)
+	provider := &tenancy.ConfigProvider{Resolver: resolver}
+	putConfig(t, engine, orgA, 1, `{"version":1,"onboarding_mode":"preregistered_only"}`)
+
+	cfg, ok, err := provider.StoredConfigForOrg(ctx, orgA)
+	require.NoError(t, err)
+	assert.True(t, ok)
+	assert.Equal(t, tenancy.OnboardingPreregisteredOnly, cfg.Onboarding())
+
+	// a tenant that was never sent a config has the defaults, and they are its config
+	putConfig(t, engine, orgB, 0, `{}`)
+	cfg, ok, err = provider.StoredConfigForOrg(ctx, orgB)
+	require.NoError(t, err)
+	assert.True(t, ok)
+	assert.Equal(t, &tenancy.TenantConfig{}, cfg)
+
+	// an org that is not a tenant has none
+	cfg, ok, err = provider.StoredConfigForOrg(ctx, "0193b2c4-0000-7000-8000-0000000000ff")
+	require.NoError(t, err)
+	assert.False(t, ok)
+	assert.Nil(t, cfg)
 }
 
 // failingTenantsByOrg is a tenant store that cannot read a tenant by its org.

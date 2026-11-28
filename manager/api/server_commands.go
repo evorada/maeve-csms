@@ -43,6 +43,7 @@ const (
 	errorInvalidPayload        = "invalid_payload"
 	errorInvalidExpiry         = "invalid_expiry"
 	errorStationVersionUnknown = "station_version_unknown"
+	errorStationNotActive      = "station_not_active"
 )
 
 // errCommandsNotAvailable answers a command operation of a manager whose storage engine
@@ -210,6 +211,8 @@ func renderEnqueueError(w http.ResponseWriter, r *http.Request, err error) {
 		_ = render.Render(w, r, ErrInvalidRequest(err))
 	case errors.Is(err, commands.ErrUnknownOcppVersion):
 		_ = render.Render(w, r, ErrConflict(coded(errorStationVersionUnknown).Error()))
+	case errors.Is(err, commands.ErrStationNotActive):
+		_ = render.Render(w, r, ErrConflict(coded(errorStationNotActive).Error()))
 	default:
 		renderCommandStoreError(w, r, "queueing a command", err)
 	}
