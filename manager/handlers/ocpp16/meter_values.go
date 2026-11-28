@@ -19,7 +19,9 @@ import (
 
 // MeterValuesHandler stores the sampled values of a MeterValues.req against the
 // connector and, when the request has one, the transaction. For a transaction that is
-// known it emits session.updated with the newest readings, in the same transaction.
+// known it emits session.updated with the newest readings, in the same transaction. The
+// event belongs to the org of the transaction, also when the charge station has moved
+// to another org since the transaction started.
 type MeterValuesHandler struct {
 	TransactionStore store.TransactionStore
 	MeterValuesStore store.MeterValuesStore
@@ -91,7 +93,7 @@ func (m MeterValuesHandler) findTransaction(ctx context.Context, chargeStationId
 }
 
 // sessionUpdatedEvent is the session.updated event of the meter values of a known
-// transaction.
+// transaction, in the org of the transaction (sessionOrgId).
 func sessionUpdatedEvent(chargeStationId string, ocppTransactionId, connectorId int, transaction *store.Transaction, meterValues []store.MeterValue) events.Event {
 	readings := newestReadings(meterValues)
 	data := events.SessionUpdatedData{
@@ -117,6 +119,7 @@ func sessionUpdatedEvent(chargeStationId string, ocppTransactionId, connectorId 
 	}
 	return events.Event{
 		Type:         events.TypeSessionUpdated,
+		OrgId:        sessionOrgId(transaction),
 		StationKey:   chargeStationId,
 		ResourceType: events.ResourceSession,
 		ResourceId:   transaction.TransactionId,

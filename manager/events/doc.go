@@ -27,7 +27,9 @@
 //   - a UUIDv7 as its id;
 //   - the org that owns it: Event.OrgId, or the org of the charge station of
 //     Event.StationKey (OrgResolver; the manager uses the tenant resolver, which gives a
-//     station that moved to another org the org it has now);
+//     station that moved to another org the org it has now). The session events name
+//     the org of their transaction, so a session that runs while its station moves
+//     stays with the org that it started in;
 //   - its subject, the URN of the resource it is about (URN);
 //   - its actor: Event.Actor, else the actor of the ctx (WithActor), else
 //     "station:<station key>" when the event has a station, else DefaultActor;
