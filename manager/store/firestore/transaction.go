@@ -60,6 +60,17 @@ func (s *Store) FindTransaction(ctx context.Context, chargeStationId, transactio
 	return &transaction, nil
 }
 
+// FindTransactionSummary returns the transaction without its meter values. Firestore
+// keeps them in the document of the transaction, so they are read all the same.
+func (s *Store) FindTransactionSummary(ctx context.Context, chargeStationId, transactionId string) (*store.Transaction, error) {
+	transaction, err := s.FindTransaction(ctx, chargeStationId, transactionId)
+	if err != nil || transaction == nil {
+		return nil, err
+	}
+	transaction.MeterValues = nil
+	return transaction, nil
+}
+
 func (s *Store) Transactions(ctx context.Context) ([]*store.Transaction, error) {
 	transactionRefs, err := s.client.Collection("Transaction").Documents(ctx).GetAll()
 	if err != nil {
@@ -222,6 +233,11 @@ func (s *Store) NextOcpp16TransactionId(ctx context.Context) (int, error) {
 // SetTransactionTariff is not implemented for Firestore, which has no tariffs.
 func (s *Store) SetTransactionTariff(context.Context, string, string, *string, *int, string) error {
 	return fmt.Errorf("SetTransactionTariff: %w", store.ErrNotImplemented)
+}
+
+// SetTransactionAnalysis is not implemented for Firestore.
+func (s *Store) SetTransactionAnalysis(context.Context, string, string, store.TransactionAnalysis) error {
+	return fmt.Errorf("SetTransactionAnalysis: %w", store.ErrNotImplemented)
 }
 
 func getPath(chargeStationId, transactionId string) string {

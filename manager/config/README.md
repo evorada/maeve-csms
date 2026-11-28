@@ -501,7 +501,8 @@ There is a single tariff service implementation:
 
 #### kWh tariff service
 
-There is no additional configuration for the kWh tariff service.
+There is no additional configuration for the kWh tariff service. The settings of
+[the idle time of a transaction](#the-idle-time-of-a-transaction) are in `[tariff_service.idle_detection]`.
 
 #### The tariff of a transaction
 
@@ -531,6 +532,46 @@ cannot be stored, that is logged and the transaction starts without a tariff (no
 
 Tariffs, token groups and the asset model are only stored in PostgreSQL and in memory. With Firestore no
 transaction gets a tariff.
+
+#### The idle time of a transaction
+
+When a transaction ends, the manager works out from the readings of its energy register (the meter start, the
+meter values and the meter stop) how long it charged and how long it stayed plugged in after that, and stores
+that with the transaction: `idle_started_at`, `idle_s` and `charging_s` (seconds), `average_power_w` and
+`analysed_at`. The transaction API shows them as `idleStartedAt`, `idleS`, `chargingS` and `averagePowerW`.
+
+The power of a transaction is measured between two readings that differ, so a charger that charges slowly, or
+whose register moves in steps of 100 Wh, is not taken for idle. The transaction charges while that power is at
+least the higher of `min_charging_power_w` and `charging_power_share` of the highest power of the connector, and
+it is idle from the end of the last such interval to its stop. A transaction that never charged is idle from its
+start. The highest power of the connector is the `max_electric_power` of the connector in the asset model; without
+one, the capacity of the charge station (`max_capacity_kw`); when neither is known, only `min_charging_power_w`
+counts. The average power is that of the intervals between two meter readings that follow each other in which the
+power was above `min_charging_power_w`.
+
+| Key                    | Description | Default |
+|------------------------|-------------|---------|
+| `charging_power_share` | The share of the highest power of the connector from which a transaction charges, above 0 and at most 1 | `0.01` |
+| `min_charging_power_w` | The lowest power in W that counts as charging | `200` |
+| `timestamp_tolerance`  | How long before the start or after the end of a transaction a meter reading may be timed and still be used; a reading further away comes from a clock that was wrong | `"1h"` |
+| `fresh_session`        | How long after its start a running transaction is never shown as parking. No stored value depends on it | `"60s"` |
+
+```toml
+[tariff_service]
+type = "kwh"
+
+[tariff_service.idle_detection]
+charging_power_share = 0.01
+min_charging_power_w = 200
+timestamp_tolerance = "1h"
+fresh_session = "60s"
+```
+
+A tariff version can set `charging_power_share` and `min_charging_power_w` for the transactions that are charged
+with it (`idle_detection`); what it does not set comes from these settings.
+
+The analysis never holds up or fails the answer to the charge station: when it takes more than 2 seconds, or
+fails, that is logged and the transaction has no analysis. With Firestore no transaction is analysed.
 
 ### Root certificate provider
 

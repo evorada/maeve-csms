@@ -23,6 +23,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/jobs"
 	"github.com/thoughtworks/maeve-csms/manager/ocpi"
+	"github.com/thoughtworks/maeve-csms/manager/rating"
 	"github.com/thoughtworks/maeve-csms/manager/schemas"
 	"github.com/thoughtworks/maeve-csms/manager/services"
 	"github.com/thoughtworks/maeve-csms/manager/store"
@@ -344,6 +345,11 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		return nil, err
 	}
 
+	idleSettings, err := parseIdleDetectionConfig(&cfg.TariffService.IdleDetection)
+	if err != nil {
+		return nil, err
+	}
+
 	c.AuthVerifier, err = getAuthVerifier(ctx, &cfg.Api.Auth, c.DefaultOrgId)
 	if err != nil {
 		return nil, err
@@ -469,6 +475,16 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		Tenants:  c.TenantConfig,
 		Fallback: c.TariffService != nil,
 	}
+	// a transaction that ends is analysed: how long it charged and how long it was idle
+	analyzer := &rating.Analyzer{
+		Transactions: c.Storage,
+		MeterValues:  c.Storage,
+		Assets:       c.Storage,
+		Registry:     c.Storage,
+		Tariffs:      c.Storage,
+		Defaults:     idleSettings,
+		Clock:        clock.RealClock{},
+	}
 
 	if cfg.Ocpp.Ocpp16Enabled {
 		c.Ocpp16Handler = ocpp16.NewRouter(c.MsgEmitter,
@@ -484,7 +500,8 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 			schemas.OcppSchemas,
 			commandObserver(c.CommandDispatcher),
 			commandTracker(c.CommandTracker),
-			tariffSelector)
+			tariffSelector,
+			analyzer)
 	}
 	if cfg.Ocpp.Ocpp201Enabled {
 		c.Ocpp201Handler = ocpp201.NewRouter(c.MsgEmitter,
@@ -499,7 +516,8 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 			heartbeatInterval,
 			schemas.OcppSchemas,
 			commandObserver(c.CommandDispatcher),
-			tariffSelector)
+			tariffSelector,
+			analyzer)
 	}
 
 	if cfg.Ocpi != nil {

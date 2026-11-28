@@ -15,6 +15,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/connectivity"
 	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/jobs"
+	"github.com/thoughtworks/maeve-csms/manager/rating"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
@@ -106,6 +107,12 @@ var DefaultConfig = BaseConfig{
 	},
 	TariffService: TariffServiceConfig{
 		Type: "kwh",
+		IdleDetection: IdleDetectionConfig{
+			ChargingPowerShare: rating.DefaultChargingPowerShare,
+			MinChargingPowerW:  rating.DefaultMinChargingPowerW,
+			TimestampTolerance: rating.DefaultTimestampTolerance.String(),
+			FreshSession:       rating.DefaultFreshSession.String(),
+		},
 	},
 	Jobs: JobsConfig{
 		Runner:                    "nats_kv",

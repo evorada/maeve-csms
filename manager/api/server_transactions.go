@@ -123,6 +123,7 @@ func (s *Server) ListTransactions(w http.ResponseWriter, r *http.Request, csId s
 			StopReason:    txn.StopReason,
 			EnergyWh:      txn.EnergyWh,
 		}
+		summary.IdleStartedAt, summary.IdleS, summary.ChargingS, summary.AveragePowerW = analysisView(txn)
 		response.Transactions = append(response.Transactions, summary)
 	}
 
@@ -203,8 +204,20 @@ func (s *Server) GetTransactionDetails(w http.ResponseWriter, r *http.Request, c
 		StopReason:    txn.StopReason,
 		EnergyWh:      txn.EnergyWh,
 	}
+	response.IdleStartedAt, response.IdleS, response.ChargingS, response.AveragePowerW = analysisView(txn)
 
 	_ = render.Render(w, r, response)
+}
+
+// analysisView returns the API fields of the analysis of a transaction: all nil for a
+// transaction that was not analysed (one that runs, or of a store that keeps no
+// analysis).
+func analysisView(txn *store.Transaction) (idleStartedAt *time.Time, idleS, chargingS *int64, averagePowerW *float64) {
+	analysis := txn.Analysis
+	if analysis == nil {
+		return nil, nil, nil, nil
+	}
+	return analysis.IdleStartedAt, &analysis.IdleS, &analysis.ChargingS, analysis.AveragePowerW
 }
 
 // energyRegisterMeasurand is the measurand of the energy meter reading that the meter

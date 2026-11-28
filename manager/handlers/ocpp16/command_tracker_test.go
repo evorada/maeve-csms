@@ -34,7 +34,7 @@ func clockAt(t *testing.T, at string) *clockTest.FakePassiveClock {
 func newRouterWithTracker(t *testing.T, engine *inmemory.Store, tracker handlers.CommandTracker) *msghandlers.Router {
 	t.Helper()
 	router, ok := handlers.NewRouter(&FakeEmitter{}, clockAt(t, "2026-11-27T10:00:00Z"), engine, events.NopEmitter{},
-		&tenancy.Resolver{Stations: engine}, nil, nil, nil, nil, time.Minute, schemas.OcppSchemas, nil, tracker, nil).(*msghandlers.Router)
+		&tenancy.Resolver{Stations: engine}, nil, nil, nil, nil, time.Minute, schemas.OcppSchemas, nil, tracker, nil, nil).(*msghandlers.Router)
 	require.True(t, ok)
 	return router
 }

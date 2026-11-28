@@ -11,8 +11,10 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
+	"github.com/thoughtworks/maeve-csms/manager/rating"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/slog"
 	"k8s.io/utils/clock"
 )
@@ -25,6 +27,11 @@ import (
 // one transaction. Once it is stored, the end is given to the CommandTracker (when there
 // is one), which records it on the remote stop that asked for it; nothing the tracker
 // does changes the answer.
+//
+// After that the Analyzer (when there is one) works out from the meter values how long
+// the transaction charged and how long it was idle, and stores that with the
+// transaction. The answer never depends on it: an analysis that fails or takes too long
+// is logged, and the transaction is left without one.
 type StopTransactionHandler struct {
 	Clock      clock.PassiveClock
 	TokenStore store.TokenStore
@@ -38,6 +45,9 @@ type StopTransactionHandler struct {
 	Tx               store.Transactor
 	Events           events.Emitter
 	CommandTracker   CommandTracker // nil: commands are not followed
+	// Analyzer works out the idle time of the transaction. Nil: transactions are not
+	// analysed.
+	Analyzer *rating.Analyzer
 }
 
 func (s StopTransactionHandler) HandleCall(ctx context.Context, chargeStationId string, request ocpp.Request) (response ocpp.Response, err error) {
@@ -88,9 +98,25 @@ func (s StopTransactionHandler) HandleCall(ctx context.Context, chargeStationId 
 		tracker.OnTransactionStopped(ctx, chargeStationId, req.TransactionId, reason)
 	})
 
+	s.analyse(ctx, chargeStationId, transactionId)
+
 	return &types.StopTransactionResponseJson{
 		IdTagInfo: idTagInfo,
 	}, nil
+}
+
+// analyse works out the idle time of the transaction that has just ended and stores it
+// with the transaction, in a database transaction of its own, after the one that stored
+// the end. Nothing here fails the stop.
+func (s StopTransactionHandler) analyse(ctx context.Context, chargeStationId, transactionId string) {
+	if s.Analyzer == nil {
+		return
+	}
+	if _, err := s.Analyzer.AnalyseAtStop(ctx, s.Tx, chargeStationId, transactionId); err != nil {
+		slog.Error("failed to analyse an ended transaction, it has no idle time",
+			slog.String("chargeStationId", chargeStationId), slog.String("transactionId", transactionId), "err", err)
+		trace.SpanFromContext(ctx).RecordError(err)
+	}
 }
 
 // endTransaction records the end of a transaction (creating the transaction when it is

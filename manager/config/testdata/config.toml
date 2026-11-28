@@ -102,3 +102,8 @@ opcp.auth.hubject_test_token.cache.ttl = "1h"
 
 [tariff_service]
 type = "kwh"
+
+[tariff_service.idle_detection]
+charging_power_share = 0.02
+min_charging_power_w = 150.0
+timestamp_tolerance = "30m"

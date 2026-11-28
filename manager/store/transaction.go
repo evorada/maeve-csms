@@ -52,6 +52,36 @@ type Transaction struct {
 	TariffId      *string `firestore:"-"`
 	TariffVersion *int    `firestore:"-"`
 	TariffSource  *string `firestore:"-"`
+
+	// Analysis is what the manager worked out about the transaction after it ended; nil
+	// before that. It is written with TransactionStore.SetTransactionAnalysis. Firestore
+	// does not store it.
+	Analysis *TransactionAnalysis `firestore:"-"`
+}
+
+// MaxAveragePowerW is the limit of TransactionAnalysis.AveragePowerW, which must stay
+// below it: PostgreSQL keeps the value with nine digits before the decimal point and one
+// after it.
+const MaxAveragePowerW = 1e9
+
+// TransactionAnalysis is what the manager worked out about an ended transaction from the
+// readings of its energy register: how long it charged and how long it stayed plugged in
+// afterwards (idle time).
+type TransactionAnalysis struct {
+	// IdleStartedAt is when the transaction stopped charging: the end of the last interval
+	// in which it drew power. It is the end of the transaction when it charged until
+	// then, and nil when there was no reading to tell from.
+	IdleStartedAt *time.Time
+	// IdleS is the idle time in seconds: from IdleStartedAt to the end of the transaction.
+	IdleS int64
+	// ChargingS is the rest of the transaction in seconds: its duration less IdleS.
+	ChargingS int64
+	// AveragePowerW is the average power in W over the intervals between two readings in
+	// which the transaction drew more than the minimum charging power: 0 when there was
+	// no such interval, nil when there were no two readings. PostgreSQL keeps one decimal.
+	AveragePowerW *float64
+	// AnalysedAt is when this was worked out. Both times are read back in UTC.
+	AnalysedAt time.Time
 }
 
 // TransactionDetails is a partial update: only non-nil fields are written.
@@ -94,7 +124,13 @@ type UnitOfMeasure struct {
 // the station, so two stations may use the same id.
 type TransactionStore interface {
 	Transactions(ctx context.Context) ([]*Transaction, error)
+	// FindTransaction returns the transaction with its meter values; nil, nil when the
+	// charge station has no transaction with the id.
 	FindTransaction(ctx context.Context, chargeStationId, transactionId string) (*Transaction, error)
+	// FindTransactionSummary is FindTransaction without the meter values of the
+	// transaction (MeterValues is nil): for a caller that does not need them, which is
+	// spared reading every meter value of a transaction that may run for hours.
+	FindTransactionSummary(ctx context.Context, chargeStationId, transactionId string) (*Transaction, error)
 	CreateTransaction(ctx context.Context, chargeStationId, transactionId, idToken, tokenType string, meterValue []MeterValue, seqNo int, offline bool) error
 	UpdateTransaction(ctx context.Context, chargeStationId, transactionId string, meterValue []MeterValue) error
 	EndTransaction(ctx context.Context, chargeStationId, transactionId, idToken, tokenType string, meterValue []MeterValue, seqNo int) error
@@ -122,6 +158,11 @@ type TransactionStore interface {
 	// nothing is written and ErrAlreadyExists is returned. A transaction that does not
 	// exist is ErrNotFound. Firestore returns ErrNotImplemented.
 	SetTransactionTariff(ctx context.Context, chargeStationId, transactionId string, tariffId *string, version *int, source string) error
+	// SetTransactionAnalysis stores what was worked out about an ended transaction
+	// (Transaction.Analysis). An analysis that the transaction has already is replaced.
+	// A transaction that does not exist is ErrNotFound; an analysis that
+	// CheckTransactionAnalysis refuses is not stored. Firestore returns ErrNotImplemented.
+	SetTransactionAnalysis(ctx context.Context, chargeStationId, transactionId string, analysis TransactionAnalysis) error
 }
 
 // CheckTransactionTariff checks what SetTransactionTariff is given: a source, and a
@@ -134,6 +175,24 @@ func CheckTransactionTariff(tariffId *string, version *int, source string) error
 		return errors.New("a tariff id and a tariff version go together")
 	case version != nil && (*version < 1 || *version > math.MaxInt32):
 		return fmt.Errorf("tariff version %d is not a version number", *version)
+	}
+	return nil
+}
+
+// CheckTransactionAnalysis checks what SetTransactionAnalysis is given: the time of the
+// analysis, an idle and a charging time that are not negative, and an average power that
+// is a number from 0 and, rounded to one decimal, below MaxAveragePowerW.
+func CheckTransactionAnalysis(analysis TransactionAnalysis) error {
+	switch {
+	case analysis.IdleS < 0:
+		return fmt.Errorf("idle time %d s is negative", analysis.IdleS)
+	case analysis.ChargingS < 0:
+		return fmt.Errorf("charging time %d s is negative", analysis.ChargingS)
+	case analysis.AnalysedAt.IsZero():
+		return errors.New("the time of the analysis is required")
+	}
+	if power := analysis.AveragePowerW; power != nil && (math.IsNaN(*power) || *power < 0 || math.Round(*power*10)/10 >= MaxAveragePowerW) {
+		return fmt.Errorf("average power %v W is not a power from 0 to below %v W", *power, float64(MaxAveragePowerW))
 	}
 	return nil
 }

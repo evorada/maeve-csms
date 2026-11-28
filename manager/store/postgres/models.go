@@ -565,29 +565,34 @@ type TokenGroup struct {
 }
 
 type Transaction struct {
-	ID              string           `db:"id" json:"id"`
-	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
-	TokenUid        string           `db:"token_uid" json:"token_uid"`
-	TokenType       string           `db:"token_type" json:"token_type"`
-	MeterStart      pgtype.Int8      `db:"meter_start" json:"meter_start"`
-	MeterStop       pgtype.Int8      `db:"meter_stop" json:"meter_stop"`
-	StartTimestamp  pgtype.Timestamp `db:"start_timestamp" json:"start_timestamp"`
-	StopTimestamp   pgtype.Timestamp `db:"stop_timestamp" json:"stop_timestamp"`
-	StoppedReason   pgtype.Text      `db:"stopped_reason" json:"stopped_reason"`
-	UpdatedSeqNo    int32            `db:"updated_seq_no" json:"updated_seq_no"`
-	Offline         bool             `db:"offline" json:"offline"`
-	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
-	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
-	LastCost        pgtype.Numeric   `db:"last_cost" json:"last_cost"`
-	EvseID          pgtype.Int4      `db:"evse_id" json:"evse_id"`
-	ConnectorID     pgtype.Int4      `db:"connector_id" json:"connector_id"`
-	EnergyWh        pgtype.Int8      `db:"energy_wh" json:"energy_wh"`
-	IDTokenGroup    pgtype.Text      `db:"id_token_group" json:"id_token_group"`
-	ReservationID   pgtype.Int4      `db:"reservation_id" json:"reservation_id"`
-	OrgID           pgtype.UUID      `db:"org_id" json:"org_id"`
-	TariffID        pgtype.UUID      `db:"tariff_id" json:"tariff_id"`
-	TariffVersion   pgtype.Int4      `db:"tariff_version" json:"tariff_version"`
-	TariffSource    pgtype.Text      `db:"tariff_source" json:"tariff_source"`
+	ID              string             `db:"id" json:"id"`
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	TokenUid        string             `db:"token_uid" json:"token_uid"`
+	TokenType       string             `db:"token_type" json:"token_type"`
+	MeterStart      pgtype.Int8        `db:"meter_start" json:"meter_start"`
+	MeterStop       pgtype.Int8        `db:"meter_stop" json:"meter_stop"`
+	StartTimestamp  pgtype.Timestamp   `db:"start_timestamp" json:"start_timestamp"`
+	StopTimestamp   pgtype.Timestamp   `db:"stop_timestamp" json:"stop_timestamp"`
+	StoppedReason   pgtype.Text        `db:"stopped_reason" json:"stopped_reason"`
+	UpdatedSeqNo    int32              `db:"updated_seq_no" json:"updated_seq_no"`
+	Offline         bool               `db:"offline" json:"offline"`
+	CreatedAt       pgtype.Timestamp   `db:"created_at" json:"created_at"`
+	UpdatedAt       pgtype.Timestamp   `db:"updated_at" json:"updated_at"`
+	LastCost        pgtype.Numeric     `db:"last_cost" json:"last_cost"`
+	EvseID          pgtype.Int4        `db:"evse_id" json:"evse_id"`
+	ConnectorID     pgtype.Int4        `db:"connector_id" json:"connector_id"`
+	EnergyWh        pgtype.Int8        `db:"energy_wh" json:"energy_wh"`
+	IDTokenGroup    pgtype.Text        `db:"id_token_group" json:"id_token_group"`
+	ReservationID   pgtype.Int4        `db:"reservation_id" json:"reservation_id"`
+	OrgID           pgtype.UUID        `db:"org_id" json:"org_id"`
+	TariffID        pgtype.UUID        `db:"tariff_id" json:"tariff_id"`
+	TariffVersion   pgtype.Int4        `db:"tariff_version" json:"tariff_version"`
+	TariffSource    pgtype.Text        `db:"tariff_source" json:"tariff_source"`
+	IdleStartedAt   pgtype.Timestamptz `db:"idle_started_at" json:"idle_started_at"`
+	IdleS           pgtype.Int8        `db:"idle_s" json:"idle_s"`
+	ChargingS       pgtype.Int8        `db:"charging_s" json:"charging_s"`
+	AveragePowerW   pgtype.Numeric     `db:"average_power_w" json:"average_power_w"`
+	AnalysedAt      pgtype.Timestamptz `db:"analysed_at" json:"analysed_at"`
 }
 
 type TransactionMeterValue struct {

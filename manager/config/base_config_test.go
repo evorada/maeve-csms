@@ -116,6 +116,13 @@ func TestParseConfig(t *testing.T) {
 		},
 		TariffService: config.TariffServiceConfig{
 			Type: "kwh",
+			IdleDetection: config.IdleDetectionConfig{
+				ChargingPowerShare: 0.02,
+				MinChargingPowerW:  150,
+				TimestampTolerance: "30m",
+				// not in the file: the default
+				FreshSession: "1m0s",
+			},
 		},
 		Jobs: config.JobsConfig{
 			Runner:                    "local",

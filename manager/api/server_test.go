@@ -1439,6 +1439,83 @@ func TestTransactionsPreferStoredDetailsOverSamples(t *testing.T) {
 	assert.Len(t, gotDetail.MeterValues, 2)
 }
 
+// TestTransactionsReturnTheAnalysis checks that the list and the detail of the
+// transactions carry the analysis of an ended transaction (its idle time, its charging
+// time and its average power), and nothing of it for a transaction that has none.
+func TestTransactionsReturnTheAnalysis(t *testing.T) {
+	server, r, engine, _ := setupServer(t)
+	defer server.Close()
+	registerStation(t, engine, "cs001")
+	ctx := context.Background()
+
+	startTime := time.Date(2026, 11, 26, 10, 0, 0, 0, time.UTC)
+	idleStartedAt := time.Date(2026, 11, 26, 11, 0, 0, 0, time.UTC)
+	stopTime := time.Date(2026, 11, 26, 12, 30, 0, 0, time.UTC)
+	for _, transactionId := range []string{"tx-analysed", "tx-not-analysed", "tx-without-readings"} {
+		require.NoError(t, engine.CreateTransaction(ctx, "cs001", transactionId, "MYRFIDTAG", "ISO14443", nil, 0, false))
+		require.NoError(t, engine.EndTransaction(ctx, "cs001", transactionId, "MYRFIDTAG", "ISO14443", nil, 1))
+		require.NoError(t, engine.UpdateTransactionDetails(ctx, "cs001", transactionId, &store.TransactionDetails{
+			StartedAt: &startTime, StoppedAt: &stopTime,
+		}))
+	}
+	require.NoError(t, engine.CreateTransaction(ctx, "cs001", "tx-running", "MYRFIDTAG", "ISO14443", nil, 0, false))
+	require.NoError(t, engine.SetTransactionAnalysis(ctx, "cs001", "tx-analysed", store.TransactionAnalysis{
+		IdleStartedAt: &idleStartedAt, IdleS: 5400, ChargingS: 3600, AveragePowerW: ptr(11000.5), AnalysedAt: stopTime,
+	}))
+	// an analysis of a transaction without meter readings: times, but nothing to tell from
+	require.NoError(t, engine.SetTransactionAnalysis(ctx, "cs001", "tx-without-readings", store.TransactionAnalysis{
+		ChargingS: 9000, AnalysedAt: stopTime,
+	}))
+
+	gotDetail := new(api.TransactionDetail)
+	getJson(t, r, "/cs/cs001/transaction/tx-analysed", gotDetail)
+	assert.Equal(t, &idleStartedAt, gotDetail.IdleStartedAt)
+	assert.Equal(t, ptr(int64(5400)), gotDetail.IdleS)
+	assert.Equal(t, ptr(int64(3600)), gotDetail.ChargingS)
+	assert.Equal(t, ptr(11000.5), gotDetail.AveragePowerW)
+
+	gotDetail = new(api.TransactionDetail)
+	getJson(t, r, "/cs/cs001/transaction/tx-without-readings", gotDetail)
+	assert.Nil(t, gotDetail.IdleStartedAt)
+	assert.Equal(t, ptr(int64(0)), gotDetail.IdleS, "analysed: no idle time")
+	assert.Equal(t, ptr(int64(9000)), gotDetail.ChargingS)
+	assert.Nil(t, gotDetail.AveragePowerW)
+
+	for _, transactionId := range []string{"tx-not-analysed", "tx-running"} {
+		fields := map[string]any{}
+		getJson(t, r, "/cs/cs001/transaction/"+transactionId, &fields)
+		require.Equal(t, transactionId, fields["transactionId"])
+		for _, field := range []string{"idleStartedAt", "idleS", "chargingS", "averagePowerW"} {
+			assert.NotContains(t, fields, field, transactionId)
+		}
+	}
+
+	gotList := new(api.TransactionList)
+	getJson(t, r, "/cs/cs001/transactions", gotList)
+	require.Len(t, gotList.Transactions, 4)
+	listed := map[string]api.TransactionSummary{}
+	for _, summary := range gotList.Transactions {
+		listed[summary.TransactionId] = summary
+	}
+	analysed := listed["tx-analysed"]
+	assert.Equal(t, &idleStartedAt, analysed.IdleStartedAt)
+	assert.Equal(t, ptr(int64(5400)), analysed.IdleS)
+	assert.Equal(t, ptr(int64(3600)), analysed.ChargingS)
+	assert.Equal(t, ptr(11000.5), analysed.AveragePowerW)
+	withoutReadings := listed["tx-without-readings"]
+	assert.Nil(t, withoutReadings.IdleStartedAt)
+	assert.Equal(t, ptr(int64(0)), withoutReadings.IdleS)
+	assert.Equal(t, ptr(int64(9000)), withoutReadings.ChargingS)
+	assert.Nil(t, withoutReadings.AveragePowerW)
+	for _, transactionId := range []string{"tx-not-analysed", "tx-running"} {
+		summary := listed[transactionId]
+		assert.Nil(t, summary.IdleStartedAt, transactionId)
+		assert.Nil(t, summary.IdleS, transactionId)
+		assert.Nil(t, summary.ChargingS, transactionId)
+		assert.Nil(t, summary.AveragePowerW, transactionId)
+	}
+}
+
 // TestTransactionsFallBackToSamples covers transactions that have no stored details
 // (written before the details existed, or by a store that does not keep them): the
 // times and the meter readings are derived from the samples.

@@ -632,6 +632,19 @@ func (s *Store) FindTransaction(_ context.Context, chargeStationId, transactionI
 	return s.getTransaction(chargeStationId, transactionId), nil
 }
 
+// FindTransactionSummary returns a copy of the transaction without its meter values.
+func (s *Store) FindTransactionSummary(_ context.Context, chargeStationId, transactionId string) (*store.Transaction, error) {
+	s.Lock()
+	defer s.Unlock()
+	transaction := s.getTransaction(chargeStationId, transactionId)
+	if transaction == nil {
+		return nil, nil
+	}
+	summary := *transaction
+	summary.MeterValues = nil
+	return &summary, nil
+}
+
 func (s *Store) FindActiveTransaction(_ context.Context, chargeStationId string) (*store.Transaction, error) {
 	s.Lock()
 	defer s.Unlock()
@@ -804,6 +817,32 @@ func (s *Store) SetTransactionTariff(_ context.Context, chargeStationId, transac
 	transaction.TariffId = id
 	transaction.TariffVersion = copyOrNil(version)
 	transaction.TariffSource = &source
+	return nil
+}
+
+// SetTransactionAnalysis stores what was worked out about an ended transaction, in place
+// of what was worked out before.
+func (s *Store) SetTransactionAnalysis(_ context.Context, chargeStationId, transactionId string, analysis store.TransactionAnalysis) error {
+	what := fmt.Sprintf("set the analysis of transaction %s/%s", chargeStationId, transactionId)
+	if err := store.CheckTransactionAnalysis(analysis); err != nil {
+		return fmt.Errorf("%s: %w", what, err)
+	}
+
+	s.Lock()
+	defer s.Unlock()
+	transaction := s.getTransaction(chargeStationId, transactionId)
+	if transaction == nil {
+		return fmt.Errorf("%s: %w", what, store.ErrNotFound)
+	}
+	// the values are copied so that the stored transaction does not alias the caller's
+	// pointers, and the times are kept in UTC
+	if analysis.IdleStartedAt != nil {
+		idleStartedAt := analysis.IdleStartedAt.UTC()
+		analysis.IdleStartedAt = &idleStartedAt
+	}
+	analysis.AveragePowerW = copyOrNil(analysis.AveragePowerW)
+	analysis.AnalysedAt = analysis.AnalysedAt.UTC()
+	transaction.Analysis = &analysis
 	return nil
 }
 

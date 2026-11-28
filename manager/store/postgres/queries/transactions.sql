@@ -73,6 +73,18 @@ UPDATE transactions SET
     updated_at     = NOW()
 WHERE charge_station_id = sqlc.arg('charge_station_id') AND id = sqlc.arg('id') AND tariff_source IS NULL;
 
+-- The analysis of an ended transaction. An earlier analysis is replaced. The average
+-- power is rounded to the one decimal that the column keeps.
+-- name: SetTransactionAnalysis :execrows
+UPDATE transactions SET
+    idle_started_at = sqlc.narg('idle_started_at')::timestamptz,
+    idle_s          = sqlc.arg('idle_s')::bigint,
+    charging_s      = sqlc.arg('charging_s')::bigint,
+    average_power_w = sqlc.narg('average_power_w')::float8,
+    analysed_at     = sqlc.arg('analysed_at')::timestamptz,
+    updated_at      = NOW()
+WHERE charge_station_id = sqlc.arg('charge_station_id') AND id = sqlc.arg('id');
+
 -- name: NextOcpp16TransactionId :one
 SELECT nextval('ocpp16_transaction_id_seq')::integer AS id;
 

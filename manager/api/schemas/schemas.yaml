@@ -758,6 +758,22 @@ components:
           type: integer
           format: int64
           description: Delivered energy in Wh, null while active or if unknown
+        idleStartedAt:
+          type: string
+          format: date-time
+          description: When the transaction stopped charging, as worked out from its meter readings after it ended. Equal to the stop time when it charged until then. Null while active, and when it was not analysed or had no meter reading to tell from
+        idleS:
+          type: integer
+          format: int64
+          description: Idle time in seconds, plugged in after charging ended (from idleStartedAt to the stop). Null while active or if not analysed
+        chargingS:
+          type: integer
+          format: int64
+          description: Charging time in seconds, the duration of the transaction less idleS. Null while active or if not analysed
+        averagePowerW:
+          type: number
+          format: double
+          description: Average power in W over the intervals between two meter readings in which the transaction charged, 0 when there was none. Null while active, if not analysed, or without two meter readings
     TransactionDetail:
       type: object
       description: Detailed transaction information including meter values
@@ -811,6 +827,22 @@ components:
           type: integer
           format: int64
           description: Delivered energy in Wh, null while active or if unknown
+        idleStartedAt:
+          type: string
+          format: date-time
+          description: When the transaction stopped charging, as worked out from its meter readings after it ended. Equal to the stop time when it charged until then. Null while active, and when it was not analysed or had no meter reading to tell from
+        idleS:
+          type: integer
+          format: int64
+          description: Idle time in seconds, plugged in after charging ended (from idleStartedAt to the stop). Null while active or if not analysed
+        chargingS:
+          type: integer
+          format: int64
+          description: Charging time in seconds, the duration of the transaction less idleS. Null while active or if not analysed
+        averagePowerW:
+          type: number
+          format: double
+          description: Average power in W over the intervals between two meter readings in which the transaction charged, 0 when there was none. Null while active, if not analysed, or without two meter readings
         meterValues:
           type: array
           items:

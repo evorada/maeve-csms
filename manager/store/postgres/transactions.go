@@ -55,6 +55,22 @@ func (s *Store) FindTransaction(ctx context.Context, chargeStationId, transactio
 	return s.toStoreTransaction(ctx, &txn)
 }
 
+// FindTransactionSummary retrieves a transaction without its meter values.
+func (s *Store) FindTransactionSummary(ctx context.Context, chargeStationId, transactionId string) (*store.Transaction, error) {
+	txn, err := s.readQueries(ctx).GetTransaction(ctx, GetTransactionParams{
+		ChargeStationID: chargeStationId,
+		ID:              transactionId,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to find transaction: %w", err)
+	}
+
+	return transactionSummary(&txn), nil
+}
+
 func (s *Store) FindActiveTransaction(ctx context.Context, chargeStationId string) (*store.Transaction, error) {
 	txn, err := s.readQueries(ctx).FindActiveTransaction(ctx, chargeStationId)
 	if err != nil {
@@ -303,6 +319,36 @@ func (s *Store) SetTransactionTariff(ctx context.Context, chargeStationId, trans
 	return nil
 }
 
+// SetTransactionAnalysis stores what was worked out about an ended transaction. What it
+// is given is checked before anything is sent, so that a call that is refused leaves a
+// transaction of the caller usable.
+func (s *Store) SetTransactionAnalysis(ctx context.Context, chargeStationId, transactionId string, analysis store.TransactionAnalysis) error {
+	what := fmt.Sprintf("set the analysis of transaction %s/%s", chargeStationId, transactionId)
+	if err := store.CheckTransactionAnalysis(analysis); err != nil {
+		return fmt.Errorf("%s: %w", what, err)
+	}
+	params := SetTransactionAnalysisParams{
+		ChargeStationID: chargeStationId,
+		ID:              transactionId,
+		IdleStartedAt:   toNullTimestamptz(analysis.IdleStartedAt),
+		IdleS:           analysis.IdleS,
+		ChargingS:       analysis.ChargingS,
+		AnalysedAt:      pgtype.Timestamptz{Time: analysis.AnalysedAt, Valid: true},
+	}
+	if analysis.AveragePowerW != nil {
+		params.AveragePowerW = pgtype.Float8{Float64: *analysis.AveragePowerW, Valid: true}
+	}
+
+	rows, err := s.writeQueries(ctx).SetTransactionAnalysis(ctx, params)
+	if err != nil {
+		return fmt.Errorf("%s: %w", what, err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("%s: %w", what, store.ErrNotFound)
+	}
+	return nil
+}
+
 // NextOcpp16TransactionId returns the next CSMS-assigned OCPP 1.6 transaction id
 // (1..2147483647, wrapping).
 func (s *Store) NextOcpp16TransactionId(ctx context.Context) (int, error) {
@@ -437,6 +483,14 @@ func (s *Store) toStoreTransaction(ctx context.Context, txn *Transaction) (*stor
 		}
 	}
 
+	transaction := transactionSummary(txn)
+	transaction.MeterValues = meterValues
+	return transaction, nil
+}
+
+// transactionSummary converts the row of a transaction to a store.Transaction without
+// meter values.
+func transactionSummary(txn *Transaction) *store.Transaction {
 	// Calculate sequence numbers
 	startSeqNo := 0
 	endedSeqNo := 0
@@ -457,7 +511,6 @@ func (s *Store) toStoreTransaction(ctx context.Context, txn *Transaction) (*stor
 		TransactionId:     txn.ID,
 		IdToken:           txn.TokenUid,
 		TokenType:         txn.TokenType,
-		MeterValues:       meterValues,
 		StartSeqNo:        startSeqNo,
 		EndedSeqNo:        endedSeqNo,
 		UpdatedSeqNoCount: int(txn.UpdatedSeqNo),
@@ -477,5 +530,26 @@ func (s *Store) toStoreTransaction(ctx context.Context, txn *Transaction) (*stor
 		TariffId:          optionalUUIDString(txn.TariffID),
 		TariffVersion:     fromNullInt32(txn.TariffVersion),
 		TariffSource:      stringFromText(txn.TariffSource),
-	}, nil
+		Analysis:          transactionAnalysis(txn),
+	}
+}
+
+// transactionAnalysis returns the analysis of the row of a transaction; nil for a
+// transaction that was not analysed.
+func transactionAnalysis(txn *Transaction) *store.TransactionAnalysis {
+	if !txn.AnalysedAt.Valid {
+		return nil
+	}
+	analysis := &store.TransactionAnalysis{
+		IdleStartedAt: fromNullTimestamptz(txn.IdleStartedAt),
+		IdleS:         txn.IdleS.Int64,
+		ChargingS:     txn.ChargingS.Int64,
+		AnalysedAt:    txn.AnalysedAt.Time.UTC(),
+	}
+	if txn.AveragePowerW.Valid {
+		if f, err := txn.AveragePowerW.Float64Value(); err == nil && f.Valid {
+			analysis.AveragePowerW = &f.Float64
+		}
+	}
+	return analysis
 }

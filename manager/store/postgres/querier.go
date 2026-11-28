@@ -330,6 +330,9 @@ type Querier interface {
 	// The tokens of the org with the UID, of every party, go into the group (NULL: into no
 	// group). No row is changed when the group is not a group of the org.
 	SetTokenGroup(ctx context.Context, arg SetTokenGroupParams) (int64, error)
+	// The analysis of an ended transaction. An earlier analysis is replaced. The average
+	// power is rounded to the one decimal that the column keeps.
+	SetTransactionAnalysis(ctx context.Context, arg SetTransactionAnalysisParams) (int64, error)
 	// The tariff of a transaction is set once: no row is changed when the transaction has a
 	// tariff source already.
 	SetTransactionTariff(ctx context.Context, arg SetTransactionTariffParams) (int64, error)

@@ -19,6 +19,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/has2be"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
+	"github.com/thoughtworks/maeve-csms/manager/rating"
 	"github.com/thoughtworks/maeve-csms/manager/services"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tariffs"
@@ -33,7 +34,8 @@ import (
 // asked to send the next queued command of a station after each BootNotification.
 // commandTracker (may be nil) learns about the transactions and connector statuses that
 // the stations report, to follow the commands to their effect. tariffSelector (may be
-// nil) selects the tariff that a new transaction is charged with.
+// nil) selects the tariff that a new transaction is charged with. analyzer (may be nil)
+// works out the idle time of a transaction that ends.
 func NewRouter(emitter transport.Emitter,
 	clk clock.PassiveClock,
 	engine store.Engine,
@@ -47,7 +49,8 @@ func NewRouter(emitter transport.Emitter,
 	schemaFS fs.FS,
 	observer handlers.CallOutcomeObserver,
 	commandTracker CommandTracker,
-	tariffSelector *tariffs.Selector) transport.MessageHandler {
+	tariffSelector *tariffs.Selector,
+	analyzer *rating.Analyzer) transport.MessageHandler {
 
 	standardCallMaker := NewCallMaker(emitter)
 	commandKicker, _ := observer.(CommandKicker)
@@ -146,6 +149,7 @@ func NewRouter(emitter transport.Emitter,
 					Tx:               engine,
 					Events:           domainEvents,
 					CommandTracker:   commandTracker,
+					Analyzer:         analyzer,
 				},
 			},
 			"MeterValues": {

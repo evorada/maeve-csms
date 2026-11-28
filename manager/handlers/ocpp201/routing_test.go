@@ -94,6 +94,7 @@ func TestRoutingCalls(t *testing.T) {
 		schemas.OcppSchemas,
 		nil,
 		nil,
+		nil,
 	)
 
 	inputMessages := map[string]ocpp.Request{
@@ -288,6 +289,7 @@ func TestRoutingCallResults(t *testing.T) {
 		&fakeContractCertProvider{},
 		5*time.Minute,
 		schemas.OcppSchemas,
+		nil,
 		nil,
 		nil,
 	)
@@ -816,6 +818,7 @@ func TestAllRouteSchemasExist(t *testing.T) {
 		&fakeContractCertProvider{},
 		5*time.Minute,
 		schemas.OcppSchemas,
+		nil,
 		nil,
 		nil,
 	).(*handlers.Router)

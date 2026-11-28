@@ -321,11 +321,11 @@ type faultyEngine struct {
 	setTariffCalls        int
 }
 
-func (s *faultyEngine) FindTransaction(ctx context.Context, chargeStationId, transactionId string) (*store.Transaction, error) {
+func (s *faultyEngine) FindTransactionSummary(ctx context.Context, chargeStationId, transactionId string) (*store.Transaction, error) {
 	if s.findErr != nil {
 		return nil, s.findErr
 	}
-	return s.Engine.FindTransaction(ctx, chargeStationId, transactionId)
+	return s.Engine.FindTransactionSummary(ctx, chargeStationId, transactionId)
 }
 
 func (s *faultyEngine) SetTransactionTariff(ctx context.Context, chargeStationId, transactionId string, tariffId *string, version *int, source string) error {
@@ -389,22 +389,29 @@ func TestTransactionEventIsAnsweredWithoutATariffThatCannotBeChosen(t *testing.T
 }
 
 // primaryReads is a store that counts the reads of a transaction for its tariff: all of
-// them, and those inside a database transaction.
+// them, and those inside a database transaction. It also counts the reads of a
+// transaction with its meter values.
 type primaryReads struct {
 	store.Engine
-	finds, inTx int
+	finds, inTx, withMeterValues int
 }
 
-func (s *primaryReads) FindTransaction(ctx context.Context, chargeStationId, transactionId string) (*store.Transaction, error) {
+func (s *primaryReads) FindTransactionSummary(ctx context.Context, chargeStationId, transactionId string) (*store.Transaction, error) {
 	s.finds++
 	if eventstest.InTx(ctx) {
 		s.inTx++
 	}
+	return s.Engine.FindTransactionSummary(ctx, chargeStationId, transactionId)
+}
+
+func (s *primaryReads) FindTransaction(ctx context.Context, chargeStationId, transactionId string) (*store.Transaction, error) {
+	s.withMeterValues++
 	return s.Engine.FindTransaction(ctx, chargeStationId, transactionId)
 }
 
 // The transaction of an event is read in a database transaction: that read is on the
-// primary, where the transaction is, also while a read replica is behind.
+// primary, where the transaction is, also while a read replica is behind. It is read
+// without its meter values, which are many by the end of a long session.
 func TestTheTransactionIsReadOnThePrimaryForItsTariff(t *testing.T) {
 	f := newTariffFixture(t)
 	fixture := eventstest.New(f.engine, tariffOrgA, f.handler.Clock)
@@ -419,6 +426,15 @@ func TestTheTransactionIsReadOnThePrimaryForItsTariff(t *testing.T) {
 	transaction, err := f.engine.FindTransaction(context.Background(), tariffStation, "tx-1")
 	require.NoError(t, err)
 	assertTariff(t, f.regular, 1, tariffs.SourceConnector, transaction)
+
+	// every later event that names the EVSE looks whether the transaction has its tariff
+	for i := 0; i < 3; i++ {
+		_, err = f.handler.HandleCall(context.Background(), tariffStation, transactionEvent(types.TransactionEventEnumTypeUpdated, "tx-1", "", 1, 1))
+		require.NoError(t, err)
+	}
+	assert.Equal(t, 4, backend.finds)
+	assert.Equal(t, 4, backend.inTx)
+	assert.Zero(t, backend.withMeterValues, "no event of a running transaction reads its meter values")
 }
 
 // orgless is a store that does not keep the org of a transaction.
@@ -427,8 +443,8 @@ type orgless struct {
 	setTariffCalls int
 }
 
-func (s *orgless) FindTransaction(ctx context.Context, chargeStationId, transactionId string) (*store.Transaction, error) {
-	transaction, err := s.Engine.FindTransaction(ctx, chargeStationId, transactionId)
+func (s *orgless) FindTransactionSummary(ctx context.Context, chargeStationId, transactionId string) (*store.Transaction, error) {
+	transaction, err := s.Engine.FindTransactionSummary(ctx, chargeStationId, transactionId)
 	if transaction != nil {
 		withoutOrg := *transaction
 		withoutOrg.OrgId = ""

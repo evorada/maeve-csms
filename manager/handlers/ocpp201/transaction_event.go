@@ -8,6 +8,7 @@ import (
 
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
+	"github.com/thoughtworks/maeve-csms/manager/rating"
 	"github.com/thoughtworks/maeve-csms/manager/services"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tariffs"
@@ -25,6 +26,11 @@ import (
 // gets a new version during the session. It is selected for the org of the transaction.
 // Charging never waits for a tariff and is never refused for want of one: when the
 // selection fails or takes too long, that is logged and the event is answered as ever.
+//
+// When a transaction ends, the Analyzer (when there is one) works out from the meter
+// values how long it charged and how long it was idle, and stores that with the
+// transaction. The answer never depends on it: an analysis that fails or takes too long
+// is logged, and the transaction is left without one.
 type TransactionEventHandler struct {
 	Store            store.Engine
 	TokenAuthService services.TokenAuthService
@@ -37,6 +43,9 @@ type TransactionEventHandler struct {
 	// Clock gives the time for an event whose timestamp cannot be read. Nil is the real
 	// clock.
 	Clock clock.PassiveClock
+	// Analyzer works out the idle time of a transaction that ends. Nil: transactions are
+	// not analysed.
+	Analyzer *rating.Analyzer
 }
 
 func (t TransactionEventHandler) HandleCall(ctx context.Context, chargeStationId string, request ocpp.Request) (ocpp.Response, error) {
@@ -93,6 +102,8 @@ func (t TransactionEventHandler) HandleCall(ctx context.Context, chargeStationId
 	t.pinTariff(ctx, chargeStationId, req, idToken)
 
 	if req.EventType == types.TransactionEventEnumTypeEnded {
+		t.analyse(ctx, chargeStationId, req.TransactionInfo.TransactionId)
+
 		transaction, err := t.Store.FindTransaction(ctx, chargeStationId, req.TransactionInfo.TransactionId)
 		if err != nil {
 			return nil, err
@@ -120,10 +131,11 @@ func (t TransactionEventHandler) pinTariff(ctx context.Context, chargeStationId 
 	logAttrs := []any{slog.String("chargeStationId", chargeStationId), slog.String("transactionId", transactionId)}
 
 	// the transaction is read in a database transaction, which is on the primary: a read
-	// replica may not have what this event has just stored
+	// replica may not have what this event has just stored. Its meter values are not
+	// needed here, and they are many by the end of a long session.
 	var transaction *store.Transaction
 	err := t.Store.RunInTx(ctx, func(ctx context.Context) (err error) {
-		transaction, err = t.Store.FindTransaction(ctx, chargeStationId, transactionId)
+		transaction, err = t.Store.FindTransactionSummary(ctx, chargeStationId, transactionId)
 		return err
 	})
 	if err != nil {
@@ -171,6 +183,18 @@ func (t TransactionEventHandler) pinTariff(ctx context.Context, chargeStationId 
 	}
 	if err != nil {
 		slog.Error("failed to select the tariff of a transaction, it goes on without one", append(logAttrs, "err", err)...)
+	}
+}
+
+// analyse works out the idle time of the transaction that has just ended and stores it
+// with the transaction. Nothing here fails the event.
+func (t TransactionEventHandler) analyse(ctx context.Context, chargeStationId, transactionId string) {
+	if t.Analyzer == nil {
+		return
+	}
+	if _, err := t.Analyzer.AnalyseAtStop(ctx, t.Store, chargeStationId, transactionId); err != nil {
+		slog.Error("failed to analyse an ended transaction, it has no idle time",
+			slog.String("chargeStationId", chargeStationId), slog.String("transactionId", transactionId), "err", err)
 	}
 }
 

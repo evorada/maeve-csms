@@ -76,7 +76,7 @@ INSERT INTO transactions (
     COALESCE((SELECT cs.org_id FROM charge_stations cs WHERE cs.charge_station_id = $2::varchar), '00000000-0000-0000-0000-000000000000'::uuid)
 )
 ON CONFLICT (charge_station_id, id) DO NOTHING
-RETURNING id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source
+RETURNING id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source, idle_started_at, idle_s, charging_s, average_power_w, analysed_at
 `
 
 type CreateTransactionParams struct {
@@ -128,12 +128,17 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 		&i.TariffID,
 		&i.TariffVersion,
 		&i.TariffSource,
+		&i.IdleStartedAt,
+		&i.IdleS,
+		&i.ChargingS,
+		&i.AveragePowerW,
+		&i.AnalysedAt,
 	)
 	return i, err
 }
 
 const FindActiveTransaction = `-- name: FindActiveTransaction :one
-SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source FROM transactions 
+SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source, idle_started_at, idle_s, charging_s, average_power_w, analysed_at FROM transactions 
 WHERE charge_station_id = $1 AND stop_timestamp IS NULL
 ORDER BY start_timestamp DESC
 LIMIT 1
@@ -166,6 +171,11 @@ func (q *Queries) FindActiveTransaction(ctx context.Context, chargeStationID str
 		&i.TariffID,
 		&i.TariffVersion,
 		&i.TariffSource,
+		&i.IdleStartedAt,
+		&i.IdleS,
+		&i.ChargingS,
+		&i.AveragePowerW,
+		&i.AnalysedAt,
 	)
 	return i, err
 }
@@ -210,7 +220,7 @@ func (q *Queries) GetMeterValues(ctx context.Context, arg GetMeterValuesParams) 
 
 const GetTransaction = `-- name: GetTransaction :one
 
-SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source FROM transactions WHERE charge_station_id = $1 AND id = $2
+SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source, idle_started_at, idle_s, charging_s, average_power_w, analysed_at FROM transactions WHERE charge_station_id = $1 AND id = $2
 `
 
 type GetTransactionParams struct {
@@ -246,12 +256,17 @@ func (q *Queries) GetTransaction(ctx context.Context, arg GetTransactionParams) 
 		&i.TariffID,
 		&i.TariffVersion,
 		&i.TariffSource,
+		&i.IdleStartedAt,
+		&i.IdleS,
+		&i.ChargingS,
+		&i.AveragePowerW,
+		&i.AnalysedAt,
 	)
 	return i, err
 }
 
 const ListTransactions = `-- name: ListTransactions :many
-SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source FROM transactions
+SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source, idle_started_at, idle_s, charging_s, average_power_w, analysed_at FROM transactions
 ORDER BY start_timestamp DESC
 `
 
@@ -288,6 +303,11 @@ func (q *Queries) ListTransactions(ctx context.Context) ([]Transaction, error) {
 			&i.TariffID,
 			&i.TariffVersion,
 			&i.TariffSource,
+			&i.IdleStartedAt,
+			&i.IdleS,
+			&i.ChargingS,
+			&i.AveragePowerW,
+			&i.AnalysedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -301,7 +321,7 @@ func (q *Queries) ListTransactions(ctx context.Context) ([]Transaction, error) {
 
 const ListTransactionsFiltered = `-- name: ListTransactionsFiltered :many
 
-SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source FROM transactions
+SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source, idle_started_at, idle_s, charging_s, average_power_w, analysed_at FROM transactions
 WHERE charge_station_id = $1
     AND (cardinality($4::uuid[]) = 0 OR org_id = ANY($4::uuid[]))
     AND ($5::text IS NULL 
@@ -366,6 +386,11 @@ func (q *Queries) ListTransactionsFiltered(ctx context.Context, arg ListTransact
 			&i.TariffID,
 			&i.TariffVersion,
 			&i.TariffSource,
+			&i.IdleStartedAt,
+			&i.IdleS,
+			&i.ChargingS,
+			&i.AveragePowerW,
+			&i.AnalysedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -386,6 +411,45 @@ func (q *Queries) NextOcpp16TransactionId(ctx context.Context) (int32, error) {
 	var id int32
 	err := row.Scan(&id)
 	return id, err
+}
+
+const SetTransactionAnalysis = `-- name: SetTransactionAnalysis :execrows
+UPDATE transactions SET
+    idle_started_at = $1::timestamptz,
+    idle_s          = $2::bigint,
+    charging_s      = $3::bigint,
+    average_power_w = $4::float8,
+    analysed_at     = $5::timestamptz,
+    updated_at      = NOW()
+WHERE charge_station_id = $6 AND id = $7
+`
+
+type SetTransactionAnalysisParams struct {
+	IdleStartedAt   pgtype.Timestamptz `db:"idle_started_at" json:"idle_started_at"`
+	IdleS           int64              `db:"idle_s" json:"idle_s"`
+	ChargingS       int64              `db:"charging_s" json:"charging_s"`
+	AveragePowerW   pgtype.Float8      `db:"average_power_w" json:"average_power_w"`
+	AnalysedAt      pgtype.Timestamptz `db:"analysed_at" json:"analysed_at"`
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	ID              string             `db:"id" json:"id"`
+}
+
+// The analysis of an ended transaction. An earlier analysis is replaced. The average
+// power is rounded to the one decimal that the column keeps.
+func (q *Queries) SetTransactionAnalysis(ctx context.Context, arg SetTransactionAnalysisParams) (int64, error) {
+	result, err := q.db.Exec(ctx, SetTransactionAnalysis,
+		arg.IdleStartedAt,
+		arg.IdleS,
+		arg.ChargingS,
+		arg.AveragePowerW,
+		arg.AnalysedAt,
+		arg.ChargeStationID,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const SetTransactionTariff = `-- name: SetTransactionTariff :execrows
@@ -429,7 +493,7 @@ SET meter_stop = $3,
     updated_seq_no = $6,
     updated_at = NOW()
 WHERE charge_station_id = $1 AND id = $2
-RETURNING id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source
+RETURNING id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source, idle_started_at, idle_s, charging_s, average_power_w, analysed_at
 `
 
 type UpdateTransactionParams struct {
@@ -475,6 +539,11 @@ func (q *Queries) UpdateTransaction(ctx context.Context, arg UpdateTransactionPa
 		&i.TariffID,
 		&i.TariffVersion,
 		&i.TariffSource,
+		&i.IdleStartedAt,
+		&i.IdleS,
+		&i.ChargingS,
+		&i.AveragePowerW,
+		&i.AnalysedAt,
 	)
 	return i, err
 }

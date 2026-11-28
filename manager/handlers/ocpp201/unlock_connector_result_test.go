@@ -70,6 +70,7 @@ func TestUnlockConnectorResultIsRouted(t *testing.T) {
 		schemas.OcppSchemas,
 		nil,
 		nil,
+		nil,
 	)
 
 	reqBytes, err := json.Marshal(&types.UnlockConnectorRequestJson{
