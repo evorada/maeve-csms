@@ -1,0 +1,38 @@
+{
+  "id": "S3",
+  "description": "Energy and charging time per step with a grace period: 0.25 per kWh; 0.10 per 5 minutes of charging time, the first 30 minutes free; VAT 21%.",
+  "simple": {
+    "currency": "EUR",
+    "tariff_type": "REGULAR",
+    "price": 0.25,
+    "vat": 21.0,
+    "is_vat_relevant": true,
+    "time_tariff": 0.1,
+    "time_step_size_in_minutes": 5,
+    "time_grace_period_in_minutes": 30
+  },
+  "expected": {
+    "currency": "EUR",
+    "type": "REGULAR",
+    "elements": [
+      {
+        "price_components": [
+          {
+            "type": "ENERGY",
+            "price": 0.25,
+            "vat": 21,
+            "step_size": 1
+          },
+          {
+            "type": "TIME",
+            "price": 1.2,
+            "vat": 21,
+            "step_size": 300,
+            "grace_period_s": 1800,
+            "price_per_step": 0.1
+          }
+        ]
+      }
+    ]
+  }
+}

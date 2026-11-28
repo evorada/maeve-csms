@@ -17,7 +17,8 @@ import (
 
 // The asset store keeps the rules of the PostgreSQL tables: unique keys, optimistic
 // versions, the references between records (a location in use cannot be deleted, an
-// EVSE needs its location and charge station, a connector its EVSE) and the defaults.
+// EVSE needs its location and charge station, a connector its EVSE and the tariffs that
+// it refers to) and the defaults.
 
 // assetKey returns the canonical form of an asset id, under which the asset is stored;
 // false when the id is not a UUID, which no stored asset has.
@@ -521,6 +522,9 @@ func (s *Store) newAssetConnector(c *store.AssetConnector, evse *store.AssetEvse
 	if connector.AdhocTariffRef, err = optionalAssetKey(c.AdhocTariffRef); err != nil {
 		return nil, fmt.Errorf("invalid ad hoc tariff ref %q: %w", *c.AdhocTariffRef, err)
 	}
+	if err := s.checkAssetConnectorTariffs(connector); err != nil {
+		return nil, err
+	}
 	if _, found := s.assetConnectors[id]; found {
 		return nil, fmt.Errorf("connector %s: %w", id, store.ErrAlreadyExists)
 	}
@@ -539,6 +543,17 @@ func (s *Store) checkStoredAssetConnectorKeys(c *store.AssetConnector) error {
 	for _, other := range s.assetConnectors {
 		if err := checkAssetConnectorKeys(c, other); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// checkAssetConnectorTariffs checks that the tariffs that the connector refers to exist
+// (a deleted tariff is still there). The caller holds the lock.
+func (s *Store) checkAssetConnectorTariffs(c *store.AssetConnector) error {
+	for _, ref := range []*string{c.TariffRef, c.AdhocTariffRef} {
+		if ref != nil && s.tariffs[*ref] == nil {
+			return fmt.Errorf("tariff %s: %w", *ref, store.ErrNotFound)
 		}
 	}
 	return nil
@@ -586,6 +601,9 @@ func (s *Store) UpdateAssetConnector(_ context.Context, c *store.AssetConnector)
 	}
 	if updated.AdhocTariffRef, err = optionalAssetKey(c.AdhocTariffRef); err != nil {
 		return fmt.Errorf("update asset connector %s: invalid ad hoc tariff ref %q: %w", c.Id, *c.AdhocTariffRef, err)
+	}
+	if err := s.checkAssetConnectorTariffs(updated); err != nil {
+		return fmt.Errorf("update asset connector %s: %w", c.Id, err)
 	}
 	if err := s.checkStoredAssetConnectorKeys(updated); err != nil {
 		return fmt.Errorf("update asset connector %s: %w", c.Id, err)

@@ -13,6 +13,10 @@ import (
 type Querier interface {
 	AddChargeStationCertificate(ctx context.Context, arg AddChargeStationCertificateParams) (ChargeStationCertificate, error)
 	AddMeterValues(ctx context.Context, arg AddMeterValuesParams) error
+	// A tariff moves to a new version only when it still has the version that the caller
+	// saw and is not deleted: no row is changed otherwise. The row stays locked until the
+	// transaction ends, so that two new versions of one tariff are made one after the other.
+	BumpTariffCurrentVersion(ctx context.Context, arg BumpTariffCurrentVersionParams) (int64, error)
 	CancelReservation(ctx context.Context, reservationID int32) error
 	ClaimUnpublishedOutboxEvents(ctx context.Context, limit int32) ([]OutboxEvent, error)
 	// The approved station becomes active with the auth details of its approval; its pending
@@ -30,6 +34,9 @@ type Querier interface {
 	CountInventoryStations(ctx context.Context, arg CountInventoryStationsParams) (int64, error)
 	CountInventoryTokens(ctx context.Context, arg CountInventoryTokensParams) (int64, error)
 	CountMeterValues(ctx context.Context, arg CountMeterValuesParams) (int64, error)
+	// The records that refer to a tariff: the connectors that use it as their tariff or as
+	// their ad hoc tariff.
+	CountTariffReferences(ctx context.Context, tariffID pgtype.UUID) (int64, error)
 	CountTransactionsFiltered(ctx context.Context, arg CountTransactionsFilteredParams) (int64, error)
 	// A connector belongs to the org of its EVSE. Returns no row when there is no such EVSE.
 	CreateAssetConnector(ctx context.Context, arg CreateAssetConnectorParams) (AssetConnector, error)
@@ -41,6 +48,8 @@ type Querier interface {
 	// The reservation belongs to the org of its charge station, or to the legacy org when
 	// the charge station is not registered.
 	CreateReservation(ctx context.Context, arg CreateReservationParams) error
+	CreateTariff(ctx context.Context, arg CreateTariffParams) (Tariff, error)
+	CreateTariffVersion(ctx context.Context, arg CreateTariffVersionParams) (TariffVersion, error)
 	// CreateTransaction returns no row when the transaction already exists, instead of
 	// raising a unique violation that would abort an enclosing database transaction.
 	// The transaction belongs to the org of its charge station, or to the legacy org when
@@ -145,6 +154,10 @@ type Querier interface {
 	GetReservation(ctx context.Context, reservationID int32) (Reservation, error)
 	GetReservationByConnector(ctx context.Context, arg GetReservationByConnectorParams) (Reservation, error)
 	GetResetRequest(ctx context.Context, chargeStationID string) (ResetRequest, error)
+	// The tariff reads return the tariff with its current version.
+	GetTariff(ctx context.Context, id pgtype.UUID) (GetTariffRow, error)
+	GetTariffByOcpiId(ctx context.Context, arg GetTariffByOcpiIdParams) (GetTariffByOcpiIdRow, error)
+	GetTariffVersion(ctx context.Context, arg GetTariffVersionParams) (TariffVersion, error)
 	// The path column is an ltree, which sqlc cannot type: it is always read as text and
 	// written through a text cast. The hostnames of a tenant are read with the tenant, in
 	// the same statement.
@@ -217,6 +230,10 @@ type Querier interface {
 	ListRemoteStartTransactionRequests(ctx context.Context, arg ListRemoteStartTransactionRequestsParams) ([]RemoteStartTransactionRequest, error)
 	ListRemoteStopTransactionRequests(ctx context.Context, arg ListRemoteStopTransactionRequestsParams) ([]RemoteStopTransactionRequest, error)
 	ListSubtreeOrgIds(ctx context.Context, arg ListSubtreeOrgIdsParams) ([]pgtype.UUID, error)
+	ListTariffVersions(ctx context.Context, tariffID pgtype.UUID) ([]TariffVersion, error)
+	// The query is a LIKE pattern: the store escapes %, _ and \ in it. The type is the type
+	// of the current version.
+	ListTariffs(ctx context.Context, arg ListTariffsParams) ([]ListTariffsRow, error)
 	ListTenants(ctx context.Context, arg ListTenantsParams) ([]ListTenantsRow, error)
 	ListTokens(ctx context.Context, arg ListTokensParams) ([]Token, error)
 	ListTokensForOrgs(ctx context.Context, arg ListTokensForOrgsParams) ([]Token, error)
@@ -264,6 +281,8 @@ type Querier interface {
 	RedactCommandPayload(ctx context.Context, arg RedactCommandPayloadParams) error
 	RejectPendingChargeStation(ctx context.Context, arg RejectPendingChargeStationParams) error
 	RemoveStationEvses(ctx context.Context, stationKey string) error
+	// A deleted tariff takes no new name: no row is changed.
+	RenameTariff(ctx context.Context, arg RenameTariffParams) (int64, error)
 	SetCertificate(ctx context.Context, arg SetCertificateParams) (Certificate, error)
 	// SetChargeStationAuth without an org (NULL) registers a new charge station in the
 	// legacy org and leaves the org of a charge station that is already there as it is.
@@ -293,6 +312,7 @@ type Querier interface {
 	SetTenantStatus(ctx context.Context, arg SetTenantStatusParams) (int64, error)
 	// Unlock Connector Request
 	SetUnlockConnectorRequest(ctx context.Context, arg SetUnlockConnectorRequestParams) (UnlockConnectorRequest, error)
+	SoftDeleteTariff(ctx context.Context, id pgtype.UUID) error
 	// StoreMeterValue stores a meter value for the org that owns it: the org of its
 	// transaction when the transaction is known, else the org of its charge station, else
 	// the legacy org (a charge station that is not registered).

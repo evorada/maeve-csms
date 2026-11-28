@@ -126,8 +126,9 @@ type AssetLocationFilter struct {
 // back. An update applies only when the record still has the Version that it carries:
 // otherwise it returns an error wrapping ErrVersionConflict, and one wrapping ErrNotFound
 // when the record does not exist. A create that would repeat a unique key returns an
-// error wrapping ErrAlreadyExists, and one wrapping ErrNotFound when a record that it
-// refers to (location, charge station, EVSE) does not exist.
+// error wrapping ErrAlreadyExists. A create or an update returns an error wrapping
+// ErrNotFound when a record that it refers to (location, charge station, EVSE, tariff)
+// does not exist; a deleted tariff still exists.
 //
 // Lookups return nil, nil when there is no such record; an id that is not a UUID names
 // no record. Deletes of a record that does not exist do nothing.

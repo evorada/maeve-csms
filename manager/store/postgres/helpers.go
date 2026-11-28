@@ -3,11 +3,14 @@
 package postgres
 
 import (
+	"errors"
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/thoughtworks/maeve-csms/manager/money"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
@@ -271,4 +274,45 @@ func orgIdOrLegacy(orgId string) (pgtype.UUID, error) {
 		orgId = store.LegacyOrgId
 	}
 	return optionalOrgId(orgId)
+}
+
+// amountDecimals is the number of decimals of a money.Amount, and of the NUMERIC(14,4)
+// columns that hold one.
+const amountDecimals = 4
+
+// numericFromAmount converts an amount to a NUMERIC with 4 decimals.
+func numericFromAmount(a money.Amount) pgtype.Numeric {
+	return pgtype.Numeric{Int: big.NewInt(int64(a)), Exp: -amountDecimals, Valid: true}
+}
+
+// amountFromNumeric converts a NUMERIC to an amount; false for NULL. A value that an
+// amount cannot hold (not a number, more than 4 decimals, too large) is an error.
+func amountFromNumeric(n pgtype.Numeric) (money.Amount, bool, error) {
+	if !n.Valid {
+		return 0, false, nil
+	}
+	if n.NaN || n.InfinityModifier != pgtype.Finite || n.Int == nil {
+		return 0, false, errors.New("numeric value is not a number")
+	}
+	// the value is Int x 10^Exp; an amount counts 1/10000
+	shift := int(n.Exp) + amountDecimals
+	units := new(big.Int).Set(n.Int)
+	switch {
+	case shift > 18 || shift < -18:
+		if units.Sign() != 0 {
+			return 0, false, fmt.Errorf("numeric value %se%d does not fit an amount", n.Int, n.Exp)
+		}
+	case shift > 0:
+		units.Mul(units, new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(shift)), nil))
+	case shift < 0:
+		remainder := new(big.Int)
+		units.QuoRem(units, new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(-shift)), nil), remainder)
+		if remainder.Sign() != 0 {
+			return 0, false, fmt.Errorf("numeric value %se%d has more than %d decimals", n.Int, n.Exp, amountDecimals)
+		}
+	}
+	if !units.IsInt64() {
+		return 0, false, fmt.Errorf("numeric value %se%d does not fit an amount", n.Int, n.Exp)
+	}
+	return money.Amount(units.Int64()), true, nil
 }

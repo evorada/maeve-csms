@@ -163,6 +163,43 @@ func checkConnector(prefix string, c *store.AssetConnector) []assets.ValidationE
 	return invalid
 }
 
+// checkTariffRefs returns the tariff references of the connectors that do not name a
+// tariff of the org that is in use (the tariff does not exist, is deleted or belongs to
+// another org) as assets.ValidationErrors, and nil when there are none. The store
+// refuses a connector that refers to a tariff that does not exist. path gives the JSON
+// path of connector i in the request. The references are UUIDs (see checkConnector).
+func (s *Server) checkTariffRefs(ctx context.Context, orgId string, connectors []*store.AssetConnector, path func(i int) string) error {
+	var invalid []assets.ValidationError
+	for i, c := range connectors {
+		for _, ref := range []struct {
+			field string
+			value *string
+		}{{"tariff_ref", c.TariffRef}, {"adhoc_tariff_ref", c.AdhocTariffRef}} {
+			if ref.value == nil {
+				continue
+			}
+			tariff, err := s.store.LookupTariff(ctx, *ref.value)
+			if err != nil {
+				return fmt.Errorf("look up tariff %s: %w", *ref.value, err)
+			}
+			if tariff == nil || tariff.DeletedAt != nil || !strings.EqualFold(tariff.OrgId, orgId) {
+				invalid = append(invalid, assets.ValidationError{Field: path(i) + ref.field, Reason: "is not a tariff of the org"})
+			}
+		}
+	}
+	return validation(nil, invalid...)
+}
+
+// noConnectorPath is the JSON path of a connector that is the body of a request.
+func noConnectorPath(int) string {
+	return ""
+}
+
+// connectorPath is the JSON path of connector i of an EVSE in a request.
+func connectorPath(i int) string {
+	return fmt.Sprintf("connectors[%d].", i)
+}
+
 // checkEvse returns the fields of an EVSE, and of the connectors that it is created with,
 // that break a rule.
 func checkEvse(evse *store.AssetEvse, create bool) error {
@@ -174,7 +211,7 @@ func checkEvse(evse *store.AssetEvse, create bool) error {
 		more = append(more, assets.ValidationError{Field: "connectors", Reason: "must have at least one connector"})
 	}
 	for i, c := range evse.Connectors {
-		more = append(more, checkConnector(fmt.Sprintf("connectors[%d].", i), c)...)
+		more = append(more, checkConnector(connectorPath(i), c)...)
 	}
 	return validation(assets.ValidateEvse(evse), more...)
 }
@@ -221,6 +258,9 @@ func (s *Server) CreateAssetEvse(w http.ResponseWriter, r *http.Request, locatio
 		}
 		evse.OrgId, evse.LocationId = loc.OrgId, loc.Id
 		if err := checkEvse(evse, true); err != nil {
+			return err
+		}
+		if err := s.checkTariffRefs(ctx, loc.OrgId, evse.Connectors, connectorPath); err != nil {
 			return err
 		}
 		cs, err := s.stationForEvses(ctx, loc.OrgId, evse.StationKey)
@@ -411,6 +451,9 @@ func (s *Server) CreateAssetConnector(w http.ResponseWriter, r *http.Request, ev
 		if err := validation(assets.ValidateConnector(c), checkConnector("", c)...); err != nil {
 			return err
 		}
+		if err := s.checkTariffRefs(ctx, evse.OrgId, []*store.AssetConnector{c}, noConnectorPath); err != nil {
+			return err
+		}
 		if err := s.store.CreateAssetConnector(ctx, c); err != nil {
 			if errors.Is(err, store.ErrAlreadyExists) {
 				return answerWith(ErrConflict(errorAlreadyExists + ": the EVSE already has a connector with this ocpp_connector_id or ocpi_id"))
@@ -469,6 +512,9 @@ func (s *Server) UpdateAssetConnector(w http.ResponseWriter, r *http.Request, ev
 			c.OcpiId = current.OcpiId
 		}
 		if err := validation(assets.ValidateConnector(c), checkConnector("", c)...); err != nil {
+			return err
+		}
+		if err := s.checkTariffRefs(ctx, evse.OrgId, []*store.AssetConnector{c}, noConnectorPath); err != nil {
 			return err
 		}
 		if err := s.store.UpdateAssetConnector(ctx, c); err != nil {

@@ -1,0 +1,104 @@
+{
+  "id": "S5b",
+  "description": "Parking windows with two times of day: as S5, and on Saturday between 09:00 and 14:00.",
+  "simple": {
+    "currency": "EUR",
+    "tariff_type": "REGULAR",
+    "price": 0.3,
+    "vat": 21.0,
+    "is_vat_relevant": true,
+    "parking_tariff": 0.2,
+    "parking_step_size_in_minutes": 10,
+    "parking_grace_period_in_minutes": 15,
+    "parking_tariff_restrictions": [
+      {
+        "dayOfWeek": 1,
+        "startTime": "08:00",
+        "endTime": "20:00"
+      },
+      {
+        "dayOfWeek": 2,
+        "startTime": "08:00",
+        "endTime": "20:00"
+      },
+      {
+        "dayOfWeek": 3,
+        "startTime": "08:00",
+        "endTime": "20:00"
+      },
+      {
+        "dayOfWeek": 4,
+        "startTime": "08:00",
+        "endTime": "20:00"
+      },
+      {
+        "dayOfWeek": 5,
+        "startTime": "08:00",
+        "endTime": "20:00"
+      },
+      {
+        "dayOfWeek": 6,
+        "startTime": "09:00",
+        "endTime": "14:00"
+      }
+    ]
+  },
+  "expected": {
+    "currency": "EUR",
+    "type": "REGULAR",
+    "elements": [
+      {
+        "price_components": [
+          {
+            "type": "ENERGY",
+            "price": 0.3,
+            "vat": 21,
+            "step_size": 1
+          }
+        ]
+      },
+      {
+        "price_components": [
+          {
+            "type": "PARKING_TIME",
+            "price": 1.2,
+            "vat": 21,
+            "step_size": 600,
+            "grace_period_s": 900,
+            "price_per_step": 0.2
+          }
+        ],
+        "restrictions": {
+          "start_time": "08:00",
+          "end_time": "20:00",
+          "day_of_week": [
+            "MONDAY",
+            "TUESDAY",
+            "WEDNESDAY",
+            "THURSDAY",
+            "FRIDAY"
+          ]
+        }
+      },
+      {
+        "price_components": [
+          {
+            "type": "PARKING_TIME",
+            "price": 1.2,
+            "vat": 21,
+            "step_size": 600,
+            "grace_period_s": 900,
+            "price_per_step": 0.2
+          }
+        ],
+        "restrictions": {
+          "start_time": "09:00",
+          "end_time": "14:00",
+          "day_of_week": [
+            "SATURDAY"
+          ]
+        }
+      }
+    ]
+  }
+}

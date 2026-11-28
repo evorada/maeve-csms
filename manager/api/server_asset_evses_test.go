@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,12 +26,28 @@ func createLocation(t *testing.T, r http.Handler, caller *tenancy.Principal, par
 	return decode[api.AssetLocation](t, rr)
 }
 
+// createTariff stores a tariff of the org with the id (generated when empty) and returns
+// its id.
+func (m *multiTenant) createTariff(t *testing.T, orgId, id string) string {
+	t.Helper()
+	tariff := &store.Tariff{Id: id, OrgId: orgId, PartyRef: map[string]string{orgA: partyOfA, orgB: partyOfB}[orgId], Name: "Standard"}
+	require.NoError(t, m.engine.CreateTariff(context.Background(), tariff, &store.TariffVersion{
+		Currency: "EUR",
+		Elements: []store.TariffElement{{PriceComponents: []store.PriceComponent{
+			{Type: store.PriceComponentEnergy, Price: 3000, StepSize: 1},
+		}}},
+		CreatedBy: "user:test",
+	}))
+	return tariff.Id
+}
+
 func TestAssetEvseLifecycle(t *testing.T) {
 	ctx := context.Background()
 	m := newMultiTenant(t)
 	r := m.router(t)
 	callerOfA := callerOf(orgA, tenancy.OrgScopeSelf)
 	loc := createLocation(t, r, callerOfA, partyOfA)
+	m.createTariff(t, orgA, "0193b2c6-0000-7000-8000-000000000001")
 
 	in := evseInput(stationOfA, 1, 1, 2)
 	in.PhysicalReference = ptr("A1")
@@ -361,6 +379,88 @@ func TestAssetConnectorLifecycle(t *testing.T) {
 }
 
 // An EVSE, or a connector of it, is not deleted while a transaction runs on it.
+// A connector can only refer to a tariff of its org that is in use.
+func TestAssetConnectorTariffRefs(t *testing.T) {
+	ctx := context.Background()
+	m := newMultiTenant(t)
+	r := m.router(t)
+	callerOfA := callerOf(orgA, tenancy.OrgScopeSelf)
+	ofA := m.assetsOf(t, orgA, stationOfA)
+	connectorsPath := ofA.evsePath() + "/connectors"
+
+	tariff := m.createTariff(t, orgA, "")
+	adhocTariff := m.createTariff(t, orgA, "")
+	deleted := m.createTariff(t, orgA, "")
+	require.NoError(t, m.engine.DeleteTariff(ctx, deleted))
+	notATariff := map[string]string{
+		"a tariff that does not exist": "0193b2c6-0000-7000-8000-00000000ffff",
+		"a tariff of another org":      m.createTariff(t, orgB, ""),
+		"a deleted tariff":             deleted,
+	}
+	invalidFields := func(t *testing.T, rr *httptest.ResponseRecorder) map[string]string {
+		t.Helper()
+		require.Equal(t, http.StatusUnprocessableEntity, rr.Code, rr.Body.String())
+		reasons := map[string]string{}
+		for _, e := range decode[api.ValidationErrors](t, rr).Errors {
+			reasons[e.Field] = e.Reason
+		}
+		return reasons
+	}
+	const reason = "is not a tariff of the org"
+
+	for name, ref := range notATariff {
+		t.Run(name, func(t *testing.T) {
+			evse := evseInput(stationOfA, 2, 1, 2)
+			(*evse.Connectors)[1].TariffRef = &ref
+			rr := serve(r, as(callerOfA, http.MethodPost, ofA.locationPath()+"/evses", jsonBody(t, evse)))
+			assert.Equal(t, map[string]string{"connectors[1].tariff_ref": reason}, invalidFields(t, rr))
+			stored, err := m.engine.LookupAssetEvseByOcpp(ctx, stationOfA, 2)
+			require.NoError(t, err)
+			assert.Nil(t, stored, "an EVSE that is refused is not stored")
+
+			connector := connectorInput(3)
+			connector.TariffRef = &ref
+			connector.AdhocTariffRef = &ref
+			rr = serve(r, as(callerOfA, http.MethodPost, connectorsPath, jsonBody(t, connector)))
+			assert.Equal(t, map[string]string{"tariff_ref": reason, "adhoc_tariff_ref": reason}, invalidFields(t, rr))
+
+			connector = connectorInput(2)
+			connector.AdhocTariffRef = &ref
+			rr = serve(r, as(callerOfA, http.MethodPut, ofA.connectorPath(), jsonBody(t, connector)))
+			assert.Equal(t, map[string]string{"adhoc_tariff_ref": reason}, invalidFields(t, rr))
+
+			got, err := m.engine.LookupAssetEvse(ctx, ofA.evse.Id)
+			require.NoError(t, err)
+			assert.Equal(t, ofA.evse, got, "a refused connector changes nothing")
+		})
+	}
+
+	t.Run("tariffs of the org", func(t *testing.T) {
+		connector := connectorInput(3)
+		connector.TariffRef = ptr(strings.ToUpper(tariff))
+		connector.AdhocTariffRef = &adhocTariff
+		rr := serve(r, as(callerOfA, http.MethodPost, connectorsPath, jsonBody(t, connector)))
+		require.Equal(t, http.StatusCreated, rr.Code, rr.Body.String())
+		created := decode[api.AssetConnector](t, rr)
+		assert.Equal(t, &tariff, created.TariffRef)
+		assert.Equal(t, &adhocTariff, created.AdhocTariffRef)
+
+		// the tariffs change places, and the connector lets go of them
+		connector.TariffRef, connector.AdhocTariffRef = &adhocTariff, &tariff
+		rr = serve(r, as(callerOfA, http.MethodPut, connectorsPath+"/"+created.Uid, jsonBody(t, connector)))
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		changed := decode[api.AssetConnector](t, rr)
+		assert.Equal(t, &adhocTariff, changed.TariffRef)
+		assert.Equal(t, &tariff, changed.AdhocTariffRef)
+		assert.ErrorIs(t, m.engine.DeleteTariff(ctx, tariff), store.ErrInUse)
+
+		connector.TariffRef, connector.AdhocTariffRef = nil, nil
+		rr = serve(r, as(callerOfA, http.MethodPut, connectorsPath+"/"+created.Uid, jsonBody(t, connector)))
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		assert.NoError(t, m.engine.DeleteTariff(ctx, tariff))
+	})
+}
+
 func TestAssetEvseWithATransaction(t *testing.T) {
 	ctx := context.Background()
 	callerOfA := callerOf(orgA, tenancy.OrgScopeSelf)

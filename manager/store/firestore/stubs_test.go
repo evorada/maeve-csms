@@ -299,6 +299,38 @@ func TestStubsReturnErrNotImplemented(t *testing.T) {
 			_, err := s.CountInventory(ctx, "org001", store.InventoryStation, false)
 			return err
 		},
+		"CreateTariff": func() error {
+			return s.CreateTariff(ctx, &store.Tariff{}, &store.TariffVersion{})
+		},
+		"AddTariffVersion": func() error {
+			return s.AddTariffVersion(ctx, "tariff001", 1, &store.TariffVersion{})
+		},
+		"RenameTariff": func() error {
+			return s.RenameTariff(ctx, "tariff001", "name")
+		},
+		"LookupTariff": func() error {
+			_, err := s.LookupTariff(ctx, "tariff001")
+			return err
+		},
+		"LookupTariffByOcpiId": func() error {
+			_, err := s.LookupTariffByOcpiId(ctx, "party001", "tariff001")
+			return err
+		},
+		"LookupTariffVersion": func() error {
+			_, err := s.LookupTariffVersion(ctx, "tariff001", 1)
+			return err
+		},
+		"ListTariffs": func() error {
+			_, _, err := s.ListTariffs(ctx, store.TariffFilter{})
+			return err
+		},
+		"ListTariffVersions": func() error {
+			_, err := s.ListTariffVersions(ctx, "tariff001")
+			return err
+		},
+		"DeleteTariff": func() error {
+			return s.DeleteTariff(ctx, "tariff001")
+		},
 	}
 
 	for name, stub := range stubs {

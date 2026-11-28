@@ -474,6 +474,38 @@ func TestApproveRefusals(t *testing.T) {
 		require.Equal(t, http.StatusBadRequest, rr.Code, rr.Body.String())
 	})
 
+	t.Run("a tariff that is not a tariff of the org", func(t *testing.T) {
+		f := newOnboardingFixture(t)
+		deleted := f.createTariff(t, orgA, "")
+		require.NoError(t, f.engine.DeleteTariff(context.Background(), deleted))
+		body := func(tariffRef string) string {
+			return `{"location_id":"` + f.location.Id + `","password_mode":"manual","evses":[{"ocpp_evse_id":1,"connectors":[` +
+				`{"ocpp_connector_id":1,"standard":"IEC_62196_T2","format":"SOCKET","power_type":"AC_3_PHASE","max_voltage":400,"max_amperage":32},` +
+				`{"ocpp_connector_id":2,"standard":"IEC_62196_T2","format":"SOCKET","power_type":"AC_3_PHASE","max_voltage":400,"max_amperage":32,` +
+				`"adhoc_tariff_ref":"` + tariffRef + `"}]}]}`
+		}
+		for name, ref := range map[string]string{
+			"a tariff that does not exist": "0193b2c6-0000-7000-8000-00000000ffff",
+			"a tariff of another org":      f.createTariff(t, orgB, ""),
+			"a deleted tariff":             deleted,
+		} {
+			rr := f.approve(pendingStationOfA, body(ref))
+			require.Equal(t, http.StatusUnprocessableEntity, rr.Code, "%s: %s", name, rr.Body.String())
+			assert.JSONEq(t, `{"status":"invalid","errors":[{"field":"evses[0].connectors[1].adhoc_tariff_ref","reason":"is not a tariff of the org"}]}`,
+				rr.Body.String(), name)
+			f.assertNothingApproved(t, pendingStationOfA)
+		}
+
+		tariff := f.createTariff(t, orgA, "")
+		rr := f.approve(pendingStationOfA, body(tariff))
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		evses, err := f.engine.ListAssetEvsesForStation(context.Background(), pendingStationOfA)
+		require.NoError(t, err)
+		require.Len(t, evses, 1)
+		require.Len(t, evses[0].Connectors, 2)
+		assert.Equal(t, &tariff, evses[0].Connectors[1].AdhocTariffRef)
+	})
+
 	t.Run("a charge station that is not pending", func(t *testing.T) {
 		f := newOnboardingFixture(t)
 		require.NoError(t, f.engine.SetChargeStationAuth(ctx, retiredStationOfA, &store.ChargeStationAuth{OrgId: orgA}))

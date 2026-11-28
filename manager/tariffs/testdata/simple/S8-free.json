@@ -1,0 +1,25 @@
+{
+  "id": "S8",
+  "description": "Free: a price of 0 per kWh, without VAT.",
+  "simple": {
+    "currency": "EUR",
+    "tariff_type": "REGULAR",
+    "price": 0.0,
+    "is_vat_relevant": false
+  },
+  "expected": {
+    "currency": "EUR",
+    "type": "REGULAR",
+    "elements": [
+      {
+        "price_components": [
+          {
+            "type": "ENERGY",
+            "price": 0,
+            "step_size": 1
+          }
+        ]
+      }
+    ]
+  }
+}

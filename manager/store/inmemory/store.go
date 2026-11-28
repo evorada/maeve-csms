@@ -89,6 +89,10 @@ type Store struct {
 	// the registry records by station key, without their org (the org of the auth
 	// details) and runtime details (chargeStationRuntimeDetails)
 	chargeStations map[string]*store.ChargeStation
+	// the tariffs by the canonical text of their id, without their current version, and
+	// the versions of each tariff in the order of their numbers (version n at index n-1)
+	tariffs        map[string]*store.Tariff
+	tariffVersions map[string][]*store.TariffVersion
 }
 
 func NewStore(clock clock.PassiveClock) *Store {
@@ -144,6 +148,8 @@ func NewStore(clock clock.PassiveClock) *Store {
 		assetEvses:                       make(map[string]*store.AssetEvse),
 		assetConnectors:                  make(map[string]*store.AssetConnector),
 		chargeStations:                   make(map[string]*store.ChargeStation),
+		tariffs:                          make(map[string]*store.Tariff),
+		tariffVersions:                   make(map[string][]*store.TariffVersion),
 	}
 }
 

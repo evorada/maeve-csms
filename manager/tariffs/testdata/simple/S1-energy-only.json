@@ -1,0 +1,27 @@
+{
+  "id": "S1",
+  "description": "Energy only: 0.30 per kWh, VAT 21%.",
+  "simple": {
+    "currency": "EUR",
+    "tariff_type": "REGULAR",
+    "price": 0.3,
+    "vat": 21.0,
+    "is_vat_relevant": true
+  },
+  "expected": {
+    "currency": "EUR",
+    "type": "REGULAR",
+    "elements": [
+      {
+        "price_components": [
+          {
+            "type": "ENERGY",
+            "price": 0.3,
+            "vat": 21,
+            "step_size": 1
+          }
+        ]
+      }
+    ]
+  }
+}

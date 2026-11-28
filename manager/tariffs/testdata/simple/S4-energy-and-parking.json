@@ -1,0 +1,38 @@
+{
+  "id": "S4",
+  "description": "Energy and parking per step with a grace period: 0.30 per kWh; 0.50 per 15 minutes of parking, the first 30 minutes free; VAT 21%.",
+  "simple": {
+    "currency": "EUR",
+    "tariff_type": "REGULAR",
+    "price": 0.3,
+    "vat": 21.0,
+    "is_vat_relevant": true,
+    "parking_tariff": 0.5,
+    "parking_step_size_in_minutes": 15,
+    "parking_grace_period_in_minutes": 30
+  },
+  "expected": {
+    "currency": "EUR",
+    "type": "REGULAR",
+    "elements": [
+      {
+        "price_components": [
+          {
+            "type": "ENERGY",
+            "price": 0.3,
+            "vat": 21,
+            "step_size": 1
+          },
+          {
+            "type": "PARKING_TIME",
+            "price": 2,
+            "vat": 21,
+            "step_size": 900,
+            "grace_period_s": 1800,
+            "price_per_step": 0.5
+          }
+        ]
+      }
+    ]
+  }
+}

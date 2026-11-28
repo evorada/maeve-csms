@@ -79,6 +79,13 @@ func newTransferFixture(t *testing.T) *transferFixture {
 		require.NoError(t, f.engine.CreateAssetEvse(ctx, evse))
 		f.evses = append(f.evses, evse)
 	}
+	for _, id := range []string{tariffOfA, adhocTariffOfA} {
+		require.NoError(t, f.engine.CreateTariff(ctx,
+			&store.Tariff{Id: id, OrgId: orgA, PartyRef: "cpo-a", Name: "Tariff " + id},
+			&store.TariffVersion{Currency: "EUR", Elements: []store.TariffElement{{PriceComponents: []store.PriceComponent{
+				{Type: store.PriceComponentEnergy, Price: 3000, StepSize: 1},
+			}}}, CreatedBy: "user:alice"}))
+	}
 	connector := f.evses[1].Connectors[1]
 	connector.TariffRef = ptr(tariffOfA)
 	connector.AdhocTariffRef = ptr(adhocTariffOfA)

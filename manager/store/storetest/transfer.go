@@ -37,6 +37,8 @@ func newTransferFixture(t *testing.T, s store.Engine) *transferFixture {
 	garage.OcpiId = "GARAGE"
 	f.garage = createAssetLocation(t, s, garage)
 
+	createTariffWithId(t, s, transferTariff, orgA)
+	createTariffWithId(t, s, transferAdhocTariff, orgA)
 	first := testAssetEvse(f.plaza.Id, assetStationA, 1, 1)
 	first.Connectors[0].TariffRef = ptr(transferTariff)
 	first.Connectors[0].AdhocTariffRef = ptr(transferAdhocTariff)

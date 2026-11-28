@@ -83,6 +83,11 @@ func transferSetup(t *testing.T) (*store.AssetLocation, *store.AssetEvse) {
 	loc := &store.AssetLocation{OrgId: transferFromOrg, PartyRef: "cpo-aaaa", OcpiId: "PLAZA", Address: "Calle Mayor 1", City: "Madrid",
 		Country: "ESP", Latitude: "40.416775", Longitude: "-3.703790", TimeZone: "Europe/Madrid", Publish: true}
 	require.NoError(t, testStore.CreateAssetLocation(ctx, loc))
+	require.NoError(t, testStore.CreateTariff(ctx,
+		&store.Tariff{Id: transferTariff, OrgId: transferFromOrg, PartyRef: "cpo-aaaa", Name: "Standard"},
+		&store.TariffVersion{Currency: "EUR", Elements: []store.TariffElement{{PriceComponents: []store.PriceComponent{
+			{Type: store.PriceComponentEnergy, Price: 3000, StepSize: 1},
+		}}}, CreatedBy: "user:alice"}))
 	evse := &store.AssetEvse{OrgId: transferFromOrg, LocationId: loc.Id, StationKey: transferKey, OcppEvseId: 1,
 		Connectors: []*store.AssetConnector{{OcppConnectorId: 1, Standard: "IEC_62196_T2", Format: "SOCKET", PowerType: "AC_3_PHASE",
 			MaxVoltage: 400, MaxAmperage: 32, TariffRef: ptr(transferTariff)}}}

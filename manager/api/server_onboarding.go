@@ -240,6 +240,12 @@ func (s *Server) approve(ctx context.Context, p *tenancy.Principal, orgId, csId 
 		return approved{}, assets.ValidationErrors{{Field: "location_id", Reason: "is not a location of the org of the charge station"}}
 	}
 	approval.LocationId = loc.Id
+	for i, evse := range approval.Evses {
+		err := s.checkTariffRefs(ctx, orgId, evse.Connectors, func(j int) string { return fmt.Sprintf("evses[%d].connectors[%d].", i, j) })
+		if err != nil {
+			return approved{}, err
+		}
+	}
 	for _, evse := range approval.Evses {
 		if evse.EvseId != nil {
 			continue

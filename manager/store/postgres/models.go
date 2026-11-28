@@ -479,6 +479,38 @@ type ResetRequest struct {
 	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
 
+type Tariff struct {
+	ID             pgtype.UUID        `db:"id" json:"id"`
+	OrgID          pgtype.UUID        `db:"org_id" json:"org_id"`
+	PartyRef       string             `db:"party_ref" json:"party_ref"`
+	OcpiID         string             `db:"ocpi_id" json:"ocpi_id"`
+	Name           string             `db:"name" json:"name"`
+	CurrentVersion int32              `db:"current_version" json:"current_version"`
+	DeletedAt      pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
+	CreatedAt      pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
+type TariffVersion struct {
+	TariffID        pgtype.UUID        `db:"tariff_id" json:"tariff_id"`
+	Version         int32              `db:"version" json:"version"`
+	Currency        string             `db:"currency" json:"currency"`
+	Type            pgtype.Text        `db:"type" json:"type"`
+	TariffAltText   []byte             `db:"tariff_alt_text" json:"tariff_alt_text"`
+	TariffAltUrl    pgtype.Text        `db:"tariff_alt_url" json:"tariff_alt_url"`
+	MinPriceExclVat pgtype.Numeric     `db:"min_price_excl_vat" json:"min_price_excl_vat"`
+	MinPriceInclVat pgtype.Numeric     `db:"min_price_incl_vat" json:"min_price_incl_vat"`
+	MaxPriceExclVat pgtype.Numeric     `db:"max_price_excl_vat" json:"max_price_excl_vat"`
+	MaxPriceInclVat pgtype.Numeric     `db:"max_price_incl_vat" json:"max_price_incl_vat"`
+	StartDateTime   pgtype.Timestamptz `db:"start_date_time" json:"start_date_time"`
+	EndDateTime     pgtype.Timestamptz `db:"end_date_time" json:"end_date_time"`
+	Elements        []byte             `db:"elements" json:"elements"`
+	EnergyMix       []byte             `db:"energy_mix" json:"energy_mix"`
+	IdleDetection   []byte             `db:"idle_detection" json:"idle_detection"`
+	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	CreatedBy       string             `db:"created_by" json:"created_by"`
+}
+
 type Tenant struct {
 	OrgID               pgtype.UUID        `db:"org_id" json:"org_id"`
 	ParentID            pgtype.UUID        `db:"parent_id" json:"parent_id"`

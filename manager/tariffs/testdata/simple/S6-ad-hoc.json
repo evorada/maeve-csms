@@ -1,0 +1,27 @@
+{
+  "id": "S6",
+  "description": "Ad hoc tariff: 0.45 per kWh, VAT 21%, for sessions that are paid on the spot.",
+  "simple": {
+    "currency": "EUR",
+    "tariff_type": "AD_HOC_PAYMENT",
+    "price": 0.45,
+    "vat": 21.0,
+    "is_vat_relevant": true
+  },
+  "expected": {
+    "currency": "EUR",
+    "type": "AD_HOC_PAYMENT",
+    "elements": [
+      {
+        "price_components": [
+          {
+            "type": "ENERGY",
+            "price": 0.45,
+            "vat": 21,
+            "step_size": 1
+          }
+        ]
+      }
+    ]
+  }
+}

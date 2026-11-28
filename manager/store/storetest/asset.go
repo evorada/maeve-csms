@@ -247,6 +247,8 @@ func TestAssetStore(t *testing.T, newStore func(t *testing.T) store.Engine) {
 		s := newStore(t)
 		registerAssetStations(t, s)
 		loc := createAssetLocation(t, s, testAssetLocation("Plaza"))
+		createTariffWithId(t, s, testAssetId(50), orgA)
+		createTariffWithId(t, s, testAssetId(51), orgA)
 		evse := testAssetEvse(loc.Id, assetStationA, 1, 2, 1)
 		evse.EvseId = ptr("ES*CCM*ECP001*1")
 		evse.PhysicalReference = ptr("A1")
@@ -339,6 +341,49 @@ func TestAssetStore(t *testing.T, newStore func(t *testing.T) store.Engine) {
 		assert.ErrorIs(t, s.CreateAssetConnector(ctx, c), store.ErrNotFound, "unknown EVSE")
 		c.EvseUid = "not-a-uuid"
 		assert.ErrorIs(t, s.CreateAssetConnector(ctx, c), store.ErrNotFound, "unknown EVSE")
+	})
+
+	t.Run("the tariffs that a connector refers to must exist", func(t *testing.T) {
+		s := newStore(t)
+		registerAssetStations(t, s)
+		loc := createAssetLocation(t, s, testAssetLocation("Plaza"))
+		tariff := createTariffWithId(t, s, testAssetId(50), orgA)
+
+		for name, set := range map[string]func(c *store.AssetConnector){
+			"unknown tariff":        func(c *store.AssetConnector) { c.TariffRef = ptr(testAssetId(98)) },
+			"unknown ad hoc tariff": func(c *store.AssetConnector) { c.AdhocTariffRef = ptr(testAssetId(98)) },
+		} {
+			evse := testAssetEvse(loc.Id, assetStationA, 1, 1, 2)
+			set(evse.Connectors[1])
+			assert.ErrorIs(t, s.CreateAssetEvse(ctx, evse), store.ErrNotFound, name)
+			got, err := s.LookupAssetEvseByOcpp(ctx, assetStationA, 1)
+			require.NoError(t, err)
+			assert.Nil(t, got, "an EVSE with a connector that is refused is not stored: %s", name)
+		}
+
+		evse := createAssetEvse(t, s, testAssetEvse(loc.Id, assetStationA, 1, 1))
+		for name, set := range map[string]func(c *store.AssetConnector){
+			"unknown tariff":        func(c *store.AssetConnector) { c.TariffRef = ptr(testAssetId(98)) },
+			"unknown ad hoc tariff": func(c *store.AssetConnector) { c.AdhocTariffRef = ptr(testAssetId(98)) },
+		} {
+			added := testAssetConnector(2)
+			added.EvseUid = evse.Id
+			set(added)
+			assert.ErrorIs(t, s.CreateAssetConnector(ctx, added), store.ErrNotFound, name)
+
+			changed := *evse.Connectors[0]
+			set(&changed)
+			assert.ErrorIs(t, s.UpdateAssetConnector(ctx, &changed), store.ErrNotFound, name)
+		}
+		assert.Equal(t, evse, lookupAssetEvse(t, s, evse.Id), "a refused connector changes nothing")
+
+		// a deleted tariff is still there
+		require.NoError(t, s.DeleteTariff(ctx, tariff.Id))
+		c := evse.Connectors[0]
+		c.TariffRef = &tariff.Id
+		c.AdhocTariffRef = &tariff.Id
+		require.NoError(t, s.UpdateAssetConnector(ctx, c))
+		assert.Equal(t, c, lookupAssetConnector(t, s, c.Id))
 	})
 
 	t.Run("unique keys", func(t *testing.T) {
@@ -487,6 +532,7 @@ func TestAssetStore(t *testing.T, newStore func(t *testing.T) store.Engine) {
 		registerAssetStations(t, s)
 		loc := createAssetLocation(t, s, testAssetLocation("Plaza"))
 		evse := createAssetEvse(t, s, testAssetEvse(loc.Id, assetStationA, 1, 1, 2))
+		createTariffWithId(t, s, testAssetId(50), orgA)
 		c := evse.Connectors[0]
 		created := *c
 

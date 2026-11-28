@@ -1,0 +1,31 @@
+{
+  "description": "VAT that is not relevant: the form has a VAT percentage, but says that VAT does not apply; the price components have no VAT.",
+  "simple": {
+    "currency": "EUR",
+    "tariff_type": "REGULAR",
+    "start_tariff": 1.0,
+    "price": 0.3,
+    "vat": 21.0,
+    "is_vat_relevant": false
+  },
+  "expected": {
+    "currency": "EUR",
+    "type": "REGULAR",
+    "elements": [
+      {
+        "price_components": [
+          {
+            "type": "FLAT",
+            "price": 1,
+            "step_size": 1
+          },
+          {
+            "type": "ENERGY",
+            "price": 0.3,
+            "step_size": 1
+          }
+        ]
+      }
+    ]
+  }
+}
