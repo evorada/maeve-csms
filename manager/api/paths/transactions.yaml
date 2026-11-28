@@ -156,6 +156,10 @@ paths:
 
         This is an async operation that returns immediately with 202 Accepted.
 
+        For an OCPP 1.6 charge station the request becomes a command of the command queue
+        (`GET /commands/{commandId}`): it is sent when the charge station is connected,
+        and the answer of the charge station is the result of the command.
+
         '
       operationId: remoteStartTransaction
       x-permission: cpms.connector.command
@@ -174,7 +178,29 @@ paths:
               $ref: '../schemas/schemas.yaml#/components/schemas/RemoteStartTransactionRequest'
       responses:
         '202':
-          description: Accepted - remote start initiated
+          description: |
+            Accepted - remote start initiated.
+            For an OCPP 1.6 charge station the request is queued as a command, which is
+            the body, and `Location` names it. For other charge stations, and when the
+            storage engine of the manager does not keep commands, the body is empty.
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Command'
+        '400':
+          description: |
+            The request is not valid. For an OCPP 1.6 charge station the error starts with
+            `invalid_payload` (followed by the schema error) when the request does not make
+            a valid OCPP call.
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '401':
           description: Unauthorized
           content:
@@ -193,6 +219,14 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         default:
           description: Unexpected error
           content:
@@ -206,6 +240,13 @@ paths:
         charge station.
 
         This is an async operation that returns immediately with 202 Accepted.
+
+        For an OCPP 1.6 charge station the request becomes a command of the command queue
+        (`GET /commands/{commandId}`): it is sent when the charge station is connected,
+        and the answer of the charge station is the result of the command.
+        `transactionId` is then the OCPP transaction id or the id of the transaction in
+        the manager (the id that the transaction list shows); any other value is refused
+        with 400.
 
         '
       operationId: remoteStopTransaction
@@ -225,7 +266,29 @@ paths:
               $ref: '../schemas/schemas.yaml#/components/schemas/RemoteStopTransactionRequest'
       responses:
         '202':
-          description: Accepted - remote stop initiated
+          description: |
+            Accepted - remote stop initiated.
+            For an OCPP 1.6 charge station the request is queued as a command, which is
+            the body, and `Location` names it. For other charge stations, and when the
+            storage engine of the manager does not keep commands, the body is empty.
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Command'
+        '400':
+          description: |
+            The request is not valid. For an OCPP 1.6 charge station the error starts with
+            `invalid_payload` (followed by the schema error) when the request does not make
+            a valid OCPP call.
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '401':
           description: Unauthorized
           content:
@@ -240,6 +303,14 @@ paths:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
           content:
             application/json:
               schema:

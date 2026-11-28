@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/pelletier/go-toml/v2"
+	"github.com/thoughtworks/maeve-csms/manager/commands"
 	"github.com/thoughtworks/maeve-csms/manager/connectivity"
 	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/jobs"
@@ -33,6 +34,7 @@ type BaseConfig struct {
 	Tenancy                   TenancyConfig                   `mapstructure:"tenancy" toml:"tenancy"`
 	Events                    EventsConfig                    `mapstructure:"events" toml:"events"`
 	Connectivity              ConnectivityConfig              `mapstructure:"connectivity" toml:"connectivity"`
+	Commands                  CommandsConfig                  `mapstructure:"commands" toml:"commands"`
 	Ocpi                      *OcpiConfig                     `mapstructure:"ocpi,omitempty" toml:"ocpi,omitempty"`
 	// Nats is validated by Validate only when NATS is used.
 	Nats *NatsConfig `mapstructure:"nats,omitempty" toml:"nats,omitempty" validate:"-"`
@@ -136,6 +138,17 @@ var DefaultConfig = BaseConfig{
 		LastSeenWriteInterval: connectivity.DefaultSeenWriteEvery.String(),
 		StaleAfter:            connectivity.DefaultStaleAfter.String(),
 		SweepInterval:         connectivity.DefaultSweepInterval.String(),
+	},
+	Commands: CommandsConfig{
+		ResponseTimeout:      commands.DefaultResponseTimeout.String(),
+		ConnectDispatchDelay: commands.DefaultConnectDispatchDelay.String(),
+		SweepInterval:        commands.DefaultSweepInterval.String(),
+		DefaultTTL:           commands.DefaultTTL.String(),
+		MaxTTL:               commands.DefaultMaxTTL.String(),
+		Retention:            commands.DefaultRetention.String(),
+		RemoteStartWindow:    commands.DefaultRemoteStartWindow.String(),
+		RemoteStopWindow:     commands.DefaultRemoteStopWindow.String(),
+		AvailabilityWindow:   commands.DefaultAvailabilityWindow.String(),
 	},
 	Nats: &NatsConfig{
 		Urls: []string{"nats://localhost:4222"},

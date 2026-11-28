@@ -12,6 +12,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/thoughtworks/maeve-csms/manager/commands"
 	"github.com/thoughtworks/maeve-csms/manager/config"
 	"github.com/thoughtworks/maeve-csms/manager/connectivity"
 	"github.com/thoughtworks/maeve-csms/manager/events"
@@ -61,17 +62,20 @@ func TestBackgroundJobs(t *testing.T) {
 		withAll.Connectivity = &connectivity.Tracker{Store: engine}
 		withAll.EventRelay = &events.Relay{Store: engine}
 		withAll.OutboxPurge = &config.OutboxPurgeSettings{Retention: time.Hour, Interval: time.Hour}
+		withAll.CommandDispatcher = &commands.Dispatcher{Store: engine, Config: commands.Config{SweepInterval: 7 * time.Second}}
 		jobList := backgroundJobs(&withAll)
 		require.NoError(t, jobs.Validate(jobList))
 		assert.Equal(t, []string{
 			"sync-settings", "sync-certificates", "sync-triggers", "reservation-expiry",
 			connectivity.SweepJobName, events.RelayJobName, events.PurgeJobName,
+			commands.SweepJobName, commands.PurgeJobName,
 		}, jobNames(jobList))
 		for _, job := range jobList {
 			want := map[string]time.Duration{
 				"sync-settings": time.Minute, "sync-certificates": time.Minute, "sync-triggers": time.Minute,
 				"reservation-expiry": time.Minute, connectivity.SweepJobName: 30 * time.Second,
 				events.RelayJobName: time.Second, events.PurgeJobName: time.Hour,
+				commands.SweepJobName: 7 * time.Second, commands.PurgeJobName: time.Hour,
 			}[job.Name]
 			assert.Equal(t, want, job.Interval, job.Name)
 		}

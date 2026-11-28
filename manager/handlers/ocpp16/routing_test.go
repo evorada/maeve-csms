@@ -15,6 +15,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/handlers"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
+	ocpp16types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/schemas"
 	"github.com/thoughtworks/maeve-csms/manager/store"
@@ -77,7 +78,7 @@ func TestAllRouteSchemasExist(t *testing.T) {
 		nil,
 		nil,
 		time.Minute,
-		schemas.OcppSchemas).(*handlers.Router)
+		schemas.OcppSchemas, nil, nil).(*handlers.Router)
 	require.True(t, ok, "expected NewRouter to return a *handlers.Router")
 
 	// schema path indexed by a description of the route that uses it
@@ -145,7 +146,7 @@ func TestMeterValuesCallIsStoredThroughTheRouter(t *testing.T) {
 		nil,
 		nil,
 		time.Minute,
-		schemas.OcppSchemas)
+		schemas.OcppSchemas, nil, nil)
 
 	msg := &transport.Message{
 		MessageType: transport.MessageTypeCall,
@@ -237,7 +238,7 @@ func TestChangeConfigurationCallErrorRejectsSettingThroughTheRouter(t *testing.T
 		nil,
 		nil,
 		time.Minute,
-		schemas.OcppSchemas)
+		schemas.OcppSchemas, nil, nil)
 
 	err := engine.UpdateChargeStationSettings(ctx, "cs001", &store.ChargeStationSettings{
 		Settings: map[string]*store.ChargeStationSetting{
@@ -282,7 +283,7 @@ func TestTriggerMessageCallErrorStoresStatusThroughTheRouter(t *testing.T) {
 		nil,
 		nil,
 		time.Minute,
-		schemas.OcppSchemas)
+		schemas.OcppSchemas, nil, nil)
 
 	connectorId := 1
 	err := engine.SetChargeStationTriggerMessage(ctx, "cs001", &store.ChargeStationTriggerMessage{
@@ -312,4 +313,18 @@ func TestTriggerMessageCallErrorStoresStatusThroughTheRouter(t *testing.T) {
 		ConnectorId:     &connectorId,
 		TriggerStatus:   store.TriggerStatusNotImplemented,
 	}, got)
+}
+
+func TestCallMakerSendsPlainDataTransfer(t *testing.T) {
+	emitter := &FakeEmitter{}
+	messageId := "msg-1"
+	data := "payload"
+
+	err := ocpp16.NewCallMaker(emitter).Send(context.Background(), "cs001",
+		&ocpp16types.DataTransferJson{VendorId: "com.example", MessageId: &messageId, Data: &data})
+	require.NoError(t, err)
+
+	require.NotNil(t, emitter.got)
+	assert.Equal(t, "DataTransfer", emitter.got.Action)
+	assert.JSONEq(t, `{"vendorId":"com.example","messageId":"msg-1","data":"payload"}`, string(emitter.got.RequestPayload))
 }

@@ -2,12 +2,15 @@ paths:
   /cs/{csId}/data-transfer:
     post:
       summary: Send data transfer to charge station
-      description: 'Sends vendor-specific data to a charge station. The data format
-        and semantics
+      description: |
+        Sends vendor-specific data to a charge station. The data format and semantics are
+        defined by the vendor. Supports both OCPP 1.6 and OCPP 2.0.1.
 
-        are defined by the vendor. Supports both OCPP 1.6 and OCPP 2.0.1.
-
-        '
+        For an OCPP 1.6 charge station the request becomes a command of the command
+        queue (`GET /commands/{commandId}`): it is sent when the charge station is
+        connected, and the answer of the charge station is the result of the command.
+        The answer then has the id of the command (`commandId`) and no `status`: the status
+        is known when the charge station answers.
       operationId: sendDataTransfer
       x-permission: cpms.connector.command
       parameters:
@@ -26,10 +29,24 @@ paths:
       responses:
         '202':
           description: Accepted - data transfer request submitted
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/DataTransferResponse'
+        '400':
+          description: |
+            The request is not valid. For an OCPP 1.6 charge station the error starts with
+            `invalid_payload` (followed by the schema error) when the request does not make
+            a valid OCPP call.
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '401':
           description: Unauthorized
           content:
@@ -44,6 +61,14 @@ paths:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
           content:
             application/json:
               schema:

@@ -2,13 +2,16 @@ paths:
   /cs/{csId}/diagnostics:
     post:
       summary: Request diagnostics from charge station
-      description: 'Initiates a diagnostics upload from the specified charge station
-        (OCPP 1.6).
-
+      description: |
+        Initiates a diagnostics upload from the specified charge station (OCPP 1.6).
         The charge station will collect diagnostics and upload them to the provided
         location.
 
-        '
+        For an OCPP 1.6 charge station the request becomes a `GetDiagnostics` command of the
+        command queue (`GET /commands/{commandId}`): it is sent when the charge station is
+        connected, and the answer of the charge station (the name of the file it uploads) is
+        the result of the command. The diagnostics status says `Uploading` once the charge
+        station answered; for other charge stations it says so at once.
       operationId: requestChargeStationDiagnostics
       x-permission: cpms.connector.command
       parameters:
@@ -27,7 +30,29 @@ paths:
               $ref: '../schemas/schemas.yaml#/components/schemas/DiagnosticsRequest'
       responses:
         '202':
-          description: Accepted - diagnostics request initiated
+          description: |
+            Accepted - diagnostics request initiated.
+            For an OCPP 1.6 charge station the request is queued as a command, which is
+            the body, and `Location` names it. For other charge stations, and when the
+            storage engine of the manager does not keep commands, the body is empty.
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Command'
+        '400':
+          description: |
+            The request is not valid. For an OCPP 1.6 charge station the error starts with
+            `invalid_payload` (followed by the schema error) when the request does not make
+            a valid OCPP call.
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '401':
           description: Unauthorized
           content:
@@ -42,6 +67,14 @@ paths:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
           content:
             application/json:
               schema:
@@ -91,10 +124,15 @@ paths:
   /cs/{csId}/logs:
     post:
       summary: Request log upload from charge station
-      description: 'Initiates a log upload from the specified charge station (OCPP
-        2.0.1 GetLog).
+      description: |
+        Initiates a log upload from the specified charge station (OCPP 1.6 security
+        extension and OCPP 2.0.1 GetLog).
 
-        '
+        For an OCPP 1.6 charge station the request becomes a `GetLog` command of the command
+        queue (`GET /commands/{commandId}`): it is sent when the charge station is connected,
+        and the answer of the charge station is the result of the command. The log status
+        changes when the charge station reports it (`LogStatusNotification`); for other
+        charge stations it says `Uploading` at once.
       operationId: requestChargeStationLogs
       x-permission: cpms.connector.command
       parameters:
@@ -113,7 +151,29 @@ paths:
               $ref: '../schemas/schemas.yaml#/components/schemas/LogRequest'
       responses:
         '202':
-          description: Accepted - log request initiated
+          description: |
+            Accepted - log request initiated.
+            For an OCPP 1.6 charge station the request is queued as a command, which is
+            the body, and `Location` names it. For other charge stations, and when the
+            storage engine of the manager does not keep commands, the body is empty.
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Command'
+        '400':
+          description: |
+            The request is not valid. For an OCPP 1.6 charge station the error starts with
+            `invalid_payload` (followed by the schema error) when the request does not make
+            a valid OCPP call.
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '401':
           description: Unauthorized
           content:
@@ -128,6 +188,14 @@ paths:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
           content:
             application/json:
               schema:

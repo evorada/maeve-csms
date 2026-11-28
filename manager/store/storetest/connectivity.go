@@ -128,7 +128,8 @@ func TestConnectivityStore(t *testing.T, newStore func(t *testing.T) store.Engin
 		s := newStore(t)
 		assert.False(t, disconnect(t, s, "cs001", "conn-a", atSecond(0)))
 		_, err := s.GetChargeStationStatus(ctx, "cs001")
-		assert.Error(t, err)
+		assert.ErrorIs(t, err, store.ErrNotFound)
+		assert.EqualError(t, err, "charge station cs001 not found")
 	})
 
 	t.Run("a disconnection from before the connection does not apply", func(t *testing.T) {

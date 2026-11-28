@@ -1,0 +1,329 @@
+paths:
+  /cs/{csId}/commands:
+    post:
+      summary: Send an OCPP command to a charge station
+      description: |
+        Queues any OCPP action of the OCPP version of the charge station. The payload is
+        checked against the OCPP JSON schema of the action before anything is stored, so a
+        payload that is not valid never reaches the charge station. The command is sent as
+        soon as the charge station is connected and has no other command in flight; its id
+        is the OCPP message id of the call.
+
+        Without `waitSeconds` the answer is 202 with the command as it is now. With
+        `waitSeconds` the request waits at most that long for the command to reach a final
+        status: 200 when it did, otherwise 202 with the command as it is then.
+      operationId: enqueueCommand
+      x-permission: cpms.connector.command
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        required: true
+        schema:
+          type: string
+          maxLength: 80
+      - name: waitSeconds
+        in: query
+        description: How long to wait for a final status of the command, in seconds
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 30
+          default: 0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/schemas.yaml#/components/schemas/CommandRequest'
+      responses:
+        '200':
+          description: The command reached a final status within `waitSeconds`
+          headers:
+            Location:
+              description: Where the command can be read
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Command'
+        '202':
+          description: The command is queued or sent and has no final status yet
+          headers:
+            Location:
+              description: Where the command can be read
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Command'
+        '400':
+          description: |
+            The request is not valid. The error starts with `unknown_action` for an action
+            that the OCPP version of the charge station does not have, with
+            `invalid_payload` (followed by the schema error) for a payload that does not
+            match the OCPP schema of the action, and with `invalid_expiry` for an expiry
+            that is not in the future or too far away.
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station is not known because it never booted
+            (error `station_version_unknown`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep commands
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+    get:
+      summary: List the commands of a charge station
+      description: |
+        Lists the commands of the charge station, newest first, with the total number of
+        commands that match the filters.
+      operationId: listChargeStationCommands
+      x-permission: cpms.station.read
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        required: true
+        schema:
+          type: string
+          maxLength: 80
+      - name: status
+        in: query
+        description: Only commands with one of these statuses
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: array
+          items:
+            $ref: '../schemas/schemas.yaml#/components/schemas/CommandStatus'
+      - name: action
+        in: query
+        description: Only commands of one of these OCPP actions
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: array
+          items:
+            type: string
+      - name: createdAfter
+        in: query
+        description: Only commands created after this time
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: createdBefore
+        in: query
+        description: Only commands created before this time
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: limit
+        in: query
+        description: Maximum number of commands to return
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 500
+          default: 50
+      - name: offset
+        in: query
+        description: Number of commands to skip
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      responses:
+        '200':
+          description: A page of the commands of the charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/CommandList'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep commands
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+  /commands/{commandId}:
+    get:
+      summary: Read a command
+      operationId: getCommand
+      x-permission: cpms.station.read
+      parameters:
+      - name: commandId
+        in: path
+        description: The command identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The command
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Command'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown command
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep commands
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+  /commands/{commandId}:cancel:
+    post:
+      summary: Cancel a queued command
+      description: |
+        Cancels a command that has not been sent yet. A command that was sent, or that has
+        a final status, cannot be cancelled: the answer is then 409 with the command.
+      operationId: cancelCommand
+      x-permission: cpms.connector.command
+      parameters:
+      - name: commandId
+        in: path
+        description: The command identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The cancelled command
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Command'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown command
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: The command is not queued any more
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Command'
+        '501':
+          description: The storage engine of the manager does not keep commands
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'

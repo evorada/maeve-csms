@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS commands_accepted_progress_created_idx;

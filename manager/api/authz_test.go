@@ -181,6 +181,8 @@ func stationOperations(index map[string]string) []string {
 // not a default.
 var wantPermissions = map[string]string{
 	"POST /certificate":                              tenancy.PermCertificateWrite,
+	"GET /commands/{commandId}":                      tenancy.PermStationRead,
+	"POST /commands/{commandId}:cancel":              tenancy.PermConnectorCommand,
 	"DELETE /certificate/{certificateHash}":          tenancy.PermCertificateWrite,
 	"GET /certificate/{certificateHash}":             tenancy.PermStationRead,
 	"POST /cs/{csId}":                                tenancy.PermStationWrite,
@@ -191,6 +193,8 @@ var wantPermissions = map[string]string{
 	"GET /cs/{csId}/certificates":                    tenancy.PermStationRead,
 	"POST /cs/{csId}/certificates":                   tenancy.PermStationWrite,
 	"GET /cs/{csId}/charging-profile":                tenancy.PermStationRead,
+	"GET /cs/{csId}/commands":                        tenancy.PermStationRead,
+	"POST /cs/{csId}/commands":                       tenancy.PermConnectorCommand,
 	"POST /cs/{csId}/charging-profile":               tenancy.PermConnectorCommand,
 	"DELETE /cs/{csId}/charging-profile/{profileId}": tenancy.PermConnectorCommand,
 	"GET /cs/{csId}/composite-schedule":              tenancy.PermStationRead,

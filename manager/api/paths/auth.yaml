@@ -105,9 +105,14 @@ paths:
   /cs/{csId}/cache/clear:
     post:
       summary: Clear authorization cache on charge station
-      description: "Requests the charge station to clear its local authorization cache.\
-        \ \nThe next authorization request will query the CSMS. Supports both OCPP\
-        \ 1.6 and OCPP 2.0.1.\n"
+      description: |
+        Requests the charge station to clear its local authorization cache.
+        The next authorization request will query the CSMS. Supports both OCPP 1.6 and
+        OCPP 2.0.1.
+
+        For an OCPP 1.6 charge station the request becomes a command of the command
+        queue (`GET /commands/{commandId}`): it is sent when the charge station is
+        connected, and the answer of the charge station is the result of the command.
       operationId: clearAuthorizationCache
       x-permission: cpms.connector.command
       parameters:
@@ -119,7 +124,20 @@ paths:
           maxLength: 80
       responses:
         '202':
-          description: Accepted - cache clear request submitted
+          description: |
+            Accepted - cache clear request submitted.
+            For an OCPP 1.6 charge station the request is queued as a command, which is
+            the body, and `Location` names it. For other charge stations, and when the
+            storage engine of the manager does not keep commands, the body is empty.
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Command'
         '401':
           description: Unauthorized
           content:
@@ -134,6 +152,14 @@ paths:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
           content:
             application/json:
               schema:
@@ -193,11 +219,15 @@ paths:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
     post:
       summary: Update local authorization list
-      description: 'Updates the local authorization list on the specified charge station.
-
+      description: |
+        Updates the local authorization list on the specified charge station.
         Supports both full replacement and differential updates.
 
-        '
+        For an OCPP 1.6 charge station the request becomes a `SendLocalList` command of the
+        command queue (`GET /commands/{commandId}`): it is sent when the charge station is
+        connected, the answer of the charge station is the result of the command, and the
+        list and its version change in the manager only when the charge station accepts the
+        update. Other charge stations get the list changed at once.
       operationId: updateLocalAuthorizationList
       x-permission: cpms.token.write
       parameters:
@@ -215,7 +245,29 @@ paths:
               $ref: '../schemas/schemas.yaml#/components/schemas/UpdateLocalListRequest'
       responses:
         '202':
-          description: Accepted - operation queued
+          description: |
+            Accepted - operation queued.
+            For an OCPP 1.6 charge station the request is queued as a command, which is
+            the body, and `Location` names it. For other charge stations, and when the
+            storage engine of the manager does not keep commands, the body is empty.
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Command'
+        '400':
+          description: |
+            The request is not valid. For an OCPP 1.6 charge station the error starts with
+            `invalid_payload` (followed by the schema error) when the request does not make
+            a valid OCPP call.
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '401':
           description: Unauthorized
           content:
@@ -230,6 +282,14 @@ paths:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
           content:
             application/json:
               schema:

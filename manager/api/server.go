@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/thoughtworks/maeve-csms/manager/commands"
 	"github.com/thoughtworks/maeve-csms/manager/entitlements"
 	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/ocpi"
@@ -29,6 +30,9 @@ type Server struct {
 	// events stores the domain events of the changes that the API makes, in the store
 	// transaction of each change
 	events events.Emitter
+	// commands queues the commands to the charge stations; nil when the storage engine
+	// does not keep commands
+	commands *commands.Service
 }
 
 // ServerOption changes how NewServer sets up the API server.
@@ -49,6 +53,15 @@ func WithScoper(scoper *tenancy.Scoper) ServerOption {
 func WithEntitlements(enforcer *entitlements.Enforcer) ServerOption {
 	return func(s *Server) {
 		s.limits = enforcer
+	}
+}
+
+// WithCommands sets the queue of the commands to the charge stations. Without it, or
+// with nil (a storage engine that does not keep commands), the command operations
+// answer 501.
+func WithCommands(service *commands.Service) ServerOption {
+	return func(s *Server) {
+		s.commands = service
 	}
 }
 

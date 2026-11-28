@@ -137,6 +137,46 @@ func TestStubsReturnErrNotImplemented(t *testing.T) {
 			_, err := s.DisconnectStaleStations(ctx, time.Now(), time.Now())
 			return err
 		},
+		"CreateCommand": func() error {
+			return s.CreateCommand(ctx, &store.Command{})
+		},
+		"GetCommand": func() error {
+			_, err := s.GetCommand(ctx, "01936b2e-0000-7000-8000-000000000001")
+			return err
+		},
+		"ListCommands": func() error {
+			_, _, err := s.ListCommands(ctx, store.CommandFilter{})
+			return err
+		},
+		"ClaimNextCommand": func() error {
+			_, err := s.ClaimNextCommand(ctx, "cs001", time.Now())
+			return err
+		},
+		"TransitionCommand": func() error {
+			_, err := s.TransitionCommand(ctx, "01936b2e-0000-7000-8000-000000000001",
+				[]store.CommandStatus{store.CommandStatusSent}, store.CommandUpdate{Status: store.CommandStatusAccepted})
+			return err
+		},
+		"SetCommandProgress": func() error {
+			_, err := s.SetCommandProgress(ctx, "01936b2e-0000-7000-8000-000000000001", []byte(`{}`), time.Now(), nil)
+			return err
+		},
+		"ListQueuedStationKeys": func() error {
+			_, err := s.ListQueuedStationKeys(ctx, time.Now(), "", 10)
+			return err
+		},
+		"ListExpiredQueuedCommands": func() error {
+			_, err := s.ListExpiredQueuedCommands(ctx, time.Now(), 10)
+			return err
+		},
+		"ListOverdueSentCommands": func() error {
+			_, err := s.ListOverdueSentCommands(ctx, time.Now(), 10)
+			return err
+		},
+		"DeleteCompletedCommandsBefore": func() error {
+			_, err := s.DeleteCompletedCommandsBefore(ctx, time.Now(), 10)
+			return err
+		},
 	}
 
 	for name, stub := range stubs {

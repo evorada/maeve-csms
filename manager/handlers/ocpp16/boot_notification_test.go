@@ -5,6 +5,7 @@ package ocpp16_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -130,4 +131,63 @@ func TestBootNotificationHeartbeatIntervalOfTheTenant(t *testing.T) {
 			assert.Equal(t, types.BootNotificationResponseJsonStatusAccepted, response.Status)
 		})
 	}
+}
+
+// recordingKicker records the stations it was asked to send the queued commands of. It
+// fails with err, and blocks until release is closed when release is set.
+type recordingKicker struct {
+	kicked  chan string
+	release chan struct{}
+	err     error
+}
+
+func (k *recordingKicker) Kick(ctx context.Context, stationKey string) error {
+	if k.release != nil {
+		<-k.release
+	}
+	if ctx.Err() != nil {
+		stationKey += " (cancelled)"
+	}
+	k.kicked <- stationKey
+	return k.err
+}
+
+func TestBootNotificationSendsTheQueuedCommandsOfTheStation(t *testing.T) {
+	newHandler := func(kicker handlers.CommandKicker) handlers.BootNotificationHandler {
+		engine := inmemory.NewStore(clock.RealClock{})
+		return handlers.BootNotificationHandler{
+			Clock:               clock.RealClock{},
+			RuntimeDetailsStore: engine,
+			SettingsStore:       engine,
+			StatusStore:         engine,
+			HeartbeatInterval:   10,
+			CommandKicker:       kicker,
+		}
+	}
+
+	t.Run("in the background, after the response", func(t *testing.T) {
+		kicker := &recordingKicker{kicked: make(chan string, 1), release: make(chan struct{}), err: errors.New("broker down")}
+		ctx, cancel := context.WithCancel(context.Background())
+
+		// the response does not wait for the kick, which here blocks until released
+		got, err := newHandler(kicker).HandleCall(ctx, "k7f2.CP001", &types.BootNotificationJson{})
+		require.NoError(t, err)
+		assert.Equal(t, types.BootNotificationResponseJsonStatusAccepted, got.(*types.BootNotificationResponseJson).Status)
+
+		// the end of the message's handling does not stop the kick
+		cancel()
+		close(kicker.release)
+		select {
+		case station := <-kicker.kicked:
+			assert.Equal(t, "k7f2.CP001", station)
+		case <-time.After(5 * time.Second):
+			t.Fatal("the queued commands were not sent")
+		}
+	})
+
+	t.Run("without a kicker", func(t *testing.T) {
+		got, err := newHandler(nil).HandleCall(context.Background(), "k7f2.CP001", &types.BootNotificationJson{})
+		require.NoError(t, err)
+		assert.Equal(t, types.BootNotificationResponseJsonStatusAccepted, got.(*types.BootNotificationResponseJson).Status)
+	})
 }

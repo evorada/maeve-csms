@@ -8,13 +8,41 @@ import (
 	"sort"
 
 	"github.com/go-chi/render"
+	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
+// CreateReservation reserves a connector of the charge station for an idTag. A
+// reservation id that a reservation of another charge station has is refused. For an
+// OCPP 1.6 charge station it queues a ReserveNow command and answers it: the result
+// handler of ReserveNow stores the reservation when the charge station accepts it.
+// Other charge stations get the reservation in the store at once.
 func (s *Server) CreateReservation(w http.ResponseWriter, r *http.Request, csId string) {
 	req := new(ReservationRequest)
 	if err := render.Bind(r, req); err != nil {
 		_ = render.Render(w, r, ErrInvalidRequest(err))
+		return
+	}
+
+	// reservation ids are shared by all charge stations: a reservation of another
+	// charge station, which may belong to another org, is never replaced
+	existing, err := s.store.GetReservation(r.Context(), int(req.ReservationId))
+	if err != nil {
+		_ = render.Render(w, r, ErrInternalError(err))
+		return
+	}
+	if existing != nil && existing.ChargeStationId != csId {
+		_ = render.Render(w, r, ErrConflict("reservation id already in use"))
+		return
+	}
+
+	if s.answerThroughQueue(w, r, csId, http.StatusAccepted, "ReserveNow", &ocpp16.ReserveNowJson{
+		ConnectorId:   int(req.ConnectorId),
+		ExpiryDate:    ocppDateTime(req.ExpiryDate),
+		IdTag:         req.IdTag,
+		ParentIdTag:   req.ParentIdTag,
+		ReservationId: int(req.ReservationId),
+	}) {
 		return
 	}
 
@@ -33,18 +61,6 @@ func (s *Server) CreateReservation(w http.ResponseWriter, r *http.Request, csId 
 		reservation.ParentIdTag = req.ParentIdTag
 	}
 
-	// reservation ids are shared by all charge stations: a reservation of another
-	// charge station, which may belong to another org, is never replaced
-	existing, err := s.store.GetReservation(r.Context(), reservation.ReservationId)
-	if err != nil {
-		_ = render.Render(w, r, ErrInternalError(err))
-		return
-	}
-	if existing != nil && existing.ChargeStationId != csId {
-		_ = render.Render(w, r, ErrConflict("reservation id already in use"))
-		return
-	}
-
 	// Store the reservation
 	err = s.store.CreateReservation(r.Context(), reservation)
 	if err != nil {
@@ -56,6 +72,10 @@ func (s *Server) CreateReservation(w http.ResponseWriter, r *http.Request, csId 
 	w.WriteHeader(http.StatusAccepted)
 }
 
+// CancelReservation cancels a reservation of the charge station. For an OCPP 1.6 charge
+// station it queues a CancelReservation command and answers it: the result handler of
+// CancelReservation cancels the reservation in the store when the charge station
+// accepts. Other charge stations get the reservation cancelled in the store at once.
 func (s *Server) CancelReservation(w http.ResponseWriter, r *http.Request, csId string, reservationId int32) {
 	// Check if the reservation exists
 	reservation, err := s.store.GetReservation(r.Context(), int(reservationId))
@@ -71,6 +91,11 @@ func (s *Server) CancelReservation(w http.ResponseWriter, r *http.Request, csId 
 	// Verify the reservation belongs to the specified charge station
 	if reservation.ChargeStationId != csId {
 		_ = render.Render(w, r, ErrNotFound)
+		return
+	}
+
+	if s.answerThroughQueue(w, r, csId, http.StatusAccepted, "CancelReservation",
+		&ocpp16.CancelReservationJson{ReservationId: int(reservationId)}) {
 		return
 	}
 

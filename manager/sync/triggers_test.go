@@ -130,3 +130,27 @@ func TestSyncTriggersSendsPendingTriggerPastSendAfter(t *testing.T) {
 	assert.Equal(t, store.TriggerStatusPending, got.TriggerStatus)
 	assert.True(t, got.SendAfter.After(time.Now()), "the trigger must not be sent again before the retry time")
 }
+
+func TestSyncTriggersSendsDiagnosticsStatusNotificationAsAnOcpp16TriggerMessage(t *testing.T) {
+	ctx := context.Background()
+	engine := inmemory.NewStore(clock.RealClock{})
+	// the value that the API stores for the trigger DiagnosticsStatusNotification
+	setTrigger(t, engine, "cs001", "1.6", store.ChargeStationTriggerMessage{
+		TriggerMessage: store.TriggerMessage("DiagnosticsStatusNotification"),
+		TriggerStatus:  store.TriggerStatusPending,
+		SendAfter:      time.Now().Add(-time.Minute),
+	})
+
+	v16CallMaker := &mockCallMaker{}
+	dataTransferCallMaker := &mockCallMaker{}
+	v201CallMaker := &mockCallMaker{}
+	sync.SyncTriggersOnce(ctx, noop.NewTracerProvider().Tracer(""), engine, clock.RealClock{},
+		v16CallMaker, dataTransferCallMaker, v201CallMaker, "", time.Minute)
+
+	require.Len(t, v16CallMaker.callEvents, 1)
+	assert.Equal(t, &ocpp16.TriggerMessageJson{
+		RequestedMessage: ocpp16.TriggerMessageJsonRequestedMessageDiagnosticsStatusNotification,
+	}, v16CallMaker.callEvents[0].request)
+	assert.Empty(t, dataTransferCallMaker.callEvents, "not a Plug & Charge DataTransfer")
+	assert.Empty(t, v201CallMaker.callEvents)
+}

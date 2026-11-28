@@ -37,6 +37,14 @@ const (
 // SweepJobName is the name of the job that SweepJob returns.
 const SweepJobName = "connectivity-sweep"
 
+// ConnectionObserver is told about each station whose new connection the Tracker
+// recorded.
+type ConnectionObserver interface {
+	// OnStationConnected must return at once: the connection events of the stations
+	// wait for it.
+	OnStationConnected(ctx context.Context, stationKey string)
+}
+
 // Tracker records the connectivity of the charge stations in the store. It never delays
 // or fails the handling of OCPP messages: store errors are logged. A station that the
 // sweep marks disconnected is not disconnected anywhere; only its status changes.
@@ -60,6 +68,9 @@ type Tracker struct {
 	// StaleAfter is how long a connected station may show no sign of life before the
 	// sweep marks it disconnected; 0 is DefaultStaleAfter.
 	StaleAfter time.Duration
+	// OnConnected, when set, is told about each connection that was recorded, after
+	// its transaction.
+	OnConnected ConnectionObserver
 
 	mu sync.Mutex
 	// lastWrite is when this replica last wrote the LastSeenAt of a station.
@@ -92,6 +103,9 @@ func (t *Tracker) HandleConnectionEvent(ctx context.Context, ev *transport.Conne
 		}
 		t.wrote(ev.StationKey)
 		log.Info("station connected", "at", ev.At, "remote_addr", ev.RemoteAddr)
+		if t.OnConnected != nil {
+			t.OnConnected.OnStationConnected(ctx, ev.StationKey)
+		}
 	case transport.ConnectionEventAlive:
 		err := t.Store.TouchStationLastSeen(ctx, ev.StationKey, ev.At)
 		if err != nil {

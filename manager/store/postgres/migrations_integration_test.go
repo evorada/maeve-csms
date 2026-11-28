@@ -661,8 +661,9 @@ func TestMigration_TenancyOrgColumns(t *testing.T) {
 		assert.Equal(t, 1, rowCount(table), table)
 	}
 
-	// up again with rows in the tables: the org that a row had is not restored
-	migrateUp(t, migrationConnString)
+	// up again with rows in the tables: the org that a row had is not restored. Only to
+	// this migration: later ones add tables with an org column of their own.
+	migrateTo(t, migrationConnString, versionAfter)
 	assert.Equal(t, newWidths, stationIdWidths())
 	assert.ElementsMatch(t, orgTables, orgColumns())
 	assert.Equal(t, map[string]int{legacyOrgId: 2}, rowsByOrg("charge_stations"))

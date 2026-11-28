@@ -13,24 +13,54 @@ import (
 	"time"
 
 	"github.com/go-chi/render"
+	"github.com/thoughtworks/maeve-csms/manager/commands"
 	"github.com/thoughtworks/maeve-csms/manager/handlers"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
+	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"golang.org/x/exp/slog"
 	"k8s.io/utils/clock"
 )
+
+// commandActor is the actor of the commands that the OCPI server queues.
+const commandActor = "svc:ocpi"
 
 type Server struct {
 	ocpi         Api
 	clock        clock.PassiveClock
 	v16CallMaker *handlers.OcppCallMaker
+	// commands queues the commands to the charge stations; nil when the storage engine
+	// does not keep commands, and the calls are then sent directly
+	commands *commands.Service
+	// orgs gives the org that owns a charge station, which a command belongs to
+	orgs tenancy.StationOrgResolver
 }
 
-func NewServer(ocpi Api, clock clock.PassiveClock, v16CallMaker *handlers.OcppCallMaker) (*Server, error) {
-	return &Server{
+// ServerOption changes how NewServer sets up the OCPI server.
+type ServerOption func(*Server)
+
+// WithCommands has the commands to the charge stations queued by service, each in the
+// org that orgs gives for its charge station. Without it, or with a nil service (a
+// storage engine that does not keep commands), they are sent directly.
+func WithCommands(service *commands.Service, orgs tenancy.StationOrgResolver) ServerOption {
+	return func(s *Server) {
+		if service != nil && orgs != nil {
+			s.commands = service
+			s.orgs = orgs
+		}
+	}
+}
+
+func NewServer(ocpi Api, clock clock.PassiveClock, v16CallMaker *handlers.OcppCallMaker, opts ...ServerOption) (*Server, error) {
+	s := &Server{
 		ocpi:         ocpi,
 		clock:        clock,
 		v16CallMaker: v16CallMaker,
-	}, nil
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s, nil
 }
 
 // VERSIONS
@@ -271,7 +301,7 @@ func (s *Server) PostStartSession(w http.ResponseWriter, r *http.Request, params
 		chargeStationId = extractedChargeStationId
 	}
 	// We need to store the token because the StartSession handler currently expects the idTag it receives in the store
-	err := s.ocpi.SetToken(context.Background(), startSession.Token)
+	err := s.ocpi.SetToken(r.Context(), startSession.Token)
 	if err != nil {
 		_ = render.Render(w, r, ErrInvalidRequest(err))
 		return
@@ -286,10 +316,18 @@ func (s *Server) PostStartSession(w http.ResponseWriter, r *http.Request, params
 		IdTag:       startSession.Token.Uid,
 	}
 	commandResponse := CommandResponse{Result: CommandResponseResultACCEPTED}
-	err = s.v16CallMaker.Send(context.Background(), chargeStationId, &remoteStartTransactionReq)
-	if err != nil {
-		slog.Error("error sending mqtt message", "err", err)
-		commandResponse = CommandResponse{Result: CommandResponseResultREJECTED}
+	if s.commands != nil {
+		err = s.enqueueRemoteStart(r.Context(), chargeStationId, &remoteStartTransactionReq)
+		if err != nil {
+			slog.Error("error queueing remote start transaction", "chargeStationId", chargeStationId, "err", err)
+			commandResponse = CommandResponse{Result: CommandResponseResultREJECTED}
+		}
+	} else {
+		err = s.v16CallMaker.Send(r.Context(), chargeStationId, &remoteStartTransactionReq)
+		if err != nil {
+			slog.Error("error sending mqtt message", "err", err)
+			commandResponse = CommandResponse{Result: CommandResponseResultREJECTED}
+		}
 	}
 	_ = render.Render(w, r, OcpiResponseCommandResponse{
 		StatusCode:    StatusSuccess,
@@ -297,6 +335,29 @@ func (s *Server) PostStartSession(w http.ResponseWriter, r *http.Request, params
 		Timestamp:     s.clock.Now().Format(time.RFC3339),
 		Data:          &commandResponse,
 	})
+}
+
+// enqueueRemoteStart queues the RemoteStartTransaction for the charge station, in the
+// org that owns it: the command is sent when the charge station is connected, while it
+// has not expired.
+func (s *Server) enqueueRemoteStart(ctx context.Context, chargeStationId string, req *ocpp16.RemoteStartTransactionJson) error {
+	orgId, err := s.orgs.OrgIdForStation(ctx, chargeStationId)
+	if err != nil {
+		return err
+	}
+	payload, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("building the payload of a remote start: %w", err)
+	}
+	actor := commandActor
+	_, err = s.commands.Enqueue(ctx, &store.Command{
+		OrgId:      orgId,
+		StationKey: chargeStationId,
+		Action:     "RemoteStartTransaction",
+		Payload:    payload,
+		Actor:      &actor,
+	})
+	return err
 }
 
 func (s *Server) PostStopSession(w http.ResponseWriter, r *http.Request, params PostStopSessionParams) {

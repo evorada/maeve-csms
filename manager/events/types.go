@@ -19,6 +19,7 @@ const (
 	TypeSessionUpdated         = "session.updated"
 	TypeSessionCompleted       = "session.completed"
 	TypeCommandCompleted       = "command.completed"
+	TypeCommandProgress        = "command.progress"
 )
 
 // The types of the resources that the events are about, with the form of their ids.
@@ -39,6 +40,7 @@ var AllTypes = []string{
 	TypeSessionUpdated,
 	TypeSessionCompleted,
 	TypeCommandCompleted,
+	TypeCommandProgress,
 }
 
 // DisconnectReasonStale is the reason of a station.disconnected event when the station

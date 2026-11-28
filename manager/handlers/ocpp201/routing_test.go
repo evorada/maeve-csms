@@ -92,6 +92,7 @@ func TestRoutingCalls(t *testing.T) {
 		&fakeContractCertProvider{},
 		5*time.Minute,
 		schemas.OcppSchemas,
+		nil,
 	)
 
 	inputMessages := map[string]ocpp.Request{
@@ -286,6 +287,7 @@ func TestRoutingCallResults(t *testing.T) {
 		&fakeContractCertProvider{},
 		5*time.Minute,
 		schemas.OcppSchemas,
+		nil,
 	)
 
 	pemBlock := &pem.Block{
@@ -812,6 +814,7 @@ func TestAllRouteSchemasExist(t *testing.T) {
 		&fakeContractCertProvider{},
 		5*time.Minute,
 		schemas.OcppSchemas,
+		nil,
 	).(*handlers.Router)
 	require.True(t, ok, "expected NewRouter to return a *handlers.Router")
 

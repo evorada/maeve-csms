@@ -124,3 +124,24 @@ func TestDiagnosticsStatusNotificationHandler_UnknownStatus(t *testing.T) {
 	mockStore.AssertNotCalled(t, "GetDiagnosticsStatus")
 	mockStore.AssertNotCalled(t, "SetDiagnosticsStatus")
 }
+
+// The stores answer no status without an error when a charge station has none yet, e.g.
+// when it reports before the answer to GetDiagnostics is handled.
+func TestDiagnosticsStatusNotificationHandler_NoStatusInTheStore(t *testing.T) {
+	mockStore := new(MockFirmwareStore)
+	handler := handlers.DiagnosticsStatusNotificationHandler{
+		FirmwareStore: mockStore,
+	}
+
+	mockStore.On("GetDiagnosticsStatus", mock.Anything, "cs001").Return(nil, nil)
+	mockStore.On("SetDiagnosticsStatus", mock.Anything, "cs001", mock.MatchedBy(func(s *store.DiagnosticsStatus) bool {
+		return s.Status == store.DiagnosticsStatusUploading && s.ChargeStationId == "cs001"
+	})).Return(nil)
+
+	resp, err := handler.HandleCall(context.Background(), "cs001", &types.DiagnosticsStatusNotificationJson{
+		Status: types.DiagnosticsStatusNotificationJsonStatusUploading,
+	})
+	require.NoError(t, err)
+	assert.IsType(t, &types.DiagnosticsStatusNotificationResponseJson{}, resp)
+	mockStore.AssertExpectations(t)
+}

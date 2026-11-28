@@ -428,3 +428,45 @@ func TestStoreWithoutConnectivityWarnsOnce(t *testing.T) {
 	assert.NotContains(t, logs.String(), "level=ERROR")
 	assert.Contains(t, logs.String(), "not tracked")
 }
+
+// recordingObserver records the stations whose connection was reported to it, and
+// whether the change was already stored when it was told.
+type recordingObserver struct {
+	engine    *inmemory.Store
+	stations  []string
+	connected []bool
+}
+
+func (o *recordingObserver) OnStationConnected(ctx context.Context, stationKey string) {
+	o.stations = append(o.stations, stationKey)
+	status, err := o.engine.GetChargeStationStatus(ctx, stationKey)
+	o.connected = append(o.connected, err == nil && status.Connected)
+}
+
+func TestTheObserverIsToldAboutEachRecordedConnection(t *testing.T) {
+	f := newFixture()
+	observer := &recordingObserver{engine: f.engine}
+	f.tracker.OnConnected = observer
+
+	f.event(transport.ConnectionEventConnected, "conn-a", t0)
+	assert.Equal(t, []string{stationKey}, observer.stations)
+	assert.Equal(t, []bool{true}, observer.connected, "told after the connection was stored")
+
+	// alive, disconnected and connections that do not apply are not reported
+	f.event(transport.ConnectionEventAlive, "conn-a", t0.Add(time.Minute))
+	f.disconnected("conn-a", t0.Add(2*time.Minute))
+	f.event(transport.ConnectionEventConnected, "conn-old", t0.Add(-time.Minute))
+	assert.Len(t, observer.stations, 1)
+
+	f.event(transport.ConnectionEventConnected, "conn-b", t0.Add(3*time.Minute))
+	assert.Equal(t, []string{stationKey, stationKey}, observer.stations)
+
+	t.Run("not when the store fails", func(t *testing.T) {
+		f := newFixture()
+		observer := &recordingObserver{engine: f.engine}
+		f.tracker.OnConnected = observer
+		f.store.err = errors.New("database down")
+		f.event(transport.ConnectionEventConnected, "conn-a", t0)
+		assert.Empty(t, observer.stations)
+	})
+}

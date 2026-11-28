@@ -6,13 +6,29 @@ import (
 	"net/http"
 
 	"github.com/go-chi/render"
+	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
+// RequestChargeStationDiagnostics asks the charge station to upload its diagnostics.
+// For an OCPP 1.6 charge station it queues a GetDiagnostics command and answers it: the
+// result handler of GetDiagnostics records that the upload started when the charge
+// station answers. For other charge stations the diagnostics status says at once that
+// the upload started.
 func (s *Server) RequestChargeStationDiagnostics(w http.ResponseWriter, r *http.Request, csId string) {
 	req := new(DiagnosticsRequest)
 	if err := render.Bind(r, req); err != nil {
 		_ = render.Render(w, r, ErrInvalidRequest(err))
+		return
+	}
+
+	if s.answerThroughQueue(w, r, csId, http.StatusAccepted, "GetDiagnostics", &ocpp16.GetDiagnosticsJson{
+		Location:      req.Location,
+		StartTime:     optionalOcppDateTime(req.StartTime),
+		StopTime:      optionalOcppDateTime(req.StopTime),
+		Retries:       req.Retries,
+		RetryInterval: req.RetryInterval,
+	}) {
 		return
 	}
 
@@ -31,10 +47,28 @@ func (s *Server) RequestChargeStationDiagnostics(w http.ResponseWriter, r *http.
 	w.WriteHeader(http.StatusAccepted)
 }
 
+// RequestChargeStationLogs asks the charge station to upload a log. For an OCPP 1.6
+// charge station it queues a GetLog command and answers it: the log status changes when
+// the charge station reports it (LogStatusNotification). For other charge stations the
+// log status says at once that the upload started.
 func (s *Server) RequestChargeStationLogs(w http.ResponseWriter, r *http.Request, csId string) {
 	req := new(LogRequest)
 	if err := render.Bind(r, req); err != nil {
 		_ = render.Render(w, r, ErrInvalidRequest(err))
+		return
+	}
+
+	if s.answerThroughQueue(w, r, csId, http.StatusAccepted, "GetLog", &ocpp16.GetLogJson{
+		LogType:   ocpp16.LogEnumType(req.LogType),
+		RequestId: req.RequestId,
+		Log: ocpp16.LogParametersType{
+			RemoteLocation:  req.Log.RemoteLocation,
+			OldestTimestamp: optionalOcppDateTime(req.Log.OldestTimestamp),
+			LatestTimestamp: optionalOcppDateTime(req.Log.LatestTimestamp),
+		},
+		Retries:       req.Retries,
+		RetryInterval: req.RetryInterval,
+	}) {
 		return
 	}
 

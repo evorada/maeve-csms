@@ -6,13 +6,22 @@ import (
 	"net/http"
 
 	"github.com/go-chi/render"
+	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
+// ResetChargeStation asks the charge station to reset. For an OCPP 1.6 charge station it
+// queues a Reset command and answers it; other charge stations get a reset request in
+// the store.
 func (s *Server) ResetChargeStation(w http.ResponseWriter, r *http.Request, csId string) {
 	req := new(ResetRequest)
 	if err := render.Bind(r, req); err != nil {
 		_ = render.Render(w, r, ErrInvalidRequest(err))
+		return
+	}
+
+	if s.answerThroughQueue(w, r, csId, http.StatusAccepted, "Reset",
+		&ocpp16.ResetJson{Type: ocpp16.ResetJsonType(req.Type)}) {
 		return
 	}
 
@@ -44,10 +53,18 @@ func (s *Server) ResetChargeStation(w http.ResponseWriter, r *http.Request, csId
 	w.WriteHeader(http.StatusAccepted)
 }
 
+// UnlockConnector asks the charge station to unlock a connector. For an OCPP 1.6 charge
+// station it queues an UnlockConnector command and answers it; other charge stations get
+// an unlock request in the store.
 func (s *Server) UnlockConnector(w http.ResponseWriter, r *http.Request, csId string) {
 	req := new(UnlockConnectorRequest)
 	if err := render.Bind(r, req); err != nil {
 		_ = render.Render(w, r, ErrInvalidRequest(err))
+		return
+	}
+
+	if s.answerThroughQueue(w, r, csId, http.StatusAccepted, "UnlockConnector",
+		&ocpp16.UnlockConnectorJson{ConnectorId: req.ConnectorId}) {
 		return
 	}
 
@@ -79,10 +96,23 @@ func (s *Server) UnlockConnector(w http.ResponseWriter, r *http.Request, csId st
 	w.WriteHeader(http.StatusAccepted)
 }
 
+// ChangeAvailability asks the charge station to change the availability of a connector
+// or of the whole charge station. For an OCPP 1.6 charge station it queues a
+// ChangeAvailability command and answers it: OCPP 1.6 has no EVSEs, so evseId is not
+// used, and no connector is connector 0, the whole charge station. Other charge
+// stations get an availability change in the store.
 func (s *Server) ChangeAvailability(w http.ResponseWriter, r *http.Request, csId string) {
 	req := new(ChangeAvailabilityRequest)
 	if err := render.Bind(r, req); err != nil {
 		_ = render.Render(w, r, ErrInvalidRequest(err))
+		return
+	}
+
+	payload := &ocpp16.ChangeAvailabilityJson{Type: ocpp16.ChangeAvailabilityJsonType(req.Type)}
+	if req.ConnectorId != nil {
+		payload.ConnectorId = *req.ConnectorId
+	}
+	if s.answerThroughQueue(w, r, csId, http.StatusAccepted, "ChangeAvailability", payload) {
 		return
 	}
 

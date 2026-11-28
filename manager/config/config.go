@@ -15,6 +15,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/subnova/slog-exporter/slogtrace"
+	"github.com/thoughtworks/maeve-csms/manager/commands"
 	"github.com/thoughtworks/maeve-csms/manager/connectivity"
 	"github.com/thoughtworks/maeve-csms/manager/entitlements"
 	"github.com/thoughtworks/maeve-csms/manager/events"
@@ -121,6 +122,15 @@ type Config struct {
 	// OutboxPurge says when the published events are deleted from the outbox. It is nil
 	// when the storage has no outbox (Firestore).
 	OutboxPurge *OutboxPurgeSettings
+	// Commands queues the commands to the charge stations and has them sent. It is nil
+	// when the storage has no command store (Firestore).
+	Commands *commands.Service
+	// CommandDispatcher sends the queued commands and records the answers of the
+	// stations. It is nil when Commands is.
+	CommandDispatcher *commands.Dispatcher
+	// CommandTracker follows the commands that the stations accepted to their effect.
+	// It is nil when Commands is.
+	CommandTracker *commands.Tracker
 }
 
 // devSubject is the caller of every API request in dev mode.
@@ -328,6 +338,11 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 	}
 	c.EventRelayInterval = evSettings.relayInterval
 
+	commandSettings, err := parseCommandsConfig(&cfg.Commands)
+	if err != nil {
+		return nil, err
+	}
+
 	c.AuthVerifier, err = getAuthVerifier(ctx, &cfg.Api.Auth, c.DefaultOrgId)
 	if err != nil {
 		return nil, err
@@ -436,6 +451,12 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		return nil, err
 	}
 
+	c.Commands, c.CommandDispatcher, c.CommandTracker = getCommandService(commandSettings, cfg.Storage.Type, c.Storage, c.Events, c.MsgEmitter)
+	if c.CommandDispatcher != nil && c.Connectivity != nil {
+		// a station that connects gets its queued commands
+		c.Connectivity.OnConnected = c.CommandDispatcher
+	}
+
 	if cfg.Ocpp.Ocpp16Enabled {
 		c.Ocpp16Handler = ocpp16.NewRouter(c.MsgEmitter,
 			clock.RealClock{},
@@ -447,7 +468,9 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 			c.ChargeStationCertProviderService,
 			c.ContractCertProviderService,
 			heartbeatInterval,
-			schemas.OcppSchemas)
+			schemas.OcppSchemas,
+			commandObserver(c.CommandDispatcher),
+			commandTracker(c.CommandTracker))
 	}
 	if cfg.Ocpp.Ocpp201Enabled {
 		c.Ocpp201Handler = ocpp201.NewRouter(c.MsgEmitter,
@@ -460,7 +483,8 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 			c.ChargeStationCertProviderService,
 			c.ContractCertProviderService,
 			heartbeatInterval,
-			schemas.OcppSchemas)
+			schemas.OcppSchemas,
+			commandObserver(c.CommandDispatcher))
 	}
 
 	if cfg.Ocpi != nil {

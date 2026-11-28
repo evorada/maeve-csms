@@ -2,13 +2,16 @@ paths:
   /cs/{csId}/certificates:
     get:
       summary: Get installed certificates from the charge station
-      description: 'Queries the charge station for installed certificates. Uses OCPP
-        GetInstalledCertificateIds
+      description: |
+        Queries the charge station for installed certificates. Uses OCPP
+        GetInstalledCertificateIds to retrieve certificate hash data for certificates
+        currently installed on the charge station.
 
-        to retrieve certificate hash data for certificates currently installed on
-        the charge station.
-
-        '
+        For an OCPP 1.6 charge station the request becomes a `GetInstalledCertificateIds`
+        command of the command queue (`GET /commands/{commandId}`), whose result holds the
+        certificates. OCPP 1.6 knows two types: `CSMSRootCertificate` (sent as
+        `CentralSystemRootCertificate`) and `ManufacturerRootCertificate`; another type, or
+        no type, is refused (400).
       operationId: getInstalledCertificates
       x-permission: cpms.station.read
       parameters:
@@ -32,11 +35,29 @@ paths:
           - ManufacturerRootCertificate
       responses:
         '202':
-          description: Request accepted, will query charge station asynchronously
+          description: |
+            Request accepted, will query charge station asynchronously.
+            For an OCPP 1.6 charge station the request is queued as a command:
+            `operationId` is the id of the command, the outcome is its result, and
+            `Location` names it. For other charge stations `operationId` is the charge
+            station identifier.
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/OperationResponse'
+        '400':
+          description: |
+            For an OCPP 1.6 charge station: no `certificateType`, or a type that OCPP 1.6
+            does not have (`not supported for OCPP 1.6 stations`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '401':
           description: Unauthorized
           content:
@@ -51,6 +72,14 @@ paths:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
           content:
             application/json:
               schema:
@@ -108,12 +137,13 @@ paths:
   /cs/{csId}/certificate:
     delete:
       summary: Delete a certificate from the charge station
-      description: 'Requests the charge station to delete a specific certificate identified
-        by its hash data.
+      description: |
+        Requests the charge station to delete a specific certificate identified by its hash
+        data. Uses OCPP DeleteCertificate to remove the certificate from the charge station.
 
-        Uses OCPP DeleteCertificate to remove the certificate from the charge station.
-
-        '
+        For an OCPP 1.6 charge station the request becomes a `DeleteCertificate` command of
+        the command queue (`GET /commands/{commandId}`): it is sent when the charge station is
+        connected, and the answer of the charge station is the result of the command.
       operationId: deleteChargeStationCertificate
       x-permission: cpms.station.write
       parameters:
@@ -131,11 +161,30 @@ paths:
               $ref: '../schemas/schemas.yaml#/components/schemas/CertificateHashDataRequest'
       responses:
         '202':
-          description: Request accepted, will delete certificate asynchronously
+          description: |
+            Request accepted, will delete certificate asynchronously.
+            For an OCPP 1.6 charge station the request is queued as a command:
+            `operationId` is the id of the command, the outcome is its result, and
+            `Location` names it. For other charge stations `operationId` is the charge
+            station identifier.
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/OperationResponse'
+        '400':
+          description: |
+            The request is not valid. For an OCPP 1.6 charge station the error starts with
+            `invalid_payload` (followed by the schema error) when the request does not make
+            a valid OCPP call.
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '401':
           description: Unauthorized
           content:
@@ -150,6 +199,14 @@ paths:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
           content:
             application/json:
               schema:

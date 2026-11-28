@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/render"
+	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
@@ -226,10 +228,41 @@ func lastEnergyRegisterReading(meterValues []store.MeterValue) (int, bool) {
 	return 0, false
 }
 
+// remoteStartPayload is the payload of the RemoteStartTransaction command of an OCPP 1.6
+// charge station. The charging profile of the API has the fields of the OCPP 1.6
+// charging profile, so it is sent as the API has it.
+type remoteStartPayload struct {
+	ConnectorId     *int            `json:"connectorId,omitempty"`
+	IdTag           string          `json:"idTag"`
+	ChargingProfile json.RawMessage `json:"chargingProfile,omitempty"`
+}
+
+// RemoteStartTransaction asks the charge station to start a transaction. For an OCPP 1.6
+// charge station it queues a RemoteStartTransaction command and answers it: a charge
+// station that is not connected gets it when it connects, while the command has not
+// expired. Other charge stations get a remote start request in the store.
 func (s *Server) RemoteStartTransaction(w http.ResponseWriter, r *http.Request, csId string) {
 	req := new(RemoteStartTransactionRequest)
 	if err := render.Bind(r, req); err != nil {
 		_ = render.Render(w, r, ErrInvalidRequest(err))
+		return
+	}
+
+	var chargingProfileJSON json.RawMessage
+	if req.ChargingProfile != nil {
+		profileBytes, err := json.Marshal(req.ChargingProfile)
+		if err != nil {
+			_ = render.Render(w, r, ErrInvalidRequest(fmt.Errorf("invalid charging profile: %w", err)))
+			return
+		}
+		chargingProfileJSON = profileBytes
+	}
+
+	if s.answerThroughQueue(w, r, csId, http.StatusAccepted, "RemoteStartTransaction", &remoteStartPayload{
+		ConnectorId:     req.ConnectorId,
+		IdTag:           req.IdTag,
+		ChargingProfile: chargingProfileJSON,
+	}) {
 		return
 	}
 
@@ -243,22 +276,17 @@ func (s *Server) RemoteStartTransaction(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	var chargingProfileJSON *string
-	if req.ChargingProfile != nil {
-		profileBytes, err := json.Marshal(req.ChargingProfile)
-		if err != nil {
-			_ = render.Render(w, r, ErrInvalidRequest(fmt.Errorf("invalid charging profile: %w", err)))
-			return
-		}
-		profileStr := string(profileBytes)
-		chargingProfileJSON = &profileStr
+	var storedProfile *string
+	if chargingProfileJSON != nil {
+		profile := string(chargingProfileJSON)
+		storedProfile = &profile
 	}
 
 	transactionReq := &store.RemoteStartTransactionRequest{
 		ChargeStationId: csId,
 		IdTag:           req.IdTag,
 		ConnectorId:     req.ConnectorId,
-		ChargingProfile: chargingProfileJSON,
+		ChargingProfile: storedProfile,
 		Status:          store.RemoteTransactionRequestStatusPending,
 		SendAfter:       s.clock.Now(),
 		RequestType:     store.RemoteTransactionRequestTypeStart,
@@ -273,10 +301,32 @@ func (s *Server) RemoteStartTransaction(w http.ResponseWriter, r *http.Request, 
 	w.WriteHeader(http.StatusAccepted)
 }
 
+// RemoteStopTransaction asks the charge station to stop a transaction. For an OCPP 1.6
+// charge station it queues a RemoteStopTransaction command and answers it; the
+// transaction is named by its OCPP transaction id or by its id in the manager (see
+// ocpp16TransactionId). Other charge stations get a remote stop request in the store.
 func (s *Server) RemoteStopTransaction(w http.ResponseWriter, r *http.Request, csId string) {
 	req := new(RemoteStopTransactionRequest)
 	if err := render.Bind(r, req); err != nil {
 		_ = render.Render(w, r, ErrInvalidRequest(err))
+		return
+	}
+
+	queue, ok := s.useQueue(w, r, csId)
+	if !ok {
+		return
+	}
+	if queue {
+		transactionId, ok := ocpp16TransactionId(req.TransactionId)
+		if !ok {
+			_ = render.Render(w, r, ErrInvalidRequest(fmt.Errorf(
+				"transactionId %q is neither an OCPP 1.6 transaction id nor the id of one in the manager", req.TransactionId)))
+			return
+		}
+		if cmd := s.enqueueFor(w, r, csId, "RemoteStopTransaction",
+			&ocpp16.RemoteStopTransactionJson{TransactionId: transactionId}); cmd != nil {
+			s.renderQueued(w, r, http.StatusAccepted, cmd)
+		}
 		return
 	}
 
@@ -305,6 +355,16 @@ func (s *Server) RemoteStopTransaction(w http.ResponseWriter, r *http.Request, c
 	}
 
 	w.WriteHeader(http.StatusAccepted)
+}
+
+// ocpp16TransactionId returns the OCPP 1.6 transaction id of a transaction named by the
+// integer that the charge station gave it or by the id under which the manager stores
+// it (ocpp16.ConvertToUUID of that integer, the id that the transaction list shows).
+func ocpp16TransactionId(id string) (int, bool) {
+	if n, err := strconv.Atoi(id); err == nil {
+		return n, true
+	}
+	return ocpp16.ConvertFromUUID(id)
 }
 
 func toRendererList(response []ConnectorStatusResponse) []render.Renderer {

@@ -2,11 +2,15 @@ paths:
   /cs/{csId}/reservation:
     post:
       summary: Create a connector reservation
-      description: 'Creates a reservation for a specific connector on the charge station.
+      description: |
+        Creates a reservation for a specific connector on the charge station. A reservation
+        id that a reservation of another charge station has is refused (409).
 
-        The charge station will be instructed to reserve the connector via OCPP ReserveNow.
-
-        '
+        For an OCPP 1.6 charge station the request becomes a `ReserveNow` command of the
+        command queue (`GET /commands/{commandId}`): it is sent when the charge station is
+        connected, the answer of the charge station is the result of the command, and the
+        reservation is stored (and listed) only when the charge station accepts it. Other
+        charge stations get the reservation stored at once.
       operationId: createReservation
       x-permission: cpms.connector.command
       parameters:
@@ -25,9 +29,25 @@ paths:
               $ref: '../schemas/schemas.yaml#/components/schemas/ReservationRequest'
       responses:
         '202':
-          description: Accepted - reservation request initiated
+          description: |
+            Accepted - reservation request initiated.
+            For an OCPP 1.6 charge station the request is queued as a command, which is
+            the body, and `Location` names it. For other charge stations, and when the
+            storage engine of the manager does not keep commands, the body is empty.
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Command'
         '400':
-          description: Bad request
+          description: |
+            The request is not valid. For an OCPP 1.6 charge station the error starts with
+            `invalid_payload` (followed by the schema error) when the request does not make
+            a valid OCPP call.
           content:
             application/json:
               schema:
@@ -51,7 +71,10 @@ paths:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '409':
-          description: The reservation id is already in use
+          description: |
+            The reservation id is in use by a reservation of another charge station, or
+            the OCPP version of the charge station could not be found when the command was
+            queued (error `station_version_unknown`)
           content:
             application/json:
               schema:
@@ -65,11 +88,14 @@ paths:
   /cs/{csId}/reservation/{reservationId}:
     delete:
       summary: Cancel a reservation
-      description: 'Cancels an active reservation on the charge station.
+      description: |
+        Cancels a reservation of the charge station.
 
-        The charge station will be instructed to cancel the reservation via OCPP CancelReservation.
-
-        '
+        For an OCPP 1.6 charge station the request becomes a `CancelReservation` command of
+        the command queue (`GET /commands/{commandId}`): it is sent when the charge station
+        is connected, the answer of the charge station is the result of the command, and the
+        reservation is cancelled in the manager only when the charge station accepts. Other
+        charge stations get the reservation cancelled at once.
       operationId: cancelReservation
       x-permission: cpms.connector.command
       parameters:
@@ -89,7 +115,20 @@ paths:
           format: int32
       responses:
         '202':
-          description: Accepted - cancellation request initiated
+          description: |
+            Accepted - cancellation request initiated.
+            For an OCPP 1.6 charge station the request is queued as a command, which is
+            the body, and `Location` names it. For other charge stations, and when the
+            storage engine of the manager does not keep commands, the body is empty.
+          headers:
+            Location:
+              description: Where the command can be read (OCPP 1.6 charge stations only)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Command'
         '401':
           description: Unauthorized
           content:
@@ -104,6 +143,14 @@ paths:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
           description: Unknown charge station or reservation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: |
+            The OCPP version of the charge station could not be found when the command
+            was queued (error `station_version_unknown`)
           content:
             application/json:
               schema:

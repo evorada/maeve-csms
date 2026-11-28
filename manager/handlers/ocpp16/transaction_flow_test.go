@@ -82,7 +82,7 @@ func TestOcpp16TransactionFlow(t *testing.T) {
 		nil,
 		nil,
 		time.Minute,
-		schemas.OcppSchemas)
+		schemas.OcppSchemas, nil, nil)
 
 	// call sends a call of the station and returns the payload of the CallResult
 	messageNo := 0

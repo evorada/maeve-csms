@@ -64,8 +64,8 @@ func matchPath(r *http.Request, swagger *openapi3.T) (*string, map[string]string
 		if len(requestElements) == len(pathElements) {
 			for i := 0; i < len(requestElements); i++ {
 				pe := pathElements[i]
-				if strings.HasPrefix(pe, "{") && strings.HasSuffix(pe, "}") {
-					pathParams[pe[1:len(pe)-1]] = requestElements[i]
+				if name, value, ok := matchParamSegment(pe, requestElements[i]); ok {
+					pathParams[name] = value
 					continue
 				}
 				if pe != requestElements[i] {
@@ -81,4 +81,30 @@ func matchPath(r *http.Request, swagger *openapi3.T) (*string, map[string]string
 	}
 
 	return nil, nil
+}
+
+// matchParamSegment matches a segment of a request path to a segment of a spec path
+// that is a path parameter: "{name}", which takes the whole segment, or "{name}:verb",
+// which takes the segment up to a literal ":verb" at its end (as in
+// "/commands/{commandId}:cancel"). It reports false when the spec segment is no
+// parameter or the request segment does not end with the verb.
+func matchParamSegment(specSegment, requestSegment string) (name, value string, ok bool) {
+	if !strings.HasPrefix(specSegment, "{") {
+		return "", "", false
+	}
+	name, verb, found := strings.Cut(specSegment[1:], "}")
+	if !found || name == "" {
+		return "", "", false
+	}
+	if verb == "" {
+		return name, requestSegment, true
+	}
+	if !strings.HasPrefix(verb, ":") {
+		return "", "", false
+	}
+	value, found = strings.CutSuffix(requestSegment, verb)
+	if !found || value == "" {
+		return "", "", false
+	}
+	return name, value, true
 }

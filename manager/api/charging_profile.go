@@ -7,9 +7,14 @@ import (
 	"net/http"
 
 	"github.com/go-chi/render"
+	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
+// SetChargingProfile sets a charging profile on a connector of the charge station. For
+// an OCPP 1.6 charge station it queues a SetChargingProfile command with the profile and
+// answers it: the result handler of SetChargingProfile stores the profile when the
+// charge station accepts it. Other charge stations get the profile in the store at once.
 func (s *Server) SetChargingProfile(w http.ResponseWriter, r *http.Request, csId string) {
 	req := new(SetChargingProfileRequest)
 	if err := render.Bind(r, req); err != nil {
@@ -17,6 +22,22 @@ func (s *Server) SetChargingProfile(w http.ResponseWriter, r *http.Request, csId
 		return
 	}
 
+	profile := chargingProfileOf(csId, req)
+	if s.answerThroughQueue(w, r, csId, http.StatusAccepted, "SetChargingProfile", setChargingProfileOf(profile)) {
+		return
+	}
+
+	err := s.store.SetChargingProfile(r.Context(), profile)
+	if err != nil {
+		_ = render.Render(w, r, ErrInternalError(err))
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// chargingProfileOf is the charging profile of the request as the manager stores it.
+func chargingProfileOf(csId string, req *SetChargingProfileRequest) *store.ChargingProfile {
 	// Convert API request to store model
 	profile := &store.ChargingProfile{
 		ChargeStationId:        csId,
@@ -74,14 +95,47 @@ func (s *Server) SetChargingProfile(w http.ResponseWriter, r *http.Request, csId
 		)
 	}
 
-	// Store the charging profile (this will trigger OCPP operation)
-	err := s.store.SetChargingProfile(r.Context(), profile)
-	if err != nil {
-		_ = render.Render(w, r, ErrInternalError(err))
-		return
+	return profile
+}
+
+// setChargingProfileOf is the SetChargingProfile request of OCPP 1.6 that sets the
+// charging profile: what the result handler of SetChargingProfile stores when the
+// charge station accepts it is the profile again.
+func setChargingProfileOf(profile *store.ChargingProfile) *ocpp16.SetChargingProfileJson {
+	schedule := ocpp16.SetChargingProfileJsonChargingSchedule{
+		ChargingRateUnit:       ocpp16.SetChargingProfileJsonChargingRateUnit(profile.ChargingSchedule.ChargingRateUnit),
+		Duration:               profile.ChargingSchedule.Duration,
+		StartSchedule:          optionalOcppDateTime(profile.ChargingSchedule.StartSchedule),
+		MinChargingRate:        profile.ChargingSchedule.MinChargingRate,
+		ChargingSchedulePeriod: make([]ocpp16.SetChargingProfileJsonChargingSchedulePeriod, 0, len(profile.ChargingSchedule.ChargingSchedulePeriod)),
+	}
+	for _, period := range profile.ChargingSchedule.ChargingSchedulePeriod {
+		schedule.ChargingSchedulePeriod = append(schedule.ChargingSchedulePeriod, ocpp16.SetChargingProfileJsonChargingSchedulePeriod{
+			StartPeriod:  period.StartPeriod,
+			Limit:        period.Limit,
+			NumberPhases: period.NumberPhases,
+		})
 	}
 
-	w.WriteHeader(http.StatusAccepted)
+	chargingProfile := ocpp16.SetChargingProfileJsonCsChargingProfiles{
+		ChargingProfileId:      profile.ChargingProfileId,
+		TransactionId:          profile.TransactionId,
+		StackLevel:             profile.StackLevel,
+		ChargingProfilePurpose: ocpp16.SetChargingProfileJsonChargingProfilePurpose(profile.ChargingProfilePurpose),
+		ChargingProfileKind:    ocpp16.SetChargingProfileJsonChargingProfileKind(profile.ChargingProfileKind),
+		ValidFrom:              optionalOcppDateTime(profile.ValidFrom),
+		ValidTo:                optionalOcppDateTime(profile.ValidTo),
+		ChargingSchedule:       schedule,
+	}
+	if profile.RecurrencyKind != nil {
+		recurrencyKind := ocpp16.SetChargingProfileJsonRecurrencyKind(*profile.RecurrencyKind)
+		chargingProfile.RecurrencyKind = &recurrencyKind
+	}
+
+	return &ocpp16.SetChargingProfileJson{
+		ConnectorId:        profile.ConnectorId,
+		CsChargingProfiles: chargingProfile,
+	}
 }
 
 func (s *Server) GetChargingProfiles(w http.ResponseWriter, r *http.Request, csId string, params GetChargingProfilesParams) {
@@ -124,6 +178,11 @@ func (s *Server) GetChargingProfiles(w http.ResponseWriter, r *http.Request, csI
 	_ = render.Render(w, r, &response)
 }
 
+// ClearChargingProfile clears a charging profile of the charge station. For an OCPP 1.6
+// charge station it queues a ClearChargingProfile command for the profile id and the
+// other criteria of the request and answers it: the result handler of
+// ClearChargingProfile clears the matching profiles from the store when the charge
+// station accepts. Other charge stations get them cleared from the store at once.
 func (s *Server) ClearChargingProfile(w http.ResponseWriter, r *http.Request, csId string, profileId int, params ClearChargingProfileParams) {
 	// Build filters for clearing
 	var connectorId *int
@@ -142,6 +201,15 @@ func (s *Server) ClearChargingProfile(w http.ResponseWriter, r *http.Request, cs
 	if params.StackLevel != nil {
 		sl := int(*params.StackLevel)
 		stackLevel = &sl
+	}
+
+	payload := &ocpp16.ClearChargingProfileJson{Id: &pid, ConnectorId: connectorId, StackLevel: stackLevel}
+	if params.ChargingProfilePurpose != nil {
+		p := ocpp16.ClearChargingProfileJsonChargingProfilePurpose(*params.ChargingProfilePurpose)
+		payload.ChargingProfilePurpose = &p
+	}
+	if s.answerThroughQueue(w, r, csId, http.StatusAccepted, "ClearChargingProfile", payload) {
+		return
 	}
 
 	// Clear the charging profile(s)

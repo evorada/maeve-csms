@@ -18,12 +18,15 @@ import (
 )
 
 // StatusNotificationHandler stores the status of a connector and, when its status or
-// error code changed, emits connector.status_changed in the same transaction.
+// error code changed, emits connector.status_changed in the same transaction. Once it is
+// stored, the status is given to the CommandTracker (when there is one), which marks the
+// changes of availability that it fulfils; nothing the tracker does changes the answer.
 type StatusNotificationHandler struct {
-	Clock       clock.PassiveClock
-	StatusStore store.StatusStore
-	Tx          store.Transactor
-	Events      events.Emitter
+	Clock          clock.PassiveClock
+	StatusStore    store.StatusStore
+	Tx             store.Transactor
+	Events         events.Emitter
+	CommandTracker CommandTracker // nil: commands are not followed
 }
 
 func (h StatusNotificationHandler) HandleCall(ctx context.Context, chargeStationId string, request ocpp.Request) (ocpp.Response, error) {
@@ -75,6 +78,10 @@ func (h StatusNotificationHandler) HandleCall(ctx context.Context, chargeStation
 	if err != nil {
 		return nil, err
 	}
+
+	trackCommand(ctx, h.CommandTracker, chargeStationId, "StatusNotification", func(tracker CommandTracker) {
+		tracker.OnConnectorStatus(ctx, chargeStationId, req.ConnectorId, string(req.Status))
+	})
 
 	return &types.StatusNotificationResponseJson{}, nil
 }

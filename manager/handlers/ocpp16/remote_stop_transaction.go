@@ -29,7 +29,8 @@ func (r RemoteStopTransactionHandler) HandleCallResult(ctx context.Context, char
 
 	// Validate transaction if TransactionStore is available
 	if r.TransactionStore != nil {
-		transactionId := fmt.Sprintf("%d", req.TransactionId)
+		// the transaction is stored with the UUID form of the station's integer id
+		transactionId := ConvertToUUID(req.TransactionId)
 		tx, err := r.TransactionStore.FindTransaction(ctx, chargeStationId, transactionId)
 		if err != nil {
 			return fmt.Errorf("find transaction: %w", err)

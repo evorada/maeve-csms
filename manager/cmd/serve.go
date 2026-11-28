@@ -14,6 +14,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/config"
 	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/jobs"
+	"github.com/thoughtworks/maeve-csms/manager/ocpi"
 	"github.com/thoughtworks/maeve-csms/manager/server"
 	"github.com/thoughtworks/maeve-csms/manager/sync"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
@@ -72,6 +73,7 @@ the gateway and send appropriate responses.`,
 				Scoper:       settings.TenantScoper,
 				Entitlements: settings.Entitlements,
 				Events:       settings.Events,
+				Commands:     settings.Commands,
 			}))
 		internalServer := server.New("internal", cfg.Api.InternalAddr, nil,
 			server.NewInternalHandler(server.InternalDeps{
@@ -135,7 +137,8 @@ the gateway and send appropriate responses.`,
 		}
 
 		if settings.OcpiApi != nil {
-			ocpiServer := server.New("ocpi", cfg.Ocpi.Addr, nil, server.NewOcpiHandler(settings.Storage, clock.RealClock{}, settings.OcpiApi, settings.MsgEmitter))
+			ocpiServer := server.New("ocpi", cfg.Ocpi.Addr, nil, server.NewOcpiHandler(settings.Storage, clock.RealClock{}, settings.OcpiApi, settings.MsgEmitter,
+				ocpi.WithCommands(settings.Commands, settings.TenantResolver)))
 			ocpiServer.Start(errCh)
 		}
 
@@ -187,8 +190,8 @@ func waitForStop(signals context.Context, errCh <-chan error) error {
 }
 
 // backgroundJobs returns the periodic jobs of the manager. The connectivity sweep, the
-// relay and the purge of the outbox are left out when the storage or the configuration
-// has no use for them.
+// relay and the purge of the outbox and the sweep and purge of the command queue are left
+// out when the storage or the configuration has no use for them.
 func backgroundJobs(settings *config.Config) []jobs.Job {
 	jobList := sync.Jobs(settings.Storage, clock.RealClock{}, settings.Tracer, settings.MsgEmitter,
 		settings.SyncInterval, settings.SyncRetryAfter)
@@ -204,6 +207,10 @@ func backgroundJobs(settings *config.Config) []jobs.Job {
 	if settings.OutboxPurge != nil {
 		jobList = append(jobList, events.PurgeJob(settings.Storage, clock.RealClock{},
 			settings.OutboxPurge.Retention, settings.OutboxPurge.Interval))
+	}
+	// the commands that expired or got no answer, and those whose send failed
+	if settings.CommandDispatcher != nil {
+		jobList = append(jobList, settings.CommandDispatcher.SweepJob(), settings.CommandDispatcher.PurgeJob())
 	}
 	return jobList
 }
