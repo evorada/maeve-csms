@@ -71,9 +71,16 @@ fi
 
 cp "${cert_dir}"/csms.pem "${everest_dir}"/certs/ca/csms
 
-if [ ! -f "${cert_dir}"/${cs_id}.pem ]; then
+# The CS certificate comes from the test PKI and is only valid for 90 days: one that is
+# missing, expired or about to expire (less than a day left) is requested again.
+if [ ! -f "${cert_dir}"/${cs_id}.pem ] || ! openssl x509 -in "${cert_dir}"/${cs_id}.pem -noout -checkend 86400 > /dev/null 2>&1; then
   echo "Creating CS certificate..."
   "$script_dir"/generate-cs-cert.sh "${bearer_token}" "${cs_id}"
+  if ! openssl x509 -in "${cert_dir}"/${cs_id}.pem -noout -checkend 86400 > /dev/null 2>&1; then
+    echo "ERROR: could not get a valid CS certificate for ${cs_id} from the test PKI."
+    exit 1
+  fi
+  openssl x509 -in "${cert_dir}"/${cs_id}.pem -noout -subject -issuer -enddate
 fi
 
 echo "Setting CS certificate as EVerest SECC client certificate"
