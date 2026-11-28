@@ -1,0 +1,128 @@
+{
+  "id": "duration-switch",
+  "description": "Charging time by duration: 6.00 per hour in the first hour of the session (max_duration 3600), 12.00 per hour after it (min_duration 3600), per minute, VAT 10%. 105 minutes: 6.00 and 9.00. The energy has no price.",
+  "tariff": {
+    "currency": "EUR",
+    "elements": [
+      {
+        "price_components": [
+          {
+            "type": "TIME",
+            "price": 6,
+            "vat": 10,
+            "step_size": 60
+          }
+        ],
+        "restrictions": {
+          "max_duration": 3600
+        }
+      },
+      {
+        "price_components": [
+          {
+            "type": "TIME",
+            "price": 12,
+            "vat": 10,
+            "step_size": 60
+          }
+        ],
+        "restrictions": {
+          "min_duration": 3600
+        }
+      }
+    ]
+  },
+  "session": {
+    "start": "2026-10-01T10:00:00Z",
+    "stop": "2026-10-01T11:45:00Z",
+    "samples": [
+      {
+        "at": "2026-10-01T10:00:00Z",
+        "energy_wh": 0
+      }
+    ],
+    "total_energy_wh": 10500
+  },
+  "expected": {
+    "currency": "EUR",
+    "final": true,
+    "total_energy_wh": 10500,
+    "total_time_s": 6300,
+    "charging_time_s": 6300,
+    "parking_time_s": 0,
+    "breakdown": {
+      "flat": {
+        "excl_vat": 0,
+        "incl_vat": 0
+      },
+      "energy": {
+        "wh": 10500,
+        "billed_wh": 0,
+        "cost": {
+          "excl_vat": 0,
+          "incl_vat": 0
+        }
+      },
+      "time": {
+        "total_s": 6300,
+        "grace_s": 0,
+        "billable_s": 6300,
+        "step_size_s": 60,
+        "steps": 105,
+        "minutes": 105,
+        "cost": {
+          "excl_vat": 15,
+          "incl_vat": 16.5
+        }
+      },
+      "parking": {
+        "total_s": 0,
+        "grace_s": 0,
+        "billable_s": 0,
+        "step_size_s": 0,
+        "steps": 0,
+        "minutes": 0.0,
+        "cost": {
+          "excl_vat": 0,
+          "incl_vat": 0
+        }
+      },
+      "min_price_applied": false,
+      "max_price_applied": false,
+      "total": {
+        "excl_vat": 15,
+        "incl_vat": 16.5
+      }
+    },
+    "charging_periods": [
+      {
+        "start_date_time": "2026-10-01T10:00:00Z",
+        "dimensions": [
+          {
+            "type": "ENERGY",
+            "volume": 6
+          },
+          {
+            "type": "TIME",
+            "volume": 1
+          }
+        ],
+        "tariff_id": "0193b2c4-0000-7000-8000-00000000f001"
+      },
+      {
+        "start_date_time": "2026-10-01T11:00:00Z",
+        "dimensions": [
+          {
+            "type": "ENERGY",
+            "volume": 4.5
+          },
+          {
+            "type": "TIME",
+            "volume": 0.75
+          }
+        ],
+        "tariff_id": "0193b2c4-0000-7000-8000-00000000f001"
+      }
+    ]
+  }
+}

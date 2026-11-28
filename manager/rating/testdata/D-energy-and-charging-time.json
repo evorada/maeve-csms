@@ -1,0 +1,126 @@
+{
+  "id": "D",
+  "description": "Energy 0.25 per kWh and charging time 0.10 per 5 minutes, the first 30 minutes free, VAT 21%. 112 minutes of charging, 20 kWh: 82 minutes are charged as 17 steps.",
+  "simple_fixture": "S3-energy-and-charging-time.json",
+  "tariff": {
+    "currency": "EUR",
+    "type": "REGULAR",
+    "elements": [
+      {
+        "price_components": [
+          {
+            "type": "ENERGY",
+            "price": 0.25,
+            "vat": 21,
+            "step_size": 1
+          },
+          {
+            "type": "TIME",
+            "price": 1.2,
+            "vat": 21,
+            "step_size": 300,
+            "grace_period_s": 1800,
+            "price_per_step": 0.1
+          }
+        ]
+      }
+    ]
+  },
+  "session": {
+    "start": "2026-10-01T10:00:00Z",
+    "stop": "2026-10-01T11:52:00Z",
+    "samples": [
+      {
+        "at": "2026-10-01T10:00:00Z",
+        "energy_wh": 0
+      },
+      {
+        "at": "2026-10-01T11:00:00Z",
+        "energy_wh": 10000
+      }
+    ],
+    "total_energy_wh": 20000
+  },
+  "expected": {
+    "currency": "EUR",
+    "final": true,
+    "total_energy_wh": 20000,
+    "total_time_s": 6720,
+    "charging_time_s": 6720,
+    "parking_time_s": 0,
+    "breakdown": {
+      "flat": {
+        "excl_vat": 0,
+        "incl_vat": 0
+      },
+      "energy": {
+        "wh": 20000,
+        "billed_wh": 20000,
+        "cost": {
+          "excl_vat": 5,
+          "incl_vat": 6.05
+        }
+      },
+      "time": {
+        "total_s": 6720,
+        "grace_s": 1800,
+        "billable_s": 4920,
+        "step_size_s": 300,
+        "steps": 17,
+        "minutes": 112,
+        "cost": {
+          "excl_vat": 1.7,
+          "incl_vat": 2.06
+        }
+      },
+      "parking": {
+        "total_s": 0,
+        "grace_s": 0,
+        "billable_s": 0,
+        "step_size_s": 0,
+        "steps": 0,
+        "minutes": 0.0,
+        "cost": {
+          "excl_vat": 0,
+          "incl_vat": 0
+        }
+      },
+      "min_price_applied": false,
+      "max_price_applied": false,
+      "total": {
+        "excl_vat": 6.7,
+        "incl_vat": 8.11
+      }
+    },
+    "charging_periods": [
+      {
+        "start_date_time": "2026-10-01T10:00:00Z",
+        "dimensions": [
+          {
+            "type": "ENERGY",
+            "volume": 5
+          },
+          {
+            "type": "TIME",
+            "volume": 0.5
+          }
+        ],
+        "tariff_id": "0193b2c4-0000-7000-8000-00000000f001"
+      },
+      {
+        "start_date_time": "2026-10-01T10:30:00Z",
+        "dimensions": [
+          {
+            "type": "ENERGY",
+            "volume": 15
+          },
+          {
+            "type": "TIME",
+            "volume": 1.3667
+          }
+        ],
+        "tariff_id": "0193b2c4-0000-7000-8000-00000000f001"
+      }
+    ]
+  }
+}

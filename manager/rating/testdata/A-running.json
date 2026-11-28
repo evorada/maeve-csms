@@ -1,0 +1,140 @@
+{
+  "id": "A-running",
+  "description": "The session of A while it runs, at 11:45 with the samples up to 11:30: idle since 11:00, 15 minutes after the grace period, one step.",
+  "simple_fixture": "S4-energy-and-parking.json",
+  "tariff": {
+    "currency": "EUR",
+    "type": "REGULAR",
+    "elements": [
+      {
+        "price_components": [
+          {
+            "type": "ENERGY",
+            "price": 0.3,
+            "vat": 21,
+            "step_size": 1
+          },
+          {
+            "type": "PARKING_TIME",
+            "price": 2,
+            "vat": 21,
+            "step_size": 900,
+            "grace_period_s": 1800,
+            "price_per_step": 0.5
+          }
+        ]
+      }
+    ]
+  },
+  "session": {
+    "start": "2026-10-01T10:00:00Z",
+    "now": "2026-10-01T11:45:00Z",
+    "samples": [
+      {
+        "at": "2026-10-01T10:00:00Z",
+        "energy_wh": 0
+      },
+      {
+        "at": "2026-10-01T10:30:00Z",
+        "energy_wh": 5500
+      },
+      {
+        "at": "2026-10-01T11:00:00Z",
+        "energy_wh": 11000
+      },
+      {
+        "at": "2026-10-01T11:30:00Z",
+        "energy_wh": 11000
+      }
+    ],
+    "idle_started_at": "2026-10-01T11:00:00Z"
+  },
+  "expected": {
+    "currency": "EUR",
+    "final": false,
+    "total_energy_wh": 11000,
+    "total_time_s": 6300,
+    "charging_time_s": 3600,
+    "parking_time_s": 2700,
+    "breakdown": {
+      "flat": {
+        "excl_vat": 0,
+        "incl_vat": 0
+      },
+      "energy": {
+        "wh": 11000,
+        "billed_wh": 11000,
+        "cost": {
+          "excl_vat": 3.3,
+          "incl_vat": 3.99
+        }
+      },
+      "time": {
+        "total_s": 3600,
+        "grace_s": 0,
+        "billable_s": 0,
+        "step_size_s": 0,
+        "steps": 0,
+        "minutes": 60.0,
+        "cost": {
+          "excl_vat": 0,
+          "incl_vat": 0
+        }
+      },
+      "parking": {
+        "total_s": 2700,
+        "grace_s": 1800,
+        "billable_s": 900,
+        "step_size_s": 900,
+        "steps": 1,
+        "minutes": 45,
+        "cost": {
+          "excl_vat": 0.5,
+          "incl_vat": 0.61
+        }
+      },
+      "min_price_applied": false,
+      "max_price_applied": false,
+      "total": {
+        "excl_vat": 3.8,
+        "incl_vat": 4.6
+      }
+    },
+    "charging_periods": [
+      {
+        "start_date_time": "2026-10-01T10:00:00Z",
+        "dimensions": [
+          {
+            "type": "ENERGY",
+            "volume": 11
+          },
+          {
+            "type": "TIME",
+            "volume": 1
+          }
+        ],
+        "tariff_id": "0193b2c4-0000-7000-8000-00000000f001"
+      },
+      {
+        "start_date_time": "2026-10-01T11:00:00Z",
+        "dimensions": [
+          {
+            "type": "PARKING_TIME",
+            "volume": 0.5
+          }
+        ],
+        "tariff_id": "0193b2c4-0000-7000-8000-00000000f001"
+      },
+      {
+        "start_date_time": "2026-10-01T11:30:00Z",
+        "dimensions": [
+          {
+            "type": "PARKING_TIME",
+            "volume": 0.25
+          }
+        ],
+        "tariff_id": "0193b2c4-0000-7000-8000-00000000f001"
+      }
+    ]
+  }
+}

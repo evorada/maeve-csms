@@ -1,0 +1,167 @@
+{
+  "id": "B",
+  "description": "Energy 0.30 per kWh and parking 0.20 per 10 minutes, the first 15 minutes free, from Monday to Friday between 08:00 and 20:00, VAT 21%, in Europe/Madrid (UTC+2). A Friday: idle from 19:30 local time, the grace period ends at 19:45, the window at 20:00. Only those 15 minutes are charged, as 2 steps; the hour after 20:00 is free.",
+  "simple_fixture": "S5-parking-windows.json",
+  "tariff": {
+    "currency": "EUR",
+    "type": "REGULAR",
+    "elements": [
+      {
+        "price_components": [
+          {
+            "type": "ENERGY",
+            "price": 0.3,
+            "vat": 21,
+            "step_size": 1
+          }
+        ]
+      },
+      {
+        "price_components": [
+          {
+            "type": "PARKING_TIME",
+            "price": 1.2,
+            "vat": 21,
+            "step_size": 600,
+            "grace_period_s": 900,
+            "price_per_step": 0.2
+          }
+        ],
+        "restrictions": {
+          "start_time": "08:00",
+          "end_time": "20:00",
+          "day_of_week": [
+            "MONDAY",
+            "TUESDAY",
+            "WEDNESDAY",
+            "THURSDAY",
+            "FRIDAY"
+          ]
+        }
+      }
+    ]
+  },
+  "session": {
+    "start": "2026-10-02T16:30:00Z",
+    "stop": "2026-10-02T19:00:00Z",
+    "time_zone": "Europe/Madrid",
+    "samples": [
+      {
+        "at": "2026-10-02T16:30:00Z",
+        "energy_wh": 0
+      },
+      {
+        "at": "2026-10-02T17:00:00Z",
+        "energy_wh": 3700
+      },
+      {
+        "at": "2026-10-02T17:30:00Z",
+        "energy_wh": 7400
+      },
+      {
+        "at": "2026-10-02T18:30:00Z",
+        "energy_wh": 7400
+      }
+    ],
+    "total_energy_wh": 7400,
+    "idle_started_at": "2026-10-02T17:30:00Z"
+  },
+  "expected": {
+    "currency": "EUR",
+    "final": true,
+    "total_energy_wh": 7400,
+    "total_time_s": 9000,
+    "charging_time_s": 3600,
+    "parking_time_s": 5400,
+    "breakdown": {
+      "flat": {
+        "excl_vat": 0,
+        "incl_vat": 0
+      },
+      "energy": {
+        "wh": 7400,
+        "billed_wh": 7400,
+        "cost": {
+          "excl_vat": 2.22,
+          "incl_vat": 2.69
+        }
+      },
+      "time": {
+        "total_s": 3600,
+        "grace_s": 0,
+        "billable_s": 0,
+        "step_size_s": 0,
+        "steps": 0,
+        "minutes": 60.0,
+        "cost": {
+          "excl_vat": 0,
+          "incl_vat": 0
+        }
+      },
+      "parking": {
+        "total_s": 5400,
+        "grace_s": 900,
+        "billable_s": 900,
+        "step_size_s": 600,
+        "steps": 2,
+        "minutes": 90,
+        "cost": {
+          "excl_vat": 0.4,
+          "incl_vat": 0.48
+        }
+      },
+      "min_price_applied": false,
+      "max_price_applied": false,
+      "total": {
+        "excl_vat": 2.62,
+        "incl_vat": 3.17
+      }
+    },
+    "charging_periods": [
+      {
+        "start_date_time": "2026-10-02T16:30:00Z",
+        "dimensions": [
+          {
+            "type": "ENERGY",
+            "volume": 7.4
+          },
+          {
+            "type": "TIME",
+            "volume": 1
+          }
+        ],
+        "tariff_id": "0193b2c4-0000-7000-8000-00000000f001"
+      },
+      {
+        "start_date_time": "2026-10-02T17:30:00Z",
+        "dimensions": [
+          {
+            "type": "PARKING_TIME",
+            "volume": 0.25
+          }
+        ],
+        "tariff_id": "0193b2c4-0000-7000-8000-00000000f001"
+      },
+      {
+        "start_date_time": "2026-10-02T17:45:00Z",
+        "dimensions": [
+          {
+            "type": "PARKING_TIME",
+            "volume": 0.25
+          }
+        ],
+        "tariff_id": "0193b2c4-0000-7000-8000-00000000f001"
+      },
+      {
+        "start_date_time": "2026-10-02T18:00:00Z",
+        "dimensions": [
+          {
+            "type": "PARKING_TIME",
+            "volume": 1
+          }
+        ],
+        "tariff_id": "0193b2c4-0000-7000-8000-00000000f001"
+      }
+    ]
+  }
+}

@@ -1,0 +1,110 @@
+{
+  "id": "max-price",
+  "description": "A maximum price: energy 0.30 per kWh, VAT 21%, at most 5.00 (6.05 with VAT). 30 kWh cost 9.00 (10.89 with VAT): the total is held to the maximum price.",
+  "tariff": {
+    "currency": "EUR",
+    "max_price": {
+      "excl_vat": 5,
+      "incl_vat": 6.05
+    },
+    "elements": [
+      {
+        "price_components": [
+          {
+            "type": "ENERGY",
+            "price": 0.3,
+            "vat": 21,
+            "step_size": 1
+          }
+        ]
+      }
+    ]
+  },
+  "session": {
+    "start": "2026-10-01T10:00:00Z",
+    "stop": "2026-10-01T11:00:00Z",
+    "samples": [
+      {
+        "at": "2026-10-01T10:00:00Z",
+        "energy_wh": 0
+      },
+      {
+        "at": "2026-10-01T11:00:00Z",
+        "energy_wh": 30000
+      }
+    ],
+    "total_energy_wh": 30000
+  },
+  "expected": {
+    "currency": "EUR",
+    "final": true,
+    "total_energy_wh": 30000,
+    "total_time_s": 3600,
+    "charging_time_s": 3600,
+    "parking_time_s": 0,
+    "breakdown": {
+      "flat": {
+        "excl_vat": 0,
+        "incl_vat": 0
+      },
+      "energy": {
+        "wh": 30000,
+        "billed_wh": 30000,
+        "cost": {
+          "excl_vat": 9,
+          "incl_vat": 10.89
+        }
+      },
+      "time": {
+        "total_s": 3600,
+        "grace_s": 0,
+        "billable_s": 0,
+        "step_size_s": 0,
+        "steps": 0,
+        "minutes": 60.0,
+        "cost": {
+          "excl_vat": 0,
+          "incl_vat": 0
+        }
+      },
+      "parking": {
+        "total_s": 0,
+        "grace_s": 0,
+        "billable_s": 0,
+        "step_size_s": 0,
+        "steps": 0,
+        "minutes": 0.0,
+        "cost": {
+          "excl_vat": 0,
+          "incl_vat": 0
+        }
+      },
+      "min_price_applied": false,
+      "max_price_applied": true,
+      "total": {
+        "excl_vat": 5,
+        "incl_vat": 6.05
+      },
+      "adjustment": {
+        "excl_vat": -4,
+        "incl_vat": -4.84
+      }
+    },
+    "charging_periods": [
+      {
+        "start_date_time": "2026-10-01T10:00:00Z",
+        "dimensions": [
+          {
+            "type": "ENERGY",
+            "volume": 30.0
+          },
+          {
+            "type": "TIME",
+            "volume": 1
+          }
+        ],
+        "tariff_id": "0193b2c4-0000-7000-8000-00000000f001"
+      }
+    ]
+  }
+}

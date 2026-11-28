@@ -1,0 +1,135 @@
+{
+  "id": "C",
+  "description": "Energy by time of day: 0.20 per kWh between 22:00 and 06:00, 0.30 otherwise, VAT 20%, in Europe/Madrid (UTC+2). 22:00 local time falls between two samples: the energy at that moment is read from the straight line between them, 7 kWh.",
+  "tariff": {
+    "currency": "EUR",
+    "elements": [
+      {
+        "price_components": [
+          {
+            "type": "ENERGY",
+            "price": 0.2,
+            "vat": 20,
+            "step_size": 1
+          }
+        ],
+        "restrictions": {
+          "start_time": "22:00",
+          "end_time": "06:00"
+        }
+      },
+      {
+        "price_components": [
+          {
+            "type": "ENERGY",
+            "price": 0.3,
+            "vat": 20,
+            "step_size": 1
+          }
+        ]
+      }
+    ]
+  },
+  "session": {
+    "start": "2026-10-02T19:00:00Z",
+    "stop": "2026-10-02T21:00:00Z",
+    "time_zone": "Europe/Madrid",
+    "samples": [
+      {
+        "at": "2026-10-02T19:00:00Z",
+        "energy_wh": 0
+      },
+      {
+        "at": "2026-10-02T19:30:00Z",
+        "energy_wh": 3500
+      },
+      {
+        "at": "2026-10-02T20:30:00Z",
+        "energy_wh": 10500
+      }
+    ],
+    "total_energy_wh": 14000
+  },
+  "expected": {
+    "currency": "EUR",
+    "final": true,
+    "total_energy_wh": 14000,
+    "total_time_s": 7200,
+    "charging_time_s": 7200,
+    "parking_time_s": 0,
+    "breakdown": {
+      "flat": {
+        "excl_vat": 0,
+        "incl_vat": 0
+      },
+      "energy": {
+        "wh": 14000,
+        "billed_wh": 14000,
+        "cost": {
+          "excl_vat": 3.5,
+          "incl_vat": 4.2
+        }
+      },
+      "time": {
+        "total_s": 7200,
+        "grace_s": 0,
+        "billable_s": 0,
+        "step_size_s": 0,
+        "steps": 0,
+        "minutes": 120.0,
+        "cost": {
+          "excl_vat": 0,
+          "incl_vat": 0
+        }
+      },
+      "parking": {
+        "total_s": 0,
+        "grace_s": 0,
+        "billable_s": 0,
+        "step_size_s": 0,
+        "steps": 0,
+        "minutes": 0.0,
+        "cost": {
+          "excl_vat": 0,
+          "incl_vat": 0
+        }
+      },
+      "min_price_applied": false,
+      "max_price_applied": false,
+      "total": {
+        "excl_vat": 3.5,
+        "incl_vat": 4.2
+      }
+    },
+    "charging_periods": [
+      {
+        "start_date_time": "2026-10-02T19:00:00Z",
+        "dimensions": [
+          {
+            "type": "ENERGY",
+            "volume": 7
+          },
+          {
+            "type": "TIME",
+            "volume": 1
+          }
+        ],
+        "tariff_id": "0193b2c4-0000-7000-8000-00000000f001"
+      },
+      {
+        "start_date_time": "2026-10-02T20:00:00Z",
+        "dimensions": [
+          {
+            "type": "ENERGY",
+            "volume": 7
+          },
+          {
+            "type": "TIME",
+            "volume": 1
+          }
+        ],
+        "tariff_id": "0193b2c4-0000-7000-8000-00000000f001"
+      }
+    ]
+  }
+}

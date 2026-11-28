@@ -1,0 +1,121 @@
+{
+  "id": "reservation-element",
+  "description": "A tariff element for reservations (a fee of 5.00 and 10.00 per hour) comes first, but a session is not a reservation: only the energy at 0.30 per kWh is charged. 10 kWh.",
+  "tariff": {
+    "currency": "EUR",
+    "elements": [
+      {
+        "price_components": [
+          {
+            "type": "FLAT",
+            "price": 5,
+            "vat": 21,
+            "step_size": 1
+          },
+          {
+            "type": "TIME",
+            "price": 10,
+            "vat": 21,
+            "step_size": 60
+          }
+        ],
+        "restrictions": {
+          "reservation": "RESERVATION"
+        }
+      },
+      {
+        "price_components": [
+          {
+            "type": "ENERGY",
+            "price": 0.3,
+            "vat": 21,
+            "step_size": 1
+          }
+        ]
+      }
+    ]
+  },
+  "session": {
+    "start": "2026-10-01T10:00:00Z",
+    "stop": "2026-10-01T11:00:00Z",
+    "samples": [
+      {
+        "at": "2026-10-01T10:00:00Z",
+        "energy_wh": 0
+      },
+      {
+        "at": "2026-10-01T11:00:00Z",
+        "energy_wh": 10000
+      }
+    ],
+    "total_energy_wh": 10000
+  },
+  "expected": {
+    "currency": "EUR",
+    "final": true,
+    "total_energy_wh": 10000,
+    "total_time_s": 3600,
+    "charging_time_s": 3600,
+    "parking_time_s": 0,
+    "breakdown": {
+      "flat": {
+        "excl_vat": 0,
+        "incl_vat": 0
+      },
+      "energy": {
+        "wh": 10000,
+        "billed_wh": 10000,
+        "cost": {
+          "excl_vat": 3,
+          "incl_vat": 3.63
+        }
+      },
+      "time": {
+        "total_s": 3600,
+        "grace_s": 0,
+        "billable_s": 0,
+        "step_size_s": 0,
+        "steps": 0,
+        "minutes": 60.0,
+        "cost": {
+          "excl_vat": 0,
+          "incl_vat": 0
+        }
+      },
+      "parking": {
+        "total_s": 0,
+        "grace_s": 0,
+        "billable_s": 0,
+        "step_size_s": 0,
+        "steps": 0,
+        "minutes": 0.0,
+        "cost": {
+          "excl_vat": 0,
+          "incl_vat": 0
+        }
+      },
+      "min_price_applied": false,
+      "max_price_applied": false,
+      "total": {
+        "excl_vat": 3,
+        "incl_vat": 3.63
+      }
+    },
+    "charging_periods": [
+      {
+        "start_date_time": "2026-10-01T10:00:00Z",
+        "dimensions": [
+          {
+            "type": "ENERGY",
+            "volume": 10.0
+          },
+          {
+            "type": "TIME",
+            "volume": 1
+          }
+        ],
+        "tariff_id": "0193b2c4-0000-7000-8000-00000000f001"
+      }
+    ]
+  }
+}
