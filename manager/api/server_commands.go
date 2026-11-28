@@ -416,13 +416,14 @@ func (s *Server) renderCommand(w http.ResponseWriter, r *http.Request, code int,
 }
 
 // apiCommand is the command as the API shows it. Its jti is kept for the audit and not
-// shown.
+// shown, and neither are the secrets of its payload, even before they are replaced in
+// the stored payload.
 func (s *Server) apiCommand(cmd *store.Command) (Command, error) {
 	id, err := uuid.Parse(cmd.Id)
 	if err != nil {
 		return Command{}, fmt.Errorf("command id %q is not a UUID: %w", cmd.Id, err)
 	}
-	payload := cmd.Payload
+	payload, _ := commands.RedactPayload(cmd.Payload, cmd.RedactPaths)
 	if len(payload) == 0 {
 		payload = json.RawMessage(`{}`)
 	}

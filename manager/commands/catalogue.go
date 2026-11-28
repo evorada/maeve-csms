@@ -56,6 +56,12 @@ var catalogue = map[transport.OcppVersion]map[string]ActionSpec{
 		ocpp16Action("UnlockConnector", 5*time.Minute, "Unlocked"),
 		ocpp16Action("UpdateFirmware", 24*time.Hour),
 	),
+	// OCPP 2.0.1: only what the onboarding of a station needs so far, its new password
+	// and the BootNotification that follows it
+	transport.OcppVersion201: actionsOf(
+		ocpp201Action("SetVariables", 0),
+		ocpp201Action("TriggerMessage", 0, "Accepted"),
+	),
 }
 
 // ocpp16Action returns the spec of an OCPP 1.6 action, whose schemas are named after it.
@@ -66,6 +72,19 @@ func ocpp16Action(action string, ttl time.Duration, accepted ...string) ActionSp
 		Action:           action,
 		RequestSchema:    "ocpp16/" + action + ".json",
 		ResponseSchema:   "ocpp16/" + action + "Response.json",
+		AcceptedStatuses: accepted,
+		DefaultTTL:       ttl,
+	}
+}
+
+// ocpp201Action returns the spec of an OCPP 2.0.1 action, whose schemas are named after
+// it. Without accepted statuses the response has no top-level status field.
+func ocpp201Action(action string, ttl time.Duration, accepted ...string) ActionSpec {
+	return ActionSpec{
+		Version:          transport.OcppVersion201,
+		Action:           action,
+		RequestSchema:    "ocpp201/" + action + "Request.json",
+		ResponseSchema:   "ocpp201/" + action + "Response.json",
 		AcceptedStatuses: accepted,
 		DefaultTTL:       ttl,
 	}

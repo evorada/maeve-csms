@@ -23,6 +23,9 @@ const (
 	TypeLocationUpdated        = "location.updated"
 	TypeStationDecommissioned  = "station.decommissioned"
 	TypeStationPending         = "station.pending"
+	TypeStationApproved        = "station.approved"
+	TypeStationApprovalFailed  = "station.approval_failed"
+	TypeStationRejected        = "station.rejected"
 )
 
 // The types of the resources that the events are about, with the form of their ids.
@@ -48,6 +51,9 @@ var AllTypes = []string{
 	TypeLocationUpdated,
 	TypeStationDecommissioned,
 	TypeStationPending,
+	TypeStationApproved,
+	TypeStationApprovalFailed,
+	TypeStationRejected,
 }
 
 // The changes that a location.updated event reports.
@@ -55,6 +61,18 @@ const (
 	LocationChangeCreated = "created"
 	LocationChangeUpdated = "updated"
 	LocationChangeDeleted = "deleted"
+)
+
+// The ways in which the password of an approved station is set (StationApprovedData).
+const (
+	// PasswordModeRotate sends a new password of the station to it.
+	PasswordModeRotate = "rotate"
+	// PasswordModeManual gives the new password of the station to the operator, who sets
+	// it on the station.
+	PasswordModeManual = "manual"
+	// PasswordModeKeepOnboarding keeps the onboarding password of the tenant, which the
+	// station connected with.
+	PasswordModeKeepOnboarding = "keep_onboarding"
 )
 
 // DisconnectReasonStale is the reason of a station.disconnected event when the station

@@ -40,3 +40,15 @@ func (s *Store) RecordOnboardingConnection(context.Context, string, string, stri
 func (s *Store) RecordOnboardingBoot(context.Context, string, time.Time) (*store.StationOnboarding, bool, error) {
 	return nil, false, fmt.Errorf("RecordOnboardingBoot: %w", store.ErrNotImplemented)
 }
+
+func (s *Store) SetOnboarding(context.Context, string, *store.StationOnboarding, *string) error {
+	return fmt.Errorf("SetOnboarding: %w", store.ErrNotImplemented)
+}
+
+func (s *Store) CompleteApproval(context.Context, string, *store.PendingApproval, *store.ChargeStationAuth, bool) error {
+	return fmt.Errorf("CompleteApproval: %w", store.ErrNotImplemented)
+}
+
+func (s *Store) RejectChargeStation(context.Context, string, string) error {
+	return fmt.Errorf("RejectChargeStation: %w", store.ErrNotImplemented)
+}

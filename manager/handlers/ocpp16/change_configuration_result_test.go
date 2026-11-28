@@ -15,6 +15,7 @@ import (
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
+	"github.com/thoughtworks/maeve-csms/manager/testutil"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	"k8s.io/utils/clock"
 )
@@ -486,4 +487,64 @@ func TestChangeConfigurationHandlerCallErrorWithoutRequest(t *testing.T) {
 
 	mockStore.AssertNotCalled(t, "UpdateChargeStationSettings", mock.Anything, mock.Anything, mock.Anything)
 	mockCallMaker.AssertNotCalled(t, "Send", mock.Anything, mock.Anything, mock.Anything)
+}
+
+// The password of a station (AuthorizationKey) is never stored or traced, whatever sent
+// it and however the station answered.
+func TestChangeConfigurationHandlerKeepsNoAuthorizationKey(t *testing.T) {
+	const password = "0123456789abcdef0123456789abcdef01234567"
+	request := &types.ChangeConfigurationJson{Key: "AuthorizationKey", Value: password}
+
+	for name, answer := range map[string]func(ctx context.Context, h handlers.ChangeConfigurationResultHandler) error{
+		"accepted": func(ctx context.Context, h handlers.ChangeConfigurationResultHandler) error {
+			return h.HandleCallResult(ctx, "cs001", request, &types.ChangeConfigurationResponseJson{
+				Status: types.ChangeConfigurationResponseJsonStatusAccepted}, nil)
+		},
+		"reboot required": func(ctx context.Context, h handlers.ChangeConfigurationResultHandler) error {
+			return h.HandleCallResult(ctx, "cs001", request, &types.ChangeConfigurationResponseJson{
+				Status: types.ChangeConfigurationResponseJsonStatusRebootRequired}, nil)
+		},
+		"not supported": func(ctx context.Context, h handlers.ChangeConfigurationResultHandler) error {
+			return h.HandleCallResult(ctx, "cs001", request, &types.ChangeConfigurationResponseJson{
+				Status: types.ChangeConfigurationResponseJsonStatusNotSupported}, nil)
+		},
+		"call error": func(ctx context.Context, h handlers.ChangeConfigurationResultHandler) error {
+			return h.HandleCallError(ctx, "cs001", request, changeConfigurationCallError(), nil)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			engine := inmemory.NewStore(clock.RealClock{})
+			callMaker := new(MockCallMaker)
+			callMaker.On("Send", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+			tracer, exporter := testutil.GetTracer()
+			ctx, span := tracer.Start(context.Background(), "result")
+
+			require.NoError(t, answer(ctx, handlers.ChangeConfigurationResultHandler{SettingsStore: engine, CallMaker: callMaker}))
+			span.End()
+
+			settings, err := engine.LookupChargeStationSettings(context.Background(), "cs001")
+			require.NoError(t, err)
+			require.Contains(t, settings.Settings, "AuthorizationKey")
+			assert.Equal(t, "***", settings.Settings["AuthorizationKey"].Value)
+			spans := exporter.GetSpans()
+			require.Len(t, spans, 1)
+			traced := map[string]string{}
+			for _, attribute := range spans[0].Attributes {
+				traced[string(attribute.Key)] = attribute.Value.Emit()
+				assert.NotContains(t, attribute.Value.Emit(), password, string(attribute.Key))
+			}
+			assert.Equal(t, "***", traced["setting.value"])
+		})
+	}
+
+	t.Run("other keys keep their values", func(t *testing.T) {
+		engine := inmemory.NewStore(clock.RealClock{})
+		err := handlers.ChangeConfigurationResultHandler{SettingsStore: engine, CallMaker: new(MockCallMaker)}.HandleCallResult(
+			context.Background(), "cs001", &types.ChangeConfigurationJson{Key: "HeartbeatInterval", Value: "300"},
+			&types.ChangeConfigurationResponseJson{Status: types.ChangeConfigurationResponseJsonStatusAccepted}, nil)
+		require.NoError(t, err)
+		settings, err := engine.LookupChargeStationSettings(context.Background(), "cs001")
+		require.NoError(t, err)
+		assert.Equal(t, "300", settings.Settings["HeartbeatInterval"].Value)
+	})
 }

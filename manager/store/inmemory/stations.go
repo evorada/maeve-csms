@@ -319,6 +319,126 @@ func (s *Store) RecordOnboardingBoot(_ context.Context, stationKey string, at ti
 	return copyOnboarding(onboarding), notify, nil
 }
 
+// pendingStation returns the record of a pending station. A station that does not exist
+// is ErrNotFound, one that is not pending ErrInvalidState. The caller holds the lock.
+func (s *Store) pendingStation(stationKey string) (*store.ChargeStation, error) {
+	registered := s.chargeStations[stationKey]
+	if registered == nil {
+		return nil, store.ErrNotFound
+	}
+	if registered.State != store.StationStatePending {
+		return nil, fmt.Errorf("the station is %s: %w", registered.State, store.ErrInvalidState)
+	}
+	return registered, nil
+}
+
+// setPendingPassword sets the pending password hash of the auth details of the station
+// ("" clears it). The auth details are handed out as they are stored, so they are
+// replaced, not changed. The caller holds the lock.
+func (s *Store) setPendingPassword(stationKey, hash string) {
+	if current := s.chargeStationAuth[stationKey]; current != nil {
+		updated := *current
+		updated.PendingBase64SHA256Password = hash
+		s.chargeStationAuth[stationKey] = &updated
+	}
+}
+
+func (s *Store) SetOnboarding(_ context.Context, stationKey string, onboarding *store.StationOnboarding, pendingPasswordHash *string) error {
+	if onboarding == nil {
+		return fmt.Errorf("set onboarding of %s: no onboarding", stationKey)
+	}
+	s.Lock()
+	defer s.Unlock()
+	registered, err := s.pendingStation(stationKey)
+	if err != nil {
+		return fmt.Errorf("set onboarding of %s: %w", stationKey, err)
+	}
+	registered.Onboarding = copyOnboarding(onboarding)
+	registered.UpdatedAt = s.clock.Now().UTC()
+	hash := ""
+	if pendingPasswordHash != nil {
+		hash = *pendingPasswordHash
+	}
+	s.setPendingPassword(stationKey, hash)
+	return nil
+}
+
+func (s *Store) CompleteApproval(_ context.Context, stationKey string, approval *store.PendingApproval, auth *store.ChargeStationAuth, sharedCredentials bool) error {
+	fail := func(err error) error {
+		return fmt.Errorf("complete the approval of %s: %w", stationKey, err)
+	}
+	if approval == nil || auth == nil {
+		return fail(fmt.Errorf("no approval or no auth details"))
+	}
+	var maxCapacityKw *float64
+	if approval.MaxCapacityKw != nil {
+		rounded := math.Round(*approval.MaxCapacityKw*1000) / 1000
+		maxCapacityKw = &rounded
+	}
+
+	s.Lock()
+	defer s.Unlock()
+	registered, err := s.pendingStation(stationKey)
+	if err != nil {
+		return fail(err)
+	}
+	locationId, ok := assetKey(approval.LocationId)
+	if !ok || s.assetLocations[locationId] == nil {
+		return fail(fmt.Errorf("location %s: %w", approval.LocationId, store.ErrNotFound))
+	}
+
+	// the EVSEs are created one by one and deleted again when one of them cannot be, so
+	// that the approval is stored whole or not at all
+	orgId := stationOrgId(s.orgIdForStation(stationKey))
+	var created []string
+	for _, evse := range approval.Evses {
+		evse.OrgId, evse.LocationId, evse.StationKey = orgId, locationId, stationKey
+		if err := s.createAssetEvse(evse); err != nil {
+			for _, id := range created {
+				s.deleteAssetEvse(id)
+			}
+			return fail(err)
+		}
+		created = append(created, evse.Id)
+	}
+
+	now := s.clock.Now().UTC()
+	registered.LocationId = &locationId
+	registered.DisplayName = clonePtr(approval.DisplayName)
+	registered.MaxCapacityKw = maxCapacityKw
+	registered.AllowAnyToken = approval.AllowAnyToken
+	registered.State = store.StationStateActive
+	registered.StateReason = nil
+	registered.StateChangedAt = now
+	registered.UpdatedAt = now
+	registered.Onboarding = nil
+	registered.SharedCredentials = sharedCredentials
+	s.chargeStationAuth[stationKey] = &store.ChargeStationAuth{
+		SecurityProfile:        auth.SecurityProfile,
+		Base64SHA256Password:   auth.Base64SHA256Password,
+		InvalidUsernameAllowed: auth.InvalidUsernameAllowed,
+		OrgId:                  s.orgIdForStation(stationKey),
+	}
+	return nil
+}
+
+func (s *Store) RejectChargeStation(_ context.Context, stationKey string, reason string) error {
+	s.Lock()
+	defer s.Unlock()
+	registered, err := s.pendingStation(stationKey)
+	if err != nil {
+		return fmt.Errorf("reject charge station %s: %w", stationKey, err)
+	}
+	now := s.clock.Now().UTC()
+	stateReason := store.RejectedStateReason(reason)
+	registered.State = store.StationStateDecommissioned
+	registered.StateReason = &stateReason
+	registered.StateChangedAt = now
+	registered.UpdatedAt = now
+	s.setPendingPassword(stationKey, "")
+	return nil
+}
+
 // stationOrgId returns the canonical (lowercase) form of an org id that is a UUID, as
 // PostgreSQL returns it, and any other org id as it is.
 func stationOrgId(orgId string) string {
@@ -336,6 +456,23 @@ func copyOnboarding(onboarding *store.StationOnboarding) *store.StationOnboardin
 	copied.NotifiedAt = clonePtr(onboarding.NotifiedAt)
 	copied.Error = clonePtr(onboarding.Error)
 	copied.CommandId = clonePtr(onboarding.CommandId)
+	copied.Approval = copyPendingApproval(onboarding.Approval)
+	return &copied
+}
+
+func copyPendingApproval(approval *store.PendingApproval) *store.PendingApproval {
+	if approval == nil {
+		return nil
+	}
+	copied := *approval
+	copied.DisplayName = clonePtr(approval.DisplayName)
+	copied.MaxCapacityKw = clonePtr(approval.MaxCapacityKw)
+	if approval.Evses != nil {
+		copied.Evses = make([]*store.AssetEvse, len(approval.Evses))
+		for i, evse := range approval.Evses {
+			copied.Evses[i] = copyAssetEvse(evse)
+		}
+	}
 	return &copied
 }
 

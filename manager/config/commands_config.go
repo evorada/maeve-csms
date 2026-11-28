@@ -13,6 +13,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/handlers"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp201"
+	"github.com/thoughtworks/maeve-csms/manager/onboarding"
 	"github.com/thoughtworks/maeve-csms/manager/schemas"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
@@ -136,8 +137,9 @@ func parsePositiveDuration(name, value string, allowZero bool) (time.Duration, e
 // getCommandService creates the command queue: the service that the API uses, the
 // dispatcher that sends the commands and sees the answers, and the tracker that follows
 // the accepted commands to their effect (told by the dispatcher about the answers and
-// sweeping in its sweep job). The Firestore storage has no command store: all three are
-// nil there and the manager works as before.
+// sweeping in its sweep job). The dispatcher also tells the approvals of the pending
+// charge stations how the commands that send their new passwords end. The Firestore
+// storage has no command store: all three are nil there and the manager works as before.
 func getCommandService(settings commands.Config, storageType string, engine store.Engine, domainEvents events.Emitter,
 	emitter transport.Emitter) (*commands.Service, *commands.Dispatcher, *commands.Tracker) {
 	if storageType == "firestore" {
@@ -176,6 +178,9 @@ func getCommandService(settings commands.Config, storageType string, engine stor
 		SchemaFS:       schemas.OcppSchemas,
 		Clock:          clock.RealClock{},
 		Config:         settings,
+	}
+	dispatcher.AfterCompletion = []commands.CompletionHook{
+		&onboarding.Approvals{Store: engine, Tx: engine, Events: domainEvents, Commands: service},
 	}
 	return service, dispatcher, tracker
 }

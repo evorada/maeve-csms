@@ -22,6 +22,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/handlers"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/jobs"
+	"github.com/thoughtworks/maeve-csms/manager/onboarding"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/testutil"
@@ -1427,6 +1428,16 @@ func TestConfigureCommands(t *testing.T) {
 		assert.Same(t, settings.Events, settings.CommandTracker.Events)
 		assert.Equal(t, []commands.ResultHook{settings.CommandTracker}, settings.CommandDispatcher.AfterResult)
 		assert.Equal(t, []commands.Sweeper{settings.CommandTracker}, settings.CommandDispatcher.AfterSweep)
+
+		// the approvals of the pending stations hear how the commands with their new
+		// passwords end, and ask the approved stations to boot through the queue
+		require.Len(t, settings.CommandDispatcher.AfterCompletion, 1)
+		approvals, ok := settings.CommandDispatcher.AfterCompletion[0].(*onboarding.Approvals)
+		require.True(t, ok)
+		assert.Same(t, settings.Storage, approvals.Store)
+		assert.Same(t, settings.Storage, approvals.Tx)
+		assert.Same(t, settings.Events, approvals.Events)
+		assert.Same(t, settings.Commands, approvals.Commands)
 		router16 := settings.Ocpp16Handler.(*handlers.Router)
 		for _, action := range []string{"StartTransaction", "StopTransaction", "StatusNotification"} {
 			assert.Same(t, settings.CommandTracker, trackerOf(t, router16.CallRoutes[action].Handler), action)

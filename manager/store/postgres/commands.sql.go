@@ -76,7 +76,7 @@ func (q *Queries) DeleteCompletedCommandsBefore(ctx context.Context, arg DeleteC
 }
 
 const GetCommand = `-- name: GetCommand :one
-SELECT id, org_id, station_key, ocpp_version, action, payload, status, result, error_code, error_description, progress, progress_at, actor, jti, created_at, sent_at, completed_at, expires_at FROM commands WHERE id = $1
+SELECT id, org_id, station_key, ocpp_version, action, payload, status, result, error_code, error_description, progress, progress_at, actor, jti, created_at, sent_at, completed_at, expires_at, redact_paths FROM commands WHERE id = $1
 `
 
 func (q *Queries) GetCommand(ctx context.Context, id pgtype.UUID) (Command, error) {
@@ -101,6 +101,7 @@ func (q *Queries) GetCommand(ctx context.Context, id pgtype.UUID) (Command, erro
 		&i.SentAt,
 		&i.CompletedAt,
 		&i.ExpiresAt,
+		&i.RedactPaths,
 	)
 	return i, err
 }
@@ -120,9 +121,9 @@ const InsertCommand = `-- name: InsertCommand :exec
 INSERT INTO commands (
     id, org_id, station_key, ocpp_version, action, payload, status, result,
     error_code, error_description, progress, progress_at, actor, jti,
-    created_at, sent_at, completed_at, expires_at
+    created_at, sent_at, completed_at, expires_at, redact_paths
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 `
 
 type InsertCommandParams struct {
@@ -144,6 +145,7 @@ type InsertCommandParams struct {
 	SentAt           pgtype.Timestamptz `db:"sent_at" json:"sent_at"`
 	CompletedAt      pgtype.Timestamptz `db:"completed_at" json:"completed_at"`
 	ExpiresAt        pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
+	RedactPaths      []string           `db:"redact_paths" json:"redact_paths"`
 }
 
 func (q *Queries) InsertCommand(ctx context.Context, arg InsertCommandParams) error {
@@ -166,12 +168,13 @@ func (q *Queries) InsertCommand(ctx context.Context, arg InsertCommandParams) er
 		arg.SentAt,
 		arg.CompletedAt,
 		arg.ExpiresAt,
+		arg.RedactPaths,
 	)
 	return err
 }
 
 const ListCommands = `-- name: ListCommands :many
-SELECT id, org_id, station_key, ocpp_version, action, payload, status, result, error_code, error_description, progress, progress_at, actor, jti, created_at, sent_at, completed_at, expires_at FROM commands
+SELECT id, org_id, station_key, ocpp_version, action, payload, status, result, error_code, error_description, progress, progress_at, actor, jti, created_at, sent_at, completed_at, expires_at, redact_paths FROM commands
 WHERE ($1::uuid IS NULL OR org_id = $1::uuid)
   AND ($2::text IS NULL OR station_key = $2::text)
   AND (cardinality($3::text[]) = 0 OR action = ANY($3::text[]))
@@ -236,6 +239,7 @@ func (q *Queries) ListCommands(ctx context.Context, arg ListCommandsParams) ([]C
 			&i.SentAt,
 			&i.CompletedAt,
 			&i.ExpiresAt,
+			&i.RedactPaths,
 		); err != nil {
 			return nil, err
 		}
@@ -248,7 +252,7 @@ func (q *Queries) ListCommands(ctx context.Context, arg ListCommandsParams) ([]C
 }
 
 const ListExpiredQueuedCommands = `-- name: ListExpiredQueuedCommands :many
-SELECT id, org_id, station_key, ocpp_version, action, payload, status, result, error_code, error_description, progress, progress_at, actor, jti, created_at, sent_at, completed_at, expires_at FROM commands
+SELECT id, org_id, station_key, ocpp_version, action, payload, status, result, error_code, error_description, progress, progress_at, actor, jti, created_at, sent_at, completed_at, expires_at, redact_paths FROM commands
 WHERE status = 'queued' AND expires_at <= $1
 ORDER BY expires_at, id
 LIMIT $2
@@ -287,6 +291,7 @@ func (q *Queries) ListExpiredQueuedCommands(ctx context.Context, arg ListExpired
 			&i.SentAt,
 			&i.CompletedAt,
 			&i.ExpiresAt,
+			&i.RedactPaths,
 		); err != nil {
 			return nil, err
 		}
@@ -299,7 +304,7 @@ func (q *Queries) ListExpiredQueuedCommands(ctx context.Context, arg ListExpired
 }
 
 const ListOverdueSentCommands = `-- name: ListOverdueSentCommands :many
-SELECT id, org_id, station_key, ocpp_version, action, payload, status, result, error_code, error_description, progress, progress_at, actor, jti, created_at, sent_at, completed_at, expires_at FROM commands
+SELECT id, org_id, station_key, ocpp_version, action, payload, status, result, error_code, error_description, progress, progress_at, actor, jti, created_at, sent_at, completed_at, expires_at, redact_paths FROM commands
 WHERE status = 'sent' AND sent_at <= $1
 ORDER BY sent_at, id
 LIMIT $2
@@ -338,6 +343,7 @@ func (q *Queries) ListOverdueSentCommands(ctx context.Context, arg ListOverdueSe
 			&i.SentAt,
 			&i.CompletedAt,
 			&i.ExpiresAt,
+			&i.RedactPaths,
 		); err != nil {
 			return nil, err
 		}
@@ -403,7 +409,7 @@ func (q *Queries) LockStationCommands(ctx context.Context, arg LockStationComman
 const MarkCommandSent = `-- name: MarkCommandSent :one
 UPDATE commands SET status = 'sent', sent_at = $1
 WHERE id = $2 AND status = 'queued'
-RETURNING id, org_id, station_key, ocpp_version, action, payload, status, result, error_code, error_description, progress, progress_at, actor, jti, created_at, sent_at, completed_at, expires_at
+RETURNING id, org_id, station_key, ocpp_version, action, payload, status, result, error_code, error_description, progress, progress_at, actor, jti, created_at, sent_at, completed_at, expires_at, redact_paths
 `
 
 type MarkCommandSentParams struct {
@@ -433,12 +439,13 @@ func (q *Queries) MarkCommandSent(ctx context.Context, arg MarkCommandSentParams
 		&i.SentAt,
 		&i.CompletedAt,
 		&i.ExpiresAt,
+		&i.RedactPaths,
 	)
 	return i, err
 }
 
 const NextQueuedCommandForUpdate = `-- name: NextQueuedCommandForUpdate :one
-SELECT id, org_id, station_key, ocpp_version, action, payload, status, result, error_code, error_description, progress, progress_at, actor, jti, created_at, sent_at, completed_at, expires_at FROM commands
+SELECT id, org_id, station_key, ocpp_version, action, payload, status, result, error_code, error_description, progress, progress_at, actor, jti, created_at, sent_at, completed_at, expires_at, redact_paths FROM commands
 WHERE station_key = $1 AND status = 'queued' AND expires_at > $2
 ORDER BY created_at, id
 LIMIT 1
@@ -472,14 +479,30 @@ func (q *Queries) NextQueuedCommandForUpdate(ctx context.Context, arg NextQueued
 		&i.SentAt,
 		&i.CompletedAt,
 		&i.ExpiresAt,
+		&i.RedactPaths,
 	)
 	return i, err
+}
+
+const RedactCommandPayload = `-- name: RedactCommandPayload :exec
+UPDATE commands SET payload = $1
+WHERE id = $2
+`
+
+type RedactCommandPayloadParams struct {
+	Payload []byte      `db:"payload" json:"payload"`
+	ID      pgtype.UUID `db:"id" json:"id"`
+}
+
+func (q *Queries) RedactCommandPayload(ctx context.Context, arg RedactCommandPayloadParams) error {
+	_, err := q.db.Exec(ctx, RedactCommandPayload, arg.Payload, arg.ID)
+	return err
 }
 
 const SetCommandProgress = `-- name: SetCommandProgress :one
 UPDATE commands SET progress = $1, progress_at = $2
 WHERE id = $3
-RETURNING id, org_id, station_key, ocpp_version, action, payload, status, result, error_code, error_description, progress, progress_at, actor, jti, created_at, sent_at, completed_at, expires_at
+RETURNING id, org_id, station_key, ocpp_version, action, payload, status, result, error_code, error_description, progress, progress_at, actor, jti, created_at, sent_at, completed_at, expires_at, redact_paths
 `
 
 type SetCommandProgressParams struct {
@@ -510,6 +533,7 @@ func (q *Queries) SetCommandProgress(ctx context.Context, arg SetCommandProgress
 		&i.SentAt,
 		&i.CompletedAt,
 		&i.ExpiresAt,
+		&i.RedactPaths,
 	)
 	return i, err
 }
@@ -523,7 +547,7 @@ SET status            = $1,
     sent_at           = $5,
     completed_at      = $6
 WHERE id = $7 AND status = ANY($8::text[])
-RETURNING id, org_id, station_key, ocpp_version, action, payload, status, result, error_code, error_description, progress, progress_at, actor, jti, created_at, sent_at, completed_at, expires_at
+RETURNING id, org_id, station_key, ocpp_version, action, payload, status, result, error_code, error_description, progress, progress_at, actor, jti, created_at, sent_at, completed_at, expires_at, redact_paths
 `
 
 type TransitionCommandParams struct {
@@ -568,6 +592,7 @@ func (q *Queries) TransitionCommand(ctx context.Context, arg TransitionCommandPa
 		&i.SentAt,
 		&i.CompletedAt,
 		&i.ExpiresAt,
+		&i.RedactPaths,
 	)
 	return i, err
 }

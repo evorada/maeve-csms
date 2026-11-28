@@ -258,6 +258,7 @@ type Command struct {
 	SentAt           pgtype.Timestamptz `db:"sent_at" json:"sent_at"`
 	CompletedAt      pgtype.Timestamptz `db:"completed_at" json:"completed_at"`
 	ExpiresAt        pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
+	RedactPaths      []string           `db:"redact_paths" json:"redact_paths"`
 }
 
 type ConnectorStatus struct {

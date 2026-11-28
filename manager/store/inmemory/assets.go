@@ -243,6 +243,13 @@ func (s *Store) DeleteAssetLocation(_ context.Context, locationId string) error 
 }
 
 func (s *Store) CreateAssetEvse(_ context.Context, evse *store.AssetEvse) error {
+	s.Lock()
+	defer s.Unlock()
+	return s.createAssetEvse(evse)
+}
+
+// createAssetEvse is CreateAssetEvse. The caller holds the lock.
+func (s *Store) createAssetEvse(evse *store.AssetEvse) error {
 	id, err := newAssetKey(evse.Id)
 	if err != nil {
 		return fmt.Errorf("create asset EVSE: invalid id %q: %w", evse.Id, err)
@@ -259,8 +266,6 @@ func (s *Store) CreateAssetEvse(_ context.Context, evse *store.AssetEvse) error 
 		stored.Status = store.AssetEvseStatusActive
 	}
 
-	s.Lock()
-	defer s.Unlock()
 	if err := s.checkAssetEvseReferences(stored); err != nil {
 		return fmt.Errorf("create asset EVSE: %w", err)
 	}
@@ -446,8 +451,15 @@ func (s *Store) DeleteAssetEvse(_ context.Context, evseUid string) error {
 	}
 	s.Lock()
 	defer s.Unlock()
+	s.deleteAssetEvse(id)
+	return nil
+}
+
+// deleteAssetEvse deletes the EVSE with the id, and its connectors. The caller holds the
+// lock.
+func (s *Store) deleteAssetEvse(id string) {
 	if s.assetEvses[id] == nil {
-		return nil
+		return
 	}
 	delete(s.assetEvses, id)
 	for connectorId, c := range s.assetConnectors {
@@ -455,7 +467,6 @@ func (s *Store) DeleteAssetEvse(_ context.Context, evseUid string) error {
 			delete(s.assetConnectors, connectorId)
 		}
 	}
-	return nil
 }
 
 // assetEvseWithConnectors returns a copy of the stored EVSE with copies of its

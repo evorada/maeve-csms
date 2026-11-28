@@ -121,9 +121,11 @@ resumption at once, any other instance within `[tenancy] cache_ttl`.
 
 The entitlements that the platform sends with a tenant (`mode = "multi"`) can limit its connectors with
 `cpms.connectors.max`. While the `enforcement` of that limit is `hard`, a new charge station is not registered
-(`POST /api/v0/cs/{csId}` is answered with `403` and an error that starts with `entitlement_limit_exceeded`)
-once the connectors that the active charge stations of the tenant have reported use up the limit (a pending or
-decommissioned charge station takes up nothing). A limit with the
+(`POST /api/v0/cs/{csId}` is answered with `403` and an error that starts with `entitlement_limit_exceeded`),
+and a pending charge station is not approved (`POST /api/v0/cs/{csId}/approve`, `409` and the error
+`entitlement_exceeded`) when its connectors would go beyond the limit, once the connectors that the active
+charge stations of the tenant have reported use up the limit (a pending or decommissioned charge station takes up
+nothing). A limit with the
 `scope` `subtree` is shared by the org in its `pool_org_id` and the tenants below that org. A `soft` limit
 refuses nothing, and a changed limit applies to the next request on every instance of the manager. Only
 registering a new charge station is limited: the charge stations that are registered connect, report
@@ -153,6 +155,17 @@ the platform called, within `[tenancy] cache_ttl` on any other instance, and for
 A tenant that was never sent a config has the defaults, and so has an org that is not a tenant and every org
 in `mode = "single"`. The onboarding of charge stations that are not registered only exists for a tenant: in
 `mode = "single"`, and for a tenant whose stored config cannot be read, such a station is refused.
+
+An operator approves a pending charge station (`POST /api/v0/cs/{csId}/approve`, with its location and its
+EVSEs) or rejects it (`POST /api/v0/cs/{csId}/reject`: it is decommissioned and can no longer connect). An
+approved charge station gets a password of its own: by default (`rotate`) a new one is sent to it through the
+command queue (OCPP 1.6 `ChangeConfiguration` of `AuthorizationKey`, OCPP 2.0.1 `SetVariables` of
+`SecurityCtrlr.BasicAuthPassword`) and it becomes active once it has taken it; until then it may connect with
+either password. A charge station that does not take it stays pending (`credentials_failed`) and is approved
+again with `manual` (a new password that the answer shows once and that is set on the charge station by hand)
+or `keep_onboarding` (it keeps the onboarding password of the tenant, which it shares with the other charge
+stations that do so). The new password is stored only as its hash; the command that sends it keeps it until it
+is sent (or ends without being sent) and the API never shows it.
 
 What that means for client certificates: for a charge station of a tenant the `--org-name` of the gateway no
 longer applies, and a tenant whose `accepted_cert_org_names` is empty or missing (also a tenant without a

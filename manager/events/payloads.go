@@ -207,3 +207,42 @@ type StationPendingData struct {
 	Transport       string    `json:"transport"`
 	Credential      string    `json:"credential"`
 }
+
+// StationApprovedData is the payload of station.approved: an operator approved a pending
+// station, which is active now and may charge. LocationId is where it is,
+// EvseCount and ConnectorCount what it was given; PasswordMode is how its password was
+// set (PasswordMode*) and SharedCredentials whether it is the onboarding password of the
+// tenant. Actor is who approved it.
+type StationApprovedData struct {
+	StationKey        string `json:"station_key"`
+	StationId         string `json:"station_id"`
+	LocationId        string `json:"location_id"`
+	EvseCount         int    `json:"evse_count"`
+	ConnectorCount    int    `json:"connector_count"`
+	PasswordMode      string `json:"password_mode"`
+	SharedCredentials bool   `json:"shared_credentials"`
+	Actor             string `json:"actor"`
+}
+
+// StationApprovalFailedData is the payload of station.approval_failed: a pending station
+// did not take the new password of its approval, and stays pending. CommandId is the
+// command that sent the password; Result is what came of it: the status the station
+// answered (e.g. "Rejected", "NotSupported"), the error code of its CallError, "timeout"
+// or "cancelled"; Error describes it, or is null.
+type StationApprovalFailedData struct {
+	StationKey string  `json:"station_key"`
+	StationId  string  `json:"station_id"`
+	CommandId  string  `json:"command_id"`
+	Result     string  `json:"result"`
+	Error      *string `json:"error"`
+}
+
+// StationRejectedData is the payload of station.rejected: an operator refused a pending
+// station, which is decommissioned and can no longer connect. Reason is the reason given,
+// or null; Actor is who rejected it.
+type StationRejectedData struct {
+	StationKey string  `json:"station_key"`
+	StationId  string  `json:"station_id"`
+	Reason     *string `json:"reason"`
+	Actor      string  `json:"actor"`
+}

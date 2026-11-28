@@ -21,6 +21,10 @@ paths:
     $ref: 'paths/assets.yaml#/paths/~1cs~1{csId}'
   /cs/{csId}/decommission:
     $ref: 'paths/assets.yaml#/paths/~1cs~1{csId}~1decommission'
+  /cs/{csId}/approve:
+    $ref: 'paths/onboarding.yaml#/paths/~1cs~1{csId}~1approve'
+  /cs/{csId}/reject:
+    $ref: 'paths/onboarding.yaml#/paths/~1cs~1{csId}~1reject'
   /cs/{csId}/reconfigure:
     $ref: 'paths/configuration.yaml#/paths/~1cs~1{csId}~1reconfigure'
   /cs/{csId}/certificates:
@@ -344,3 +348,13 @@ components:
       $ref: 'schemas/schemas.yaml#/components/schemas/ChargeStationPatch'
     DecommissionRequest:
       $ref: 'schemas/schemas.yaml#/components/schemas/DecommissionRequest'
+    ApproveRequest:
+      $ref: 'schemas/schemas.yaml#/components/schemas/ApproveRequest'
+    ApprovalEvseInput:
+      $ref: 'schemas/schemas.yaml#/components/schemas/ApprovalEvseInput'
+    ApprovalResult:
+      $ref: 'schemas/schemas.yaml#/components/schemas/ApprovalResult'
+    RejectRequest:
+      $ref: 'schemas/schemas.yaml#/components/schemas/RejectRequest'
+    StationOnboarding:
+      $ref: 'schemas/schemas.yaml#/components/schemas/StationOnboarding'

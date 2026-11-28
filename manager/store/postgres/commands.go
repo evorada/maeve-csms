@@ -66,6 +66,7 @@ func (s *Store) CreateCommand(ctx context.Context, cmd *store.Command) error {
 		SentAt:           toNullTimestamptz(cmd.SentAt),
 		CompletedAt:      toNullTimestamptz(cmd.CompletedAt),
 		ExpiresAt:        toPgTimestamptz(cmd.ExpiresAt),
+		RedactPaths:      redactPaths(cmd.RedactPaths),
 	})
 	if isUniqueViolation(err, commandsPrimaryKey) {
 		return fmt.Errorf("create command %s: %w", cmd.Id, store.ErrAlreadyExists)
@@ -297,6 +298,35 @@ func (s *Store) TransitionCommand(ctx context.Context, id string, from []store.C
 	return commandFromRow(row), nil
 }
 
+func (s *Store) RedactCommandPayload(ctx context.Context, id string, payload json.RawMessage) error {
+	pgId, ok := commandId(id)
+	if !ok {
+		return nil
+	}
+	err := s.writeQueries(ctx).RedactCommandPayload(ctx, RedactCommandPayloadParams{Payload: payload, ID: pgId})
+	if err != nil {
+		return fmt.Errorf("redact the payload of command %s: %w", id, err)
+	}
+	return nil
+}
+
+// redactPaths is the column value of the redact paths of a command: never NULL.
+func redactPaths(paths []string) []string {
+	if paths == nil {
+		return []string{}
+	}
+	return paths
+}
+
+// storedRedactPaths is the redact paths of a command row: nil when there are none, as a
+// command is created without them.
+func storedRedactPaths(paths []string) []string {
+	if len(paths) == 0 {
+		return nil
+	}
+	return paths
+}
+
 // SetCommandProgress updates and appends evt together, like TransitionCommand.
 func (s *Store) SetCommandProgress(ctx context.Context, id string, progress json.RawMessage, at time.Time, evt *store.OutboxEvent) (*store.Command, error) {
 	pgId, ok := commandId(id)
@@ -427,6 +457,7 @@ func commandFromRow(row Command) *store.Command {
 		OcppVersion:      row.OcppVersion,
 		Action:           row.Action,
 		Payload:          json.RawMessage(row.Payload),
+		RedactPaths:      storedRedactPaths(row.RedactPaths),
 		Status:           store.CommandStatus(row.Status),
 		Result:           json.RawMessage(row.Result),
 		ErrorCode:        fromPgText(row.ErrorCode),

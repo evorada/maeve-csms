@@ -50,6 +50,11 @@ type Command struct {
 	SentAt           *time.Time
 	CompletedAt      *time.Time
 	ExpiresAt        time.Time // a queued command is not sent after this instant
+	// RedactPaths name the values of the payload that are secrets, as dot-separated
+	// JSON paths with array indexes ("value", "setVariableData.0.attributeValue"). The
+	// dispatcher replaces them with "***" in the stored payload once the command is sent
+	// (or ends without being sent), and the API never shows them.
+	RedactPaths []string
 }
 
 // CommandUpdate is what TransitionCommand writes. Every field but Result and Event is
@@ -134,6 +139,10 @@ type CommandStore interface {
 	// SetCommandProgress replaces progress/progress_at without changing status. Returns
 	// nil, nil if not found; evt, when set, is appended to the outbox with the change.
 	SetCommandProgress(ctx context.Context, id string, progress json.RawMessage, at time.Time, evt *OutboxEvent) (*Command, error)
+	// RedactCommandPayload replaces the payload of the command with payload, which is the
+	// payload with its secrets replaced; nothing else changes. A command that does not
+	// exist is left alone (no error).
+	RedactCommandPayload(ctx context.Context, id string, payload json.RawMessage) error
 	// ListQueuedStationKeys pages (by station_key) over stations with non-expired queued commands.
 	ListQueuedStationKeys(ctx context.Context, now time.Time, afterStationKey string, limit int) ([]string, error)
 	// ListExpiredQueuedCommands returns queued commands with expires_at <= now, oldest

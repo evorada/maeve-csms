@@ -527,3 +527,40 @@ func TestCommandTrackerOnPostgres(t *testing.T) {
 		requireNoOpenTransaction(t)
 	})
 }
+
+func TestMigration_AddCommandRedactPaths(t *testing.T) {
+	ctx := context.Background()
+
+	const (
+		versionBefore = 43
+		versionAfter  = 44
+	)
+
+	migrationConnString, pool := migrationTestDatabase(t, "maeve_migration_000044")
+	hasColumn := func() bool {
+		var found bool
+		require.NoError(t, pool.QueryRow(ctx, `
+			SELECT EXISTS (SELECT 1 FROM information_schema.columns
+			               WHERE table_name = 'commands' AND column_name = 'redact_paths')`).Scan(&found))
+		return found
+	}
+
+	migrateTo(t, migrationConnString, versionBefore)
+	assert.False(t, hasColumn())
+	_, err := pool.Exec(ctx, `
+		INSERT INTO commands (id, org_id, station_key, ocpp_version, action, payload, status, created_at, expires_at)
+		VALUES ('0193b2c4-0000-7000-8000-000000000c01', '0193b2c4-0000-7000-8000-0000000000a1', 'k7f2.cs001',
+		        'ocpp1.6', 'Reset', '{"type":"Soft"}', 'queued', NOW(), NOW() + INTERVAL '1 hour')`)
+	require.NoError(t, err)
+
+	migrateTo(t, migrationConnString, versionAfter)
+	assert.True(t, hasColumn())
+	var paths []string
+	require.NoError(t, pool.QueryRow(ctx, `SELECT redact_paths FROM commands`).Scan(&paths))
+	assert.Equal(t, []string{}, paths, "a command that was stored before has no secrets")
+
+	migrateTo(t, migrationConnString, versionBefore)
+	assert.False(t, hasColumn())
+	migrateTo(t, migrationConnString, versionAfter)
+	assert.True(t, hasColumn())
+}

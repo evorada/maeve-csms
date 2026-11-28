@@ -359,7 +359,7 @@ WHERE org_id = sqlc.arg('org_id')::uuid
 SELECT pg_advisory_xact_lock(sqlc.arg('lock_class')::int, hashtext(sqlc.arg('org_id')::text));
 
 -- name: GetChargeStationOnboardingForUpdate :one
-SELECT state, onboarding FROM charge_stations
+SELECT state, onboarding, org_id FROM charge_stations
 WHERE charge_station_id = $1
 FOR UPDATE;
 
@@ -376,5 +376,40 @@ ON CONFLICT (charge_station_id) DO NOTHING;
 -- name: SetChargeStationOnboarding :exec
 UPDATE charge_stations
 SET onboarding = sqlc.arg('onboarding')::jsonb,
+    updated_at = NOW()
+WHERE charge_station_id = sqlc.arg('charge_station_id');
+
+-- name: SetChargeStationPendingPassword :exec
+UPDATE charge_stations
+SET pending_base64_sha256_password = sqlc.narg('pending_base64_sha256_password')::text,
+    updated_at = NOW()
+WHERE charge_station_id = sqlc.arg('charge_station_id');
+
+-- The approved station becomes active with the auth details of its approval; its pending
+-- password and its onboarding are cleared.
+-- name: CompleteChargeStationApproval :exec
+UPDATE charge_stations
+SET location_id = sqlc.arg('location_id')::uuid,
+    display_name = sqlc.narg('display_name')::text,
+    max_capacity_kw = sqlc.narg('max_capacity_kw')::float8,
+    allow_any_token = sqlc.arg('allow_any_token')::boolean,
+    security_profile = sqlc.arg('security_profile')::int,
+    base64_sha256_password = sqlc.narg('base64_sha256_password')::text,
+    invalid_username_allowed = sqlc.arg('invalid_username_allowed')::boolean,
+    pending_base64_sha256_password = NULL,
+    shared_credentials = sqlc.arg('shared_credentials')::boolean,
+    onboarding = NULL,
+    state = 'active',
+    state_reason = NULL,
+    state_changed_at = NOW(),
+    updated_at = NOW()
+WHERE charge_station_id = sqlc.arg('charge_station_id');
+
+-- name: RejectPendingChargeStation :exec
+UPDATE charge_stations
+SET state = 'decommissioned',
+    state_reason = sqlc.arg('state_reason')::text,
+    state_changed_at = NOW(),
+    pending_base64_sha256_password = NULL,
     updated_at = NOW()
 WHERE charge_station_id = sqlc.arg('charge_station_id');

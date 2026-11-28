@@ -128,6 +128,9 @@ func (s *Server) apiChargeStation(ctx context.Context, cs *store.ChargeStation, 
 		StateChangedAt: cs.StateChangedAt,
 		StateReason:    cs.StateReason,
 	}
+	if cs.State == store.StationStatePending && cs.Onboarding != nil {
+		out.Onboarding = apiStationOnboarding(cs.Onboarding)
+	}
 	if runtime := cs.Runtime; runtime != nil {
 		if runtime.OcppVersion != "" {
 			ocppVersion := runtime.OcppVersion

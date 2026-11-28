@@ -161,6 +161,9 @@ func TestStubsReturnErrNotImplemented(t *testing.T) {
 			_, err := s.SetCommandProgress(ctx, "01936b2e-0000-7000-8000-000000000001", []byte(`{}`), time.Now(), nil)
 			return err
 		},
+		"RedactCommandPayload": func() error {
+			return s.RedactCommandPayload(ctx, "01936b2e-0000-7000-8000-000000000001", []byte(`{}`))
+		},
 		"ListQueuedStationKeys": func() error {
 			_, err := s.ListQueuedStationKeys(ctx, time.Now(), "", 10)
 			return err
@@ -274,6 +277,15 @@ func TestStubsReturnErrNotImplemented(t *testing.T) {
 		"RecordOnboardingBoot": func() error {
 			_, _, err := s.RecordOnboardingBoot(ctx, "cs001", time.Now())
 			return err
+		},
+		"SetOnboarding": func() error {
+			return s.SetOnboarding(ctx, "cs001", &store.StationOnboarding{}, nil)
+		},
+		"CompleteApproval": func() error {
+			return s.CompleteApproval(ctx, "cs001", &store.PendingApproval{}, &store.ChargeStationAuth{}, false)
+		},
+		"RejectChargeStation": func() error {
+			return s.RejectChargeStation(ctx, "cs001", "")
 		},
 	}
 

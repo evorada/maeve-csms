@@ -49,6 +49,54 @@ func (q *Queries) AddChargeStationCertificate(ctx context.Context, arg AddCharge
 	return i, err
 }
 
+const CompleteChargeStationApproval = `-- name: CompleteChargeStationApproval :exec
+UPDATE charge_stations
+SET location_id = $1::uuid,
+    display_name = $2::text,
+    max_capacity_kw = $3::float8,
+    allow_any_token = $4::boolean,
+    security_profile = $5::int,
+    base64_sha256_password = $6::text,
+    invalid_username_allowed = $7::boolean,
+    pending_base64_sha256_password = NULL,
+    shared_credentials = $8::boolean,
+    onboarding = NULL,
+    state = 'active',
+    state_reason = NULL,
+    state_changed_at = NOW(),
+    updated_at = NOW()
+WHERE charge_station_id = $9
+`
+
+type CompleteChargeStationApprovalParams struct {
+	LocationID             pgtype.UUID   `db:"location_id" json:"location_id"`
+	DisplayName            pgtype.Text   `db:"display_name" json:"display_name"`
+	MaxCapacityKw          pgtype.Float8 `db:"max_capacity_kw" json:"max_capacity_kw"`
+	AllowAnyToken          bool          `db:"allow_any_token" json:"allow_any_token"`
+	SecurityProfile        int32         `db:"security_profile" json:"security_profile"`
+	Base64Sha256Password   pgtype.Text   `db:"base64_sha256_password" json:"base64_sha256_password"`
+	InvalidUsernameAllowed bool          `db:"invalid_username_allowed" json:"invalid_username_allowed"`
+	SharedCredentials      bool          `db:"shared_credentials" json:"shared_credentials"`
+	ChargeStationID        string        `db:"charge_station_id" json:"charge_station_id"`
+}
+
+// The approved station becomes active with the auth details of its approval; its pending
+// password and its onboarding are cleared.
+func (q *Queries) CompleteChargeStationApproval(ctx context.Context, arg CompleteChargeStationApprovalParams) error {
+	_, err := q.db.Exec(ctx, CompleteChargeStationApproval,
+		arg.LocationID,
+		arg.DisplayName,
+		arg.MaxCapacityKw,
+		arg.AllowAnyToken,
+		arg.SecurityProfile,
+		arg.Base64Sha256Password,
+		arg.InvalidUsernameAllowed,
+		arg.SharedCredentials,
+		arg.ChargeStationID,
+	)
+	return err
+}
+
 const CountChargeStationRecords = `-- name: CountChargeStationRecords :one
 SELECT count(*) FROM charge_stations
 WHERE org_id = $1::uuid
@@ -301,20 +349,21 @@ func (q *Queries) GetChargeStationDataTransfer(ctx context.Context, chargeStatio
 }
 
 const GetChargeStationOnboardingForUpdate = `-- name: GetChargeStationOnboardingForUpdate :one
-SELECT state, onboarding FROM charge_stations
+SELECT state, onboarding, org_id FROM charge_stations
 WHERE charge_station_id = $1
 FOR UPDATE
 `
 
 type GetChargeStationOnboardingForUpdateRow struct {
-	State      string `db:"state" json:"state"`
-	Onboarding []byte `db:"onboarding" json:"onboarding"`
+	State      string      `db:"state" json:"state"`
+	Onboarding []byte      `db:"onboarding" json:"onboarding"`
+	OrgID      pgtype.UUID `db:"org_id" json:"org_id"`
 }
 
 func (q *Queries) GetChargeStationOnboardingForUpdate(ctx context.Context, chargeStationID string) (GetChargeStationOnboardingForUpdateRow, error) {
 	row := q.db.QueryRow(ctx, GetChargeStationOnboardingForUpdate, chargeStationID)
 	var i GetChargeStationOnboardingForUpdateRow
-	err := row.Scan(&i.State, &i.Onboarding)
+	err := row.Scan(&i.State, &i.Onboarding, &i.OrgID)
 	return i, err
 }
 
@@ -1000,6 +1049,26 @@ func (q *Queries) LookupChargeStationCertificateQuery(ctx context.Context, charg
 	return i, err
 }
 
+const RejectPendingChargeStation = `-- name: RejectPendingChargeStation :exec
+UPDATE charge_stations
+SET state = 'decommissioned',
+    state_reason = $1::text,
+    state_changed_at = NOW(),
+    pending_base64_sha256_password = NULL,
+    updated_at = NOW()
+WHERE charge_station_id = $2
+`
+
+type RejectPendingChargeStationParams struct {
+	StateReason     string `db:"state_reason" json:"state_reason"`
+	ChargeStationID string `db:"charge_station_id" json:"charge_station_id"`
+}
+
+func (q *Queries) RejectPendingChargeStation(ctx context.Context, arg RejectPendingChargeStationParams) error {
+	_, err := q.db.Exec(ctx, RejectPendingChargeStation, arg.StateReason, arg.ChargeStationID)
+	return err
+}
+
 const SetChargeStationAuth = `-- name: SetChargeStationAuth :one
 
 INSERT INTO charge_stations (
@@ -1279,6 +1348,23 @@ type SetChargeStationOnboardingParams struct {
 
 func (q *Queries) SetChargeStationOnboarding(ctx context.Context, arg SetChargeStationOnboardingParams) error {
 	_, err := q.db.Exec(ctx, SetChargeStationOnboarding, arg.Onboarding, arg.ChargeStationID)
+	return err
+}
+
+const SetChargeStationPendingPassword = `-- name: SetChargeStationPendingPassword :exec
+UPDATE charge_stations
+SET pending_base64_sha256_password = $1::text,
+    updated_at = NOW()
+WHERE charge_station_id = $2
+`
+
+type SetChargeStationPendingPasswordParams struct {
+	PendingBase64Sha256Password pgtype.Text `db:"pending_base64_sha256_password" json:"pending_base64_sha256_password"`
+	ChargeStationID             string      `db:"charge_station_id" json:"charge_station_id"`
+}
+
+func (q *Queries) SetChargeStationPendingPassword(ctx context.Context, arg SetChargeStationPendingPasswordParams) error {
+	_, err := q.db.Exec(ctx, SetChargeStationPendingPassword, arg.PendingBase64Sha256Password, arg.ChargeStationID)
 	return err
 }
 

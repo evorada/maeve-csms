@@ -26,8 +26,24 @@ var ocpp16Actions = []string{
 
 func TestCatalogueHasTheOcpp16Actions(t *testing.T) {
 	assert.Equal(t, ocpp16Actions, commands.Actions(transport.OcppVersion16))
-	// the 2.0.1 actions are not in the catalogue yet
-	assert.Empty(t, commands.Actions(transport.OcppVersion201))
+	// of OCPP 2.0.1 only what the onboarding of a station sends so far
+	assert.Equal(t, []string{"SetVariables", "TriggerMessage"}, commands.Actions(transport.OcppVersion201))
+}
+
+func TestCatalogueHasTheOcpp201ActionsOfTheOnboarding(t *testing.T) {
+	for action, accepted := range map[string][]string{"SetVariables": nil, "TriggerMessage": {"Accepted"}} {
+		spec, ok := commands.Lookup(transport.OcppVersion201, action)
+		require.True(t, ok, action)
+		assert.Equal(t, transport.OcppVersion201, spec.Version)
+		assert.Equal(t, "ocpp201/"+action+"Request.json", spec.RequestSchema)
+		assert.Equal(t, "ocpp201/"+action+"Response.json", spec.ResponseSchema)
+		assert.Equal(t, accepted, spec.AcceptedStatuses, action)
+		assert.Zero(t, spec.DefaultTTL, action)
+		for _, file := range []string{spec.RequestSchema, spec.ResponseSchema} {
+			_, err := schemas.Compile(schemas.OcppSchemas, file)
+			assert.NoError(t, err, file)
+		}
+	}
 }
 
 func TestCatalogueSchemasExist(t *testing.T) {

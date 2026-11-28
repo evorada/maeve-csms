@@ -15,6 +15,9 @@ type Querier interface {
 	AddMeterValues(ctx context.Context, arg AddMeterValuesParams) error
 	CancelReservation(ctx context.Context, reservationID int32) error
 	ClaimUnpublishedOutboxEvents(ctx context.Context, limit int32) ([]OutboxEvent, error)
+	// The approved station becomes active with the auth details of its approval; its pending
+	// password and its onboarding are cleared.
+	CompleteChargeStationApproval(ctx context.Context, arg CompleteChargeStationApprovalParams) error
 	CountAssetEvsesForLocation(ctx context.Context, locationID pgtype.UUID) (int64, error)
 	CountChargeStationEvents(ctx context.Context, chargeStationID string) (int64, error)
 	CountChargeStationRecords(ctx context.Context, arg CountChargeStationRecordsParams) (int64, error)
@@ -231,6 +234,8 @@ type Querier interface {
 	// handle at the same time cannot interleave between a read and a write.
 	RecordStationConnected(ctx context.Context, arg RecordStationConnectedParams) (int64, error)
 	RecordStationDisconnected(ctx context.Context, arg RecordStationDisconnectedParams) (int64, error)
+	RedactCommandPayload(ctx context.Context, arg RedactCommandPayloadParams) error
+	RejectPendingChargeStation(ctx context.Context, arg RejectPendingChargeStationParams) error
 	RemoveStationEvses(ctx context.Context, stationKey string) error
 	SetCertificate(ctx context.Context, arg SetCertificateParams) (Certificate, error)
 	// SetChargeStationAuth without an org (NULL) registers a new charge station in the
@@ -242,6 +247,7 @@ type Querier interface {
 	SetChargeStationClearCache(ctx context.Context, arg SetChargeStationClearCacheParams) (ChargeStationClearCache, error)
 	SetChargeStationDataTransfer(ctx context.Context, arg SetChargeStationDataTransferParams) (ChargeStationDataTransfer, error)
 	SetChargeStationOnboarding(ctx context.Context, arg SetChargeStationOnboardingParams) error
+	SetChargeStationPendingPassword(ctx context.Context, arg SetChargeStationPendingPasswordParams) error
 	SetChargeStationRuntime(ctx context.Context, arg SetChargeStationRuntimeParams) (ChargeStationRuntime, error)
 	SetChargeStationSettings(ctx context.Context, arg SetChargeStationSettingsParams) (ChargeStationSetting, error)
 	SetChargeStationState(ctx context.Context, arg SetChargeStationStateParams) (int64, error)

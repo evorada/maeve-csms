@@ -425,4 +425,5 @@ func TestChargeStationRegistryStore(t *testing.T, newStore func(t *testing.T) st
 	})
 
 	testStationOnboarding(t, newStore)
+	testStationApproval(t, newStore)
 }

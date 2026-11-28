@@ -1,0 +1,188 @@
+paths:
+  /cs/{csId}/approve:
+    post:
+      summary: Approve a pending charge station
+      description: |
+        Approves a charge station that connected without being registered and waits for
+        approval (state `pending`): it gets a location, its EVSEs with their connectors, and
+        a password of its own, and becomes `active` and may charge.
+
+        `password_mode` says how the charge station gets its password:
+        - `rotate` (default): a new password is sent to the charge station through the
+          command queue (OCPP 1.6 `ChangeConfiguration` of `AuthorizationKey`, OCPP 2.0.1
+          `SetVariables` of `SecurityCtrlr.BasicAuthPassword`); the answer is 202 and the
+          charge station stays `pending` (onboarding status `approving`) until it takes the
+          password, then it becomes `active` (event `station.approved`). When it does not
+          take it, the onboarding status becomes `credentials_failed` (event
+          `station.approval_failed`) and the charge station can be approved again. The
+          password is never shown and the command keeps it only until it is sent.
+        - `manual`: the charge station becomes `active` at once with a new password, which
+          the answer shows once (`password`) and which is set on the charge station by hand.
+        - `keep_onboarding`: the charge station becomes `active` at once and keeps the
+          onboarding password of its tenant, which it connected with (`shared_credentials`).
+      operationId: approveChargeStation
+      x-permission: cpms.station.write
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        required: true
+        schema:
+          type: string
+          maxLength: 80
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/schemas.yaml#/components/schemas/ApproveRequest'
+      responses:
+        '200':
+          description: The charge station is approved and active (`manual`, `keep_onboarding`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/ApprovalResult'
+        '202':
+          description: The new password is being sent to the charge station (`rotate`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/ApprovalResult'
+        '400':
+          description: The body is not a JSON document of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: |
+            The charge station is not pending (error `invalid_state`), its new password is
+            being sent to it (error `approval_in_progress`), its connectors would go beyond
+            the connector limit of the tenant (error `entitlement_exceeded`), its OCPP
+            version is not known because it has not booted (`rotate`, error
+            `station_version_unknown`), or an EVSE id is taken (error `already_exists`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '422':
+          description: |
+            Fields of the body break a rule: the location is not one of the org of the
+            charge station, an EVSE or a connector is not valid, or `keep_onboarding` is
+            asked for a charge station that did not connect with the onboarding password of
+            its tenant
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/ValidationErrors'
+        '501':
+          description: The storage engine of the manager does not keep the registry of the charge stations, or (`rotate`) the commands
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+  /cs/{csId}/reject:
+    post:
+      summary: Reject a pending charge station
+      description: |
+        Refuses a charge station that connected without being registered and waits for
+        approval (state `pending`): it is `decommissioned` with the state reason
+        `rejected: <reason>` and can no longer connect (an open connection is not closed).
+        Its id cannot be registered or onboarded again. A new password that is still
+        queued for it is not sent.
+      operationId: rejectChargeStation
+      x-permission: cpms.station.write
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        required: true
+        schema:
+          type: string
+          maxLength: 80
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/schemas.yaml#/components/schemas/RejectRequest'
+      responses:
+        '200':
+          description: The rejected charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/ChargeStationRecord'
+        '400':
+          description: The body is not a JSON document of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: The charge station is not pending (error `invalid_state`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '422':
+          description: Fields of the body break a rule
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/ValidationErrors'
+        '501':
+          description: The storage engine of the manager does not keep the registry of the charge stations
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'

@@ -2697,6 +2697,57 @@ components:
           description: The EVSEs of the charge station, ordered by OCPP EVSE id (only when one charge station is read)
           items:
             $ref: '#/components/schemas/AssetEvse'
+        onboarding:
+          $ref: '#/components/schemas/StationOnboarding'
+    StationOnboarding:
+      type: object
+      description: |
+        What is known about a pending charge station, which connected without being
+        registered (only for pending charge stations)
+      required:
+      - status
+      - first_seen_at
+      - last_seen_at
+      - transport
+      - credential
+      properties:
+        status:
+          type: string
+          description: |
+            `awaiting_approval` before an approval, `approving` while the new password of
+            an approval is being sent to it, `credentials_failed` when it did not take it
+          enum:
+          - awaiting_approval
+          - approving
+          - credentials_failed
+        first_seen_at:
+          type: string
+          format: date-time
+        last_seen_at:
+          type: string
+          format: date-time
+          description: The time of its last connection or BootNotification
+        transport:
+          type: string
+          description: The transport of its last connection
+          enum:
+          - ws
+          - wss
+        credential:
+          type: string
+          description: What it connected with last
+          enum:
+          - open
+          - onboarding_password
+          - pending_password
+        error:
+          type: string
+          description: Why it did not take its new password (`credentials_failed`)
+        command_id:
+          type: string
+          format: uuid
+          x-go-type: string
+          description: The command that sends its new password (`/commands/{commandId}`)
     ChargeStationPage:
       type: object
       description: A page of charge stations
@@ -2736,6 +2787,98 @@ components:
           maximum: 9999999.999
         allow_any_token:
           type: boolean
+    ApproveRequest:
+      type: object
+      description: How a pending charge station is approved
+      required:
+      - location_id
+      - evses
+      properties:
+        location_id:
+          type: string
+          format: uuid
+          x-go-type: string
+          description: The location of the charge station, a location of its org
+        display_name:
+          type: string
+          maxLength: 255
+        allow_any_token:
+          type: boolean
+          default: false
+          description: Whether the charge station accepts idTags that are not known
+        max_capacity_kw:
+          type: number
+          format: double
+          description: The most power that the charge station can deliver in total, in kW
+        security_profile:
+          type: string
+          description: |
+            The security profile of the charge station: `SP1` (no TLS, password) or `SP2`
+            (TLS, password); by default the one of the transport it connected with
+            (`ws`: SP1, `wss`: SP2)
+          enum:
+          - SP1
+          - SP2
+        password_mode:
+          type: string
+          default: rotate
+          description: How the charge station gets its password (see the operation)
+          enum:
+          - rotate
+          - manual
+          - keep_onboarding
+        evses:
+          type: array
+          minItems: 1
+          description: The EVSEs of the charge station, at least one, each with at least one connector
+          items:
+            $ref: '#/components/schemas/ApprovalEvseInput'
+    ApprovalEvseInput:
+      type: object
+      description: An EVSE of a charge station that is approved, with its connectors
+      required:
+      - ocpp_evse_id
+      - connectors
+      properties:
+        ocpp_evse_id:
+          type: integer
+          minimum: 1
+          description: The OCPP 2.0.1 EVSE id; for OCPP 1.6 the connector id (one EVSE per connector)
+        evse_id:
+          type: string
+          maxLength: 48
+          description: The eMI3 EVSE id, e.g. BE*TWK*E12345*1; made from the party of the location when left out
+        physical_reference:
+          type: string
+          maxLength: 16
+          description: What is printed on the EVSE
+        status:
+          $ref: '#/components/schemas/AssetEvseStatus'
+        connectors:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/AssetConnectorInput'
+    ApprovalResult:
+      type: object
+      description: The charge station that was approved, and the password that it was given by hand
+      required:
+      - station
+      properties:
+        station:
+          $ref: '#/components/schemas/ChargeStationRecord'
+        password:
+          type: string
+          description: |
+            The new password of the charge station (`manual` only): it is shown once, is
+            not stored, and is set on the charge station by hand
+    RejectRequest:
+      type: object
+      description: Why a pending charge station is rejected
+      properties:
+        reason:
+          type: string
+          maxLength: 255
     DecommissionRequest:
       type: object
       description: Why a charge station is decommissioned, and whether it is while it charges

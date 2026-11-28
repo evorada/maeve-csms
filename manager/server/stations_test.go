@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -164,4 +165,35 @@ func TestStationsAndTokensThroughTheApiHandler(t *testing.T) {
 		assert.Equal(t, "user:alice", ev.Actor)
 		assert.JSONEq(t, `{"station_key":"aaaa.CP001","station_id":"CP001","location_id":null,"reason":"replaced","actor":"user:alice"}`, string(ev.Data))
 	})
+	t.Run("a rejected charge station can no longer connect", func(t *testing.T) {
+		_, err := engine.RecordOnboardingConnection(ctx, "aaaa.NEW", orgA, store.OnboardingTransportWs, store.OnboardingCredentialOpen, 50, time.Now())
+		require.NoError(t, err)
+		auth := get(internal, "/_internal/v1/station-auth?host=aaaa.example.com&stationId=NEW", "")
+		require.Equal(t, http.StatusOK, auth.Code, auth.Body.String())
+		assert.Contains(t, auth.Body.String(), `"onboarding"`)
+
+		rr := request(handler, http.MethodPost, "/api/v0/cs/aaaa.NEW/reject", tokenOfB, `{"reason":"not ours"}`)
+		require.Equal(t, http.StatusNotFound, rr.Code, "the charge station of another tenant: %s", rr.Body.String())
+		rr = request(handler, http.MethodPost, "/api/v0/cs/aaaa.NEW/reject", tokenOfA, `{"reason":"not ours"}`)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+
+		auth = get(internal, "/_internal/v1/station-auth?host=aaaa.example.com&stationId=NEW", "")
+		require.Equal(t, http.StatusNotFound, auth.Code, auth.Body.String())
+		assert.JSONEq(t, `{"status":"Not Found","error":"unknown_station"}`, auth.Body.String())
+		onboarding := request(internal, http.MethodPut, "/_internal/v1/station-onboarding?host=aaaa.example.com&stationId=NEW", "",
+			`{"transport":"ws","credential":"open"}`)
+		assert.Equal(t, http.StatusConflict, onboarding.Code, "it is not made pending again: %s", onboarding.Body.String())
+
+		var relayed []*store.OutboxEvent
+		_, err = engine.RelayOutboxEvents(ctx, 100, func(_ context.Context, evs []*store.OutboxEvent) (int, error) {
+			relayed = append(relayed, evs...)
+			return len(evs), nil
+		})
+		require.NoError(t, err)
+		require.Len(t, relayed, 1)
+		assert.Equal(t, events.TypeStationRejected, relayed[0].Type)
+		assert.Equal(t, orgA, relayed[0].OrgId)
+		assert.Equal(t, "user:alice", relayed[0].Actor)
+	})
+
 }

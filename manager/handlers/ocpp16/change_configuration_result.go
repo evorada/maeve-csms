@@ -38,18 +38,32 @@ func (c ChangeConfigurationResultHandler) HandleCallError(ctx context.Context, c
 	return c.updateSetting(ctx, chargeStationId, req, store.ChargeStationSettingStatusRejected)
 }
 
+// secretConfigurationKeys are the configuration keys whose values are secrets: the
+// password of the station (security profiles 1 and 2). Their values are neither stored
+// nor traced.
+var secretConfigurationKeys = map[string]bool{
+	"AuthorizationKey": true,
+}
+
+// redactedSettingValue replaces the value of a secret configuration key.
+const redactedSettingValue = "***"
+
 func (c ChangeConfigurationResultHandler) updateSetting(ctx context.Context, chargeStationId string, req *ocpp16.ChangeConfigurationJson, status store.ChargeStationSettingStatus) error {
+	value := req.Value
+	if secretConfigurationKeys[req.Key] {
+		value = redactedSettingValue
+	}
 	span := trace.SpanFromContext(ctx)
 	span.SetAttributes(
 		attribute.String("setting.key", req.Key),
-		attribute.String("setting.value", req.Value),
+		attribute.String("setting.value", value),
 		attribute.String("setting.status", string(status)))
 
 	err := c.SettingsStore.UpdateChargeStationSettings(ctx, chargeStationId, &store.ChargeStationSettings{
 		ChargeStationId: chargeStationId,
 		Settings: map[string]*store.ChargeStationSetting{
 			req.Key: {
-				Value:  req.Value,
+				Value:  value,
 				Status: status,
 			},
 		},

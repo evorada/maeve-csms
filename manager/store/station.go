@@ -83,6 +83,23 @@ func ValidOnboardingCredential(credential string) bool {
 	return false
 }
 
+// PendingApproval is what an operator approved a pending station with while its new
+// password is sent to it: the approval is completed with it (CompleteApproval) once the
+// station has taken the password.
+type PendingApproval struct {
+	LocationId      string
+	DisplayName     *string
+	AllowAnyToken   bool
+	MaxCapacityKw   *float64
+	SecurityProfile SecurityProfile
+	// Evses are the EVSEs of the station with their connectors, created when the
+	// approval is completed. Only the fields that the owner of an EVSE sets are kept.
+	Evses []*AssetEvse
+	// RequestedBy is the actor who approved the station ("user:…", "svc:…").
+	RequestedBy string
+	RequestedAt time.Time
+}
+
 // StationOnboarding is what the CSMS knows about a pending station: a station that
 // connected without being registered.
 type StationOnboarding struct {
@@ -101,6 +118,9 @@ type StationOnboarding struct {
 	Error *string
 	// CommandId is the command that sends the new password to the station.
 	CommandId *string
+	// Approval is the approval that waits for the station to take its new password; nil
+	// before an approval.
+	Approval *PendingApproval
 }
 
 // ChargeStation is the registry record of a charge station: what the operator knows
@@ -190,4 +210,31 @@ type ChargeStationRegistryStore interface {
 	// notify. It returns the onboarding as it is stored now. A station that does not
 	// exist is ErrNotFound, one that is not pending ErrInvalidState.
 	RecordOnboardingBoot(ctx context.Context, stationKey string, at time.Time) (onboarding *StationOnboarding, notify bool, err error)
+	// SetOnboarding replaces the onboarding of a pending station and the hash of its
+	// pending password (nil clears it). A station that does not exist is ErrNotFound, one
+	// that is not pending ErrInvalidState, and nothing is written then.
+	SetOnboarding(ctx context.Context, stationKey string, onboarding *StationOnboarding, pendingPasswordHash *string) error
+	// CompleteApproval makes a pending station active as the approval says: it creates the
+	// EVSEs of the approval with their connectors at its location (in the org of the
+	// station; the EVSEs are filled in as CreateAssetEvse fills them), writes the
+	// location, display name, capacity and AllowAnyToken of the station, its security
+	// profile, password hash and InvalidUsernameAllowed from auth, clears its pending
+	// password and its onboarding, and sets SharedCredentials. A station that does not
+	// exist is ErrNotFound, one that is not pending ErrInvalidState; a location that does
+	// not exist is ErrNotFound and an EVSE whose ids are taken ErrAlreadyExists. Nothing
+	// is written when it fails.
+	CompleteApproval(ctx context.Context, stationKey string, approval *PendingApproval, auth *ChargeStationAuth, sharedCredentials bool) error
+	// RejectChargeStation decommissions a pending station that an operator refused: its
+	// state becomes decommissioned with the reason "rejected: <reason>" ("rejected"
+	// without one), and its pending password is cleared. A station that does not exist is
+	// ErrNotFound, one that is not pending ErrInvalidState.
+	RejectChargeStation(ctx context.Context, stationKey string, reason string) error
+}
+
+// RejectedStateReason is the state reason of a station that was rejected for the reason.
+func RejectedStateReason(reason string) string {
+	if reason == "" {
+		return "rejected"
+	}
+	return "rejected: " + reason
 }

@@ -178,6 +178,7 @@ func TestCommandStore(t *testing.T, newStore func(t *testing.T) store.Engine) {
 		full.Jti = ptr("jti-1")
 		full.SentAt = ptr(commandAt(1))
 		full.CompletedAt = ptr(commandAt(3))
+		full.RedactPaths = []string{"idToken.idToken", "remoteStartId"}
 		minimal := testCommand(2, "k7f2.cs001", 0)
 		createCommands(t, s, full, minimal)
 
@@ -186,6 +187,7 @@ func TestCommandStore(t *testing.T, newStore func(t *testing.T) store.Engine) {
 		assertSameCommand(t, minimal, got)
 		assert.Nil(t, got.Result)
 		assert.Nil(t, got.Progress)
+		assert.Nil(t, got.RedactPaths)
 		assert.Nil(t, got.ErrorCode)
 		assert.Nil(t, got.Actor)
 		assert.Nil(t, got.SentAt)
@@ -634,6 +636,29 @@ func TestCommandStore(t *testing.T, newStore func(t *testing.T) store.Engine) {
 			assert.Nil(t, unknown, id)
 		}
 		assert.Empty(t, relayAll(t, s), "no event for an unknown command")
+	})
+
+	t.Run("redact replaces the payload and nothing else", func(t *testing.T) {
+		s := newStore(t)
+		cmd := testCommand(1, "k7f2.cs001", 0)
+		cmd.Action = "ChangeConfiguration"
+		cmd.Payload = json.RawMessage(`{"key":"AuthorizationKey","value":"0123456789abcdef"}`)
+		cmd.RedactPaths = []string{"value"}
+		createCommands(t, s, cmd)
+		claimed, err := s.ClaimNextCommand(ctx, "k7f2.cs001", commandAt(1))
+		require.NoError(t, err)
+		require.NotNil(t, claimed)
+		assert.Equal(t, []string{"value"}, claimed.RedactPaths)
+
+		require.NoError(t, s.RedactCommandPayload(ctx, cmd.Id, json.RawMessage(`{"key":"AuthorizationKey","value":"***"}`)))
+
+		got := getCommand(t, s, cmd.Id)
+		want := *claimed
+		want.Payload = json.RawMessage(`{"key":"AuthorizationKey","value":"***"}`)
+		assertSameCommand(t, &want, got)
+
+		assert.NoError(t, s.RedactCommandPayload(ctx, testCommandId(99), json.RawMessage(`{}`)), "an unknown command is left alone")
+		assert.NoError(t, s.RedactCommandPayload(ctx, "not-a-uuid", json.RawMessage(`{}`)))
 	})
 
 	t.Run("queued station keys are paged by station key and skip expired commands", func(t *testing.T) {

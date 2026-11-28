@@ -9,20 +9,24 @@ import (
 
 	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"golang.org/x/exp/slog"
 )
 
 // completer moves commands to a final status and emits command.completed for each move
-// that applied, in one store transaction.
+// that applied, in one store transaction. It then tells the hooks.
 type completer struct {
 	store  store.CommandStore
 	tx     store.Transactor
 	events events.Emitter
+	hooks  []CompletionHook
 }
 
-// complete applies upd to the command id when its status is in from, and emits
-// command.completed with the stored command in the same transaction. late marks a result
-// that arrived after the command timed out. It returns nil, nil when the command does
-// not exist and store.ErrCommandConflict when its status is not in from; neither emits.
+// complete applies upd to the command id when its status is in from, replaces the
+// secrets of its payload (RedactPaths) and emits command.completed with the stored
+// command in the same transaction, then tells the hooks. late marks a result that
+// arrived after the command timed out. It returns nil, nil when the command does not
+// exist and store.ErrCommandConflict when its status is not in from; neither emits nor
+// tells the hooks.
 func (c completer) complete(ctx context.Context, id string, from []store.CommandStatus, upd store.CommandUpdate, late bool) (*store.Command, error) {
 	if upd.CompletedAt == nil {
 		return nil, errors.New("a completed command needs its completion time")
@@ -33,6 +37,13 @@ func (c completer) complete(ctx context.Context, id string, from []store.Command
 		if err != nil || cmd == nil {
 			return err
 		}
+		// a command that ends without being sent keeps no secret either
+		if redacted, changed := RedactPayload(cmd.Payload, cmd.RedactPaths); changed {
+			if err := c.store.RedactCommandPayload(ctx, cmd.Id, redacted); err != nil {
+				return fmt.Errorf("redacting the payload of command %s: %w", cmd.Id, err)
+			}
+			cmd.Payload = redacted
+		}
 		if err := c.events.Emit(ctx, completedEvent(cmd, late)); err != nil {
 			return fmt.Errorf("emitting %s: %w", events.TypeCommandCompleted, err)
 		}
@@ -42,7 +53,26 @@ func (c completer) complete(ctx context.Context, id string, from []store.Command
 	if err != nil {
 		return nil, err
 	}
+	if done != nil {
+		c.afterCompletion(ctx, done)
+	}
 	return done, nil
+}
+
+// afterCompletion tells the hooks about a command that has just completed. A hook that
+// panics is logged and the next one is told all the same.
+func (c completer) afterCompletion(ctx context.Context, cmd *store.Command) {
+	for _, hook := range c.hooks {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("a hook on the completion of a command panicked", "commandId", cmd.Id,
+						"stationKey", cmd.StationKey, "action", cmd.Action, "panic", r)
+				}
+			}()
+			hook.AfterCompletion(ctx, cmd)
+		}()
+	}
 }
 
 // completedEvent is the command.completed event of a command that has just reached its

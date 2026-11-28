@@ -173,6 +173,21 @@ func TestPayloadFieldNames(t *testing.T) {
 			want: `{"station_key":"k7f2.CP001","station_id":"CP001","vendor":"Acme","model":"Volt 22",` +
 				`"first_seen_at":"2026-11-27T10:30:00Z","transport":"wss","credential":"onboarding_password"}`,
 		},
+		"station.approved": {
+			payload: events.StationApprovedData{StationKey: "k7f2.CP001", StationId: "CP001", LocationId: "0193b2c4-0000-7000-8000-000000000001",
+				EvseCount: 2, ConnectorCount: 3, PasswordMode: events.PasswordModeKeepOnboarding, SharedCredentials: true, Actor: "user:alice"},
+			want: `{"station_key":"k7f2.CP001","station_id":"CP001","location_id":"0193b2c4-0000-7000-8000-000000000001",` +
+				`"evse_count":2,"connector_count":3,"password_mode":"keep_onboarding","shared_credentials":true,"actor":"user:alice"}`,
+		},
+		"station.approval_failed": {
+			payload: events.StationApprovalFailedData{StationKey: "k7f2.CP001", StationId: "CP001", CommandId: "0193b2c4-0000-7000-8000-00000000c0de",
+				Result: "NotSupported"},
+			want: `{"station_key":"k7f2.CP001","station_id":"CP001","command_id":"0193b2c4-0000-7000-8000-00000000c0de","result":"NotSupported","error":null}`,
+		},
+		"station.rejected": {
+			payload: events.StationRejectedData{StationKey: "k7f2.CP001", StationId: "CP001", Reason: ptr("not ours"), Actor: "user:alice"},
+			want:    `{"station_key":"k7f2.CP001","station_id":"CP001","reason":"not ours","actor":"user:alice"}`,
+		},
 		"location.updated of a location": {
 			payload: events.LocationUpdatedData{LocationId: "0193b2c4-0000-7000-8000-000000000001", OcpiId: "LOC1",
 				PartyRef: "cpo-1", Change: events.LocationChangeUpdated, PublishChanged: true},
@@ -200,11 +215,12 @@ func TestStationActorAndConnectorResourceId(t *testing.T) {
 
 // Every type of the catalogue is one that the emitter accepts.
 func TestAllTypesCanBeEmitted(t *testing.T) {
-	assert.Len(t, events.AllTypes, 12)
+	assert.Len(t, events.AllTypes, 15)
 	assert.Equal(t, []string{
 		"station.registered", "station.connected", "station.disconnected", "connector.status_changed",
 		"session.started", "session.updated", "session.completed", "command.completed", "command.progress",
-		"location.updated", "station.decommissioned", "station.pending",
+		"location.updated", "station.decommissioned", "station.pending", "station.approved",
+		"station.approval_failed", "station.rejected",
 	}, events.AllTypes)
 
 	s := inmemory.NewStore(clocktest.NewFakePassiveClock(testNow))

@@ -219,6 +219,9 @@ func (s *Service) newId() string {
 func (s *Service) Cancel(ctx context.Context, id string) (*store.Command, error) {
 	now := s.Clock.Now()
 	c := completer{store: s.Store, tx: s.Tx, events: s.Events}
+	if s.Dispatcher != nil {
+		c.hooks = s.Dispatcher.AfterCompletion
+	}
 	cmd, err := c.complete(ctx, id, []store.CommandStatus{store.CommandStatusQueued}, store.CommandUpdate{
 		Status:      store.CommandStatusCancelled,
 		CompletedAt: &now,
