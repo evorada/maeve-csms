@@ -31,7 +31,7 @@ const (
 	ErrorOnboardingDisabled = "onboarding_disabled"
 	// ErrorCredentialNotAllowed is the error of a 403 of an onboarding connection whose
 	// credential the tenant does not accept (any more).
-	ErrorCredentialNotAllowed = "credential_not_allowed"
+	ErrorCredentialNotAllowed = "credential_not_allowed" // #nosec G101 -- an error code, not a credential
 	// ErrorStationNotPending is the error of a 409 of an onboarding connection of a
 	// station that is registered, approved or decommissioned.
 	ErrorStationNotPending = "station_not_pending"

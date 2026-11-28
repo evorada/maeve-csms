@@ -29,7 +29,7 @@ type transferFixture struct {
 func newTransferFixture(t *testing.T, s store.Engine) *transferFixture {
 	t.Helper()
 	ctx := context.Background()
-	f := &transferFixture{auth: &store.ChargeStationAuth{SecurityProfile: store.TLSWithBasicAuth, Base64SHA256Password: "c2VjcmV0", OrgId: orgA}}
+	f := &transferFixture{auth: &store.ChargeStationAuth{SecurityProfile: store.TLSWithBasicAuth, Base64SHA256Password: "c2VjcmV0", OrgId: orgA}} // #nosec G101 -- a test value, not a credential
 	require.NoError(t, s.SetChargeStationAuth(ctx, assetStationA, f.auth))
 	require.NoError(t, s.SetChargeStationAuth(ctx, assetStationB, &store.ChargeStationAuth{SecurityProfile: store.TLSWithBasicAuth, OrgId: orgA}))
 	f.plaza = createAssetLocation(t, s, testAssetLocation("Plaza"))
