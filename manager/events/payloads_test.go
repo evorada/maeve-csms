@@ -188,6 +188,24 @@ func TestPayloadFieldNames(t *testing.T) {
 			payload: events.StationRejectedData{StationKey: "k7f2.CP001", StationId: "CP001", Reason: ptr("not ours"), Actor: "user:alice"},
 			want:    `{"station_key":"k7f2.CP001","station_id":"CP001","reason":"not ours","actor":"user:alice"}`,
 		},
+		"station.transferred": {
+			payload: events.StationTransferredData{StationKey: "k7f2.CP001", StationId: "CP001",
+				FromOrgId: "0193b2c4-0000-7000-8000-0000000000a1", ToOrgId: "0193b2c4-0000-7000-8000-0000000000b2",
+				LocationId: ptr("0193b2c4-0000-7000-8000-000000000001"), LocationMoved: true, EvsesMoved: 2, ConnectorsMoved: 3,
+				ClearedTariffRefs: []string{"0193b2c4-0000-7000-8000-00000000ta01"}, Actor: "svc:platform", Reason: ptr("sold")},
+			want: `{"station_key":"k7f2.CP001","station_id":"CP001","from_org_id":"0193b2c4-0000-7000-8000-0000000000a1",` +
+				`"to_org_id":"0193b2c4-0000-7000-8000-0000000000b2","location_id":"0193b2c4-0000-7000-8000-000000000001",` +
+				`"location_moved":true,"evses_moved":2,"connectors_moved":3,"cleared_tariff_refs":["0193b2c4-0000-7000-8000-00000000ta01"],` +
+				`"actor":"svc:platform","reason":"sold"}`,
+		},
+		"station.transferred without a location": {
+			payload: events.StationTransferredData{StationKey: "k7f2.CP001", StationId: "CP001",
+				FromOrgId: "0193b2c4-0000-7000-8000-0000000000a1", ToOrgId: "0193b2c4-0000-7000-8000-0000000000b2",
+				ClearedTariffRefs: []string{}, Actor: "svc:platform"},
+			want: `{"station_key":"k7f2.CP001","station_id":"CP001","from_org_id":"0193b2c4-0000-7000-8000-0000000000a1",` +
+				`"to_org_id":"0193b2c4-0000-7000-8000-0000000000b2","location_id":null,"location_moved":false,"evses_moved":0,` +
+				`"connectors_moved":0,"cleared_tariff_refs":[],"actor":"svc:platform","reason":null}`,
+		},
 		"location.updated of a location": {
 			payload: events.LocationUpdatedData{LocationId: "0193b2c4-0000-7000-8000-000000000001", OcpiId: "LOC1",
 				PartyRef: "cpo-1", Change: events.LocationChangeUpdated, PublishChanged: true},
@@ -215,12 +233,12 @@ func TestStationActorAndConnectorResourceId(t *testing.T) {
 
 // Every type of the catalogue is one that the emitter accepts.
 func TestAllTypesCanBeEmitted(t *testing.T) {
-	assert.Len(t, events.AllTypes, 15)
+	assert.Len(t, events.AllTypes, 16)
 	assert.Equal(t, []string{
 		"station.registered", "station.connected", "station.disconnected", "connector.status_changed",
 		"session.started", "session.updated", "session.completed", "command.completed", "command.progress",
 		"location.updated", "station.decommissioned", "station.pending", "station.approved",
-		"station.approval_failed", "station.rejected",
+		"station.approval_failed", "station.rejected", "station.transferred",
 	}, events.AllTypes)
 
 	s := inmemory.NewStore(clocktest.NewFakePassiveClock(testNow))

@@ -92,3 +92,7 @@ func (s *Store) MoveChargeStationToLocation(context.Context, string, string) err
 func (s *Store) DecommissionChargeStation(context.Context, string, *string) error {
 	return fmt.Errorf("DecommissionChargeStation: %w", store.ErrNotImplemented)
 }
+
+func (s *Store) TransferChargeStation(context.Context, store.TransferParams) (*store.TransferResult, error) {
+	return nil, fmt.Errorf("TransferChargeStation: %w", store.ErrNotImplemented)
+}

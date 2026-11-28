@@ -249,6 +249,10 @@ func TestStubsReturnErrNotImplemented(t *testing.T) {
 		"DecommissionChargeStation": func() error {
 			return s.DecommissionChargeStation(ctx, "cs001", nil)
 		},
+		"TransferChargeStation": func() error {
+			_, err := s.TransferChargeStation(ctx, store.TransferParams{StationKey: "cs001"})
+			return err
+		},
 		"DeleteToken": func() error {
 			return s.DeleteToken(ctx, "org001", "token001")
 		},

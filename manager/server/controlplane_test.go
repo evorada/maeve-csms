@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -32,6 +34,11 @@ type controlPlaneRoute struct {
 	target string
 }
 
+// resourceActionRoute is the route that the control plane registers besides those of its
+// spec: it reads the URN of a resource whose ":" or "/" are not encoded, which does not
+// fit the route of the transfer in the spec.
+const resourceActionRoute = "POST /resources/*"
+
 // controlPlaneRoutes returns every route that the handler of the control plane
 // registers, as a request for the given org, after checking that they are the
 // operations of the spec of the control plane, no more and no less.
@@ -45,6 +52,8 @@ func controlPlaneRoutes(t *testing.T, orgId string) []controlPlaneRoute {
 		registered = append(registered, method+" "+route)
 		return nil
 	}))
+	require.Contains(t, registered, resourceActionRoute)
+	registered = slices.DeleteFunc(registered, func(route string) bool { return route == resourceActionRoute })
 	sort.Strings(registered)
 
 	swagger, err := controlplane.GetSwagger()
@@ -57,16 +66,33 @@ func controlPlaneRoutes(t *testing.T, orgId string) []controlPlaneRoute {
 	}
 	sort.Strings(specified)
 	require.Equal(t, specified, registered)
-	require.Len(t, registered, 7, "a new operation: check that the tests of the control plane cover it")
+	require.Len(t, registered, 8, "a new operation: check that the tests of the control plane cover it")
 
-	result := make([]controlPlaneRoute, 0, len(registered))
+	result := make([]controlPlaneRoute, 0, len(registered)+1)
 	for _, route := range registered {
 		method, path, _ := strings.Cut(route, " ")
 		target := controlplane.BasePath + strings.ReplaceAll(path, "{orgId}", orgId)
+		// the route of the spec: the whole URN is encoded
+		target = strings.ReplaceAll(target, "{urn}", strings.ReplaceAll(url.PathEscape("urn:cpms:"+orgId+":station/aaaa.CP001"), ":", "%3A"))
 		require.NotContains(t, target, "{", "a parameter that this test does not know")
 		result = append(result, controlPlaneRoute{method: method, target: target})
 	}
+	// the same transfer through the route that reads the path itself
+	result = append(result, controlPlaneRoute{method: http.MethodPost, target: transferTarget("urn:cpms:" + orgId + ":station/aaaa.CP001")})
 	return result
+}
+
+// transferTarget is the path of the transfer of the resource, with every character of
+// the URN that is not allowed in a path segment percent-encoded, as Go encodes it: its
+// "/" is encoded, its ":" are not.
+func transferTarget(urn string) string {
+	return controlplane.BasePath + "/resources/" + url.PathEscape(urn) + ":transfer"
+}
+
+// isTransfer reports whether the route is the transfer of a resource, which needs the
+// permission to write charge stations besides the one to manage tenants.
+func isTransfer(route controlPlaneRoute) bool {
+	return strings.HasSuffix(route.target, ":transfer")
 }
 
 // serviceToken returns a token of the platform for one of its services.
@@ -169,6 +195,11 @@ func TestControlPlaneRefusesEveryCallerButAPlatformServiceThatMayManageTenants(t
 		token := serviceToken(platform, "svc:provisioner", tenancy.PermTenantManage)
 		for _, route := range routes {
 			rr := send(handler, route, token)
+			if isTransfer(route) {
+				assert.Equal(t, http.StatusForbidden, rr.Code, "%s %s: %s", route.method, route.target, rr.Body.String())
+				assert.JSONEq(t, `{"status":"Forbidden","error":"forbidden"}`, rr.Body.String())
+				continue
+			}
 			assert.Equal(t, http.StatusOK, rr.Code, "%s %s: %s", route.method, route.target, rr.Body.String())
 		}
 

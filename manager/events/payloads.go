@@ -246,3 +246,24 @@ type StationRejectedData struct {
 	Reason     *string `json:"reason"`
 	Actor      string  `json:"actor"`
 }
+
+// StationTransferredData is the payload of station.transferred: a charge station moved
+// from one org to another, with its EVSEs and their connectors, and with its location
+// when LocationMoved. It is emitted in both orgs. The station key does not change; the
+// history of the station (transactions, meter values) stays with the old org.
+// LocationId is where the station and its EVSEs are now (null without a location),
+// ClearedTariffRefs the tariffs of the old org that the connectors lost, Reason the
+// reason given (or null) and Actor who transferred the station.
+type StationTransferredData struct {
+	StationKey        string   `json:"station_key"`
+	StationId         string   `json:"station_id"`
+	FromOrgId         string   `json:"from_org_id"`
+	ToOrgId           string   `json:"to_org_id"`
+	LocationId        *string  `json:"location_id"`
+	LocationMoved     bool     `json:"location_moved"`
+	EvsesMoved        int      `json:"evses_moved"`
+	ConnectorsMoved   int      `json:"connectors_moved"`
+	ClearedTariffRefs []string `json:"cleared_tariff_refs"`
+	Actor             string   `json:"actor"`
+	Reason            *string  `json:"reason"`
+}

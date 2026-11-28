@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -886,4 +887,129 @@ func (s *Store) DecommissionChargeStation(ctx context.Context, stationKey string
 		return fmt.Errorf("decommission charge station %s: commit: %w", stationKey, err)
 	}
 	return nil
+}
+
+// TransferChargeStation moves a charge station to another org, in a transaction of its
+// own or in a savepoint inside the transaction of the caller. The station row is locked
+// first. The rows that refer to the target location are written last, so that a target
+// that does not exist fails after the other writes and undoes them.
+func (s *Store) TransferChargeStation(ctx context.Context, p store.TransferParams) (*store.TransferResult, error) {
+	what := "transfer charge station " + p.StationKey
+	from, err := pgUUID(p.FromOrgId)
+	if err != nil {
+		return nil, fmt.Errorf("%s: from org %q: %w", what, p.FromOrgId, err)
+	}
+	to, err := pgUUID(p.ToOrgId)
+	if err != nil {
+		return nil, fmt.Errorf("%s: to org %q: %w", what, p.ToOrgId, err)
+	}
+	var target pgtype.UUID
+	if !p.MoveLocation && p.TargetLocationId != nil {
+		var ok bool
+		if target, ok = assetId(*p.TargetLocationId); !ok {
+			// not a UUID: no location has this id
+			return nil, fmt.Errorf("%s: location %s: %w", what, *p.TargetLocationId, store.ErrNotFound)
+		}
+	}
+	if p.MoveLocation && (p.TargetPartyRef == nil || *p.TargetPartyRef == "") {
+		return nil, fmt.Errorf("%s: a location that moves needs the party of the target org", what)
+	}
+
+	tx, err := s.begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%s: begin transaction: %w", what, err)
+	}
+	defer rollback(ctx, tx)
+	q := New(tx)
+
+	station, err := q.LockChargeStation(ctx, p.StationKey)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("%s: %w", what, store.ErrNotFound)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", what, err)
+	}
+	if station.OrgID != from {
+		return nil, fmt.Errorf("%s: the station belongs to org %s, not %s: %w", what, uuidString(station.OrgID), p.FromOrgId, store.ErrInvalidState)
+	}
+	if store.StationState(station.State) == store.StationStateDecommissioned {
+		return nil, fmt.Errorf("%s: the station is decommissioned: %w", what, store.ErrInvalidState)
+	}
+
+	result := &store.TransferResult{StationKey: p.StationKey, ClearedTariffRefs: []string{}}
+	if p.MoveLocation {
+		if !station.LocationID.Valid {
+			return nil, fmt.Errorf("%s: the station has no location to move: %w", what, store.ErrInvalidState)
+		}
+		target = station.LocationID
+		rows, err := q.TransferLocation(ctx, TransferLocationParams{
+			ToOrgID:    to,
+			PartyRef:   *p.TargetPartyRef,
+			LocationID: target,
+			StationKey: p.StationKey,
+		})
+		if err != nil {
+			// the party of the target has a location with the OCPI id: ErrAlreadyExists
+			return nil, assetWriteError(what+": move location "+uuidString(target), err)
+		}
+		if rows == 0 {
+			return nil, fmt.Errorf("%s: location %s is shared with other stations: %w", what, uuidString(target), store.ErrInvalidState)
+		}
+		result.LocationMoved = true
+	}
+	result.LocationId = optionalUUIDString(target)
+
+	if err := q.TransferChargingProfiles(ctx, TransferChargingProfilesParams{ToOrgID: to, ChargeStationID: p.StationKey}); err != nil {
+		return nil, fmt.Errorf("%s: charging profiles: %w", what, err)
+	}
+
+	connectors, err := q.LockStationConnectors(ctx, p.StationKey)
+	if err != nil {
+		return nil, fmt.Errorf("%s: connectors: %w", what, err)
+	}
+	ids := make([]pgtype.UUID, len(connectors))
+	tariffs := map[string]bool{}
+	for i, c := range connectors {
+		ids[i] = c.ID
+		for _, ref := range []pgtype.UUID{c.TariffRef, c.AdhocTariffRef} {
+			if ref.Valid {
+				tariffs[uuidString(ref)] = true
+			}
+		}
+	}
+	if len(ids) > 0 {
+		moved, err := q.TransferStationConnectors(ctx, TransferStationConnectorsParams{ToOrgID: to, Ids: ids})
+		if err != nil {
+			return nil, fmt.Errorf("%s: connectors: %w", what, err)
+		}
+		result.ConnectorsMoved = int(moved)
+	}
+	for ref := range tariffs {
+		result.ClearedTariffRefs = append(result.ClearedTariffRefs, ref)
+	}
+	slices.Sort(result.ClearedTariffRefs)
+
+	evses, err := q.ListAssetEvsesByStation(ctx, p.StationKey)
+	if err != nil {
+		return nil, fmt.Errorf("%s: EVSEs: %w", what, err)
+	}
+	if len(evses) > 0 {
+		if !target.Valid {
+			return nil, fmt.Errorf("%s: the EVSEs of the station need a location: %w", what, store.ErrInvalidState)
+		}
+		moved, err := q.TransferStationEvses(ctx, TransferStationEvsesParams{ToOrgID: to, LocationID: target, StationKey: p.StationKey})
+		if err != nil {
+			// a target location that does not exist: ErrNotFound
+			return nil, assetWriteError(what+": EVSEs", err)
+		}
+		result.EvsesMoved = int(moved)
+	}
+
+	if err := q.TransferStationRow(ctx, TransferStationRowParams{ToOrgID: to, LocationID: target, ChargeStationID: p.StationKey}); err != nil {
+		return nil, assetWriteError(what, err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("%s: commit: %w", what, err)
+	}
+	return result, nil
 }

@@ -9,6 +9,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/thoughtworks/maeve-csms/manager/commands"
+	"github.com/thoughtworks/maeve-csms/manager/entitlements"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"golang.org/x/exp/slog"
@@ -43,6 +46,18 @@ type Server struct {
 	// Scoper says which orgs a caller may read the domain events of: the org of its token
 	// and, with the org scope subtree, the orgs below it.
 	Scoper *tenancy.Scoper
+	// Stations keeps the charge stations and their assets that a transfer moves. Nil
+	// answers a transfer with 501.
+	Stations StationStore
+	// Events stores the domain events of a transfer, in its store transaction. A transfer
+	// needs it.
+	Events events.Emitter
+	// Entitlements checks the connector limit of the org that gets a charge station. Nil
+	// limits nothing.
+	Entitlements *entitlements.Enforcer
+	// Commands cancels the commands that are queued for a charge station that is
+	// transferred. Nil when the storage keeps no commands.
+	Commands *commands.Service
 }
 
 var _ ServerInterface = (*Server)(nil)
@@ -59,6 +74,9 @@ func NewHandler(s *Server) http.Handler {
 	r.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, codeMethodNotAllowed)
 	})
+	// the URN of a resource that a client sends with ":" or "/" that are not encoded does
+	// not fit the route of the spec
+	r.Post(resourcesPath+"*", s.resourceAction)
 	return HandlerWithOptions(s, ChiServerOptions{BaseRouter: r, ErrorHandlerFunc: parameterError})
 }
 

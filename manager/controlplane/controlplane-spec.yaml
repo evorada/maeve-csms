@@ -9,7 +9,8 @@ info:
     Every request needs a token that the platform minted for one of its services: the
     subject starts with `svc:` and the permissions contain `cpms.tenant.manage`. Only
     `GET /events` looks at the org of the token: it returns the events of that org and,
-    with the org scope `subtree`, of the orgs below it.
+    with the org scope `subtree`, of the orgs below it. A transfer of a resource also
+    needs the permission `cpms.station.write`.
   version: 1.0.0
 servers:
   - url: /_control/v1
@@ -252,6 +253,104 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /resources/{urn}:transfer:
+    parameters:
+      - name: urn
+        in: path
+        required: true
+        description: |
+          The URN of the resource, `urn:cpms:<org_id>:<type>/<id>` with the org that owns
+          the resource now, percent-encoded as one path segment: at least its `/` as
+          `%2F` (`urn:cpms:<org_id>:station%2Fk7f2.CP001`); its `:` may be encoded as
+          `%3A` too. Only charge stations (`station`, with the station key as id) can be
+          transferred.
+        schema:
+          type: string
+    post:
+      operationId: transferResource
+      summary: Transfer a charge station to another org
+      description: |
+        Moves the charge station, its EVSEs and their connectors to the org `to_org_id`,
+        all in one transaction, with the location of the station when it is the only
+        station there (`move_location`). The station key does not change: the station
+        goes on connecting to the same host with the same credentials, and the config of
+        its new owner applies to it from then on. Its transactions, meter values and
+        message log keep the old org. The tariffs of the connectors and the location are
+        cleared (tariffs belong to an org), the charging profiles of the station move,
+        and the commands that are still queued for the station are cancelled.
+
+        Both orgs get the event `cpms.station.transferred`; a location that moved gets
+        `cpms.location.updated` with the change `transferred` in both orgs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferRequest'
+      responses:
+        '200':
+          description: The charge station belongs to the org `to_org_id` now
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferResult'
+        '400':
+          description: The body or the URN cannot be read; `field` names what is wrong
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: |
+            The caller is not a platform service with the permissions
+            `cpms.tenant.manage` and `cpms.station.write`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: |
+            There is no such charge station in the org of the URN, or the action is not
+            `transfer`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: |
+            The transfer cannot be made now; `message` says why:
+            - `active_transaction`: a transaction is running on the station (`force`
+              transfers it all the same: the running session keeps the old org)
+            - `location_shared`: `move_location` is `always`, and other charge stations or
+              their EVSEs are at the location of the station
+            - `target_not_active`: `to_org_id` is not a tenant, or the tenant is suspended
+              or cancelled
+            - `entitlement_exceeded`: the connectors of the station would take the target
+              beyond its `cpms.connectors.max`
+            - `invalid_state`: the station is decommissioned, or an approval of the
+              pending station is not finished (approve it again or reject it first)
+            - `conflict`: the party of the target already has a location with the OCPI
+              id of the location that would move
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: |
+            The transfer is not possible as asked; `field` names what is wrong:
+            `unsupported_resource_type` (only charge stations can be transferred),
+            `target_party_required` (the location moves, and the target has no single
+            CPO party to give it), or `invalid_field` (`to_org_id` is the org of the
+            station, `target_location_id` is missing where the location does not move or
+            is not a location of the target)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
 components:
   parameters:
     OrgId:
@@ -617,12 +716,98 @@ components:
           description: The field of the request that is not valid
         message:
           type: string
-          description: Why the field is not valid
+          description: Why the field is not valid, or why the request cannot be done
         details:
           type: array
           description: Every setting of a tenant config that is not valid (`invalid_config`)
           items:
             $ref: '#/components/schemas/ErrorDetail'
+    TransferRequest:
+      type: object
+      description: Where a charge station goes.
+      required:
+        - to_org_id
+      properties:
+        to_org_id:
+          type: string
+          format: uuid
+          description: The org that gets the station, a tenant of the manager that is active
+          x-go-type: string
+        move_location:
+          type: string
+          description: |
+            Whether the location of the station goes with it:
+            - `auto`: it moves when the station is the only one there (no other station
+              and no EVSE of another station is at it); otherwise `target_location_id`
+              is needed
+            - `always`: it moves, and the transfer is refused when it is shared
+            - `never`: it stays with the old org; `target_location_id` is needed
+            A `target_location_id` that is given is where the EVSEs go, and the location
+            does not move (with `auto` and `never`). A station without a location and
+            without EVSEs needs no target.
+          enum:
+            - auto
+            - always
+            - never
+          default: auto
+        target_party_ref:
+          type: string
+          description: |
+            The CPO party of the target tenant that publishes the location when it
+            moves. Not needed when the target has exactly one CPO party. Ignored when the
+            location does not move.
+        target_location_id:
+          type: string
+          format: uuid
+          description: A location of the target org, where the EVSEs of the station go
+          x-go-type: string
+        force:
+          type: boolean
+          default: false
+          description: Transfer the station also while a transaction is running on it. The running session keeps the old org.
+        reason:
+          type: string
+          maxLength: 255
+          description: Why the station is transferred, for the events
+    TransferResult:
+      type: object
+      required:
+        - urn
+        - new_urn
+        - from_org_id
+        - to_org_id
+        - location_id
+        - location_moved
+        - evses_moved
+        - connectors_moved
+        - cleared_tariff_refs
+      properties:
+        urn:
+          type: string
+          description: The URN of the station in its old org
+        new_urn:
+          type: string
+          description: The URN of the station in its new org
+        from_org_id:
+          type: string
+        to_org_id:
+          type: string
+        location_id:
+          type: string
+          nullable: true
+          description: The location of the station and its EVSEs now; null for a station without a location
+        location_moved:
+          type: boolean
+          description: Whether the location moved to the new org with the station
+        evses_moved:
+          type: integer
+        connectors_moved:
+          type: integer
+        cleared_tariff_refs:
+          type: array
+          description: The tariffs of the old org that the moved connectors and the location referred to, which are cleared
+          items:
+            type: string
     ErrorDetail:
       type: object
       required:

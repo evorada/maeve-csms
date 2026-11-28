@@ -84,6 +84,9 @@ the gateway and send appropriate responses.`,
 				Settings:       settings.Api,
 				CSCertProvider: settings.ChargeStationCertProviderService,
 				DefaultOrgId:   settings.DefaultOrgId,
+				Events:         settings.Events,
+				Entitlements:   settings.Entitlements,
+				Commands:       settings.Commands,
 			}))
 
 		// every OCPP message is a sign of life of its station (Connectivity is nil when the

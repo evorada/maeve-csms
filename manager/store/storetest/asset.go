@@ -744,6 +744,8 @@ func TestAssetStore(t *testing.T, newStore func(t *testing.T) store.Engine) {
 
 		assert.ErrorIs(t, s.DecommissionChargeStation(ctx, "k7f2.UNKNOWN", nil), store.ErrNotFound)
 	})
+
+	testStationTransfer(t, newStore)
 }
 
 func listAssetEvses(t *testing.T, s store.Engine, locationId string) []*store.AssetEvse {

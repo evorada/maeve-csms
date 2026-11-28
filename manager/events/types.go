@@ -26,6 +26,7 @@ const (
 	TypeStationApproved        = "station.approved"
 	TypeStationApprovalFailed  = "station.approval_failed"
 	TypeStationRejected        = "station.rejected"
+	TypeStationTransferred     = "station.transferred"
 )
 
 // The types of the resources that the events are about, with the form of their ids.
@@ -54,6 +55,7 @@ var AllTypes = []string{
 	TypeStationApproved,
 	TypeStationApprovalFailed,
 	TypeStationRejected,
+	TypeStationTransferred,
 }
 
 // The changes that a location.updated event reports.
@@ -61,6 +63,9 @@ const (
 	LocationChangeCreated = "created"
 	LocationChangeUpdated = "updated"
 	LocationChangeDeleted = "deleted"
+	// LocationChangeTransferred is a location that moved to another org with its charge
+	// station: the event is emitted in the old and in the new org.
+	LocationChangeTransferred = "transferred"
 )
 
 // The ways in which the password of an approved station is set (StationApprovedData).

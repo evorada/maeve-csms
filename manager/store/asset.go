@@ -178,4 +178,47 @@ type AssetStore interface {
 	// to REMOVED (a new Version each), all together. A station that does not exist is
 	// ErrNotFound.
 	DecommissionChargeStation(ctx context.Context, stationKey string, reason *string) error
+	// TransferChargeStation moves a charge station to another org, all together: the
+	// station, every EVSE of the station and their connectors (a new Version each), its
+	// charging profiles and, with MoveLocation, its location. The connectors lose their
+	// tariffs, which belong to the old org. Transactions, meter values and the other
+	// history of the station keep their org, and the station key does not change.
+	//
+	// A station that does not exist is ErrNotFound; one that is decommissioned or whose
+	// org is not FromOrgId is ErrInvalidState. MoveLocation with a station without a
+	// location, or with a location where another station or an EVSE of another station
+	// is, is ErrInvalidState; a party of the target that already has a location with the
+	// OCPI id of the location is ErrAlreadyExists. A TargetLocationId that does not exist
+	// is ErrNotFound; without one, a station with EVSEs is ErrInvalidState. The caller
+	// checks that the target location belongs to ToOrgId. Nothing is written when it
+	// fails.
+	TransferChargeStation(ctx context.Context, p TransferParams) (*TransferResult, error)
+}
+
+// TransferParams says where TransferChargeStation moves a charge station.
+type TransferParams struct {
+	StationKey string
+	// FromOrgId is the org that the station belongs to, as stored.
+	FromOrgId string
+	ToOrgId   string
+	// MoveLocation moves the location of the station, which only the station uses, to
+	// ToOrgId with the party TargetPartyRef; the EVSEs of the station go there.
+	MoveLocation   bool
+	TargetPartyRef *string // required with MoveLocation: a party of ToOrgId
+	// TargetLocationId is the location of ToOrgId where the station and its EVSEs go when
+	// the location does not move. Nil leaves a station without EVSEs without a location.
+	TargetLocationId *string
+}
+
+// TransferResult says what TransferChargeStation moved.
+type TransferResult struct {
+	StationKey string
+	// LocationId is the location of the station and its EVSEs now; nil when it has none.
+	LocationId      *string
+	LocationMoved   bool
+	EvsesMoved      int
+	ConnectorsMoved int
+	// ClearedTariffRefs are the tariffs (of the old org) that the moved connectors
+	// referred to, each once, sorted.
+	ClearedTariffRefs []string
 }

@@ -627,6 +627,65 @@ func (q *Queries) ListAssetLocations(ctx context.Context, arg ListAssetLocations
 	return items, nil
 }
 
+const LockChargeStation = `-- name: LockChargeStation :one
+
+SELECT org_id, location_id, state FROM charge_stations
+WHERE charge_station_id = $1
+FOR UPDATE
+`
+
+type LockChargeStationRow struct {
+	OrgID      pgtype.UUID `db:"org_id" json:"org_id"`
+	LocationID pgtype.UUID `db:"location_id" json:"location_id"`
+	State      string      `db:"state" json:"state"`
+}
+
+// A charge station that moves to another org, with its EVSEs, their connectors, its
+// charging profiles and maybe its location. The station row is locked first, so that
+// transfers of one station happen one after the other.
+func (q *Queries) LockChargeStation(ctx context.Context, chargeStationID string) (LockChargeStationRow, error) {
+	row := q.db.QueryRow(ctx, LockChargeStation, chargeStationID)
+	var i LockChargeStationRow
+	err := row.Scan(&i.OrgID, &i.LocationID, &i.State)
+	return i, err
+}
+
+const LockStationConnectors = `-- name: LockStationConnectors :many
+SELECT c.id, c.tariff_ref, c.adhoc_tariff_ref FROM asset_connectors c
+JOIN asset_evses e ON e.id = c.evse_uid
+WHERE e.station_key = $1
+ORDER BY c.id
+FOR UPDATE OF c
+`
+
+type LockStationConnectorsRow struct {
+	ID             pgtype.UUID `db:"id" json:"id"`
+	TariffRef      pgtype.UUID `db:"tariff_ref" json:"tariff_ref"`
+	AdhocTariffRef pgtype.UUID `db:"adhoc_tariff_ref" json:"adhoc_tariff_ref"`
+}
+
+// The connectors of the EVSEs of the station with the tariffs that they refer to, locked
+// until the transaction ends.
+func (q *Queries) LockStationConnectors(ctx context.Context, stationKey string) ([]LockStationConnectorsRow, error) {
+	rows, err := q.db.Query(ctx, LockStationConnectors, stationKey)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LockStationConnectorsRow{}
+	for rows.Next() {
+		var i LockStationConnectorsRow
+		if err := rows.Scan(&i.ID, &i.TariffRef, &i.AdhocTariffRef); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const MoveStationEvses = `-- name: MoveStationEvses :exec
 
 UPDATE asset_evses
@@ -654,6 +713,124 @@ WHERE station_key = $1 AND status <> 'REMOVED'
 
 func (q *Queries) RemoveStationEvses(ctx context.Context, stationKey string) error {
 	_, err := q.db.Exec(ctx, RemoveStationEvses, stationKey)
+	return err
+}
+
+const TransferChargingProfiles = `-- name: TransferChargingProfiles :exec
+UPDATE charging_profiles SET org_id = $1 WHERE charge_station_id = $2
+`
+
+type TransferChargingProfilesParams struct {
+	ToOrgID         pgtype.UUID `db:"to_org_id" json:"to_org_id"`
+	ChargeStationID string      `db:"charge_station_id" json:"charge_station_id"`
+}
+
+func (q *Queries) TransferChargingProfiles(ctx context.Context, arg TransferChargingProfilesParams) error {
+	_, err := q.db.Exec(ctx, TransferChargingProfiles, arg.ToOrgID, arg.ChargeStationID)
+	return err
+}
+
+const TransferLocation = `-- name: TransferLocation :execrows
+UPDATE asset_locations l SET
+    org_id = $1::uuid,
+    party_ref = $2::text,
+    version = l.version + 1,
+    updated_at = NOW()
+WHERE l.id = $3::uuid
+  AND NOT EXISTS (
+        SELECT 1 FROM asset_evses e
+        WHERE e.location_id = $3::uuid AND e.station_key <> $4::text)
+  AND NOT EXISTS (
+        SELECT 1 FROM charge_stations cs
+        WHERE cs.location_id = $3::uuid AND cs.charge_station_id <> $4::text)
+`
+
+type TransferLocationParams struct {
+	ToOrgID    pgtype.UUID `db:"to_org_id" json:"to_org_id"`
+	PartyRef   string      `db:"party_ref" json:"party_ref"`
+	LocationID pgtype.UUID `db:"location_id" json:"location_id"`
+	StationKey string      `db:"station_key" json:"station_key"`
+}
+
+// A location only moves to another org when no other station and no EVSE of another
+// station is at it: no row is changed otherwise.
+func (q *Queries) TransferLocation(ctx context.Context, arg TransferLocationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, TransferLocation,
+		arg.ToOrgID,
+		arg.PartyRef,
+		arg.LocationID,
+		arg.StationKey,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const TransferStationConnectors = `-- name: TransferStationConnectors :execrows
+UPDATE asset_connectors SET
+    org_id = $1,
+    tariff_ref = NULL,
+    adhoc_tariff_ref = NULL,
+    version = version + 1,
+    updated_at = NOW()
+WHERE id = ANY($2::uuid[])
+`
+
+type TransferStationConnectorsParams struct {
+	ToOrgID pgtype.UUID   `db:"to_org_id" json:"to_org_id"`
+	Ids     []pgtype.UUID `db:"ids" json:"ids"`
+}
+
+// Tariffs belong to an org: the connectors of a station that moves to another org lose
+// theirs.
+func (q *Queries) TransferStationConnectors(ctx context.Context, arg TransferStationConnectorsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, TransferStationConnectors, arg.ToOrgID, arg.Ids)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const TransferStationEvses = `-- name: TransferStationEvses :execrows
+UPDATE asset_evses SET
+    org_id = $1,
+    location_id = $2,
+    version = version + 1,
+    updated_at = NOW()
+WHERE station_key = $3
+`
+
+type TransferStationEvsesParams struct {
+	ToOrgID    pgtype.UUID `db:"to_org_id" json:"to_org_id"`
+	LocationID pgtype.UUID `db:"location_id" json:"location_id"`
+	StationKey string      `db:"station_key" json:"station_key"`
+}
+
+func (q *Queries) TransferStationEvses(ctx context.Context, arg TransferStationEvsesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, TransferStationEvses, arg.ToOrgID, arg.LocationID, arg.StationKey)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const TransferStationRow = `-- name: TransferStationRow :exec
+UPDATE charge_stations SET
+    org_id = $1,
+    location_id = $2::uuid,
+    updated_at = NOW()
+WHERE charge_station_id = $3
+`
+
+type TransferStationRowParams struct {
+	ToOrgID         pgtype.UUID `db:"to_org_id" json:"to_org_id"`
+	LocationID      pgtype.UUID `db:"location_id" json:"location_id"`
+	ChargeStationID string      `db:"charge_station_id" json:"charge_station_id"`
+}
+
+func (q *Queries) TransferStationRow(ctx context.Context, arg TransferStationRowParams) error {
+	_, err := q.db.Exec(ctx, TransferStationRow, arg.ToOrgID, arg.LocationID, arg.ChargeStationID)
 	return err
 }
 

@@ -110,6 +110,69 @@ UPDATE asset_evses
 SET status = 'REMOVED', version = version + 1, updated_at = NOW()
 WHERE station_key = @station_key AND status <> 'REMOVED';
 
+-- A charge station that moves to another org, with its EVSEs, their connectors, its
+-- charging profiles and maybe its location. The station row is locked first, so that
+-- transfers of one station happen one after the other.
+
+-- name: LockChargeStation :one
+SELECT org_id, location_id, state FROM charge_stations
+WHERE charge_station_id = $1
+FOR UPDATE;
+
+-- A location only moves to another org when no other station and no EVSE of another
+-- station is at it: no row is changed otherwise.
+-- name: TransferLocation :execrows
+UPDATE asset_locations l SET
+    org_id = sqlc.arg('to_org_id')::uuid,
+    party_ref = sqlc.arg('party_ref')::text,
+    version = l.version + 1,
+    updated_at = NOW()
+WHERE l.id = sqlc.arg('location_id')::uuid
+  AND NOT EXISTS (
+        SELECT 1 FROM asset_evses e
+        WHERE e.location_id = sqlc.arg('location_id')::uuid AND e.station_key <> sqlc.arg('station_key')::text)
+  AND NOT EXISTS (
+        SELECT 1 FROM charge_stations cs
+        WHERE cs.location_id = sqlc.arg('location_id')::uuid AND cs.charge_station_id <> sqlc.arg('station_key')::text);
+
+-- name: TransferChargingProfiles :exec
+UPDATE charging_profiles SET org_id = @to_org_id WHERE charge_station_id = @charge_station_id;
+
+-- The connectors of the EVSEs of the station with the tariffs that they refer to, locked
+-- until the transaction ends.
+-- name: LockStationConnectors :many
+SELECT c.id, c.tariff_ref, c.adhoc_tariff_ref FROM asset_connectors c
+JOIN asset_evses e ON e.id = c.evse_uid
+WHERE e.station_key = $1
+ORDER BY c.id
+FOR UPDATE OF c;
+
+-- Tariffs belong to an org: the connectors of a station that moves to another org lose
+-- theirs.
+-- name: TransferStationConnectors :execrows
+UPDATE asset_connectors SET
+    org_id = @to_org_id,
+    tariff_ref = NULL,
+    adhoc_tariff_ref = NULL,
+    version = version + 1,
+    updated_at = NOW()
+WHERE id = ANY(sqlc.arg('ids')::uuid[]);
+
+-- name: TransferStationEvses :execrows
+UPDATE asset_evses SET
+    org_id = @to_org_id,
+    location_id = @location_id,
+    version = version + 1,
+    updated_at = NOW()
+WHERE station_key = @station_key;
+
+-- name: TransferStationRow :exec
+UPDATE charge_stations SET
+    org_id = @to_org_id,
+    location_id = sqlc.narg('location_id')::uuid,
+    updated_at = NOW()
+WHERE charge_station_id = @charge_station_id;
+
 -- A connector belongs to the org of its EVSE. Returns no row when there is no such EVSE.
 -- name: CreateAssetConnector :one
 INSERT INTO asset_connectors (

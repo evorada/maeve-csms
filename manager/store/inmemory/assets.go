@@ -729,3 +729,133 @@ func (s *Store) DecommissionChargeStation(_ context.Context, stationKey string, 
 	}
 	return nil
 }
+
+// TransferChargeStation checks everything before it writes anything, under the lock, so
+// that a transfer that is refused changes nothing.
+func (s *Store) TransferChargeStation(_ context.Context, p store.TransferParams) (*store.TransferResult, error) {
+	what := "transfer charge station " + p.StationKey
+	from, err := uuid.Parse(p.FromOrgId)
+	if err != nil {
+		return nil, fmt.Errorf("%s: from org %q: %w", what, p.FromOrgId, err)
+	}
+	to, err := uuid.Parse(p.ToOrgId)
+	if err != nil {
+		return nil, fmt.Errorf("%s: to org %q: %w", what, p.ToOrgId, err)
+	}
+	if p.MoveLocation && (p.TargetPartyRef == nil || *p.TargetPartyRef == "") {
+		return nil, fmt.Errorf("%s: a location that moves needs the party of the target org", what)
+	}
+
+	s.Lock()
+	defer s.Unlock()
+	registered := s.chargeStations[p.StationKey]
+	// a station record always comes with auth details
+	if registered == nil || s.chargeStationAuth[p.StationKey] == nil {
+		return nil, fmt.Errorf("%s: %w", what, store.ErrNotFound)
+	}
+	if owner := stationOrgId(s.orgIdForStation(p.StationKey)); owner != from.String() {
+		return nil, fmt.Errorf("%s: the station belongs to org %s, not %s: %w", what, owner, p.FromOrgId, store.ErrInvalidState)
+	}
+	if registered.State == store.StationStateDecommissioned {
+		return nil, fmt.Errorf("%s: the station is decommissioned: %w", what, store.ErrInvalidState)
+	}
+
+	var target *string
+	var moved *store.AssetLocation
+	switch {
+	case p.MoveLocation:
+		if registered.LocationId == nil {
+			return nil, fmt.Errorf("%s: the station has no location to move: %w", what, store.ErrInvalidState)
+		}
+		target = registered.LocationId
+		if s.assetLocationShared(*target, p.StationKey) {
+			return nil, fmt.Errorf("%s: location %s is shared with other stations: %w", what, *target, store.ErrInvalidState)
+		}
+		moved = copyAssetLocation(s.assetLocations[*target])
+		moved.OrgId = to.String()
+		moved.PartyRef = *p.TargetPartyRef
+		if s.assetLocationOcpiIdTaken(moved) {
+			return nil, fmt.Errorf("%s: move location %s: OCPI id %s/%s: %w", what, *target, moved.PartyRef, moved.OcpiId, store.ErrAlreadyExists)
+		}
+	case p.TargetLocationId != nil:
+		id, ok := assetKey(*p.TargetLocationId)
+		if !ok || s.assetLocations[id] == nil {
+			return nil, fmt.Errorf("%s: location %s: %w", what, *p.TargetLocationId, store.ErrNotFound)
+		}
+		target = &id
+	}
+	evses := s.listAssetEvses(func(evse *store.AssetEvse) bool { return evse.StationKey == p.StationKey })
+	if len(evses) > 0 && target == nil {
+		return nil, fmt.Errorf("%s: the EVSEs of the station need a location: %w", what, store.ErrInvalidState)
+	}
+
+	now := s.clock.Now().UTC()
+	result := &store.TransferResult{StationKey: p.StationKey, LocationId: clonePtr(target), ClearedTariffRefs: []string{}}
+	if moved != nil {
+		moved.Version++
+		moved.UpdatedAt = now
+		s.assetLocations[moved.Id] = moved
+		result.LocationMoved = true
+	}
+	for key, profile := range s.chargingProfiles {
+		if profile.ChargeStationId == p.StationKey {
+			// the stored profile is the one that its caller set: it is replaced, not changed
+			transferred := *profile
+			transferred.OrgId = to.String()
+			s.chargingProfiles[key] = &transferred
+		}
+	}
+	tariffs := map[string]bool{}
+	for _, evse := range evses {
+		stored := s.assetEvses[evse.Id]
+		stored.OrgId = to.String()
+		stored.LocationId = *target
+		stored.Version++
+		stored.UpdatedAt = now
+		result.EvsesMoved++
+		for _, c := range s.assetConnectors {
+			if c.EvseUid != evse.Id {
+				continue
+			}
+			for _, ref := range []*string{c.TariffRef, c.AdhocTariffRef} {
+				if ref != nil {
+					tariffs[*ref] = true
+				}
+			}
+			c.OrgId = to.String()
+			c.TariffRef = nil
+			c.AdhocTariffRef = nil
+			c.Version++
+			c.UpdatedAt = now
+			result.ConnectorsMoved++
+		}
+	}
+	for ref := range tariffs {
+		result.ClearedTariffRefs = append(result.ClearedTariffRefs, ref)
+	}
+	slices.Sort(result.ClearedTariffRefs)
+
+	// the stored auth details may be those that their caller set: they are replaced
+	auth := *s.chargeStationAuth[p.StationKey]
+	auth.OrgId = to.String()
+	s.chargeStationAuth[p.StationKey] = &auth
+	registered.LocationId = clonePtr(target)
+	registered.UpdatedAt = now
+	return result, nil
+}
+
+// assetLocationShared reports whether another station than stationKey, or an EVSE of
+// another station, is at the location. The caller holds the lock.
+func (s *Store) assetLocationShared(locationId, stationKey string) bool {
+	for _, evse := range s.assetEvses {
+		if evse.LocationId == locationId && evse.StationKey != stationKey {
+			return true
+		}
+	}
+	for key, registered := range s.chargeStations {
+		if key != stationKey && registered.LocationId != nil && *registered.LocationId == locationId {
+			return true
+		}
+	}
+	return false
+}

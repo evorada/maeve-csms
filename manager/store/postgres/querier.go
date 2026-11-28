@@ -205,6 +205,10 @@ type Querier interface {
 	ListTransactions(ctx context.Context) ([]Transaction, error)
 	ListTransactionsFiltered(ctx context.Context, arg ListTransactionsFilteredParams) ([]Transaction, error)
 	ListVariableMonitoring(ctx context.Context, arg ListVariableMonitoringParams) ([]VariableMonitoring, error)
+	// A charge station that moves to another org, with its EVSEs, their connectors, its
+	// charging profiles and maybe its location. The station row is locked first, so that
+	// transfers of one station happen one after the other.
+	LockChargeStation(ctx context.Context, chargeStationID string) (LockChargeStationRow, error)
 	// Serialises the onboarding connections of one org until the transaction ends, so that
 	// its pending stations are counted and created one connection at a time. lock_class is
 	// a constant of the store that names this lock (see LockStationCommands).
@@ -214,6 +218,9 @@ type Querier interface {
 	// the outbox relay lock); lock_class is a constant of the store that names this lock.
 	// Two stations whose keys hash alike only wait for each other's claims.
 	LockStationCommands(ctx context.Context, arg LockStationCommandsParams) error
+	// The connectors of the EVSEs of the station with the tariffs that they refer to, locked
+	// until the transaction ends.
+	LockStationConnectors(ctx context.Context, stationKey string) ([]LockStationConnectorsRow, error)
 	LookupChargeStationCertificateDeletion(ctx context.Context, chargeStationID string) (ChargeStationCertificateDeletion, error)
 	LookupChargeStationCertificateQuery(ctx context.Context, chargeStationID string) (ChargeStationCertificateQuery, error)
 	MarkCommandSent(ctx context.Context, arg MarkCommandSentParams) (Command, error)
@@ -268,6 +275,15 @@ type Querier interface {
 	SetUnlockConnectorRequest(ctx context.Context, arg SetUnlockConnectorRequestParams) (UnlockConnectorRequest, error)
 	StoreMeterValue(ctx context.Context, arg StoreMeterValueParams) error
 	TouchStationLastSeen(ctx context.Context, arg TouchStationLastSeenParams) error
+	TransferChargingProfiles(ctx context.Context, arg TransferChargingProfilesParams) error
+	// A location only moves to another org when no other station and no EVSE of another
+	// station is at it: no row is changed otherwise.
+	TransferLocation(ctx context.Context, arg TransferLocationParams) (int64, error)
+	// Tariffs belong to an org: the connectors of a station that moves to another org lose
+	// theirs.
+	TransferStationConnectors(ctx context.Context, arg TransferStationConnectorsParams) (int64, error)
+	TransferStationEvses(ctx context.Context, arg TransferStationEvsesParams) (int64, error)
+	TransferStationRow(ctx context.Context, arg TransferStationRowParams) error
 	TransitionCommand(ctx context.Context, arg TransitionCommandParams) (Command, error)
 	// The key of the lock is a constant of the store (outboxRelayLockKey): a transaction
 	// that holds it is the only relay batch of every manager that shares the database.
