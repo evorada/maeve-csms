@@ -152,7 +152,7 @@ type = "in_memory"
 ```
 
 ## Documentation
-MaEVe is implemented in Go 1.20. Learn more about MaEVe and its existing components through this [High-level design document](./docs/design.md).
+MaEVe is implemented in Go 1.26. Learn more about MaEVe and its existing components through this [High-level design document](./docs/design.md).
 
 ## Pre-requisites
 

@@ -14,7 +14,7 @@ This package provides a PostgreSQL implementation of the MaEVE CSMS storage inte
 ## Prerequisites
 
 - **PostgreSQL 13+** (tested with PostgreSQL 15)
-- **Go 1.21+**
+- **Go 1.26+**
 - **golang-migrate CLI** (for running migrations)
 - **sqlc CLI** (only needed for development/regenerating queries)
 
