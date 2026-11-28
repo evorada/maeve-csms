@@ -4,11 +4,16 @@ package config
 
 import (
 	"bufio"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/pelletier/go-toml/v2"
+	"github.com/thoughtworks/maeve-csms/manager/connectivity"
+	"github.com/thoughtworks/maeve-csms/manager/events"
+	"github.com/thoughtworks/maeve-csms/manager/jobs"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
@@ -26,7 +31,11 @@ type BaseConfig struct {
 	TariffService             TariffServiceConfig             `mapstructure:"tariff_service" toml:"tariff_service" validate:"required"`
 	Jobs                      JobsConfig                      `mapstructure:"jobs" toml:"jobs"`
 	Tenancy                   TenancyConfig                   `mapstructure:"tenancy" toml:"tenancy"`
+	Events                    EventsConfig                    `mapstructure:"events" toml:"events"`
+	Connectivity              ConnectivityConfig              `mapstructure:"connectivity" toml:"connectivity"`
 	Ocpi                      *OcpiConfig                     `mapstructure:"ocpi,omitempty" toml:"ocpi,omitempty"`
+	// Nats is validated by Validate only when NATS is used.
+	Nats *NatsConfig `mapstructure:"nats,omitempty" toml:"nats,omitempty" validate:"-"`
 }
 
 // DefaultConfig provides the default configuration. The configuration
@@ -51,8 +60,10 @@ var DefaultConfig = BaseConfig{
 			},
 		},
 	},
+	// NATS is the default transport. The MQTT settings stay, so that type = "mqtt"
+	// works without further keys.
 	Transport: TransportConfig{
-		Type: "mqtt",
+		Type: "nats",
 		Mqtt: &MqttSettingsConfig{
 			Urls:              []string{"mqtt://localhost:1883"},
 			Prefix:            "cs",
@@ -95,12 +106,39 @@ var DefaultConfig = BaseConfig{
 		Type: "kwh",
 	},
 	Jobs: JobsConfig{
+		Runner:                    "nats_kv",
+		LeaseBucket:               jobs.DefaultLeaseBucket,
+		LeaseTTL:                  jobs.DefaultLeaseTTL.String(),
+		EnsureBucket:              false,
+		BucketReplicas:            1,
+		SyncInterval:              "1m",
+		SyncRetryAfter:            "2m",
 		ReservationExpiryInterval: "1m",
 	},
 	Tenancy: TenancyConfig{
 		DefaultOrgId: store.LegacyOrgId,
 		Mode:         "single",
 		CacheTTL:     "30s",
+	},
+	Events: EventsConfig{
+		Enabled:         true,
+		RelayEnabled:    true,
+		SubjectPrefix:   events.DefaultSubjectPrefix,
+		Stream:          events.DefaultStreamName,
+		StreamReplicas:  1,
+		StreamMaxAge:    "720h",
+		RelayInterval:   "1s",
+		RelayBatchSize:  events.DefaultRelayBatchSize,
+		OutboxRetention: "720h",
+		PurgeInterval:   "1h",
+	},
+	Connectivity: ConnectivityConfig{
+		LastSeenWriteInterval: connectivity.DefaultSeenWriteEvery.String(),
+		StaleAfter:            connectivity.DefaultStaleAfter.String(),
+		SweepInterval:         connectivity.DefaultSweepInterval.String(),
+	},
+	Nats: &NatsConfig{
+		Urls: []string{"nats://localhost:4222"},
 	},
 }
 
@@ -145,5 +183,32 @@ func (c *BaseConfig) replaceDefaults() {
 func (c *BaseConfig) Validate() error {
 	validate := validator.New()
 
-	return validate.Struct(c)
+	err := validate.Struct(c)
+	if err != nil {
+		return err
+	}
+
+	if c.usesNats() {
+		if c.Nats == nil {
+			switch {
+			case c.Transport.Type == "nats":
+				return fmt.Errorf("the [nats] section is required with transport type %q", c.Transport.Type)
+			case c.relaysEvents():
+				return errors.New("the [nats] section is required to relay the domain events to JetStream (events.relay_enabled)")
+			default:
+				return errors.New(`the [nats] section is required to run the background jobs with jobs runner "nats_kv" (use "local" for a single instance without NATS)`)
+			}
+		}
+		err = validate.Struct(c.Nats)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// usesNats reports whether something needs the connection to NATS: the NATS transport,
+// the relay of the domain events or the leases of the background jobs.
+func (c *BaseConfig) usesNats() bool {
+	return c.Transport.Type == "nats" || c.relaysEvents() || c.Jobs.usesLeasedRunner()
 }

@@ -17,6 +17,7 @@ import (
 	"k8s.io/utils/clock"
 )
 
+// SyncSettings runs SyncSettingsOnce every runEvery until ctx is cancelled.
 func SyncSettings(ctx context.Context, engine store.Engine, clock clock.PassiveClock, v16CallMaker, v201CallMaker handlers.CallMaker, runEvery time.Duration, retryAfter time.Duration) {
 	var previousChargeStationId string
 	for {
@@ -25,94 +26,106 @@ func SyncSettings(ctx context.Context, engine store.Engine, clock clock.PassiveC
 			slog.Info("shutting down sync settings")
 			return
 		case <-time.After(runEvery):
-			slog.Info("checking for pending charge station settings changes")
-			settings, err := engine.ListChargeStationSettings(ctx, 50, previousChargeStationId)
-			if err != nil {
-				slog.Error("list charge station settings", slog.String("err", err.Error()))
-				continue
-			}
-			if len(settings) > 0 {
-				previousChargeStationId = settings[len(settings)-1].ChargeStationId
-			} else {
-				previousChargeStationId = ""
-			}
-			pendingSettings := filterPendingSettings(settings)
-			for _, pendingSetting := range pendingSettings {
-				details, err := engine.LookupChargeStationRuntimeDetails(ctx, pendingSetting.ChargeStationId)
-				if err != nil {
-					slog.Error("lookup charge station runtime details", slog.String("err", err.Error()),
-						slog.String("chargeStationId", pendingSetting.ChargeStationId))
+			previousChargeStationId = SyncSettingsOnce(ctx, engine, clock, v16CallMaker, v201CallMaker, previousChargeStationId, retryAfter)
+		}
+	}
+}
+
+// SyncSettingsOnce sends the pending settings of the next page of charge stations after
+// the charge station after, and returns where the next pass starts: the last charge
+// station of the page, "" after the last page, after itself when the page could not be
+// read. A setting that is sent is not sent again before retryAfter.
+func SyncSettingsOnce(ctx context.Context, engine store.Engine, clock clock.PassiveClock, v16CallMaker, v201CallMaker handlers.CallMaker, after string, retryAfter time.Duration) (next string) {
+	slog.Info("checking for pending charge station settings changes")
+	settings, err := engine.ListChargeStationSettings(ctx, 50, after)
+	if err != nil {
+		slog.Error("list charge station settings", slog.String("err", err.Error()))
+		return after
+	}
+	if len(settings) > 0 {
+		next = settings[len(settings)-1].ChargeStationId
+	}
+	pendingSettings := filterPendingSettings(settings)
+	for _, pendingSetting := range pendingSettings {
+		details, err := engine.LookupChargeStationRuntimeDetails(ctx, pendingSetting.ChargeStationId)
+		if err != nil {
+			slog.Error("lookup charge station runtime details", slog.String("err", err.Error()),
+				slog.String("chargeStationId", pendingSetting.ChargeStationId))
+			continue
+		}
+		// a charge station that has not booted yet: its version is not known
+		if details == nil {
+			continue
+		}
+		csId := pendingSetting.ChargeStationId
+		switch details.OcppVersion {
+		case "1.6":
+			for name, setting := range pendingSetting.Settings {
+				if setting.Status == store.ChargeStationSettingStatusPending && clock.Now().After(setting.SendAfter) {
+					slog.Info("updating charge station settings", slog.String("chargeStationId", csId),
+						slog.String("key", name),
+						slog.String("value", setting.Value),
+						slog.String("OcppVersion", details.OcppVersion))
+					err = engine.UpdateChargeStationSettings(ctx, csId, &store.ChargeStationSettings{
+						Settings: map[string]*store.ChargeStationSetting{
+							name: {Status: setting.Status, Value: setting.Value, SendAfter: clock.Now().Add(retryAfter)},
+						},
+					})
+					if err != nil {
+						slog.Error("update charge station settings", slog.String("err", err.Error()))
+						continue
+					}
+					req := &ocpp16.ChangeConfigurationJson{
+						Key:   name,
+						Value: setting.Value,
+					}
+					err := v16CallMaker.Send(ctx, csId, req)
+					if err != nil {
+						slog.Error("send change configuration request", slog.String("err", err.Error()),
+							slog.String("chargeStationId", csId), slog.String("key", name), slog.String("value", setting.Value))
+					}
 				}
-				csId := pendingSetting.ChargeStationId
-				switch details.OcppVersion {
-				case "1.6":
-					for name, setting := range pendingSetting.Settings {
-						if setting.Status == store.ChargeStationSettingStatusPending && clock.Now().After(setting.SendAfter) {
-							slog.Info("updating charge station settings", slog.String("chargeStationId", csId),
-								slog.String("key", name),
-								slog.String("value", setting.Value),
-								slog.String("OcppVersion", details.OcppVersion))
-							err = engine.UpdateChargeStationSettings(ctx, csId, &store.ChargeStationSettings{
-								Settings: map[string]*store.ChargeStationSetting{
-									name: {Status: setting.Status, Value: setting.Value, SendAfter: clock.Now().Add(retryAfter)},
-								},
-							})
-							if err != nil {
-								slog.Error("update charge station settings", slog.String("err", err.Error()))
-								continue
-							}
-							req := &ocpp16.ChangeConfigurationJson{
-								Key:   name,
-								Value: setting.Value,
-							}
-							err := v16CallMaker.Send(ctx, csId, req)
-							if err != nil {
-								slog.Error("send change configuration request", slog.String("err", err.Error()),
-									slog.String("chargeStationId", csId), slog.String("key", name), slog.String("value", setting.Value))
-							}
-						}
+			}
+		case "2.0.1":
+			var variables []ocpp201.SetVariableDataType
+			for name, setting := range pendingSetting.Settings {
+				slog.Info("updating charge station settings", slog.String("chargeStationId", csId),
+					slog.String("key", name),
+					slog.String("value", setting.Value),
+					slog.String("OcppVersion", details.OcppVersion))
+				if setting.Status == store.ChargeStationSettingStatusPending && clock.Now().After(setting.SendAfter) {
+					err = engine.UpdateChargeStationSettings(ctx, csId, &store.ChargeStationSettings{
+						Settings: map[string]*store.ChargeStationSetting{
+							name: {Status: setting.Status, Value: setting.Value, SendAfter: clock.Now().Add(retryAfter)},
+						},
+					})
+					if err != nil {
+						slog.Error("update charge station settings", slog.String("err", err.Error()))
+						continue
 					}
-				case "2.0.1":
-					var variables []ocpp201.SetVariableDataType
-					for name, setting := range pendingSetting.Settings {
-						slog.Info("updating charge station settings", slog.String("chargeStationId", csId),
-							slog.String("key", name),
-							slog.String("value", setting.Value),
-							slog.String("OcppVersion", details.OcppVersion))
-						if setting.Status == store.ChargeStationSettingStatusPending && clock.Now().After(setting.SendAfter) {
-							err = engine.UpdateChargeStationSettings(ctx, csId, &store.ChargeStationSettings{
-								Settings: map[string]*store.ChargeStationSetting{
-									name: {Status: setting.Status, Value: setting.Value, SendAfter: clock.Now().Add(retryAfter)},
-								},
-							})
-							if err != nil {
-								slog.Error("update charge station settings", slog.String("err", err.Error()))
-								continue
-							}
-							var variable ocpp201.SetVariableDataType
-							err = parseOcpp201Name(name, &variable)
-							if err != nil {
-								slog.Error("parse ocpp 2.0.1 name", slog.String("err", err.Error()))
-								continue
-							}
-							variable.AttributeValue = setting.Value
-							variables = append(variables, variable)
-						}
+					var variable ocpp201.SetVariableDataType
+					err = parseOcpp201Name(name, &variable)
+					if err != nil {
+						slog.Error("parse ocpp 2.0.1 name", slog.String("err", err.Error()))
+						continue
 					}
-					if len(variables) > 0 {
-						req := &ocpp201.SetVariablesRequestJson{
-							SetVariableData: variables,
-						}
-						err = v201CallMaker.Send(ctx, csId, req)
-						if err != nil {
-							slog.Error("send set variables request", slog.String("err", err.Error()),
-								slog.String("chargeStationId", csId))
-						}
-					}
+					variable.AttributeValue = setting.Value
+					variables = append(variables, variable)
+				}
+			}
+			if len(variables) > 0 {
+				req := &ocpp201.SetVariablesRequestJson{
+					SetVariableData: variables,
+				}
+				err = v201CallMaker.Send(ctx, csId, req)
+				if err != nil {
+					slog.Error("send set variables request", slog.String("err", err.Error()),
+						slog.String("chargeStationId", csId))
 				}
 			}
 		}
 	}
+	return next
 }
 
 // ocpp201NamePattern is a regexp that matches the following:

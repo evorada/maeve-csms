@@ -75,6 +75,10 @@ type Store struct {
 	tenantsByHost                    map[string]string        // hostname to org id
 	tenantsByOrgKey                  map[string]string        // org key to org id
 	tenantsBySlug                    map[string]string        // slug to org id
+	outbox                           []*store.OutboxEvent     // in Seq order
+	outboxSeq                        int64
+	outboxPublishedSeq               int64
+	relayMu                          sync.Mutex // held by the relay batch that runs
 }
 
 func NewStore(clock clock.PassiveClock) *Store {
@@ -1680,6 +1684,22 @@ func (s *Store) SetChargeStationStatus(_ context.Context, chargeStationId string
 
 	statusCopy := *status
 	statusCopy.UpdatedAt = time.Now()
+	// the connectivity fields are written by the ConnectivityStore methods only: like
+	// the PostgreSQL upsert, a status without them keeps the stored ones
+	if stored, ok := s.chargeStationStatuses[chargeStationId]; ok {
+		if statusCopy.LastConnectedAt == nil {
+			statusCopy.LastConnectedAt = stored.LastConnectedAt
+		}
+		if statusCopy.LastDisconnectedAt == nil {
+			statusCopy.LastDisconnectedAt = stored.LastDisconnectedAt
+		}
+		if statusCopy.LastSeenAt == nil {
+			statusCopy.LastSeenAt = stored.LastSeenAt
+		}
+		if statusCopy.ConnectionId == nil {
+			statusCopy.ConnectionId = stored.ConnectionId
+		}
+	}
 	s.chargeStationStatuses[chargeStationId] = &statusCopy
 
 	return nil

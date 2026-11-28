@@ -5,8 +5,10 @@ package ocpp16
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
@@ -18,11 +20,16 @@ import (
 // StopTransactionHandler records the end of a transaction. A StopTransaction.req is
 // always acknowledged, also for a transaction that the CSMS does not know: the station
 // retries a StopTransaction.req that fails.
+//
+// The end of the transaction, its details and the session.completed event are stored in
+// one transaction.
 type StopTransactionHandler struct {
 	Clock            clock.PassiveClock
 	TokenStore       store.TokenStore
 	OrgResolver      tenancy.StationOrgResolver
 	TransactionStore store.TransactionStore
+	Tx               store.Transactor
+	Events           events.Emitter
 }
 
 func (s StopTransactionHandler) HandleCall(ctx context.Context, chargeStationId string, request ocpp.Request) (response ocpp.Response, err error) {
@@ -59,12 +66,28 @@ func (s StopTransactionHandler) HandleCall(ctx context.Context, chargeStationId 
 	var idToken, tokenType string
 	if req.IdTag != nil {
 		idToken = *req.IdTag
-		tokenType = "ISO14443"
+		tokenType = idTagTokenType
 	}
 
-	transaction, err := s.TransactionStore.FindTransaction(ctx, chargeStationId, transactionId)
+	err = s.Tx.RunInTx(ctx, func(ctx context.Context) error {
+		return s.endTransaction(ctx, chargeStationId, req, transactionId, idToken, tokenType, stoppedAt, reason)
+	})
 	if err != nil {
 		return nil, err
+	}
+
+	return &types.StopTransactionResponseJson{
+		IdTagInfo: idTagInfo,
+	}, nil
+}
+
+// endTransaction records the end of a transaction (creating the transaction when it is
+// not known) and emits session.completed.
+func (s StopTransactionHandler) endTransaction(ctx context.Context, chargeStationId string, req *types.StopTransactionJson,
+	transactionId, idToken, tokenType string, stoppedAt time.Time, reason string) error {
+	transaction, err := s.TransactionStore.FindTransaction(ctx, chargeStationId, transactionId)
+	if err != nil {
+		return err
 	}
 	if transaction == nil {
 		// a station that restarted can stop a transaction that the CSMS never saw:
@@ -73,7 +96,7 @@ func (s StopTransactionHandler) HandleCall(ctx context.Context, chargeStationId 
 			slog.String("chargeStationId", chargeStationId), slog.String("transactionId", transactionId))
 		err = s.TransactionStore.CreateTransaction(ctx, chargeStationId, transactionId, idToken, tokenType, nil, 0, false)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		transaction = &store.Transaction{
 			ChargeStationId: chargeStationId,
@@ -92,7 +115,7 @@ func (s StopTransactionHandler) HandleCall(ctx context.Context, chargeStationId 
 
 	err = s.TransactionStore.EndTransaction(ctx, chargeStationId, transactionId, idToken, tokenType, meterValues, seqNo)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	meterStop := int64(req.MeterStop)
@@ -114,12 +137,60 @@ func (s StopTransactionHandler) HandleCall(ctx context.Context, chargeStationId 
 	}
 	err = s.TransactionStore.UpdateTransactionDetails(ctx, chargeStationId, transactionId, details)
 	if err != nil && !errors.Is(err, store.ErrNotImplemented) {
-		return nil, err
+		return err
 	}
 
-	return &types.StopTransactionResponseJson{
-		IdTagInfo: idTagInfo,
-	}, nil
+	// the event describes the transaction as it is stored now
+	ended, err := s.TransactionStore.FindTransaction(ctx, chargeStationId, transactionId)
+	if err != nil {
+		return err
+	}
+	if ended == nil {
+		ended = transaction
+	}
+	return s.Events.Emit(ctx, sessionCompletedEvent(chargeStationId, req.TransactionId, ended, details))
+}
+
+// sessionCompletedEvent is the session.completed event of an ended transaction. The
+// stop (time, meter, energy, reason) is what the handler wrote, details; the rest comes
+// from the stored transaction. So a store that does not keep the details (Firestore)
+// still gives the event its stop.
+func sessionCompletedEvent(chargeStationId string, ocppTransactionId int, transaction *store.Transaction, details *store.TransactionDetails) events.Event {
+	stoppedAt := details.StoppedAt.UTC()
+	data := events.SessionCompletedData{
+		StationKey:        chargeStationId,
+		StationId:         events.StationId(chargeStationId),
+		TransactionId:     transaction.TransactionId,
+		OcppTransactionId: strconv.Itoa(ocppTransactionId),
+		EvseId:            transaction.EvseId,
+		ConnectorId:       transaction.ConnectorId,
+		IdToken:           transaction.IdToken,
+		TokenType:         transaction.TokenType,
+		IdTokenGroup:      transaction.IdTokenGroup,
+		StoppedAt:         stoppedAt,
+		MeterStopWh:       details.MeterStopWh,
+		EnergyWh:          details.EnergyWh,
+		StopReason:        *details.StopReason,
+	}
+	if meterStart, ok := transactionMeterStartWh(transaction); ok {
+		data.MeterStartWh = &meterStart
+	}
+	if transaction.StartedAt != nil {
+		startedAt := transaction.StartedAt.UTC()
+		data.StartedAt = &startedAt
+		// a station clock that went backwards gives no duration
+		if duration := int64(stoppedAt.Sub(startedAt) / time.Second); duration >= 0 {
+			data.DurationS = &duration
+		}
+	}
+	return events.Event{
+		Type:         events.TypeSessionCompleted,
+		StationKey:   chargeStationId,
+		ResourceType: events.ResourceSession,
+		ResourceId:   transaction.TransactionId,
+		Actor:        events.StationActor(chargeStationId),
+		Data:         data,
+	}
 }
 
 // transactionMeterStartWh returns the energy register (Wh) at the start of the

@@ -29,12 +29,20 @@ import (
 	"github.com/eclipse/paho.golang/paho"
 	"github.com/mochi-co/mqtt/v2"
 	"github.com/mochi-co/mqtt/v2/packets"
+	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/gateway/ocpp"
 	"github.com/thoughtworks/maeve-csms/gateway/pipe"
 	"github.com/thoughtworks/maeve-csms/gateway/registry"
 	"github.com/thoughtworks/maeve-csms/gateway/server"
+	"github.com/thoughtworks/maeve-csms/gateway/transport"
+	natstransport "github.com/thoughtworks/maeve-csms/gateway/transport/nats"
+	"github.com/thoughtworks/maeve-csms/gateway/transport/nats/natstest"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	tracesdk "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace"
 	"nhooyr.io/websocket"
 )
 
@@ -702,8 +710,16 @@ func startGatewayTLS(t *testing.T, clientCAs *x509.CertPool, opts ...server.Webs
 
 func serveGateway(t *testing.T, tlsConfig *tls.Config, opts ...server.WebsocketOpt) *httptest.Server {
 	t.Helper()
+	srv, _ := serveGatewayWithShutdown(t, tlsConfig, opts...)
+	return srv
+}
 
-	handler := server.NewWebsocketHandler(opts...)
+// serveGatewayWithShutdown is serveGateway that also returns the shutdown function of
+// the websocket handler.
+func serveGatewayWithShutdown(t *testing.T, tlsConfig *tls.Config, opts ...server.WebsocketOpt) (*httptest.Server, func(context.Context) error) {
+	t.Helper()
+
+	handler, shutdown := server.NewWebsocketHandlerWithShutdown(opts...)
 	var handling atomic.Int64
 	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handling.Add(1)
@@ -721,7 +737,7 @@ func serveGateway(t *testing.T, tlsConfig *tls.Config, opts ...server.WebsocketO
 		assert.Eventually(t, func() bool { return handling.Load() == 0 }, teardownTimeout, time.Millisecond,
 			"the gateway is still handling a connection at the end of the test: is a websocket left open?")
 	})
-	return srv
+	return srv, shutdown
 }
 
 // tenantStation returns a charge station of the tenant with the org key that
@@ -740,6 +756,12 @@ func tenantStation(orgKey, clientId string) *registry.ChargeStation {
 // its request (as if the charge station had resolved host to the address of the server).
 func dialStation(ctx context.Context, t *testing.T, srv *httptest.Server, host, clientId, username, password string, header http.Header) (*websocket.Conn, *http.Response, error) {
 	t.Helper()
+	return dialStationWithProtocol(ctx, t, srv, host, clientId, username, password, header, "ocpp2.0.1")
+}
+
+// dialStationWithProtocol is dialStation with the OCPP websocket subprotocol.
+func dialStationWithProtocol(ctx context.Context, t *testing.T, srv *httptest.Server, host, clientId, username, password string, header http.Header, protocol string) (*websocket.Conn, *http.Response, error) {
+	t.Helper()
 
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
@@ -756,7 +778,7 @@ func dialStation(ctx context.Context, t *testing.T, srv *httptest.Server, host, 
 
 	return websocket.Dial(ctx, fmt.Sprintf("ws://%s/ws/%s", host, clientId), &websocket.DialOptions{
 		HTTPClient:   &http.Client{Transport: transport},
-		Subprotocols: []string{"ocpp2.0.1"},
+		Subprotocols: []string{protocol},
 		HTTPHeader:   header,
 	})
 }
@@ -1207,7 +1229,13 @@ func TestSingleTenantStationKeepsItsTopics(t *testing.T) {
 	assert.Equal(t, brokerEvent{clientId: "cs.1", topic: "cs/out/ocpp2.0.1/cs.1"}, await(hook.subscribed))
 
 	require.NoError(t, conn.Write(ctx, websocket.MessageText, []byte(`[2,"1","Heartbeat",{}]`)))
-	assert.Equal(t, brokerEvent{clientId: "cs.1", topic: "cs/in/ocpp2.0.1/cs.1"}, await(hook.published))
+	// the call, and the connected event of the socket, which is published on its own
+	assert.ElementsMatch(t,
+		[]brokerEvent{
+			{clientId: "cs.1", topic: "cs/in/ocpp2.0.1/cs.1"},
+			{clientId: "cs.1", topic: "cs/conn/cs.1"},
+		},
+		[]brokerEvent{await(hook.published), await(hook.published)})
 }
 
 // The organisation names that the tenant of a charge station accepts in a client
@@ -1345,6 +1373,247 @@ func TestCertificateOrganizationOfTheTenant(t *testing.T) {
 			}
 			require.NotNil(t, resp, "no answer from the gateway: %v", err)
 			assert.Equal(t, tc.want, resp.StatusCode)
+		})
+	}
+}
+
+// A charge station is turned away when the broker is not reached within the connect
+// timeout: the gateway closes its websocket and does not wait for the broker any
+// longer (startGateway fails the test when the handler has not returned).
+func TestUnreachableBrokerClosesTheWebsocket(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	reg := registry.NewMockRegistry()
+	reg.Add("a.example", tenantStation("aaaa", "CP001"))
+
+	srv := startGateway(t,
+		server.WithMqttBrokerUrl(unreachableBroker(t)),
+		server.WithMqttConnectSettings(300*time.Millisecond, 50*time.Millisecond, 0),
+		server.WithDeviceRegistry(reg))
+
+	conn, resp, err := dialStation(ctx, t, srv, "a.example", "CP001", "CP001", "password", nil)
+	require.NoError(t, err)
+	defer func() {
+		_ = conn.Close(websocket.StatusNormalClosure, "OK")
+	}()
+	assert.Equal(t, http.StatusSwitchingProtocols, resp.StatusCode)
+
+	_, _, err = conn.Read(ctx)
+	assert.Equal(t, websocket.StatusProtocolError, websocket.CloseStatus(err), "read: %v", err)
+}
+
+// unreachableBroker returns the URL of a broker that refuses every connection.
+func unreachableBroker(t *testing.T) *url.URL {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr, err := url.Parse("mqtt://" + l.Addr().String())
+	require.NoError(t, err)
+	require.NoError(t, l.Close())
+	return addr
+}
+
+// fakeTransport hands the sessions that the gateway opens to the test.
+type fakeTransport struct {
+	opened chan *fakeSession
+	// sendEvent, when set, publishes the connection events of the sessions
+	sendEvent func(ctx context.Context, ev *transport.ConnectionEvent) error
+}
+
+func (f *fakeTransport) Open(_ context.Context, stationKey, ocppProtocol string, deliver func(msg *pipe.GatewayMessage)) (transport.Session, error) {
+	s := &fakeSession{
+		stationKey: stationKey,
+		protocol:   ocppProtocol,
+		deliver:    deliver,
+		sendEvent:  f.sendEvent,
+		sent:       make(chan *pipe.GatewayMessage, 1),
+		events:     make(chan *transport.ConnectionEvent, 16),
+		done:       make(chan struct{}),
+		closed:     make(chan struct{}),
+	}
+	f.opened <- s
+	return s, nil
+}
+
+func (f *fakeTransport) Close() error {
+	return nil
+}
+
+type fakeSession struct {
+	stationKey string
+	protocol   string
+	deliver    func(msg *pipe.GatewayMessage)
+	sendEvent  func(ctx context.Context, ev *transport.ConnectionEvent) error
+	sent       chan *pipe.GatewayMessage
+	events     chan *transport.ConnectionEvent
+	done       chan struct{}
+	closed     chan struct{}
+}
+
+func (s *fakeSession) Send(_ context.Context, msg *pipe.GatewayMessage) error {
+	s.sent <- msg
+	return nil
+}
+
+func (s *fakeSession) SendConnectionEvent(ctx context.Context, ev *transport.ConnectionEvent) error {
+	if s.sendEvent != nil {
+		return s.sendEvent(ctx, ev)
+	}
+	select {
+	case s.events <- ev:
+	default:
+	}
+	return nil
+}
+
+func (s *fakeSession) Done() <-chan struct{} {
+	return s.done
+}
+
+func (s *fakeSession) Close(context.Context) error {
+	close(s.closed)
+	return nil
+}
+
+func TestWebsocketHandlerUsesTheTransport(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	reg := registry.NewMockRegistry()
+	reg.Add("a.example", tenantStation("aaaa", "CP001"))
+
+	tr := &fakeTransport{opened: make(chan *fakeSession, 1)}
+	srv := startGateway(t,
+		server.WithTransport(tr),
+		// ignored next to a transport
+		server.WithMqttBrokerUrl(unreachableBroker(t)),
+		server.WithDeviceRegistry(reg))
+
+	conn, _, err := dialStation(ctx, t, srv, "a.example", "CP001", "CP001", "password", nil)
+	require.NoError(t, err)
+	defer func() {
+		_ = conn.Close(websocket.StatusNormalClosure, "OK")
+	}()
+
+	var session *fakeSession
+	select {
+	case session = <-tr.opened:
+	case <-ctx.Done():
+		t.Fatal("timeout waiting for the session")
+	}
+	assert.Equal(t, "aaaa.CP001", session.stationKey)
+	assert.Equal(t, "ocpp2.0.1", session.protocol)
+
+	// a call of the charge station is sent to the CSMS
+	require.NoError(t, conn.Write(ctx, websocket.MessageText, []byte(`[2,"1","Heartbeat",{}]`)))
+	select {
+	case msg := <-session.sent:
+		assert.Equal(t, ocpp.MessageTypeCall, msg.MessageType)
+		assert.Equal(t, "Heartbeat", msg.Action)
+		assert.Equal(t, "1", msg.MessageId)
+	case <-ctx.Done():
+		t.Fatal("timeout waiting for the call of the charge station")
+	}
+
+	// the answer of the CSMS reaches the charge station
+	session.deliver(&pipe.GatewayMessage{
+		Context:         context.Background(),
+		MessageType:     ocpp.MessageTypeCallResult,
+		MessageId:       "1",
+		ResponsePayload: json.RawMessage(`{"currentTime":"2026-11-27T12:00:00Z"}`),
+	})
+	_, data, err := conn.Read(ctx)
+	require.NoError(t, err)
+	assert.JSONEq(t, `[3,"1",{"currentTime":"2026-11-27T12:00:00Z"}]`, string(data))
+
+	// a session that breaks down closes the websocket, and the gateway closes the session
+	close(session.done)
+	_, _, err = conn.Read(ctx)
+	assert.Equal(t, websocket.StatusProtocolError, websocket.CloseStatus(err), "read: %v", err)
+	select {
+	case <-session.closed:
+	case <-ctx.Done():
+		t.Fatal("timeout waiting for the gateway to close the session")
+	}
+}
+
+// A charge station talks to the CSMS through the NATS transport: its call arrives on
+// the in subject of its station key with the trace context in the headers, and the
+// answer that the CSMS publishes on the out subject reaches the charge station.
+func TestWebsocketRoundTripNats(t *testing.T) {
+	for protocol, ver := range map[string]string{"ocpp1.6": "ocpp16", "ocpp2.0.1": "ocpp201"} {
+		t.Run(protocol, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+
+			previous := otel.GetTextMapPropagator()
+			otel.SetTextMapPropagator(propagation.TraceContext{})
+			t.Cleanup(func() { otel.SetTextMapPropagator(previous) })
+
+			tracer := tracesdk.NewTracerProvider(tracesdk.WithSampler(tracesdk.AlwaysSample())).Tracer("test")
+
+			_, natsURL := natstest.RunServer(t)
+			gatewayConn, err := nats.Connect(natsURL)
+			require.NoError(t, err)
+			tr := natstransport.New(gatewayConn, natstransport.WithTracer(tracer))
+			t.Cleanup(func() { assert.NoError(t, tr.Close()) })
+
+			// the CSMS answers every call of the charge station with its payload
+			csms, err := nats.Connect(natsURL)
+			require.NoError(t, err)
+			t.Cleanup(csms.Close)
+			calls := make(chan *nats.Msg, 1)
+			sub, err := csms.Subscribe("ocpp.in."+ver+".k7f2.CP001", func(m *nats.Msg) {
+				calls <- m
+				var call pipe.GatewayMessage
+				if !assert.NoError(t, json.Unmarshal(m.Data, &call)) {
+					return
+				}
+				data, err := json.Marshal(pipe.GatewayMessage{
+					MessageType:     ocpp.MessageTypeCallResult,
+					MessageId:       call.MessageId,
+					ResponsePayload: json.RawMessage(`{"currentTime":"2026-11-27T12:00:00Z","interval":300,"status":"Accepted"}`),
+				})
+				if !assert.NoError(t, err) {
+					return
+				}
+				assert.NoError(t, csms.Publish("ocpp.out."+ver+".k7f2.CP001", data))
+			})
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = sub.Unsubscribe() })
+			require.NoError(t, csms.Flush())
+
+			reg := registry.NewMockRegistry()
+			reg.Add("a.example", tenantStation("k7f2", "CP001"))
+			srv := startGateway(t,
+				server.WithTransport(tr),
+				server.WithDeviceRegistry(reg),
+				server.WithOtelTracer(tracer))
+
+			conn, _, err := dialStationWithProtocol(ctx, t, srv, "a.example", "CP001", "CP001", "password", nil, protocol)
+			require.NoError(t, err)
+			defer func() {
+				_ = conn.Close(websocket.StatusNormalClosure, "OK")
+			}()
+			assert.Equal(t, protocol, conn.Subprotocol())
+
+			require.NoError(t, conn.Write(ctx, websocket.MessageText,
+				[]byte(`[2,"1","BootNotification",{"chargePointVendor":"Vendor","chargePointModel":"Model"}]`)))
+
+			select {
+			case m := <-calls:
+				assert.JSONEq(t, `{"type":2,"action":"BootNotification","id":"1","request":{"chargePointVendor":"Vendor","chargePointModel":"Model"}}`, string(m.Data))
+				callCtx := otel.GetTextMapPropagator().Extract(context.Background(),
+					propagation.MapCarrier{"traceparent": m.Header.Get("traceparent")})
+				assert.True(t, trace.SpanContextFromContext(callCtx).IsValid(), "headers: %v", m.Header)
+			case <-ctx.Done():
+				t.Fatal("timeout waiting for the call of the charge station")
+			}
+
+			_, data, err := conn.Read(ctx)
+			require.NoError(t, err)
+			assert.JSONEq(t, `[3,"1",{"currentTime":"2026-11-27T12:00:00Z","interval":300,"status":"Accepted"}]`, string(data))
 		})
 	}
 }

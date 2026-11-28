@@ -14,6 +14,7 @@ type Querier interface {
 	AddChargeStationCertificate(ctx context.Context, arg AddChargeStationCertificateParams) (ChargeStationCertificate, error)
 	AddMeterValues(ctx context.Context, arg AddMeterValuesParams) error
 	CancelReservation(ctx context.Context, reservationID int32) error
+	ClaimUnpublishedOutboxEvents(ctx context.Context, limit int32) ([]OutboxEvent, error)
 	CountChargeStationEvents(ctx context.Context, chargeStationID string) (int64, error)
 	CountConnectorsForOrgs(ctx context.Context, orgIds []pgtype.UUID) (int64, error)
 	CountDeviceReports(ctx context.Context, chargeStationID string) (int64, error)
@@ -58,6 +59,8 @@ type Querier interface {
 	DeleteTokenForOrg(ctx context.Context, arg DeleteTokenForOrgParams) error
 	DeleteUnlockConnectorRequest(ctx context.Context, chargeStationID string) error
 	DeleteVariableMonitoring(ctx context.Context, arg DeleteVariableMonitoringParams) error
+	// GREATEST ignores NULLs; a row where all three are NULL is not touched.
+	DisconnectStaleStations(ctx context.Context, arg DisconnectStaleStationsParams) ([]string, error)
 	ExpireReservations(ctx context.Context) (int64, error)
 	FindActiveTransaction(ctx context.Context, chargeStationID string) (Transaction, error)
 	GetActiveReservations(ctx context.Context, chargeStationID string) ([]Reservation, error)
@@ -120,6 +123,7 @@ type Querier interface {
 	GetVariableMonitoring(ctx context.Context, arg GetVariableMonitoringParams) (VariableMonitoring, error)
 	InsertChargeStationEvent(ctx context.Context, arg InsertChargeStationEventParams) (int32, error)
 	InsertDeviceReport(ctx context.Context, arg InsertDeviceReportParams) (int32, error)
+	InsertOutboxEvent(ctx context.Context, arg InsertOutboxEventParams) (InsertOutboxEventRow, error)
 	InsertTenant(ctx context.Context, arg InsertTenantParams) error
 	InsertTenantHostname(ctx context.Context, arg InsertTenantHostnameParams) error
 	ListAllLocations(ctx context.Context, arg ListAllLocationsParams) ([]Location, error)
@@ -144,6 +148,7 @@ type Querier interface {
 	ListLocations(ctx context.Context, arg ListLocationsParams) ([]Location, error)
 	ListLogRequests(ctx context.Context, arg ListLogRequestsParams) ([]LogRequest, error)
 	ListOcpiPartiesForRole(ctx context.Context, role string) ([]OcpiParty, error)
+	ListPublishedOutboxEvents(ctx context.Context, arg ListPublishedOutboxEventsParams) ([]OutboxEvent, error)
 	ListRemoteStartTransactionRequests(ctx context.Context, arg ListRemoteStartTransactionRequestsParams) ([]RemoteStartTransactionRequest, error)
 	ListRemoteStopTransactionRequests(ctx context.Context, arg ListRemoteStopTransactionRequestsParams) ([]RemoteStopTransactionRequest, error)
 	ListSubtreeOrgIds(ctx context.Context, arg ListSubtreeOrgIdsParams) ([]pgtype.UUID, error)
@@ -155,9 +160,19 @@ type Querier interface {
 	ListVariableMonitoring(ctx context.Context, arg ListVariableMonitoringParams) ([]VariableMonitoring, error)
 	LookupChargeStationCertificateDeletion(ctx context.Context, chargeStationID string) (ChargeStationCertificateDeletion, error)
 	LookupChargeStationCertificateQuery(ctx context.Context, chargeStationID string) (ChargeStationCertificateQuery, error)
+	MarkOutboxEventPublished(ctx context.Context, arg MarkOutboxEventPublishedParams) error
 	NextOcpp16TransactionId(ctx context.Context) (int32, error)
+	// Deletes at most 10000 of the events published before $1, so that one statement does
+	// not lock the whole table. The subquery has an alias only for sqlc, which would find
+	// published_at ambiguous without it.
+	PurgePublishedOutboxEventsBatch(ctx context.Context, publishedAt pgtype.Timestamptz) (int64, error)
 	// The optional filters are nullable parameters: NULL means "no filter".
 	QueryMeterValues(ctx context.Context, arg QueryMeterValuesParams) ([]MeterValue, error)
+	// Like the other connectivity statements, it decides in its WHERE clause whether the
+	// event still applies, so that the events of one station that several manager replicas
+	// handle at the same time cannot interleave between a read and a write.
+	RecordStationConnected(ctx context.Context, arg RecordStationConnectedParams) (int64, error)
+	RecordStationDisconnected(ctx context.Context, arg RecordStationDisconnectedParams) (int64, error)
 	SetCertificate(ctx context.Context, arg SetCertificateParams) (Certificate, error)
 	// SetChargeStationAuth without an org (NULL) registers a new charge station in the
 	// legacy org and leaves the org of a charge station that is already there as it is.
@@ -183,6 +198,10 @@ type Querier interface {
 	// Unlock Connector Request
 	SetUnlockConnectorRequest(ctx context.Context, arg SetUnlockConnectorRequestParams) (UnlockConnectorRequest, error)
 	StoreMeterValue(ctx context.Context, arg StoreMeterValueParams) error
+	TouchStationLastSeen(ctx context.Context, arg TouchStationLastSeenParams) error
+	// The key of the lock is a constant of the store (outboxRelayLockKey): a transaction
+	// that holds it is the only relay batch of every manager that shares the database.
+	TryLockOutboxRelay(ctx context.Context, lockKey int64) (bool, error)
 	UpdateChargeStationCertificate(ctx context.Context, arg UpdateChargeStationCertificateParams) (ChargeStationCertificate, error)
 	UpdateHeartbeat(ctx context.Context, arg UpdateHeartbeatParams) error
 	UpdateReservationStatus(ctx context.Context, arg UpdateReservationStatusParams) error

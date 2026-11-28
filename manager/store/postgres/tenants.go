@@ -99,13 +99,13 @@ type tenantPut struct {
 }
 
 func (s *Store) putTenant(ctx context.Context, put tenantPut) error {
-	tx, err := s.writePool().Begin(ctx)
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	qtx := s.writeQueries().WithTx(tx)
+	qtx := New(tx)
 
 	// The row lock makes concurrent puts of one tenant run one after the other.
 	existing, err := qtx.GetTenantIdentityForUpdate(ctx, put.insert.OrgID)
@@ -159,7 +159,7 @@ func (s *Store) GetTenant(ctx context.Context, orgId string) (*store.Tenant, err
 	if err != nil {
 		return nil, fmt.Errorf("get tenant: invalid org id %q: %w", orgId, err)
 	}
-	row, err := s.readQueries().GetTenant(ctx, id)
+	row, err := s.readQueries(ctx).GetTenant(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -170,7 +170,7 @@ func (s *Store) GetTenant(ctx context.Context, orgId string) (*store.Tenant, err
 }
 
 func (s *Store) GetTenantByHost(ctx context.Context, host string) (*store.Tenant, error) {
-	row, err := s.readQueries().GetTenantByHost(ctx, store.NormalizeHost(host))
+	row, err := s.readQueries(ctx).GetTenantByHost(ctx, store.NormalizeHost(host))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -181,7 +181,7 @@ func (s *Store) GetTenantByHost(ctx context.Context, host string) (*store.Tenant
 }
 
 func (s *Store) GetTenantByOrgKey(ctx context.Context, orgKey string) (*store.Tenant, error) {
-	row, err := s.readQueries().GetTenantByOrgKey(ctx, orgKey)
+	row, err := s.readQueries(ctx).GetTenantByOrgKey(ctx, orgKey)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -208,7 +208,7 @@ func (s *Store) ListTenants(ctx context.Context, afterOrgId string, limit int) (
 		return nil, fmt.Errorf("list tenants: limit: %w", err)
 	}
 
-	rows, err := s.readQueries().ListTenants(ctx, ListTenantsParams{AfterOrgID: after, PageSize: pageSize})
+	rows, err := s.readQueries(ctx).ListTenants(ctx, ListTenantsParams{AfterOrgID: after, PageSize: pageSize})
 	if err != nil {
 		return nil, fmt.Errorf("list tenants: %w", err)
 	}
@@ -229,7 +229,7 @@ func (s *Store) ListSubtreeOrgIds(ctx context.Context, orgId string) ([]string, 
 		return nil, fmt.Errorf("list subtree org ids: invalid org id %q: %w", orgId, err)
 	}
 	// The label comes from a parsed UUID, so it cannot carry lquery syntax.
-	rows, err := s.readQueries().ListSubtreeOrgIds(ctx, ListSubtreeOrgIdsParams{
+	rows, err := s.readQueries(ctx).ListSubtreeOrgIds(ctx, ListSubtreeOrgIdsParams{
 		OrgID:  id,
 		Lquery: "*." + store.OrgPathLabel(uuidString(id)) + ".*",
 	})
@@ -253,7 +253,7 @@ func (s *Store) SetTenantStatus(ctx context.Context, orgId string, status store.
 	default:
 		return false, fmt.Errorf("set tenant status of %s: invalid status %q", orgId, status)
 	}
-	rows, err := s.writeQueries().SetTenantStatus(ctx, SetTenantStatusParams{OrgID: id, Status: string(status)})
+	rows, err := s.writeQueries(ctx).SetTenantStatus(ctx, SetTenantStatusParams{OrgID: id, Status: string(status)})
 	if err != nil {
 		return false, fmt.Errorf("set tenant status of %s: %w", orgId, err)
 	}

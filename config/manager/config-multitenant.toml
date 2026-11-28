@@ -32,9 +32,24 @@ slug = "dev2"
 org_key = "dev2"
 hostnames = ["127.0.0.1"]
 
+# The gateway and the manager exchange the OCPP messages through the NATS server of
+# docker-compose. For MQTT: type = "mqtt" and mqtt.urls = ["mqtt://mqtt:1883"], a
+# broker in docker-compose and --transport mqtt for the gateway.
 [transport]
-type = "mqtt"
-mqtt.urls = ["mqtt://mqtt:1883"]
+type = "nats"
+
+[nats]
+urls = ["nats://nats:4222"]
+
+# The domain events go from the outbox to the CPMS_EVENTS stream of the NATS server of
+# docker-compose (started with JetStream); in development the manager creates it.
+[events]
+ensure_stream = true
+
+# The background jobs run on one manager at a time, coordinated through leases in the
+# maeve_job_leases KV bucket of the same NATS server; in development the manager creates it.
+[jobs]
+ensure_bucket = true
 
 [ocpi]
 addr = ":9411"

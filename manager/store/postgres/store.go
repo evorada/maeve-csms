@@ -163,21 +163,3 @@ func (s *Store) Health(ctx context.Context) error {
 
 	return nil
 }
-
-// readQueries returns the Queries instance for read operations
-// Uses read replica if configured, otherwise falls back to primary
-func (s *Store) readQueries() *Queries {
-	return s.readQ
-}
-
-// writeQueries returns the Queries instance for write operations
-// Always uses the primary connection
-func (s *Store) writeQueries() *Queries {
-	return s.q
-}
-
-// writePool returns the connection pool for write operations
-// Always returns the primary pool
-func (s *Store) writePool() *pgxpool.Pool {
-	return s.pool
-}

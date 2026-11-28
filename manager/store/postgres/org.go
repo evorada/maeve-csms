@@ -61,7 +61,7 @@ func (s *Store) AssignLegacyOrg(ctx context.Context, orgId string) (int64, error
 		return 0, nil
 	}
 
-	tx, err := s.writePool().Begin(ctx)
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to begin transaction: %w", err)
 	}

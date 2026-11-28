@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	handlers "github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
@@ -303,10 +304,11 @@ func TestStationOfASuspendedTenantStillAuthorizesAndCharges(t *testing.T) {
 
 			started := startTransaction(t, handlers.StartTransactionHandler{
 				Clock: clk, TokenStore: engine, OrgResolver: resolver, TransactionStore: engine, ReservationStore: engine,
+				Tx: engine, Events: events.NopEmitter{},
 			}, chargeStationId, startTransactionRequest(idTag))
 			require.Equal(t, types.StartTransactionResponseJsonIdTagInfoStatusAccepted, started.IdTagInfo.Status, name)
 
-			_, err = handlers.MeterValuesHandler{TransactionStore: engine, MeterValuesStore: engine}.
+			_, err = handlers.MeterValuesHandler{TransactionStore: engine, MeterValuesStore: engine, Tx: engine, Events: events.NopEmitter{}}.
 				HandleCall(ctx, chargeStationId, &types.MeterValuesJson{
 					ConnectorId:   2,
 					TransactionId: &started.TransactionId,
@@ -319,7 +321,8 @@ func TestStationOfASuspendedTenantStillAuthorizesAndCharges(t *testing.T) {
 				})
 			require.NoError(t, err, name)
 
-			resp, err = handlers.StopTransactionHandler{Clock: clk, TokenStore: engine, OrgResolver: resolver, TransactionStore: engine}.
+			resp, err = handlers.StopTransactionHandler{Clock: clk, TokenStore: engine, OrgResolver: resolver, TransactionStore: engine,
+				Tx: engine, Events: events.NopEmitter{}}.
 				HandleCall(ctx, chargeStationId, &types.StopTransactionJson{
 					IdTag: &idTag, MeterStop: 200, Timestamp: authorizeClockTime, TransactionId: started.TransactionId,
 				})

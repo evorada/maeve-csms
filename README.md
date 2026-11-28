@@ -219,6 +219,12 @@ The manager is configured through a TOML configuration file. An example configur
 [./config/manager/config.toml](./config/manager/config.toml). Details of the available configuration options
 can be found in [./manager/config/README.md](./manager/config/README.md).
 
+The gateway and the manager exchange the OCPP messages through NATS by default: docker-compose starts a NATS
+server (with JetStream on), the gateway connects to it with `--nats-url` and the manager with the `[nats]`
+section of its configuration. MQTT is still supported: select it with `--transport mqtt` on the gateway and
+`[transport] type = "mqtt"` in the manager configuration, both pointing at the same broker. See
+[./docs/gateway.md](./docs/gateway.md) for the subjects, topics and flags.
+
 ## Contributing
 
 Learn more about how to contribute on this project through [Contributing](./CONTRIBUTING.md)

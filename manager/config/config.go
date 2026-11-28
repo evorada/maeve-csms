@@ -13,8 +13,11 @@ import (
 	"slices"
 	"time"
 
+	"github.com/nats-io/nats.go"
 	"github.com/subnova/slog-exporter/slogtrace"
+	"github.com/thoughtworks/maeve-csms/manager/connectivity"
 	"github.com/thoughtworks/maeve-csms/manager/entitlements"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/jobs"
@@ -28,6 +31,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	mqtt2 "github.com/thoughtworks/maeve-csms/manager/transport/mqtt"
+	natstransport "github.com/thoughtworks/maeve-csms/manager/transport/nats"
 	"go.opentelemetry.io/contrib/detectors/gcp"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
@@ -69,8 +73,16 @@ type Config struct {
 	ChargeStationCertProviderService services.ChargeStationCertificateProvider
 	TariffService                    services.TariffService
 	OcpiApi                          ocpi.Api
-	JobRunner                        jobs.Runner
-	ReservationExpiryInterval        time.Duration
+	// JobRunner runs the background jobs: on one replica at a time with leases in NATS KV
+	// (jobs runner "nats_kv"), or all of them in this process ("local").
+	JobRunner                 jobs.Runner
+	ReservationExpiryInterval time.Duration
+	// SyncInterval is the pause between two runs of each sync job (settings, certificates
+	// and trigger messages sent to the charge stations).
+	SyncInterval time.Duration
+	// SyncRetryAfter is how long the sync jobs wait for an answer before they send a
+	// setting, certificate or trigger message again.
+	SyncRetryAfter time.Duration
 	// DefaultOrgId is the org that owns the rows from before orgs and everything that
 	// is created without a tenant.
 	DefaultOrgId string
@@ -88,6 +100,27 @@ type Config struct {
 	Entitlements *entitlements.Enforcer
 	// AuthVerifier says who the caller of an API request is.
 	AuthVerifier tenancy.Verifier
+	// Events stores the domain events in the outbox of the storage, in the transaction of
+	// the change they describe.
+	Events events.Emitter
+	// NatsConn is the one connection to NATS, nil when nothing uses NATS. Whoever stops
+	// the manager drains it after the listeners have disconnected.
+	NatsConn *nats.Conn
+	// Connectivity records whether the websockets of the charge stations are open, from
+	// the connection events of the gateways and the OCPP messages. It is nil when the
+	// storage does not track connectivity (Firestore).
+	Connectivity *connectivity.Tracker
+	// ConnectivitySweepInterval is the pause between two runs of the job that marks the
+	// stations without a sign of life disconnected.
+	ConnectivitySweepInterval time.Duration
+	// EventRelay publishes the events of the outbox to JetStream. It is nil when the
+	// events or the relay are disabled and with Firestore storage.
+	EventRelay *events.Relay
+	// EventRelayInterval is the pause between two runs of the relay job.
+	EventRelayInterval time.Duration
+	// OutboxPurge says when the published events are deleted from the outbox. It is nil
+	// when the storage has no outbox (Firestore).
+	OutboxPurge *OutboxPurgeSettings
 }
 
 // devSubject is the caller of every API request in dev mode.
@@ -229,17 +262,22 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		return nil, err
 	}
 
+	// the NATS connection of a configuration that fails is closed again
+	var natsConn *nats.Conn
+	defer func() {
+		if err != nil && natsConn != nil {
+			natsConn.Close()
+		}
+	}()
+
 	heartbeatInterval, err := time.ParseDuration(cfg.Ocpp.HeartbeatInterval)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse heartbeat interval: %s", err)
 	}
 
-	reservationExpiryInterval, err := time.ParseDuration(cfg.Jobs.ReservationExpiryInterval)
+	jobSettings, err := parseJobsConfig(&cfg.Jobs)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse reservation expiry interval: %s", err)
-	}
-	if reservationExpiryInterval <= 0 {
-		return nil, fmt.Errorf("reservation expiry interval must be positive: %s", cfg.Jobs.ReservationExpiryInterval)
+		return nil, err
 	}
 
 	tenantCacheTTL, err := time.ParseDuration(cfg.Tenancy.CacheTTL)
@@ -261,7 +299,9 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 			EnableTransactionsPage: cfg.Api.EnableTransactionsPage,
 			EnableAdminUI:          cfg.Api.EnableAdminUI,
 		},
-		ReservationExpiryInterval: reservationExpiryInterval,
+		ReservationExpiryInterval: jobSettings.reservationExpiryInterval,
+		SyncInterval:              jobSettings.syncInterval,
+		SyncRetryAfter:            jobSettings.syncRetryAfter,
 		DefaultOrgId:              cfg.Tenancy.DefaultOrgId,
 		Tenancy:                   tenancy.Mode(cfg.Tenancy.Mode),
 	}
@@ -274,6 +314,19 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 	default:
 		return nil, fmt.Errorf("unknown log format: %s", cfg.Observability.LogFormat)
 	}
+
+	// after the log format: it may warn
+	connSettings, err := parseConnectivityConfig(&cfg.Connectivity)
+	if err != nil {
+		return nil, err
+	}
+	c.ConnectivitySweepInterval = connSettings.sweepInterval
+
+	evSettings, err := parseEventsConfig(&cfg.Events)
+	if err != nil {
+		return nil, err
+	}
+	c.EventRelayInterval = evSettings.relayInterval
 
 	c.AuthVerifier, err = getAuthVerifier(ctx, &cfg.Api.Auth, c.DefaultOrgId)
 	if err != nil {
@@ -291,8 +344,6 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 	}
 
 	c.Tracer = c.TracerProvider.Tracer("manager")
-
-	c.JobRunner = &jobs.LocalRunner{Clock: clock.RealClock{}, Tracer: c.Tracer}
 
 	c.Storage, err = getStorage(ctx, &cfg.Storage)
 	if err != nil {
@@ -317,6 +368,9 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		Clock:        clock.RealClock{},
 		CacheTTL:     tenantCacheTTL,
 	}
+	c.Events = getEventEmitter(&cfg.Events, cfg.Storage.Type, c.Storage, c.TenantResolver)
+	c.OutboxPurge = getOutboxPurge(evSettings, cfg.Storage.Type)
+	c.Connectivity = getConnectivityTracker(connSettings, cfg.Storage.Type, c.Storage, c.Events)
 	c.TenantConfig = &tenancy.ConfigProvider{Resolver: c.TenantResolver}
 	c.TenantScoper = &tenancy.Scoper{
 		Mode:         c.Tenancy,
@@ -350,12 +404,34 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		return nil, err
 	}
 
-	c.MsgEmitter, err = getMsgEmitter(&cfg.Transport, c.Tracer)
+	if cfg.usesNats() {
+		natsConn, err = getNatsConn(cfg.Nats)
+		if err != nil {
+			return nil, err
+		}
+		c.NatsConn = natsConn
+	}
+
+	c.JobRunner, err = getJobRunner(ctx, &cfg.Jobs, jobSettings, c.NatsConn, c.Tracer)
 	if err != nil {
 		return nil, err
 	}
 
-	c.MsgListener, err = getMsgListener(&cfg.Transport, c.Tracer)
+	if cfg.relaysEvents() {
+		c.EventRelay, err = getEventRelay(ctx, &cfg.Events, evSettings, c.Storage, c.NatsConn, c.Tracer)
+		if err != nil {
+			return nil, err
+		}
+	} else if cfg.Events.Enabled && cfg.Storage.Type != "firestore" {
+		slog.Warn("the relay of the domain events is disabled: the events stay in the outbox")
+	}
+
+	c.MsgEmitter, err = getMsgEmitter(&cfg.Transport, c.Tracer, c.NatsConn)
+	if err != nil {
+		return nil, err
+	}
+
+	c.MsgListener, err = getMsgListener(&cfg.Transport, c.Tracer, c.NatsConn)
 	if err != nil {
 		return nil, err
 	}
@@ -364,6 +440,7 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		c.Ocpp16Handler = ocpp16.NewRouter(c.MsgEmitter,
 			clock.RealClock{},
 			c.Storage,
+			c.Events,
 			c.TenantResolver,
 			c.TenantConfig,
 			c.ContractCertValidationService,
@@ -394,6 +471,26 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 	}
 
 	return
+}
+
+// getEventEmitter creates what business code gives its domain events to: the outbox of
+// the storage, with the org of an event's charge station given by the tenant resolver.
+// Events are off when they are disabled and with Firestore storage, which has no outbox.
+func getEventEmitter(cfg *EventsConfig, storageType string, engine store.Engine, orgs events.OrgResolver) events.Emitter {
+	if !cfg.Enabled {
+		slog.Info("domain events disabled")
+		return events.NopEmitter{}
+	}
+	if storageType == "firestore" {
+		slog.Warn("domain events disabled: the firestore storage has no outbox")
+		return events.NopEmitter{}
+	}
+	return &events.OutboxEmitter{
+		Store:   engine,
+		Orgs:    orgs,
+		Clock:   clock.RealClock{},
+		Product: events.Product,
+	}
 }
 
 func getOcpiApi(o *OcpiConfig, engine store.Engine, httpClient *http.Client, defaultOrgId string) (ocpi.Api, error) {
@@ -711,8 +808,78 @@ func getTariffService(cfg *TariffServiceConfig) (tariffService services.TariffSe
 	return
 }
 
-func getMsgEmitter(cfg *TransportConfig, tracer oteltrace.Tracer) (transport.Emitter, error) {
+// getNatsConn opens the connection to NATS that [nats] describes.
+func getNatsConn(cfg *NatsConfig) (*nats.Conn, error) {
+	connCfg := natstransport.ConnConfig{
+		Urls:           cfg.Urls,
+		Name:           cfg.Name,
+		CredsFile:      cfg.CredsFile,
+		NkeySeedFile:   cfg.NkeySeedFile,
+		User:           cfg.User,
+		Password:       cfg.Password,
+		Token:          cfg.Token,
+		TlsCaFile:      cfg.TlsCaFile,
+		TlsCertFile:    cfg.TlsCertFile,
+		TlsKeyFile:     cfg.TlsKeyFile,
+		ConnectTimeout: natstransport.DefaultConnectTimeout,
+		ReconnectWait:  natstransport.DefaultReconnectWait,
+		MaxReconnects:  natstransport.DefaultMaxReconnects,
+	}
+	if cfg.ConnectTimeout != "" {
+		connectTimeout, err := time.ParseDuration(cfg.ConnectTimeout)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse nats connect timeout: %w", err)
+		}
+		if connectTimeout <= 0 {
+			return nil, fmt.Errorf("nats connect timeout must be positive: %s", cfg.ConnectTimeout)
+		}
+		connCfg.ConnectTimeout = connectTimeout
+	}
+	if cfg.ReconnectWait != "" {
+		reconnectWait, err := time.ParseDuration(cfg.ReconnectWait)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse nats reconnect wait: %w", err)
+		}
+		if reconnectWait <= 0 {
+			return nil, fmt.Errorf("nats reconnect wait must be positive: %s", cfg.ReconnectWait)
+		}
+		connCfg.ReconnectWait = reconnectWait
+	}
+	if cfg.MaxReconnects != nil {
+		connCfg.MaxReconnects = *cfg.MaxReconnects
+	}
+
+	conn, err := natstransport.Connect(connCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to nats: %w", err)
+	}
+	return conn, nil
+}
+
+// natsTransportSettings returns [transport.nats], which may be left out.
+func natsTransportSettings(cfg *TransportConfig) (*NatsTransportConfig, error) {
+	settings := cfg.Nats
+	if settings == nil {
+		settings = &NatsTransportConfig{}
+	}
+	if settings.SubjectPrefix != "" {
+		if err := natstransport.ValidatePrefix(settings.SubjectPrefix); err != nil {
+			return nil, fmt.Errorf("transport nats subject_prefix: %w", err)
+		}
+	}
+	return settings, nil
+}
+
+func getMsgEmitter(cfg *TransportConfig, tracer oteltrace.Tracer, natsConn *nats.Conn) (transport.Emitter, error) {
 	switch cfg.Type {
+	case "nats":
+		settings, err := natsTransportSettings(cfg)
+		if err != nil {
+			return nil, err
+		}
+		return natstransport.NewEmitter(natsConn,
+			natstransport.WithSubjectPrefix[natstransport.Emitter](settings.SubjectPrefix),
+			natstransport.WithOtelTracer[natstransport.Emitter](tracer)), nil
 	case "mqtt":
 		var mqttUrls []*url.URL
 		for _, urlStr := range cfg.Mqtt.Urls {
@@ -750,8 +917,18 @@ func getMsgEmitter(cfg *TransportConfig, tracer oteltrace.Tracer) (transport.Emi
 	}
 }
 
-func getMsgListener(cfg *TransportConfig, tracer oteltrace.Tracer) (transport.Listener, error) {
+func getMsgListener(cfg *TransportConfig, tracer oteltrace.Tracer, natsConn *nats.Conn) (transport.Listener, error) {
 	switch cfg.Type {
+	case "nats":
+		settings, err := natsTransportSettings(cfg)
+		if err != nil {
+			return nil, err
+		}
+		return natstransport.NewListener(natsConn,
+			natstransport.WithSubjectPrefix[natstransport.Listener](settings.SubjectPrefix),
+			natstransport.WithQueueGroup(settings.QueueGroup),
+			natstransport.WithWorkers(settings.Workers),
+			natstransport.WithOtelTracer[natstransport.Listener](tracer)), nil
 	case "mqtt":
 		var mqttUrls []*url.URL
 		for _, urlStr := range cfg.Mqtt.Urls {

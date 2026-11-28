@@ -17,6 +17,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/handlers"
 	handlers16 "github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
@@ -316,6 +317,7 @@ func TestDataTransferRoutesHas2beSignCertificate(t *testing.T) {
 	router := handlers16.NewRouter(emitter,
 		clock.RealClock{},
 		engine,
+		events.NopEmitter{},
 		&tenancy.Resolver{Stations: engine},
 		nil,
 		nil,

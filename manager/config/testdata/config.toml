@@ -31,10 +31,25 @@ heartbeat_interval = "10m"
 ocpp16_enabled = false
 
 [jobs]
+runner = "local"
+lease_bucket = "test_job_leases"
+lease_ttl = "30s"
+ensure_bucket = true
+bucket_replicas = 3
+sync_interval = "2m"
+sync_retry_after = "5m"
 reservation_expiry_interval = "30s"
 
 [tenancy]
 default_org_id = "0193b2c4-0000-7000-8000-00000000000a"
+
+[events]
+enabled = false
+
+[connectivity]
+last_seen_write_interval = "1m"
+stale_after = "10m"
+sweep_interval = "15s"
 
 [observability]
 log_format = "text"

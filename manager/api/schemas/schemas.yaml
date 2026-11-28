@@ -1549,11 +1549,28 @@ components:
           description: The charge station identifier
         connected:
           type: boolean
-          description: Whether the charge station is currently connected
+          description: Whether the websocket of the charge station is open, as far as
+            the CSMS knows. It turns false when the station closes its socket, when the
+            gateway closes it (unanswered pings, shutdown), or when the station has
+            shown no sign of life for a while.
         lastHeartbeat:
           type: string
           format: date-time
           description: Timestamp of the last heartbeat received
+        lastConnectedAt:
+          type: string
+          format: date-time
+          description: When the current (or last) websocket of the charge station opened
+        lastDisconnectedAt:
+          type: string
+          format: date-time
+          description: When the charge station was last marked disconnected
+        lastSeenAt:
+          type: string
+          format: date-time
+          description: Time of the last sign of life of the charge station (connection
+            event of the gateway or OCPP message), written at most every 30 seconds by
+            default
         firmwareVersion:
           type: string
           description: Currently installed firmware version

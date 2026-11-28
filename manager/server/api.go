@@ -9,6 +9,7 @@ import (
 	"github.com/rs/cors"
 	"github.com/thoughtworks/maeve-csms/manager/api"
 	"github.com/thoughtworks/maeve-csms/manager/entitlements"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/ocpi"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
@@ -30,6 +31,9 @@ type ApiDeps struct {
 	// Entitlements enforces the hard limits of the entitlements of a tenant on what is
 	// created through /api/v0. Nothing is limited without it.
 	Entitlements *entitlements.Enforcer
+	// Events stores the domain events of the changes made through /api/v0. It is
+	// required.
+	Events events.Emitter
 }
 
 // apiBasePath is where the API is mounted.
@@ -47,8 +51,11 @@ func NewApiHandler(d ApiDeps) http.Handler {
 	if d.Scoper == nil {
 		panic("server: the api handler needs a scoper")
 	}
+	if d.Events == nil {
+		panic("server: the api handler needs an emitter of domain events")
+	}
 
-	apiServer, err := api.NewServer(d.Engine, clock.RealClock{}, d.Ocpi, api.WithScoper(d.Scoper), api.WithEntitlements(d.Entitlements))
+	apiServer, err := api.NewServer(d.Engine, clock.RealClock{}, d.Ocpi, d.Events, api.WithScoper(d.Scoper), api.WithEntitlements(d.Entitlements))
 	if err != nil {
 		panic(err)
 	}
@@ -70,8 +77,9 @@ func NewApiHandler(d ApiDeps) http.Handler {
 	logger := middleware.RequestLogger(logFormatter{})
 
 	r.Use(middleware.Recoverer, securityHeaders(), cors.Default().Handler)
-	// a request is authenticated before anything else looks at it
-	r.With(logger, tenancy.Middleware(d.Verifier), logPrincipal, api.ValidationMiddleware).Mount(apiBasePath, apiHandler)
+	// a request is authenticated before anything else looks at it; its caller is the
+	// actor of the domain events that it causes
+	r.With(logger, tenancy.Middleware(d.Verifier), logPrincipal, api.ActorMiddleware, api.ValidationMiddleware).Mount(apiBasePath, apiHandler)
 	return r
 }
 

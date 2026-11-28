@@ -16,8 +16,11 @@ func (s *Server) GetChargeStationStatus(w http.ResponseWriter, r *http.Request, 
 	}
 
 	response := &ChargeStationStatusResponse{
-		Id:        csId,
-		Connected: status.Connected,
+		Id:                 csId,
+		Connected:          status.Connected,
+		LastConnectedAt:    status.LastConnectedAt,
+		LastDisconnectedAt: status.LastDisconnectedAt,
+		LastSeenAt:         status.LastSeenAt,
 	}
 
 	if status.LastHeartbeat != nil {

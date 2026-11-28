@@ -11,6 +11,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/thoughtworks/maeve-csms/manager/events"
+	"github.com/thoughtworks/maeve-csms/manager/events/eventstest"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/schemas"
 	"github.com/thoughtworks/maeve-csms/manager/store"
@@ -69,9 +71,11 @@ func TestOcpp16TransactionFlow(t *testing.T) {
 	}))
 
 	emitter := &capturingEmitter{}
+	domainEvents := eventstest.New(engine, eventsOrgId, clk)
 	router := ocpp16.NewRouter(emitter,
 		clk,
-		engine,
+		domainEvents.Engine(engine),
+		domainEvents.Events,
 		&tenancy.Resolver{Stations: engine},
 		nil,
 		nil,
@@ -243,4 +247,16 @@ func TestOcpp16TransactionFlow(t *testing.T) {
 	}
 	assert.Equal(t, wantMeterValues, result.MeterValues)
 	assert.Equal(t, 1, result.Total)
+
+	// the domain events of the session, in order
+	sessionEvents := domainEvents.Take(t)
+	assert.Equal(t, []string{"session.started", "session.updated", "session.completed"}, eventstest.Types(sessionEvents))
+	for _, ev := range sessionEvents {
+		assert.Equal(t, "urn:cpms:"+eventsOrgId+":session/"+transactionUuid, ev.Subject)
+	}
+	updated := eventstest.Data[events.SessionUpdatedData](t, sessionEvents[1])
+	require.NotNil(t, updated.EnergyWh)
+	assert.Equal(t, int64(800), *updated.EnergyWh)
+	completed := eventstest.Data[events.SessionCompletedData](t, sessionEvents[2])
+	assert.Equal(t, &energy, completed.EnergyWh)
 }

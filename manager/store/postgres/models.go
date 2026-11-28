@@ -120,14 +120,18 @@ type ChargeStationSetting struct {
 }
 
 type ChargeStationStatus struct {
-	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
-	Connected       bool               `db:"connected" json:"connected"`
-	LastHeartbeat   pgtype.Timestamptz `db:"last_heartbeat" json:"last_heartbeat"`
-	FirmwareVersion pgtype.Text        `db:"firmware_version" json:"firmware_version"`
-	Model           pgtype.Text        `db:"model" json:"model"`
-	Vendor          pgtype.Text        `db:"vendor" json:"vendor"`
-	SerialNumber    pgtype.Text        `db:"serial_number" json:"serial_number"`
-	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	ChargeStationID    string             `db:"charge_station_id" json:"charge_station_id"`
+	Connected          bool               `db:"connected" json:"connected"`
+	LastHeartbeat      pgtype.Timestamptz `db:"last_heartbeat" json:"last_heartbeat"`
+	FirmwareVersion    pgtype.Text        `db:"firmware_version" json:"firmware_version"`
+	Model              pgtype.Text        `db:"model" json:"model"`
+	Vendor             pgtype.Text        `db:"vendor" json:"vendor"`
+	SerialNumber       pgtype.Text        `db:"serial_number" json:"serial_number"`
+	UpdatedAt          pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	LastConnectedAt    pgtype.Timestamptz `db:"last_connected_at" json:"last_connected_at"`
+	LastDisconnectedAt pgtype.Timestamptz `db:"last_disconnected_at" json:"last_disconnected_at"`
+	LastSeenAt         pgtype.Timestamptz `db:"last_seen_at" json:"last_seen_at"`
+	ConnectionID       pgtype.Text        `db:"connection_id" json:"connection_id"`
 }
 
 type ChargeStationTrigger struct {
@@ -313,6 +317,21 @@ type OcpiRegistration struct {
 	CreatedAt pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt pgtype.Timestamp `db:"updated_at" json:"updated_at"`
 	OrgID     pgtype.UUID      `db:"org_id" json:"org_id"`
+}
+
+type OutboxEvent struct {
+	Seq          int64              `db:"seq" json:"seq"`
+	ID           pgtype.UUID        `db:"id" json:"id"`
+	OrgID        string             `db:"org_id" json:"org_id"`
+	Type         string             `db:"type" json:"type"`
+	Subject      string             `db:"subject" json:"subject"`
+	Actor        string             `db:"actor" json:"actor"`
+	Traceparent  pgtype.Text        `db:"traceparent" json:"traceparent"`
+	EventTime    pgtype.Timestamptz `db:"event_time" json:"event_time"`
+	Data         []byte             `db:"data" json:"data"`
+	CreatedAt    pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	PublishedAt  pgtype.Timestamptz `db:"published_at" json:"published_at"`
+	PublishedSeq pgtype.Int8        `db:"published_seq" json:"published_seq"`
 }
 
 type PublishFirmwareStatus struct {

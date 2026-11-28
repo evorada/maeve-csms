@@ -3,12 +3,14 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/go-chi/render"
 	"github.com/thoughtworks/maeve-csms/manager/entitlements"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"golang.org/x/exp/slog"
@@ -50,54 +52,74 @@ func (s *Server) RegisterChargeStation(w http.ResponseWriter, r *http.Request, c
 		return
 	}
 
-	// A charge station that is new adds to the connectors of its tenant: it is only
-	// registered while a hard limit on them has room for one more (how many connectors
-	// it really has is not known before it reports them). Registering a charge station
-	// again adds nothing and is never refused.
-	existing, err := s.store.LookupChargeStationAuth(r.Context(), csId)
-	if err != nil {
-		slog.Error("looking up a charge station before it is registered", "chargeStationId", csId, "err", err)
-		_ = render.Render(w, r, errInternal)
-		return
-	}
-	if existing == nil {
-		if err := s.limits.CheckConnectors(r.Context(), orgId, newStationConnectors); err != nil {
-			var exceeded *entitlements.LimitExceededError
-			if errors.As(err, &exceeded) {
-				_ = render.Render(w, r, ErrLimitExceeded(exceeded))
-				return
-			}
-			// nothing is registered when the limit cannot be checked
-			slog.Error("checking the connector limit of a tenant", "chargeStationId", csId, "org", orgId, "err", err)
-			_ = render.Render(w, r, errInternal)
-			return
-		}
-	}
-
-	var securityProfile store.SecurityProfile
-	if req.SecurityProfile != nil {
-		securityProfile = store.SecurityProfile(*req.SecurityProfile)
-	} else {
-		// A charge station that is registered without a security profile gets the default
-		// of its tenant. When the config of the tenant cannot be looked up nothing is
-		// registered: a guess could be a weaker profile than the tenant asked for.
-		cfg, err := s.tenantConfig.ConfigForOrg(r.Context(), orgId)
+	// The lookup of the charge station, its registration and its event are one store
+	// transaction: station.registered is stored with the registration of a charge station
+	// that did not exist, and never for a registration that was refused or not stored.
+	err := s.store.RunInTx(r.Context(), func(ctx context.Context) error {
+		existing, err := s.store.LookupChargeStationAuth(ctx, csId)
 		if err != nil {
-			slog.Error("looking up the default security profile of a charge station", "chargeStationId", csId, "org", orgId, "err", err)
-			_ = render.Render(w, r, errInternal)
-			return
+			return fmt.Errorf("look up the charge station: %w", err)
 		}
-		securityProfile = cfg.SecurityProfile()
-	}
 
-	err = s.store.SetChargeStationAuth(r.Context(), csId, &store.ChargeStationAuth{
-		SecurityProfile:        securityProfile,
-		Base64SHA256Password:   pwd,
-		InvalidUsernameAllowed: invalidUsernameAllowed,
-		OrgId:                  orgId,
+		// A charge station that is new adds to the connectors of its tenant: it is only
+		// registered while a hard limit on them has room for one more (how many connectors
+		// it really has is not known before it reports them). Registering a charge station
+		// again adds nothing and is never refused.
+		if existing == nil {
+			if err := s.limits.CheckConnectors(ctx, orgId, newStationConnectors); err != nil {
+				// nothing is registered when the limit is used up or cannot be checked
+				return fmt.Errorf("check the connector limit of the tenant: %w", err)
+			}
+		}
+
+		var securityProfile store.SecurityProfile
+		if req.SecurityProfile != nil {
+			securityProfile = store.SecurityProfile(*req.SecurityProfile)
+		} else {
+			// A charge station that is registered without a security profile gets the
+			// default of its tenant. When the config of the tenant cannot be looked up
+			// nothing is registered: a guess could be a weaker profile than the tenant
+			// asked for.
+			cfg, err := s.tenantConfig.ConfigForOrg(ctx, orgId)
+			if err != nil {
+				return fmt.Errorf("look up the default security profile: %w", err)
+			}
+			securityProfile = cfg.SecurityProfile()
+		}
+
+		err = s.store.SetChargeStationAuth(ctx, csId, &store.ChargeStationAuth{
+			SecurityProfile:        securityProfile,
+			Base64SHA256Password:   pwd,
+			InvalidUsernameAllowed: invalidUsernameAllowed,
+			OrgId:                  orgId,
+		})
+		if err != nil {
+			return fmt.Errorf("store the charge station: %w", err)
+		}
+		if existing != nil {
+			return nil
+		}
+		// the actor is the caller of the request (ActorMiddleware)
+		return s.events.Emit(ctx, events.Event{
+			Type:         events.TypeStationRegistered,
+			OrgId:        orgId,
+			ResourceType: events.ResourceStation,
+			ResourceId:   csId,
+			Data: events.StationRegisteredData{
+				StationKey:      csId,
+				StationId:       events.StationId(csId),
+				SecurityProfile: int(securityProfile),
+			},
+		})
 	})
 	if err != nil {
-		_ = render.Render(w, r, ErrInternalError(err))
+		var exceeded *entitlements.LimitExceededError
+		if errors.As(err, &exceeded) {
+			_ = render.Render(w, r, ErrLimitExceeded(exceeded))
+			return
+		}
+		slog.Error("registering a charge station", "chargeStationId", csId, "org", orgId, "err", err)
+		_ = render.Render(w, r, errInternal)
 		return
 	}
 

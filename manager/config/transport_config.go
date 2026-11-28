@@ -11,7 +11,10 @@ type MqttSettingsConfig struct {
 	KeepAliveInterval string   `mapstructure:"keep_alive_interval" toml:"keep_alive_interval" validate:"required"`
 }
 
+// TransportConfig selects how the manager exchanges OCPP messages with the gateway:
+// "mqtt" or "nats". The NATS transport uses the connection of [nats].
 type TransportConfig struct {
-	Type string              `mapstructure:"type" toml:"type" validate:"required,oneof=mqtt"`
-	Mqtt *MqttSettingsConfig `mapstructure:"mqtt,omitempty" toml:"mqtt,omitempty" validate:"required_if=Type mqtt"`
+	Type string               `mapstructure:"type" toml:"type" validate:"required,oneof=mqtt nats"`
+	Mqtt *MqttSettingsConfig  `mapstructure:"mqtt,omitempty" toml:"mqtt,omitempty" validate:"required_if=Type mqtt"`
+	Nats *NatsTransportConfig `mapstructure:"nats,omitempty" toml:"nats,omitempty"`
 }

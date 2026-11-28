@@ -118,12 +118,40 @@ func TestParseConfig(t *testing.T) {
 			Type: "kwh",
 		},
 		Jobs: config.JobsConfig{
+			Runner:                    "local",
+			LeaseBucket:               "test_job_leases",
+			LeaseTTL:                  "30s",
+			EnsureBucket:              true,
+			BucketReplicas:            3,
+			SyncInterval:              "2m",
+			SyncRetryAfter:            "5m",
 			ReservationExpiryInterval: "30s",
 		},
 		Tenancy: config.TenancyConfig{
 			DefaultOrgId: "0193b2c4-0000-7000-8000-00000000000a",
 			Mode:         "single",
 			CacheTTL:     "30s",
+		},
+		Events: config.EventsConfig{
+			Enabled:         false,
+			RelayEnabled:    true,
+			SubjectPrefix:   "cpms",
+			Stream:          "CPMS_EVENTS",
+			StreamReplicas:  1,
+			StreamMaxAge:    "720h",
+			RelayInterval:   "1s",
+			RelayBatchSize:  100,
+			OutboxRetention: "720h",
+			PurgeInterval:   "1h",
+		},
+		Connectivity: config.ConnectivityConfig{
+			LastSeenWriteInterval: "1m",
+			StaleAfter:            "10m",
+			SweepInterval:         "15s",
+		},
+		// the default stays and is not used with the MQTT transport
+		Nats: &config.NatsConfig{
+			Urls: []string{"nats://localhost:4222"},
 		},
 	}
 
@@ -148,6 +176,7 @@ func TestValidateConfig(t *testing.T) {
 }
 
 // The configurations for local runs must stay configurations that the manager accepts.
+// They use the NATS server of docker-compose, as the gateway does.
 func TestExampleConfigsAreValid(t *testing.T) {
 	for _, file := range []string{"config.toml", "config-inmemory.toml", "config-multitenant.toml"} {
 		t.Run(file, func(t *testing.T) {
@@ -155,6 +184,12 @@ func TestExampleConfigsAreValid(t *testing.T) {
 			require.NoError(t, cfg.LoadFromFile("../../config/manager/"+file))
 			require.NoError(t, cfg.Validate())
 			assert.Equal(t, "dev", cfg.Api.Auth.Mode)
+			assert.Equal(t, "nats", cfg.Transport.Type)
+			assert.Equal(t, []string{"nats://nats:4222"}, cfg.Nats.Urls)
+			assert.True(t, cfg.Events.RelayEnabled)
+			assert.True(t, cfg.Events.EnsureStream, "the manager creates the event stream in development")
+			assert.Equal(t, "nats_kv", cfg.Jobs.Runner)
+			assert.True(t, cfg.Jobs.EnsureBucket, "the manager creates the job lease bucket in development")
 		})
 	}
 }

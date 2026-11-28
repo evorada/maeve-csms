@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	handlers "github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
@@ -31,6 +32,8 @@ func newMeterValuesHandler(t *testing.T) (handlers.MeterValuesHandler, *inmemory
 	return handlers.MeterValuesHandler{
 		TransactionStore: engine,
 		MeterValuesStore: engine,
+		Tx:               engine,
+		Events:           events.NopEmitter{},
 	}, engine
 }
 

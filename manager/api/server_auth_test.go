@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/api"
 	"github.com/thoughtworks/maeve-csms/manager/entitlements"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/ocpi"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
@@ -145,7 +146,7 @@ func TestRegisterChargeStationRegistersNothingWhenTheTenantConfigCannotBeLookedU
 	ctx := context.Background()
 	m := newMultiTenant(t)
 	m.scoper.Resolver.Tenants = failingTenants{m.engine}
-	srv, err := api.NewServer(m.engine, m.clock, ocpi.NewOCPI(m.engine, nil, "GB", "TWK", testOrgId), api.WithScoper(m.scoper))
+	srv, err := api.NewServer(m.engine, m.clock, ocpi.NewOCPI(m.engine, nil, "GB", "TWK", testOrgId), events.NopEmitter{}, api.WithScoper(m.scoper))
 	require.NoError(t, err)
 
 	// the operation itself, as the middleware in front of it hands a request over
@@ -395,7 +396,7 @@ func TestRegisterChargeStationWhenTheConnectorLimitCannotBeChecked(t *testing.T)
 	// the operation itself, as the middleware in front of it hands a request over
 	register := func(t *testing.T, m *multiTenant, engine store.Engine, enforcer *entitlements.Enforcer, csId string) *httptest.ResponseRecorder {
 		t.Helper()
-		srv, err := api.NewServer(engine, m.clock, ocpi.NewOCPI(m.engine, nil, "GB", "TWK", testOrgId),
+		srv, err := api.NewServer(engine, m.clock, ocpi.NewOCPI(m.engine, nil, "GB", "TWK", testOrgId), events.NopEmitter{},
 			api.WithScoper(m.scoper), api.WithEntitlements(enforcer))
 		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/cs/"+csId, strings.NewReader(`{"securityProfile":2}`))

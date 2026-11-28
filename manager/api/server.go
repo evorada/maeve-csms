@@ -3,8 +3,11 @@
 package api
 
 import (
+	"errors"
+
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/thoughtworks/maeve-csms/manager/entitlements"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/ocpi"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
@@ -23,6 +26,9 @@ type Server struct {
 	// limits refuses what goes beyond a hard limit of the entitlements of a tenant; nil
 	// limits nothing
 	limits *entitlements.Enforcer
+	// events stores the domain events of the changes that the API makes, in the store
+	// transaction of each change
+	events events.Emitter
 }
 
 // ServerOption changes how NewServer sets up the API server.
@@ -48,11 +54,16 @@ func WithEntitlements(enforcer *entitlements.Enforcer) ServerOption {
 
 // NewServer creates the API server. Its operations expect a verified caller in the
 // context of a request (tenancy.FromContext) and the AuthzMiddleware in front of them.
+// The domain events of the changes go to domainEvents; ActorMiddleware in front of the
+// server names the caller as their actor.
 //
 // What is created through the API belongs to an org that the caller may reach.
 // Without WithScoper the server is single-tenant: the only org is the legacy org
 // (store.LegacyOrgId).
-func NewServer(engine store.Engine, clock clock.PassiveClock, ocpi ocpi.Api, opts ...ServerOption) (*Server, error) {
+func NewServer(engine store.Engine, clock clock.PassiveClock, ocpi ocpi.Api, domainEvents events.Emitter, opts ...ServerOption) (*Server, error) {
+	if domainEvents == nil {
+		return nil, errors.New("the api server needs an emitter of domain events")
+	}
 	swagger, err := GetSwagger()
 	if err != nil {
 		return nil, err
@@ -62,6 +73,7 @@ func NewServer(engine store.Engine, clock clock.PassiveClock, ocpi ocpi.Api, opt
 		clock:   clock,
 		ocpi:    ocpi,
 		swagger: swagger,
+		events:  domainEvents,
 		scoper: &tenancy.Scoper{
 			Mode:         tenancy.ModeSingle,
 			Resolver:     &tenancy.Resolver{Mode: tenancy.ModeSingle, Stations: engine, DefaultOrgId: store.LegacyOrgId},

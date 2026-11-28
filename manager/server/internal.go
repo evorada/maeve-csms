@@ -28,6 +28,9 @@ type InternalDeps struct {
 	Engine   store.Engine
 	// Verifier authenticates the callers of the control plane. It is required.
 	Verifier tenancy.Verifier
+	// Scoper says which orgs a caller of the control plane may read the domain events
+	// of. It is required, and should be the scoper of the API.
+	Scoper *tenancy.Scoper
 	// Settings says which legacy pages are served, and has the addresses and the
 	// organization name that the admin pages use.
 	Settings config.ApiSettings
@@ -51,6 +54,9 @@ func NewInternalHandler(d InternalDeps) http.Handler {
 	if d.Verifier == nil {
 		panic("server: the internal handler needs a verifier")
 	}
+	if d.Scoper == nil {
+		panic("server: the internal handler needs a scoper")
+	}
 
 	r := chi.NewRouter()
 
@@ -62,6 +68,8 @@ func NewInternalHandler(d InternalDeps) http.Handler {
 	controlPlane := &controlplane.Server{
 		Tenants:  d.Engine,
 		Resolver: d.Resolver,
+		Outbox:   d.Engine,
+		Scoper:   d.Scoper,
 	}
 	if d.Resolver != nil {
 		controlPlane.Mode = d.Resolver.Mode
@@ -71,8 +79,9 @@ func NewInternalHandler(d InternalDeps) http.Handler {
 		controlPlane.Store = checker
 	}
 	// a request is authenticated before anything else looks at it; the handler itself
-	// refuses every caller that is not a platform service with the permission
-	r.With(logger, tenancy.Middleware(d.Verifier), logPrincipal).Mount(controlplane.BasePath, controlplane.NewHandler(controlPlane))
+	// refuses every caller that is not a platform service with the permission. The
+	// caller is the actor of the domain events that a request causes.
+	r.With(logger, tenancy.Middleware(d.Verifier), logPrincipal, api.ActorMiddleware).Mount(controlplane.BasePath, controlplane.NewHandler(controlPlane))
 
 	// what a browser may open keeps its security headers; there are no CORS headers, so
 	// that the page of another site cannot read anything from this listener

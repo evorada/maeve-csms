@@ -26,6 +26,40 @@ func (q *Queries) CountConnectorsForOrgs(ctx context.Context, orgIds []pgtype.UU
 	return count, err
 }
 
+const DisconnectStaleStations = `-- name: DisconnectStaleStations :many
+UPDATE charge_station_status
+SET connected = false, last_disconnected_at = $1, updated_at = NOW()
+WHERE connected
+  AND GREATEST(last_seen_at, last_connected_at, last_heartbeat) < $2
+RETURNING charge_station_id
+`
+
+type DisconnectStaleStationsParams struct {
+	Now        pgtype.Timestamptz `db:"now" json:"now"`
+	SeenBefore pgtype.Timestamptz `db:"seen_before" json:"seen_before"`
+}
+
+// GREATEST ignores NULLs; a row where all three are NULL is not touched.
+func (q *Queries) DisconnectStaleStations(ctx context.Context, arg DisconnectStaleStationsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, DisconnectStaleStations, arg.Now, arg.SeenBefore)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var charge_station_id string
+		if err := rows.Scan(&charge_station_id); err != nil {
+			return nil, err
+		}
+		items = append(items, charge_station_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const GetChargeStationStatus = `-- name: GetChargeStationStatus :one
 SELECT
     charge_station_id,
@@ -35,7 +69,11 @@ SELECT
     model,
     vendor,
     serial_number,
-    updated_at
+    updated_at,
+    last_connected_at,
+    last_disconnected_at,
+    last_seen_at,
+    connection_id
 FROM charge_station_status
 WHERE charge_station_id = $1
 `
@@ -52,6 +90,10 @@ func (q *Queries) GetChargeStationStatus(ctx context.Context, chargeStationID st
 		&i.Vendor,
 		&i.SerialNumber,
 		&i.UpdatedAt,
+		&i.LastConnectedAt,
+		&i.LastDisconnectedAt,
+		&i.LastSeenAt,
+		&i.ConnectionID,
 	)
 	return i, err
 }
@@ -141,6 +183,76 @@ func (q *Queries) ListConnectorStatuses(ctx context.Context, chargeStationID str
 		return nil, err
 	}
 	return items, nil
+}
+
+const RecordStationConnected = `-- name: RecordStationConnected :execrows
+INSERT INTO charge_station_status (charge_station_id, connected, last_connected_at, last_seen_at, connection_id, updated_at)
+VALUES ($1, true, $2, $2, $3, NOW())
+ON CONFLICT (charge_station_id) DO UPDATE SET
+    connected = true,
+    last_connected_at = EXCLUDED.last_connected_at,
+    last_seen_at = GREATEST(charge_station_status.last_seen_at, EXCLUDED.last_seen_at),
+    connection_id = EXCLUDED.connection_id,
+    updated_at = NOW()
+WHERE charge_station_status.last_connected_at IS NULL
+   OR charge_station_status.last_connected_at <= EXCLUDED.last_connected_at
+`
+
+type RecordStationConnectedParams struct {
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	ConnectedAt     pgtype.Timestamptz `db:"connected_at" json:"connected_at"`
+	ConnectionID    pgtype.Text        `db:"connection_id" json:"connection_id"`
+}
+
+// Like the other connectivity statements, it decides in its WHERE clause whether the
+// event still applies, so that the events of one station that several manager replicas
+// handle at the same time cannot interleave between a read and a write.
+func (q *Queries) RecordStationConnected(ctx context.Context, arg RecordStationConnectedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, RecordStationConnected, arg.ChargeStationID, arg.ConnectedAt, arg.ConnectionID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const RecordStationDisconnected = `-- name: RecordStationDisconnected :execrows
+UPDATE charge_station_status
+SET connected = false, last_disconnected_at = $1, updated_at = NOW()
+WHERE charge_station_id = $2
+  AND connected
+  AND connection_id = $3
+  AND last_connected_at <= $1
+`
+
+type RecordStationDisconnectedParams struct {
+	DisconnectedAt  pgtype.Timestamptz `db:"disconnected_at" json:"disconnected_at"`
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	ConnectionID    pgtype.Text        `db:"connection_id" json:"connection_id"`
+}
+
+func (q *Queries) RecordStationDisconnected(ctx context.Context, arg RecordStationDisconnectedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, RecordStationDisconnected, arg.DisconnectedAt, arg.ChargeStationID, arg.ConnectionID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const TouchStationLastSeen = `-- name: TouchStationLastSeen :exec
+UPDATE charge_station_status
+SET last_seen_at = $1, updated_at = NOW()
+WHERE charge_station_id = $2
+  AND (last_seen_at IS NULL OR last_seen_at < $1)
+`
+
+type TouchStationLastSeenParams struct {
+	SeenAt          pgtype.Timestamptz `db:"seen_at" json:"seen_at"`
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+}
+
+func (q *Queries) TouchStationLastSeen(ctx context.Context, arg TouchStationLastSeenParams) error {
+	_, err := q.db.Exec(ctx, TouchStationLastSeen, arg.SeenAt, arg.ChargeStationID)
+	return err
 }
 
 const UpdateHeartbeat = `-- name: UpdateHeartbeat :exec

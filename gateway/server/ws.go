@@ -12,45 +12,62 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/propagation"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/eclipse/paho.golang/autopaho"
-	"github.com/eclipse/paho.golang/paho"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/thoughtworks/maeve-csms/gateway/ocpp"
 	"github.com/thoughtworks/maeve-csms/gateway/pipe"
 	"github.com/thoughtworks/maeve-csms/gateway/registry"
+	"github.com/thoughtworks/maeve-csms/gateway/transport"
+	"github.com/thoughtworks/maeve-csms/gateway/transport/mqtt"
 	"golang.org/x/exp/slices"
 	"golang.org/x/exp/slog"
 	"nhooyr.io/websocket"
 )
 
 type WebsocketHandler struct {
-	mqttBrokerURLs        []*url.URL
-	mqttTopicPrefix       string
-	mqttConnectTimeout    time.Duration
-	mqttConnectRetryDelay time.Duration
-	mqttKeepAliveInterval uint16
-	deviceRegistry        registry.DeviceRegistry
-	orgNames              []string
-	pipeOptions           []pipe.Opt
-	trustProxyHeaders     bool
-	tracer                trace.Tracer
+	transport         transport.Transport
+	mqttOpts          []mqtt.Opt
+	deviceRegistry    registry.DeviceRegistry
+	orgNames          []string
+	pipeOptions       []pipe.Opt
+	trustProxyHeaders bool
+	tracer            trace.Tracer
+	gatewayId         string
+	pingInterval      time.Duration
+	pongTimeout       time.Duration
+	aliveInterval     time.Duration
+
+	// mu guards shuttingDown, and handlers.Add against the wait of a shutdown
+	mu           sync.Mutex
+	shuttingDown bool
+	// handlers counts the connections that ServeHTTP serves
+	handlers sync.WaitGroup
+	// sockets holds the open station sockets by connection id
+	sockets sync.Map
 }
 
 type WebsocketOpt func(handler *WebsocketHandler)
 
+// WithTransport sets the transport that connects the charge stations to the CSMS.
+// Without it the handler uses an MQTT transport built from the WithMqtt options, which
+// are ignored when a transport is set.
+func WithTransport(t transport.Transport) WebsocketOpt {
+	return func(handler *WebsocketHandler) {
+		handler.transport = t
+	}
+}
+
 func WithMqttBrokerUrl(brokerUrl *url.URL) WebsocketOpt {
 	return func(handler *WebsocketHandler) {
-		handler.mqttBrokerURLs = append(handler.mqttBrokerURLs, brokerUrl)
+		handler.mqttOpts = append(handler.mqttOpts, mqtt.WithBrokerURLs(brokerUrl))
 	}
 }
 
@@ -60,27 +77,25 @@ func WithMqttBrokerUrlString(brokerUrl string) WebsocketOpt {
 		panic(err)
 	}
 	return func(handler *WebsocketHandler) {
-		handler.mqttBrokerURLs = append(handler.mqttBrokerURLs, u)
+		handler.mqttOpts = append(handler.mqttOpts, mqtt.WithBrokerURLs(u))
 	}
 }
 
 func WithMqttBrokerUrls(brokerUrls []*url.URL) WebsocketOpt {
 	return func(handler *WebsocketHandler) {
-		handler.mqttBrokerURLs = append(handler.mqttBrokerURLs, brokerUrls...)
+		handler.mqttOpts = append(handler.mqttOpts, mqtt.WithBrokerURLs(brokerUrls...))
 	}
 }
 
 func WithMqttTopicPrefix(topicPrefix string) WebsocketOpt {
 	return func(handler *WebsocketHandler) {
-		handler.mqttTopicPrefix = topicPrefix
+		handler.mqttOpts = append(handler.mqttOpts, mqtt.WithTopicPrefix(topicPrefix))
 	}
 }
 
 func WithMqttConnectSettings(mqttConnectTimeout, mqttConnectRetryDelay, mqttKeepAliveInterval time.Duration) WebsocketOpt {
 	return func(handler *WebsocketHandler) {
-		handler.mqttConnectTimeout = mqttConnectTimeout
-		handler.mqttConnectRetryDelay = mqttConnectRetryDelay
-		handler.mqttKeepAliveInterval = uint16(mqttKeepAliveInterval.Round(time.Second).Seconds())
+		handler.mqttOpts = append(handler.mqttOpts, mqtt.WithConnectSettings(mqttConnectTimeout, mqttConnectRetryDelay, mqttKeepAliveInterval))
 	}
 }
 
@@ -127,7 +142,20 @@ func WithOtelTracer(tracer trace.Tracer) WebsocketOpt {
 }
 
 func NewWebsocketHandler(opts ...WebsocketOpt) http.Handler {
-	s := new(WebsocketHandler)
+	handler, _ := NewWebsocketHandlerWithShutdown(opts...)
+	return handler
+}
+
+// NewWebsocketHandlerWithShutdown is NewWebsocketHandler with the function that shuts
+// the handler down: it refuses new connections, closes every station socket with 1001
+// (going away), and waits until their handlers have published the disconnected events
+// and returned, at most until its ctx is done.
+func NewWebsocketHandlerWithShutdown(opts ...WebsocketOpt) (http.Handler, func(ctx context.Context) error) {
+	s := &WebsocketHandler{
+		pingInterval:  DefaultPingInterval,
+		pongTimeout:   DefaultPongTimeout,
+		aliveInterval: DefaultAliveInterval,
+	}
 
 	for _, opt := range opts {
 		opt(s)
@@ -142,36 +170,28 @@ func NewWebsocketHandler(opts ...WebsocketOpt) http.Handler {
 		r.Use(TLSOffload(s.deviceRegistry))
 	}
 	r.Handle("/ws/{id}", s)
-	return r
+	return r, s.shutdown
 }
 
 func ensureDefaults(handler *WebsocketHandler) {
-	if handler.mqttBrokerURLs == nil {
-		u, err := url.Parse("mqtt://127.0.0.1:1883/")
-		if err != nil {
-			panic(err)
-		}
-		handler.mqttBrokerURLs = []*url.URL{u}
-	}
-
-	if handler.mqttConnectTimeout == 0 {
-		handler.mqttConnectTimeout = 5 * time.Second
-	}
-
-	if handler.mqttConnectRetryDelay == 0 {
-		handler.mqttConnectRetryDelay = 1 * time.Second
-	}
-
-	if handler.mqttKeepAliveInterval == 0 {
-		handler.mqttKeepAliveInterval = 10
-	}
-
 	if handler.deviceRegistry == nil {
 		panic("must provide device registry implementation")
 	}
 
 	if handler.tracer == nil {
 		handler.tracer = trace.NewNoopTracerProvider().Tracer("")
+	}
+
+	if handler.transport == nil {
+		handler.transport = mqtt.New(append([]mqtt.Opt{mqtt.WithTracer(handler.tracer)}, handler.mqttOpts...)...)
+	}
+
+	if handler.gatewayId == "" {
+		handler.gatewayId = DefaultGatewayId()
+	}
+
+	if handler.pongTimeout <= 0 {
+		handler.pongTimeout = DefaultPongTimeout
 	}
 }
 
@@ -180,6 +200,14 @@ func (s *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	slog.Info("processing connection", "uri", r.RequestURI)
 
 	span := trace.SpanFromContext(r.Context())
+
+	if !s.startHandling() {
+		span.SetStatus(codes.Error, "gateway shutting down")
+		span.SetAttributes(semconv.HTTPStatusCode(http.StatusServiceUnavailable))
+		http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+		return
+	}
+	defer s.handlers.Done()
 
 	clientId := chi.URLParam(r, "id")
 	if err := validateStationId(clientId); err != nil {
@@ -287,7 +315,21 @@ func (s *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		protocol = "ocpp2.0.1"
 	}
 
-	span.SetAttributes(attribute.String("ocpp.protocol", protocol))
+	sock := &stationSocket{
+		conn:       wsConn,
+		opened:     time.Now(),
+		id:         newConnectionId(),
+		gatewayId:  s.gatewayId,
+		stationKey: stationKey,
+		protocol:   protocol,
+		remoteAddr: remoteAddr(r, s.trustProxyHeaders),
+	}
+	s.track(sock)
+	defer s.untrack(sock)
+
+	span.SetAttributes(
+		attribute.String("ocpp.protocol", protocol),
+		attribute.String("gateway.connection_id", sock.id))
 
 	p := pipe.NewPipe(s.pipeOptions...)
 	p.Start()
@@ -296,104 +338,62 @@ func (s *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	mqttBrokerURLStrings := make([]string, len(s.mqttBrokerURLs))
-	for i, u := range s.mqttBrokerURLs {
-		mqttBrokerURLStrings[i] = u.String()
-	}
-	span.SetAttributes(attribute.StringSlice("mqtt.broker_urls", mqttBrokerURLStrings))
-
-	var mqttConn *autopaho.ConnectionManager
-	mqttConn, err = autopaho.NewConnection(ctx, autopaho.ClientConfig{
-		BrokerUrls:        s.mqttBrokerURLs,
-		KeepAlive:         s.mqttKeepAliveInterval,
-		ConnectRetryDelay: s.mqttConnectRetryDelay,
-		OnConnectionUp: func(manager *autopaho.ConnectionManager, connack *paho.Connack) {
-			topicName := fmt.Sprintf("%s/out/%s/%s", s.mqttTopicPrefix, protocol, stationKey)
-			span.SetAttributes(attribute.String("mqtt.topic", topicName))
-			// a variable of its own: this runs in a goroutine of the connection manager
-			_, err := manager.Subscribe(ctx, &paho.Subscribe{
-				Subscriptions: map[string]paho.SubscribeOptions{
-					topicName: {},
-				},
-			})
-			if err != nil {
-				span.SetStatus(codes.Error, "subscribing to mqtt topic failed")
-				span.RecordError(err)
-				span.SetAttributes(semconv.HTTPStatusCode(http.StatusInternalServerError))
-
-				_ = wsConn.Close(websocket.StatusProtocolError, http.StatusText(http.StatusInternalServerError))
-				return
-			}
-		},
-		ClientConfig: paho.ClientConfig{
-			ClientID: stationKey,
-			Router: paho.NewSingleHandlerRouter(func(mqttMsg *paho.Publish) {
-				// route requests from the CSMS
-				var msg pipe.GatewayMessage
-				err := json.Unmarshal(mqttMsg.Payload, &msg)
-				if err != nil {
-					slog.Error("unmarshalling CSMS message", "err", err)
-					return
-				}
-
-				correlationMap := make(map[string]string)
-				err = json.Unmarshal(mqttMsg.Properties.CorrelationData, &correlationMap)
-				if err != nil {
-					slog.Warn("unmarshalling correlation map", "err", err)
-				}
-				requestContext := otel.GetTextMapPropagator().Extract(context.Background(), propagation.MapCarrier(correlationMap))
-
-				newCtx, span := s.tracer.Start(requestContext, fmt.Sprintf("%s/out/%s/# receive", s.mqttTopicPrefix, protocol),
-					trace.WithSpanKind(trace.SpanKindConsumer),
-					trace.WithAttributes(
-						semconv.MessagingSystem("mqtt"),
-						semconv.MessagingMessagePayloadSizeBytes(len(mqttMsg.Payload)),
-						semconv.MessagingMessageConversationID(msg.MessageId),
-						semconv.MessagingOperationKey.String("receive"),
-						attribute.String("csId", stationKey),
-					))
-				defer span.End()
-
-				msg.Context = newCtx
-
-				p.CSMSRx <- &msg
-			}),
-			OnServerDisconnect: func(disconnect *paho.Disconnect) {
-				span.SetAttributes(attribute.String("mqtt.disconnect_reason", disconnect.Properties.ReasonString))
-			},
-		},
+	session, err := s.transport.Open(ctx, stationKey, protocol, func(msg *pipe.GatewayMessage) {
+		select {
+		case p.CSMSRx <- msg:
+		case <-ctx.Done():
+		}
 	})
 	if err != nil {
-		span.SetStatus(codes.Error, "connecting to mqtt")
+		span.SetStatus(codes.Error, "opening transport session")
 		span.RecordError(err)
 		span.SetAttributes(semconv.HTTPStatusCode(http.StatusInternalServerError))
-		slog.Error("connecting to mqtt", "mqttBrokerURLs", s.mqttBrokerURLs, "err", err)
+		slog.Error("opening transport session", "stationKey", stationKey, "err", err)
 		_ = wsConn.Close(websocket.StatusProtocolError, http.StatusText(http.StatusInternalServerError))
 		return
 	}
 	defer func() {
-		err := mqttConn.Disconnect(context.Background())
+		err := session.Close(context.Background())
 		if err != nil {
-			slog.Error("disconnecting from mqtt", "err", err)
+			slog.Error("closing transport session", "err", err)
 		}
 	}()
-	err = mqttConn.AwaitConnection(ctx)
-	if err != nil {
-		slog.Error("waiting for mqtt", "mqttBrokerURLs", s.mqttBrokerURLs, "err", err)
-		return
-	}
+
+	// a session that breaks down closes the websocket: the charge station then connects again
+	go func() {
+		select {
+		case <-session.Done():
+			_ = wsConn.Close(websocket.StatusProtocolError, http.StatusText(http.StatusInternalServerError))
+		case <-ctx.Done():
+		}
+	}()
+
+	// the connection events of the socket, the pings and the alive events
+	watchCtx, stopWatching := context.WithCancel(ctx)
+	watching := make(chan struct{})
+	go func() {
+		defer close(watching)
+		s.watch(watchCtx, sock, session)
+	}()
 
 	// we've finished connecting... complete this span so we get to see the details in the trace
 	span.End()
 
-	// listen on the CSMS Tx channel and publish those messages on the inbound topic
-	goPublishToCSMS(ctx, s.tracer, p.CSMSTx, mqttConn, s.mqttTopicPrefix, protocol, stationKey)
+	// listen on the CSMS Tx channel and send those messages to the CSMS
+	goPublishToCSMS(ctx, p.CSMSTx, session)
 
 	// listen the CS Tx channel and write those messages to the websocket
 	goWriteToChargeStation(ctx, s.tracer, p.ChargeStationTx, wsConn, protocol, stationKey)
 
 	// read from the websocket and send to the CS Rx channel (CS Tx used for error)
-	readFromChargeStation(ctx, s.tracer, wsConn, p.ChargeStationRx, p.ChargeStationTx, protocol, stationKey)
+	readErr := readFromChargeStation(ctx, s.tracer, sock, p.ChargeStationRx, p.ChargeStationTx, protocol, stationKey)
+
+	// The socket has closed. The disconnected event follows the other events of the
+	// socket: the watch returns within the bounds of an event publication or a close
+	// handshake.
+	stopWatching()
+	<-watching
+	publish(session, sock.disconnectedEvent(readErr))
 }
 
 func getScheme(r *http.Request) string {
@@ -478,17 +478,12 @@ func checkCertificate(ctx context.Context, r *http.Request, orgNames []string, c
 	return foundOrg
 }
 
-func goPublishToCSMS(ctx context.Context, tracer trace.Tracer, csmsTx chan *pipe.GatewayMessage, mqttConn *autopaho.ConnectionManager, topicPrefix, protocol, stationKey string) {
+func goPublishToCSMS(ctx context.Context, csmsTx chan *pipe.GatewayMessage, session transport.Session) {
 	go func() {
 		for {
 			select {
 			case msg := <-csmsTx:
-				data, err := json.Marshal(msg)
-				if err != nil {
-					slog.Error("marshaling message for publication", "err", err)
-					continue
-				}
-				err = publish(msg.Context, tracer, mqttConn, topicPrefix, protocol, stationKey, msg.MessageId, data)
+				err := session.Send(msg.Context, msg)
 				if err != nil {
 					slog.Error("publishing message", "err", err)
 				}
@@ -497,42 +492,6 @@ func goPublishToCSMS(ctx context.Context, tracer trace.Tracer, csmsTx chan *pipe
 			}
 		}
 	}()
-}
-
-func publish(ctx context.Context, tracer trace.Tracer, mqttConn *autopaho.ConnectionManager, topicPrefix, protocol, stationKey, messageId string, data []byte) error {
-	topic := fmt.Sprintf("%s/in/%s/%s", topicPrefix, protocol, stationKey)
-
-	newCtx, span := tracer.Start(ctx,
-		fmt.Sprintf("%s/in/%s/# publish", topicPrefix, protocol),
-		trace.WithSpanKind(trace.SpanKindProducer),
-		trace.WithAttributes(
-			semconv.MessagingSystem("mqtt"),
-			semconv.MessagingMessagePayloadSizeBytes(len(data)),
-			semconv.MessagingOperationKey.String("publish"),
-			semconv.MessagingMessageConversationID(messageId),
-			attribute.String("csId", stationKey),
-		))
-	defer span.End()
-
-	correlationMap := make(map[string]string)
-	otel.GetTextMapPropagator().Inject(newCtx, propagation.MapCarrier(correlationMap))
-
-	correlationData, err := json.Marshal(correlationMap)
-	if err != nil {
-		slog.Warn("marshalling correlation map: %v", err)
-	}
-
-	_, err = mqttConn.Publish(newCtx, &paho.Publish{
-		Topic:   topic,
-		Payload: data,
-		Properties: &paho.PublishProperties{
-			ContentType:     "application/json",
-			ResponseTopic:   fmt.Sprintf("%s/out/%s/%s", topicPrefix, protocol, stationKey),
-			CorrelationData: correlationData,
-		},
-	})
-
-	return err
 }
 
 func goWriteToChargeStation(ctx context.Context, tracer trace.Tracer, chargeStationTx chan *pipe.GatewayMessage, wsConn *websocket.Conn, protocol, stationKey string) {
@@ -570,22 +529,24 @@ func write(ctx context.Context, tracer trace.Tracer, wsConn *websocket.Conn, pro
 	return wsConn.Write(newCtx, websocket.MessageText, data)
 }
 
-func readFromChargeStation(ctx context.Context, tracer trace.Tracer, wsConn *websocket.Conn, csRx, csTx chan *pipe.GatewayMessage, protocol, stationKey string) {
+// readFromChargeStation reads the messages of the station until the socket closes and
+// returns the error that ended the loop (nil when a read timed out).
+func readFromChargeStation(ctx context.Context, tracer trace.Tracer, sock *stationSocket, csRx, csTx chan *pipe.GatewayMessage, protocol, stationKey string) error {
 	for {
-		msg, err := read(ctx, tracer, wsConn, protocol, stationKey)
+		msg, err := read(ctx, tracer, sock.conn, protocol, stationKey)
 		if err != nil {
 			if msg != nil {
 				slog.Warn("sending error message to client", "err", err)
-				csTx <- msg
+				sock.toPipe(csTx, msg)
 				continue
 			}
 			// connection closed
-			break
+			return err
 		} else if msg != nil {
-			csRx <- msg
+			sock.toPipe(csRx, msg)
 		} else {
 			// deadline exceeded
-			break
+			return nil
 		}
 	}
 }

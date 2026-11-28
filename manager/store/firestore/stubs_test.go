@@ -4,7 +4,9 @@ package firestore
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/thoughtworks/maeve-csms/manager/store"
@@ -103,6 +105,38 @@ func TestStubsReturnErrNotImplemented(t *testing.T) {
 			_, err := s.CountConnectorsForOrgs(ctx, []string{store.LegacyOrgId})
 			return err
 		},
+		"AppendOutboxEvents": func() error {
+			return s.AppendOutboxEvents(ctx, &store.OutboxEvent{})
+		},
+		"RelayOutboxEvents": func() error {
+			_, err := s.RelayOutboxEvents(ctx, 10, func(context.Context, []*store.OutboxEvent) (int, error) {
+				panic("publish must not be called")
+			})
+			return err
+		},
+		"ListOutboxEvents": func() error {
+			_, err := s.ListOutboxEvents(ctx, store.OutboxEventFilter{})
+			return err
+		},
+		"PurgePublishedOutboxEvents": func() error {
+			_, err := s.PurgePublishedOutboxEvents(ctx, time.Now())
+			return err
+		},
+		"RecordStationConnected": func() error {
+			_, err := s.RecordStationConnected(ctx, "cs001", "conn-a", time.Now())
+			return err
+		},
+		"RecordStationDisconnected": func() error {
+			_, err := s.RecordStationDisconnected(ctx, "cs001", "conn-a", time.Now())
+			return err
+		},
+		"TouchStationLastSeen": func() error {
+			return s.TouchStationLastSeen(ctx, "cs001", time.Now())
+		},
+		"DisconnectStaleStations": func() error {
+			_, err := s.DisconnectStaleStations(ctx, time.Now(), time.Now())
+			return err
+		},
 	}
 
 	for name, stub := range stubs {
@@ -112,4 +146,29 @@ func TestStubsReturnErrNotImplemented(t *testing.T) {
 			assert.ErrorContains(t, err, name)
 		})
 	}
+}
+
+// The Firestore backend has no transaction that spans store calls: RunInTx only calls
+// fn, with the context it was given, and returns what fn returns.
+func TestRunInTxCallsFn(t *testing.T) {
+	type ctxKey struct{}
+	ctx := context.WithValue(context.Background(), ctxKey{}, "caller")
+	s := &Store{}
+
+	var transactor store.Transactor = s
+
+	calls := 0
+	err := transactor.RunInTx(ctx, func(fnCtx context.Context) error {
+		calls++
+		assert.Equal(t, "caller", fnCtx.Value(ctxKey{}))
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, calls)
+
+	errFn := errors.New("fn failed")
+	err = transactor.RunInTx(ctx, func(context.Context) error {
+		return errFn
+	})
+	assert.ErrorIs(t, err, errFn)
 }

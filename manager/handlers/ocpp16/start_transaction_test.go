@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	handlers "github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
@@ -62,6 +63,8 @@ func newStartTransactionHandler(t *testing.T) (handlers.StartTransactionHandler,
 		OrgResolver:      &tenancy.Resolver{Stations: engine},
 		TransactionStore: engine,
 		ReservationStore: engine,
+		Tx:               engine,
+		Events:           events.NopEmitter{},
 	}, engine
 }
 

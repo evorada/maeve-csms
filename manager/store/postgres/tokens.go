@@ -32,7 +32,7 @@ func (s *Store) SetToken(ctx context.Context, token *store.Token) error {
 		return fmt.Errorf("invalid last_updated timestamp: %w", err)
 	}
 
-	_, err = s.writeQueries().UpsertToken(ctx, UpsertTokenParams{
+	_, err = s.writeQueries(ctx).UpsertToken(ctx, UpsertTokenParams{
 		CountryCode:  token.CountryCode,
 		PartyID:      token.PartyId,
 		Type:         token.Type,
@@ -62,7 +62,7 @@ func (s *Store) SetToken(ctx context.Context, token *store.Token) error {
 func (s *Store) LookupToken(ctx context.Context, tokenUid string) (*store.Token, error) {
 	slog.Debug("looking up token", "uid", tokenUid)
 
-	token, err := s.readQueries().GetTokenAnyOrg(ctx, tokenUid)
+	token, err := s.readQueries(ctx).GetTokenAnyOrg(ctx, tokenUid)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			slog.Debug("token not found", "uid", tokenUid)
@@ -86,7 +86,7 @@ func (s *Store) LookupTokenForOrg(ctx context.Context, orgId, tokenUid string) (
 		return nil, fmt.Errorf("invalid org id %q: %w", orgId, err)
 	}
 
-	token, err := s.readQueries().GetTokenForOrg(ctx, GetTokenForOrgParams{OrgID: id, Uid: tokenUid})
+	token, err := s.readQueries(ctx).GetTokenForOrg(ctx, GetTokenForOrgParams{OrgID: id, Uid: tokenUid})
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			slog.Debug("token not found", "org_id", orgId, "uid", tokenUid)
@@ -120,7 +120,7 @@ func (s *Store) ListTokensForOrgs(ctx context.Context, orgIds []string, offset, 
 		}
 	}
 
-	tokens, err := s.readQueries().ListTokensForOrgs(ctx, ListTokensForOrgsParams{
+	tokens, err := s.readQueries(ctx).ListTokensForOrgs(ctx, ListTokensForOrgsParams{
 		OrgIds:    ids,
 		RowLimit:  limitInt32,
 		RowOffset: offsetInt32,
@@ -148,7 +148,7 @@ func (s *Store) ListTokens(ctx context.Context, offset int, limit int) ([]*store
 		return nil, fmt.Errorf("invalid offset value: %w", err)
 	}
 
-	tokens, err := s.readQueries().ListTokens(ctx, ListTokensParams{
+	tokens, err := s.readQueries(ctx).ListTokens(ctx, ListTokensParams{
 		Limit:  limitInt32,
 		Offset: offsetInt32,
 	})

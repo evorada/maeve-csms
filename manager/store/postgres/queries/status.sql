@@ -28,7 +28,11 @@ SELECT
     model,
     vendor,
     serial_number,
-    updated_at
+    updated_at,
+    last_connected_at,
+    last_disconnected_at,
+    last_seen_at,
+    connection_id
 FROM charge_station_status
 WHERE charge_station_id = $1;
 
@@ -39,6 +43,43 @@ ON CONFLICT (charge_station_id) DO UPDATE SET
     connected = true,
     last_heartbeat = EXCLUDED.last_heartbeat,
     updated_at = NOW();
+
+-- name: RecordStationConnected :execrows
+-- Like the other connectivity statements, it decides in its WHERE clause whether the
+-- event still applies, so that the events of one station that several manager replicas
+-- handle at the same time cannot interleave between a read and a write.
+INSERT INTO charge_station_status (charge_station_id, connected, last_connected_at, last_seen_at, connection_id, updated_at)
+VALUES (sqlc.arg(charge_station_id), true, sqlc.arg(connected_at), sqlc.arg(connected_at), sqlc.arg(connection_id), NOW())
+ON CONFLICT (charge_station_id) DO UPDATE SET
+    connected = true,
+    last_connected_at = EXCLUDED.last_connected_at,
+    last_seen_at = GREATEST(charge_station_status.last_seen_at, EXCLUDED.last_seen_at),
+    connection_id = EXCLUDED.connection_id,
+    updated_at = NOW()
+WHERE charge_station_status.last_connected_at IS NULL
+   OR charge_station_status.last_connected_at <= EXCLUDED.last_connected_at;
+
+-- name: RecordStationDisconnected :execrows
+UPDATE charge_station_status
+SET connected = false, last_disconnected_at = sqlc.arg(disconnected_at), updated_at = NOW()
+WHERE charge_station_id = sqlc.arg(charge_station_id)
+  AND connected
+  AND connection_id = sqlc.arg(connection_id)
+  AND last_connected_at <= sqlc.arg(disconnected_at);
+
+-- name: TouchStationLastSeen :exec
+UPDATE charge_station_status
+SET last_seen_at = sqlc.arg(seen_at), updated_at = NOW()
+WHERE charge_station_id = sqlc.arg(charge_station_id)
+  AND (last_seen_at IS NULL OR last_seen_at < sqlc.arg(seen_at));
+
+-- name: DisconnectStaleStations :many
+-- GREATEST ignores NULLs; a row where all three are NULL is not touched.
+UPDATE charge_station_status
+SET connected = false, last_disconnected_at = sqlc.arg(now), updated_at = NOW()
+WHERE connected
+  AND GREATEST(last_seen_at, last_connected_at, last_heartbeat) < sqlc.arg(seen_before)
+RETURNING charge_station_id;
 
 -- name: UpsertConnectorStatus :exec
 INSERT INTO connector_status (

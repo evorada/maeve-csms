@@ -6,7 +6,10 @@ Configuration is defined in TOML.
 
 * [General settings](#general-settings)
 * [Service settings](#service-settings)
-* [Transport](#transport)
+* [Transport](#transport-settings)
+  * [NATS connection](#nats-connection)
+  * [Domain events](#domain-events)
+  * [Background jobs](#background-jobs)
 * [Storage](#storage)
 * [Contract certificate validator](#contract-certificate-validator)
 * [Contract certificate provider](#contract-certificate-provider)
@@ -39,11 +42,32 @@ Configuration is defined in TOML.
 | ocpp          | heartbeat_interval          | string | Frequency to request charge station heartbeat messages at, e.g. "5m". A tenant can set its own with `heartbeat_interval_s` of its config (see below) |
 | ocpp          | ocpp16_enabled              | bool   | Is OCPP 1.6 support enabled, e.g. "true"?                            |
 | ocpp          | ocpp201_enabled             | bool   | Is OCPP 2.0.1 support enabled, e.g. "true"?                          |
+| jobs          | runner                      | string | What runs the background jobs: "nats_kv" (default) runs each job on one instance of the manager at a time, coordinated through leases in a NATS KV bucket, and needs the [`[nats]`](#nats-connection) section whatever the transport; "local" runs every job in this process, for a single instance without NATS. See [Background jobs](#background-jobs) |
+| jobs          | lease_bucket                | string | KV bucket of the job leases. Default "maeve_job_leases" |
+| jobs          | lease_ttl                   | string | How long a lease lasts after its last renewal, e.g. "15s" (the default, at least "100ms"). It is renewed every third of it. A provisioned bucket must have this TTL: one with a shorter TTL, or none, is refused (logged, the jobs do not run) |
+| jobs          | ensure_bucket               | bool   | Create or update the bucket at startup. Default "false": the bucket is provisioned by the infrastructure and must exist. The configurations for local runs set "true" |
+| jobs          | bucket_replicas             | int    | Replicas of the bucket that `ensure_bucket` creates (1 to 5). Default 1 |
+| jobs          | sync_interval               | string | Pause between two runs of each sync job, which sends the pending settings, certificates and trigger messages to the charge stations, e.g. "1m" (the default) |
+| jobs          | sync_retry_after            | string | A setting, certificate or trigger message that was sent and is still pending is sent again after this, e.g. "2m" (the default) |
 | jobs          | reservation_expiry_interval | string | How often reservations past their expiry date are expired, e.g. "1m" |
 | tenancy       | default_org_id              | string | Org (UUID) that owns the data from before orgs and everything created without a tenant. Default "00000000-0000-0000-0000-000000000000" (the legacy org). With PostgreSQL storage, the rows of the legacy org are moved to this org at startup; a token of the legacy org stays there when this org already has a token with the same country code, party id and UID (a warning in the log names it) |
 | tenancy       | mode                        | string | Either "single" (default) or "multi". In single mode a charge station is known by the id it connects with and the host it connects to is ignored. In multi mode the host names the tenant, a charge station is known as `{org_key}.{stationId}` and a host that no tenant has is refused. Multi mode needs PostgreSQL or in-memory storage |
 | tenancy       | cache_ttl                   | string | How long a tenant that was looked up by host, org key or org id is kept in memory, e.g. "30s" (the default). It is also how long another instance of the manager takes to see that the platform suspended or resumed a tenant |
 | tenancy       | bootstrap_tenants           | array of tables | Tenants that are created or updated at startup, for deployments without a platform that provisions them. Only allowed in multi mode. See [Bootstrap tenants](#bootstrap-tenants) |
+| events        | enabled                     | bool   | Store domain events in the transactional outbox of the storage, in the same transaction as the change they describe. Default "true". Always off with Firestore storage, which has no outbox (a warning in the log at startup) |
+| events        | relay_enabled               | bool   | Publish the stored events to JetStream. Default "true". Needs the [`[nats]`](#nats-connection) section, whatever the transport. Off when `enabled` is off and with Firestore storage. See [Domain events](#domain-events) |
+| events        | subject_prefix              | string | First token of the subjects of the events, `<subject_prefix>.<type>.<org_id>`. Default "cpms" |
+| events        | stream                      | string | JetStream stream that captures `<subject_prefix>.>`. Default "CPMS_EVENTS" |
+| events        | ensure_stream               | bool   | Create or update the stream at startup. Default "false": the stream is provisioned by the infrastructure and only checked. The configurations for local runs set "true" |
+| events        | stream_replicas             | int    | Replicas of the stream that `ensure_stream` creates (1 to 5). Default 1 |
+| events        | stream_max_age              | string | How long the stream that `ensure_stream` creates keeps an event, e.g. "720h" (the default, 30 days) |
+| events        | relay_interval              | string | Pause between two runs of the relay, e.g. "1s" (the default) |
+| events        | relay_batch_size            | int    | Events published per batch (1 to 1000). Default 100; one run publishes at most 50 batches |
+| events        | outbox_retention            | string | Published events are deleted from the outbox this long after they were published, e.g. "720h" (the default, the retention of the stream, so that a replay from the outbox covers what the stream holds) |
+| events        | purge_interval              | string | Pause between two runs of the purge of the published events, e.g. "1h" (the default). The purge also runs when events are disabled, not with Firestore storage |
+| connectivity  | last_seen_write_interval    | string | The OCPP messages of a station update its last seen time at most once per interval, e.g. "30s" (the default). The alive events of the gateway always update it |
+| connectivity  | stale_after                 | string | A connected station that has shown no sign of life (connection event, OCPP message, heartbeat) for this long is marked disconnected, e.g. "5m" (the default). Must be longer than `last_seen_write_interval`. It must also exceed the alive interval of the gateways (`--conn-alive-interval`, default "2m") with a margin: more than twice that interval tolerates one lost alive event. The manager cannot read the setting of the gateways, so it only warns at startup when `stale_after` is not more than twice the gateway default. A station marked disconnected is not disconnected; only its status changes. Not tracked with Firestore storage (a warning in the log at startup) |
+| connectivity  | sweep_interval              | string | How often the stations without a sign of life are searched for, e.g. "30s" (the default) |
 | observability | log_format                  | string | Either "json" or "text"                                              |
 | observability | otel_collector_addr         | string | Address of the OpenTelemetry collector, e.g. "localhost:4317"        |
 | observability | tls_keylog_file             | string | File where TLS session keys will be written for use with Wireshark   |
@@ -158,8 +182,22 @@ hostnames = ["acme.ocpp.example.com"]
 ## Transport settings
 
 This section consists of a `type` parameter and a set of parameters specific to that type prefixed by the type name.
+The type is `nats` (the default) or `mqtt`; the gateway must use the same transport (its `--transport` flag,
+see [docs/gateway.md](../../docs/gateway.md)).
 
 e.g.
+
+```toml
+[transport]
+type = "nats"
+
+[nats]
+urls = ["nats://nats.example.com:4222"]
+```
+
+To run with MQTT instead, select it here and start the gateway with `--transport mqtt`. The MQTT
+settings have defaults (broker `mqtt://localhost:1883`, prefix `cs`), so `type = "mqtt"` alone is
+enough for a local broker:
 
 ```toml
 [transport]
@@ -179,6 +217,154 @@ Configures the MQTT transport.
 | mqtt    | connect_timeout     | string           | MQTT connection timeout, e.g. "10s"                    |
 | mqtt    | connect_retry_delay | string           | MQTT connection retry delay, e.g. "1s"                 |
 | mqtt    | keep_alive_interval | string           | MQTT keep alive interval, e.g. "10s"                   |
+
+### NATS
+
+Configures the NATS transport (`type = "nats"`). The manager subscribes to
+`<subject_prefix>.in.<ocpp16|ocpp201>.<org_key>.<station>` in a queue group, so that each
+message is handled by one manager replica, and publishes to
+`<subject_prefix>.out.<ocpp16|ocpp201>.<org_key>.<station>`. A station key without an org
+part (single tenancy mode) uses `_` as `<org_key>`; the station id is one subject token in
+which every byte outside `[A-Za-z0-9_~:@=+-]` is written as `%XX`. The connection itself
+is configured in the [`[nats]`](#nats-connection) section. This is the default transport.
+The gateway uses the same subjects; its `--nats-subject-prefix` must match `subject_prefix`.
+
+| Section | Key            | Type    | Description                                                                                          |
+|---------|----------------|---------|------------------------------------------------------------------------------------------------------|
+| nats    | subject_prefix | string  | First token of the subjects, default "ocpp"                                                          |
+| nats    | queue_group    | string  | Queue group of the manager replicas, default "maeve-manager"                                         |
+| nats    | workers        | integer | Messages handled at the same time per OCPP version (1 to 1024), default 16; one station stays in order |
+
+```toml
+[transport]
+type = "nats"
+nats.queue_group = "maeve-manager"
+
+[nats]
+urls = ["nats://nats.cpms.svc:4222"]
+creds_file = "/vault/secrets/nats.creds"
+tls_ca_file = "/vault/secrets/nats-ca.pem"
+```
+
+### NATS connection
+
+The `[nats]` section configures the one connection to NATS that the manager opens when
+something uses NATS: the NATS transport, the relay of the domain events (see
+[Domain events](#domain-events)) or the leases of the background jobs (see
+[Background jobs](#background-jobs)). It is only read and validated then.
+
+Credentials and keys are files: in Kubernetes they come from the secret store and are
+mounted into the pod; the TOML only holds their paths. `user`, `password` and `token` are
+meant for local development. Secrets are never logged.
+
+| Section | Key            | Type             | Description                                                                                 |
+|---------|----------------|------------------|---------------------------------------------------------------------------------------------|
+| nats    | urls           | array of strings | NATS server URLs, default ["nats://localhost:4222"]                                         |
+| nats    | name           | string           | Client name shown in NATS monitoring, default "maeve-manager"                               |
+| nats    | creds_file     | string           | File with the user JWT and nkey seed (production)                                           |
+| nats    | nkey_seed_file | string           | File with an nkey seed, for servers that authenticate nkeys without JWTs                    |
+| nats    | user           | string           | User name (local development)                                                               |
+| nats    | password       | string           | Password (local development)                                                                |
+| nats    | token          | string           | Token (local development)                                                                   |
+| nats    | tls_ca_file    | string           | CA certificates that sign the certificate of the server                                     |
+| nats    | tls_cert_file  | string           | Client certificate, together with `tls_key_file`                                            |
+| nats    | tls_key_file   | string           | Key of the client certificate, together with `tls_cert_file`                                |
+| nats    | connect_timeout | string          | Timeout of one connection attempt, default "5s"                                             |
+| nats    | reconnect_wait | string           | Pause between two connection attempts, default "2s"                                         |
+| nats    | max_reconnects | integer          | Connection attempts after the connection is lost or the first attempt fails, default -1 (forever) |
+
+The manager does not fail when NATS cannot be reached at startup: the connection keeps
+trying in the background, but the transport needs the server within 5 seconds to register
+its subscriptions, otherwise the manager stops with an error.
+
+The NATS server accepts messages up to its `max_payload` (1 MiB by default). An OCPP
+message above it cannot be published: the manager logs `message is larger than the max
+payload of the NATS server` with the sizes. Raise `max_payload` on the server if stations
+send larger frames.
+
+### Domain events
+
+The manager stores its domain events in a transactional outbox, in the transaction of the
+change they describe, and a background job (`outbox-relay`) publishes them to JetStream in
+outbox order:
+
+* subject `<subject_prefix>.<type>.<org_id>`, e.g. `cpms.session.completed.<org_id>`;
+* body: a CloudEvents 1.0 JSON envelope (`Content-Type: application/cloudevents+json`)
+  with `source` "urn:cpms", `type` "cpms.<type>", `subject` the URN of the resource and
+  the extensions `orgid`, `actor` and `traceparent` (when the change had a trace);
+* header `Nats-Msg-Id` = event id: within the duplicate window of the stream (2 minutes
+  for the stream that `ensure_stream` creates) a message that a retry sends again is
+  not stored twice. Consumers must still be idempotent: delivery is at least once.
+
+An event is marked published only after JetStream acknowledged it (5 s timeout per
+message). A publish that fails stops the batch; the event and the later ones stay in the
+outbox and the next run starts with it, so events never overtake each other. Charging is
+never blocked: nothing on the OCPP path waits for JetStream, and an outage of NATS or of
+the stream leaves the events in the outbox and logs the failed runs (`job failed`,
+`job=outbox-relay`).
+
+At startup the manager creates or updates the stream (`ensure_stream = true`, local
+development: limits retention, file storage, oldest events discarded) or checks that it
+exists and captures `<subject_prefix>.>` (`ensure_stream = false`, production, where the
+stream is provisioned by the infrastructure and the NATS user of the manager only needs
+publish rights on `<subject_prefix>.>`). A stream that is missing or cannot be created,
+or NATS not being connected at startup, is logged as an error and does not stop the
+manager; the relay keeps trying and publishes as soon as the stream exists.
+
+A second job (`outbox-purge`) deletes the events published more than `outbox_retention`
+ago. The metrics `maeve_outbox_published_total` and `maeve_outbox_publish_errors_total`
+are served on `/metrics`.
+
+The platform can read the published events again from the outbox with
+`GET /_control/v1/events?after=<cursor>` on the internal listener: the same CloudEvents, in
+the order in which they were published, for the org of its token and, with the org scope
+`subtree`, the orgs below it that are tenants here. The cursor is `next_cursor` of the
+previous page (`0` for the oldest event that is kept). With Firestore storage it answers
+`501`. The actor of an event caused through `/api/v0` (or `/_control/v1`) is the subject
+of the token of the caller.
+
+```toml
+[events]
+ensure_stream = true  # local development only
+```
+
+### Background jobs
+
+The manager runs its periodic work as named jobs: `sync-settings`, `sync-certificates`
+and `sync-triggers` (send what is pending to the charge stations, every `sync_interval`),
+`reservation-expiry`, `connectivity-sweep` (not with Firestore storage), `outbox-relay`
+(when the relay is enabled) and `outbox-purge` (not with Firestore storage). A job runs
+one interval after it starts, then one interval after the end of each run. A run that
+fails or panics is logged (`job failed`, `job panicked`) and the next one runs as usual.
+
+With `runner = "nats_kv"` (the default) several instances of the manager share the jobs:
+each job runs on one instance at a time, the one that holds its lease, the key
+`job.<name>` in the KV bucket `lease_bucket`. Different jobs can run on different
+instances. An instance takes a free lease (a create that only succeeds when the key is
+absent, deleted or expired), renews it every third of `lease_ttl`, and deletes it when it
+stops; both only succeed while the key still has the revision of its own last write, so
+an instance never extends or deletes the lease of another. An instance that cannot renew
+a lease (NATS unreachable, the lease taken over) cancels the job at once, and at the
+latest one renewal interval before the lease could expire, starts no further run, and
+tries to take the lease again every renewal interval. When an instance stops or loses
+NATS, another one takes its jobs over within about one `lease_ttl`. A job that ignores
+the cancellation can still be running when another instance starts it.
+
+Charging is never blocked: the jobs run in the background, and an outage of NATS only
+stops the jobs (logged as `job lease lost` and `job lease not available`) until the
+leases can be taken again. A bucket that is missing or cannot be created at startup, or
+NATS not being connected then, is logged as an error and does not stop the manager.
+
+In production the bucket (TTL `lease_ttl`, history 1, file storage, 3 replicas) is
+provisioned by the infrastructure together with the event stream, and the NATS user of
+the manager needs read and write access to that bucket only. Use `runner = "local"` only
+for a single instance: with several instances every job would run on all of them, and
+every pending setting would be sent once per instance.
+
+```toml
+[jobs]
+ensure_bucket = true  # local development only
+```
 
 ## Service settings
 
@@ -366,8 +552,11 @@ projects/<project-number>/secrets/<secret-name>/[latest|<version>]
 [api]
 addr = ":9410"
 
-[mqtt]
-urls = ["mqtt://mqtt:1883"]
+[transport]
+type = "nats"
+
+[nats]
+urls = ["nats://nats:4222"]
 
 [observability]
 otel_collector_addr = "otel-collector:4317"

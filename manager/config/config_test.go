@@ -11,19 +11,43 @@ import (
 	"time"
 
 	clone "github.com/huandu/go-clone/generic"
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/config"
 	"github.com/thoughtworks/maeve-csms/manager/entitlements"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/jobs"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/testutil"
+	"github.com/thoughtworks/maeve-csms/manager/transport"
+	"github.com/thoughtworks/maeve-csms/manager/transport/mqtt"
+	natstransport "github.com/thoughtworks/maeve-csms/manager/transport/nats"
+	"github.com/thoughtworks/maeve-csms/manager/transport/nats/natstest"
 )
 
 // newTestConfig returns the default configuration with API authentication in dev mode,
-// so that it can be configured without a platform.
+// so that it can be configured without a platform, with the MQTT transport, without the
+// relay of the domain events, with the local job runner and without a [nats] section:
+// nothing opens a connection in Configure, so the tests of the other settings need no
+// NATS server. TestConfigureNatsTransport covers the default transport,
+// TestConfigureEventRelay the relay, TestConfigureJobRunner the leased job runner.
 func newTestConfig(t *testing.T) *config.BaseConfig {
+	t.Helper()
+
+	cfg := newDefaultTestConfig(t)
+	cfg.Transport.Type = "mqtt"
+	cfg.Events.RelayEnabled = false
+	cfg.Jobs.Runner = "local"
+	cfg.Nats = nil
+	return cfg
+}
+
+// newDefaultTestConfig returns the default configuration with API authentication in
+// dev mode.
+func newDefaultTestConfig(t *testing.T) *config.BaseConfig {
 	t.Helper()
 
 	t.Setenv("ENVIRONMENT", "dev")
@@ -60,6 +84,9 @@ func TestConfigure(t *testing.T) {
 	assert.NotNil(t, settings.ChargeStationCertProviderService)
 	assert.NotNil(t, settings.TariffService)
 	assert.NotNil(t, settings.AuthVerifier)
+	assert.NotNil(t, settings.Events)
+	assert.Nil(t, settings.EventRelay)
+	assert.Equal(t, &config.OutboxPurgeSettings{Retention: 720 * time.Hour, Interval: time.Hour}, settings.OutboxPurge)
 }
 
 func TestConfigureFirestoreStorage(t *testing.T) {
@@ -75,6 +102,14 @@ func TestConfigureFirestoreStorage(t *testing.T) {
 	settings, err := config.Configure(context.TODO(), cfg)
 	require.NoError(t, err)
 	require.NotNil(t, settings.Storage)
+	// Firestore has no outbox: events are off although they are enabled
+	assert.True(t, cfg.Events.Enabled)
+	assert.Equal(t, events.NopEmitter{}, settings.Events)
+	// nor does it track connectivity: the manager starts without
+	assert.Nil(t, settings.Connectivity)
+	// nothing to relay or purge
+	assert.Nil(t, settings.EventRelay)
+	assert.Nil(t, settings.OutboxPurge)
 }
 
 func TestConfigureInMemoryStorage(t *testing.T) {
@@ -314,6 +349,186 @@ func TestConfigureReservationExpiryInterval(t *testing.T) {
 
 			settings, err := config.Configure(context.TODO(), cfg)
 			require.Error(t, err)
+			assert.Nil(t, settings)
+		})
+	}
+}
+
+func TestConfigureJobRunner(t *testing.T) {
+	// MQTT transport and no relay, so that only the job runner can need NATS
+	newConfig := func(t *testing.T, toml string) *config.BaseConfig {
+		cfg := newDefaultTestConfig(t)
+		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
+		cfg.Transport.Type = "mqtt"
+		cfg.Events.RelayEnabled = false
+		require.NoError(t, cfg.Load(strings.NewReader(toml)))
+		return cfg
+	}
+	configure := func(t *testing.T, cfg *config.BaseConfig) *config.Config {
+		settings, err := config.Configure(context.TODO(), cfg)
+		require.NoError(t, err)
+		if settings.NatsConn != nil {
+			t.Cleanup(settings.NatsConn.Close)
+		}
+		return settings
+	}
+	// runJob runs a job on the runner until it has run once.
+	runJob := func(t *testing.T, runner jobs.Runner) {
+		ran := make(chan struct{}, 1)
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan error, 1)
+		go func() {
+			done <- runner.Run(ctx, []jobs.Job{{Name: "test", Interval: time.Millisecond, Run: func(context.Context) error {
+				select {
+				case ran <- struct{}{}:
+				default:
+				}
+				return nil
+			}}})
+		}()
+		select {
+		case <-ran:
+		case <-time.After(10 * time.Second):
+			t.Fatal("the job did not run")
+		}
+		cancel()
+		require.NoError(t, <-done)
+	}
+
+	t.Run("defaults", func(t *testing.T) {
+		cfg := newDefaultTestConfig(t)
+		assert.Equal(t, config.JobsConfig{
+			Runner:                    "nats_kv",
+			LeaseBucket:               "maeve_job_leases",
+			LeaseTTL:                  "15s",
+			EnsureBucket:              false,
+			BucketReplicas:            1,
+			SyncInterval:              "1m",
+			SyncRetryAfter:            "2m",
+			ReservationExpiryInterval: "1m",
+		}, cfg.Jobs)
+	})
+
+	t.Run("the leased runner needs the nats section", func(t *testing.T) {
+		for name, toml := range map[string]string{"default": "", "nats_kv": "[jobs]\nrunner = \"nats_kv\"\n"} {
+			t.Run(name, func(t *testing.T) {
+				cfg := newConfig(t, toml)
+				cfg.Nats = nil
+				err := cfg.Validate()
+				require.Error(t, err)
+				assert.ErrorContains(t, err, "[nats] section is required to run the background jobs")
+
+				settings, err := config.Configure(context.TODO(), cfg)
+				require.Error(t, err)
+				assert.Nil(t, settings)
+			})
+		}
+	})
+
+	t.Run("local builds the local runner without nats", func(t *testing.T) {
+		cfg := newConfig(t, "[jobs]\nrunner = \"local\"\nsync_interval = \"30s\"\nsync_retry_after = \"10m\"\n")
+		cfg.Nats = nil
+		require.NoError(t, cfg.Validate())
+
+		settings := configure(t, cfg)
+		assert.IsType(t, &jobs.LocalRunner{}, settings.JobRunner)
+		assert.Nil(t, settings.NatsConn)
+		assert.Equal(t, 30*time.Second, settings.SyncInterval)
+		assert.Equal(t, 10*time.Minute, settings.SyncRetryAfter)
+		runJob(t, settings.JobRunner)
+	})
+
+	t.Run("nats_kv with all settings creates the bucket", func(t *testing.T) {
+		_, url := natstest.RunServer(t, true)
+		cfg := newConfig(t, `
+[nats]
+urls = ["`+url+`"]
+
+[jobs]
+runner = "nats_kv"
+lease_bucket = "test_leases"
+lease_ttl = "9s"
+ensure_bucket = true
+bucket_replicas = 1
+`)
+		settings := configure(t, cfg)
+		require.NotNil(t, settings.NatsConn, "the job runner opens the connection to NATS with the MQTT transport")
+		require.IsType(t, &jobs.LeasedRunner{}, settings.JobRunner)
+		runner := settings.JobRunner.(*jobs.LeasedRunner)
+		assert.Equal(t, 9*time.Second, runner.TTL)
+		require.IsType(t, &jobs.KVLease{}, runner.Lease)
+		assert.Regexp(t, `-[0-9a-f]{6}$`, runner.Lease.(*jobs.KVLease).Instance())
+		assert.Equal(t, time.Minute, settings.SyncInterval)
+		assert.Equal(t, 2*time.Minute, settings.SyncRetryAfter)
+
+		conn, err := nats.Connect(url)
+		require.NoError(t, err)
+		t.Cleanup(conn.Close)
+		js, err := jetstream.New(conn)
+		require.NoError(t, err)
+		kv, err := js.KeyValue(context.TODO(), "test_leases")
+		require.NoError(t, err, "the bucket was not created at startup")
+		status, err := kv.Status(context.TODO())
+		require.NoError(t, err)
+		assert.Equal(t, 9*time.Second, status.TTL())
+
+		runJob(t, settings.JobRunner)
+		// the lease was released when the runner stopped
+		_, err = kv.Get(context.TODO(), "job.test")
+		assert.ErrorIs(t, err, jetstream.ErrKeyNotFound)
+	})
+
+	t.Run("a missing bucket does not stop the manager", func(t *testing.T) {
+		_, url := natstest.RunServer(t, true)
+		cfg := newConfig(t, "[nats]\nurls = [\""+url+"\"]\n")
+		assert.False(t, cfg.Jobs.EnsureBucket)
+
+		settings := configure(t, cfg)
+		require.IsType(t, &jobs.LeasedRunner{}, settings.JobRunner)
+		conn, err := nats.Connect(url)
+		require.NoError(t, err)
+		t.Cleanup(conn.Close)
+		js, err := jetstream.New(conn)
+		require.NoError(t, err)
+		_, err = js.KeyValue(context.TODO(), "maeve_job_leases")
+		require.ErrorIs(t, err, jetstream.ErrBucketNotFound, "the bucket is only looked up")
+
+		// once the bucket exists, the jobs run
+		_, err = js.CreateKeyValue(context.TODO(), jetstream.KeyValueConfig{Bucket: "maeve_job_leases", TTL: 15 * time.Second})
+		require.NoError(t, err)
+		runJob(t, settings.JobRunner)
+	})
+
+	t.Run("nats not reachable at startup", func(t *testing.T) {
+		cfg := newConfig(t, "[nats]\nurls = [\"nats://127.0.0.1:1\"]\nconnect_timeout = \"100ms\"\n")
+		start := time.Now()
+		settings := configure(t, cfg)
+		assert.Less(t, time.Since(start), 3*time.Second, "the manager does not wait for the bucket")
+		assert.IsType(t, &jobs.LeasedRunner{}, settings.JobRunner)
+		assert.False(t, settings.NatsConn.IsConnected())
+	})
+
+	for name, tc := range map[string]struct {
+		toml    string
+		wantErr string
+	}{
+		"unknown runner":            {toml: "runner = \"cron\"", wantErr: "Runner"},
+		"bad lease_ttl":             {toml: "lease_ttl = \"a while\"", wantErr: "lease ttl"},
+		"zero lease_ttl":            {toml: "lease_ttl = \"0s\"", wantErr: "lease ttl must be positive"},
+		"lease_ttl below 100ms":     {toml: "lease_ttl = \"50ms\"", wantErr: "at least 100ms"},
+		"bad lease_bucket":          {toml: "lease_bucket = \"job.leases\"", wantErr: "not a valid bucket name"},
+		"empty lease_bucket":        {toml: "lease_bucket = \"\"", wantErr: "not a valid bucket name"},
+		"zero bucket_replicas":      {toml: "bucket_replicas = 0", wantErr: "BucketReplicas"},
+		"too many bucket_replicas":  {toml: "bucket_replicas = 6", wantErr: "BucketReplicas"},
+		"empty sync_interval":       {toml: "sync_interval = \"\"", wantErr: "sync interval"},
+		"zero sync_interval":        {toml: "sync_interval = \"0s\"", wantErr: "sync interval must be positive"},
+		"negative sync_retry_after": {toml: "sync_retry_after = \"-1m\"", wantErr: "sync retry after must be positive"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := newConfig(t, "[nats]\nurls = [\"nats://127.0.0.1:1\"]\nconnect_timeout = \"100ms\"\n[jobs]\n"+tc.toml+"\n")
+			settings, err := config.Configure(context.TODO(), cfg)
+			require.Error(t, err)
+			assert.ErrorContains(t, err, tc.wantErr)
 			assert.Nil(t, settings)
 		})
 	}
@@ -769,4 +984,517 @@ perms = ["cpms.station.read"]
 		_, err = settings.AuthVerifier.Verify(ctx, platform.Token(time.Now()))
 		assert.Equal(t, tenancy.ErrKeysUnavailable, err)
 	})
+}
+
+// relayAll publishes every event in the outbox of a storage and returns them.
+func relayAll(t *testing.T, engine store.Engine) []*store.OutboxEvent {
+	t.Helper()
+	var published []*store.OutboxEvent
+	_, err := engine.RelayOutboxEvents(context.TODO(), store.MaxOutboxEventListLimit,
+		func(_ context.Context, events []*store.OutboxEvent) (int, error) {
+			published = append(published, events...)
+			return len(events), nil
+		})
+	require.NoError(t, err)
+	return published
+}
+
+func TestConfigureEvents(t *testing.T) {
+	const defaultOrgId = "0193b2c4-0000-7000-8000-00000000000a"
+	newConfig := func(t *testing.T, toml string) *config.BaseConfig {
+		cfg := newTestConfig(t)
+		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
+		require.NoError(t, cfg.Load(strings.NewReader(toml)))
+		return cfg
+	}
+	stationEvent := func(stationKey string) events.Event {
+		return events.Event{
+			Type:         "station.registered",
+			StationKey:   stationKey,
+			ResourceType: "station",
+			ResourceId:   stationKey,
+			Data:         struct{}{},
+		}
+	}
+
+	t.Run("enabled by default: the org of a station comes from the tenant resolver", func(t *testing.T) {
+		ctx := context.TODO()
+		cfg := newConfig(t, "[tenancy]\ndefault_org_id = \""+defaultOrgId+"\"\n")
+		assert.True(t, cfg.Events.Enabled)
+		assert.Equal(t, "single", cfg.Tenancy.Mode)
+
+		settings, err := config.Configure(ctx, cfg)
+		require.NoError(t, err)
+		require.IsType(t, &events.OutboxEmitter{}, settings.Events)
+
+		// a station that moved to another org has its org in its auth details
+		const otherOrgId = "0193b2c4-0000-7000-8000-0000000000b2"
+		require.NoError(t, settings.Storage.SetChargeStationAuth(ctx, "cs-moved", &store.ChargeStationAuth{OrgId: otherOrgId}))
+
+		err = settings.Storage.RunInTx(ctx, func(ctx context.Context) error {
+			// single mode: the station key is the plain station id, which has no org key
+			return settings.Events.Emit(ctx, stationEvent("cs001"), stationEvent("cs-moved"))
+		})
+		require.NoError(t, err)
+
+		published := relayAll(t, settings.Storage)
+		require.Len(t, published, 2)
+		assert.Equal(t, defaultOrgId, published[0].OrgId, "a station without an org belongs to the default org")
+		assert.Equal(t, "urn:cpms:"+defaultOrgId+":station/cs001", published[0].Subject)
+		assert.Equal(t, "station:cs001", published[0].Actor)
+		assert.Equal(t, otherOrgId, published[1].OrgId, "a station with an org belongs to it")
+	})
+
+	t.Run("disabled", func(t *testing.T) {
+		cfg := newConfig(t, "[events]\nenabled = false\n")
+		assert.False(t, cfg.Events.Enabled)
+
+		settings, err := config.Configure(context.TODO(), cfg)
+		require.NoError(t, err)
+		assert.Equal(t, events.NopEmitter{}, settings.Events)
+	})
+}
+
+func TestConfigureEventRelay(t *testing.T) {
+	// the default configuration (relay enabled) with the MQTT transport, so that only the
+	// relay can need NATS
+	newConfig := func(t *testing.T, toml string) *config.BaseConfig {
+		cfg := newDefaultTestConfig(t)
+		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
+		cfg.Transport.Type = "mqtt"
+		require.NoError(t, cfg.Load(strings.NewReader(toml)))
+		return cfg
+	}
+	configure := func(t *testing.T, cfg *config.BaseConfig) *config.Config {
+		settings, err := config.Configure(context.TODO(), cfg)
+		require.NoError(t, err)
+		if settings.NatsConn != nil {
+			t.Cleanup(settings.NatsConn.Close)
+		}
+		return settings
+	}
+	emitStationEvent := func(t *testing.T, settings *config.Config) {
+		err := settings.Storage.RunInTx(context.TODO(), func(ctx context.Context) error {
+			return settings.Events.Emit(ctx, events.Event{
+				Type:         "station.registered",
+				StationKey:   "cs001",
+				ResourceType: "station",
+				ResourceId:   "cs001",
+				Data:         struct{}{},
+			})
+		})
+		require.NoError(t, err)
+	}
+	jetStream := func(t *testing.T, url string) jetstream.JetStream {
+		conn, err := nats.Connect(url)
+		require.NoError(t, err)
+		t.Cleanup(conn.Close)
+		js, err := jetstream.New(conn)
+		require.NoError(t, err)
+		return js
+	}
+
+	t.Run("defaults", func(t *testing.T) {
+		cfg := newDefaultTestConfig(t)
+		assert.Equal(t, config.EventsConfig{
+			Enabled:         true,
+			RelayEnabled:    true,
+			SubjectPrefix:   "cpms",
+			Stream:          "CPMS_EVENTS",
+			EnsureStream:    false,
+			StreamReplicas:  1,
+			StreamMaxAge:    "720h",
+			RelayInterval:   "1s",
+			RelayBatchSize:  100,
+			OutboxRetention: "720h",
+			PurgeInterval:   "1h",
+		}, cfg.Events)
+	})
+
+	t.Run("the relay needs the nats section", func(t *testing.T) {
+		cfg := newConfig(t, "")
+		cfg.Nats = nil
+		err := cfg.Validate()
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "[nats] section is required to relay the domain events")
+
+		settings, err := config.Configure(context.TODO(), cfg)
+		require.Error(t, err)
+		assert.Nil(t, settings)
+	})
+
+	t.Run("no nats section is needed without the relay and with the local job runner", func(t *testing.T) {
+		for name, toml := range map[string]string{
+			"relay disabled":  "[events]\nrelay_enabled = false\n[jobs]\nrunner = \"local\"\n",
+			"events disabled": "[events]\nenabled = false\n[jobs]\nrunner = \"local\"\n",
+		} {
+			t.Run(name, func(t *testing.T) {
+				cfg := newConfig(t, toml)
+				cfg.Nats = nil
+				require.NoError(t, cfg.Validate())
+
+				settings := configure(t, cfg)
+				assert.Nil(t, settings.EventRelay)
+				assert.Nil(t, settings.NatsConn)
+				// what was published before is still purged
+				assert.Equal(t, &config.OutboxPurgeSettings{Retention: 720 * time.Hour, Interval: time.Hour}, settings.OutboxPurge)
+			})
+		}
+	})
+
+	t.Run("firestore disables the relay", func(t *testing.T) {
+		t.Setenv("FIRESTORE_EMULATOR_HOST", "localhost:8080")
+		cfg := newConfig(t, "[storage]\ntype = \"firestore\"\nfirestore.project_id = \"test-project-id\"\n[jobs]\nrunner = \"local\"\n")
+		cfg.Nats = nil
+		assert.True(t, cfg.Events.RelayEnabled)
+		require.NoError(t, cfg.Validate())
+
+		settings := configure(t, cfg)
+		assert.Nil(t, settings.EventRelay)
+		assert.Nil(t, settings.OutboxPurge)
+		assert.Nil(t, settings.NatsConn)
+	})
+
+	t.Run("relay with all settings creates the stream", func(t *testing.T) {
+		_, url := natstest.RunServer(t, true)
+		cfg := newConfig(t, `
+[nats]
+urls = ["`+url+`"]
+
+[events]
+subject_prefix = "csms"
+stream = "CSMS_EVENTS"
+ensure_stream = true
+stream_replicas = 1
+stream_max_age = "24h"
+relay_interval = "2s"
+relay_batch_size = 10
+outbox_retention = "48h"
+purge_interval = "30m"
+`)
+		settings := configure(t, cfg)
+		require.NotNil(t, settings.NatsConn, "the relay opens the connection to NATS with the MQTT transport")
+		require.NotNil(t, settings.EventRelay)
+		assert.Equal(t, "csms", settings.EventRelay.SubjectPrefix)
+		assert.Equal(t, events.Product, settings.EventRelay.Product)
+		assert.Equal(t, 10, settings.EventRelay.BatchSize)
+		assert.Same(t, settings.Storage, settings.EventRelay.Store)
+		assert.Equal(t, 2*time.Second, settings.EventRelayInterval)
+		assert.Equal(t, &config.OutboxPurgeSettings{Retention: 48 * time.Hour, Interval: 30 * time.Minute}, settings.OutboxPurge)
+
+		js := jetStream(t, url)
+		stream, err := js.Stream(context.TODO(), "CSMS_EVENTS")
+		require.NoError(t, err)
+		info := stream.CachedInfo()
+		assert.Equal(t, []string{"csms.>"}, info.Config.Subjects)
+		assert.Equal(t, 24*time.Hour, info.Config.MaxAge)
+		assert.Equal(t, 2*time.Minute, info.Config.Duplicates)
+
+		emitStationEvent(t, settings)
+		require.NoError(t, settings.EventRelay.RunOnce(context.TODO()))
+		msg, err := stream.GetMsg(context.TODO(), 1)
+		require.NoError(t, err)
+		assert.Equal(t, "csms.station.registered."+store.LegacyOrgId, msg.Subject)
+		var ce events.CloudEvent
+		require.NoError(t, json.Unmarshal(msg.Data, &ce))
+		assert.Equal(t, "cpms.station.registered", ce.Type)
+		assert.Equal(t, msg.Header.Get(jetstream.MsgIDHeader), ce.Id)
+	})
+
+	t.Run("a missing stream does not stop the manager", func(t *testing.T) {
+		_, url := natstest.RunServer(t, true)
+		cfg := newConfig(t, "[transport]\ntype = \"nats\"\n[nats]\nurls = [\""+url+"\"]\n")
+		assert.False(t, cfg.Events.EnsureStream)
+
+		settings := configure(t, cfg)
+		require.NotNil(t, settings.EventRelay)
+		js := jetStream(t, url)
+		_, err := js.Stream(context.TODO(), "CPMS_EVENTS")
+		require.ErrorIs(t, err, jetstream.ErrStreamNotFound, "the stream is only checked")
+
+		// the manager answers the stations
+		assertHeartbeatRoundTrip(t, settings, url, "ocpp")
+
+		// the events wait in the outbox until the stream is there
+		emitStationEvent(t, settings)
+		require.Error(t, settings.EventRelay.RunOnce(context.TODO()))
+		assert.Empty(t, publishedOutbox(t, settings.Storage))
+
+		require.NoError(t, events.EnsureStream(context.TODO(), js, events.StreamConfig{
+			Name: "CPMS_EVENTS", Subjects: []string{"cpms.>"}, Replicas: 1,
+		}))
+		require.NoError(t, settings.EventRelay.RunOnce(context.TODO()))
+		assert.Len(t, publishedOutbox(t, settings.Storage), 1)
+	})
+
+	t.Run("nats not reachable at startup", func(t *testing.T) {
+		cfg := newConfig(t, "[nats]\nurls = [\"nats://127.0.0.1:1\"]\nconnect_timeout = \"100ms\"\n")
+		start := time.Now()
+		settings := configure(t, cfg)
+		assert.Less(t, time.Since(start), 3*time.Second, "the manager does not wait for the stream")
+		require.NotNil(t, settings.EventRelay)
+		assert.False(t, settings.NatsConn.IsConnected())
+	})
+
+	for name, tc := range map[string]struct {
+		toml    string
+		wantErr string
+	}{
+		"bad stream_max_age":        {toml: "stream_max_age = \"a month\"", wantErr: "stream_max_age"},
+		"zero relay_interval":       {toml: "relay_interval = \"0s\"", wantErr: "relay_interval must be positive"},
+		"negative outbox_retention": {toml: "outbox_retention = \"-1h\"", wantErr: "outbox_retention must be positive"},
+		"empty purge_interval":      {toml: "purge_interval = \"\"", wantErr: "purge_interval"},
+		"zero relay_batch_size":     {toml: "relay_batch_size = 0", wantErr: "RelayBatchSize"},
+		"huge relay_batch_size":     {toml: "relay_batch_size = 1001", wantErr: "RelayBatchSize"},
+		"zero stream_replicas":      {toml: "stream_replicas = 0", wantErr: "StreamReplicas"},
+		"empty subject_prefix":      {toml: "subject_prefix = \"\"", wantErr: "SubjectPrefix"},
+		"subject_prefix with a dot": {toml: "subject_prefix = \"a.b\"", wantErr: "subject_prefix"},
+		"empty stream":              {toml: "stream = \"\"", wantErr: "Stream"},
+		"stream with a dot":         {toml: "stream = \"CPMS.EVENTS\"", wantErr: "not a valid stream name"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			// checked although the relay is disabled
+			cfg := newConfig(t, "[events]\nrelay_enabled = false\n"+tc.toml+"\n")
+			settings, err := config.Configure(context.TODO(), cfg)
+			require.Error(t, err)
+			assert.ErrorContains(t, err, tc.wantErr)
+			assert.Nil(t, settings)
+		})
+	}
+}
+
+// publishedOutbox returns the published events of the outbox of a storage.
+func publishedOutbox(t *testing.T, engine store.Engine) []*store.OutboxEvent {
+	t.Helper()
+	evs, err := engine.ListOutboxEvents(context.TODO(), store.OutboxEventFilter{})
+	require.NoError(t, err)
+	return evs
+}
+
+func TestConfigureConnectivity(t *testing.T) {
+	newConfig := func(t *testing.T, toml string) *config.BaseConfig {
+		cfg := newTestConfig(t)
+		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
+		require.NoError(t, cfg.Load(strings.NewReader(toml)))
+		return cfg
+	}
+
+	t.Run("defaults", func(t *testing.T) {
+		settings, err := config.Configure(context.TODO(), newConfig(t, ""))
+		require.NoError(t, err)
+
+		require.NotNil(t, settings.Connectivity)
+		assert.Same(t, settings.Storage, settings.Connectivity.Store)
+		assert.NotNil(t, settings.Connectivity.Clock)
+		assert.Equal(t, 30*time.Second, settings.Connectivity.SeenWriteEvery)
+		assert.Equal(t, 5*time.Minute, settings.Connectivity.StaleAfter)
+		assert.Equal(t, 30*time.Second, settings.ConnectivitySweepInterval)
+	})
+
+	t.Run("overridden", func(t *testing.T) {
+		settings, err := config.Configure(context.TODO(), newConfig(t,
+			"[connectivity]\nlast_seen_write_interval = \"1m\"\nstale_after = \"10m\"\nsweep_interval = \"15s\"\n"))
+		require.NoError(t, err)
+
+		require.NotNil(t, settings.Connectivity)
+		assert.Equal(t, time.Minute, settings.Connectivity.SeenWriteEvery)
+		assert.Equal(t, 10*time.Minute, settings.Connectivity.StaleAfter)
+		assert.Equal(t, 15*time.Second, settings.ConnectivitySweepInterval)
+	})
+
+	t.Run("a short stale_after is accepted", func(t *testing.T) {
+		settings, err := config.Configure(context.TODO(), newConfig(t,
+			"[connectivity]\nlast_seen_write_interval = \"10s\"\nstale_after = \"1m\"\n"))
+		require.NoError(t, err)
+		assert.Equal(t, time.Minute, settings.Connectivity.StaleAfter)
+	})
+
+	for _, key := range []string{"last_seen_write_interval", "stale_after", "sweep_interval"} {
+		for name, value := range map[string]string{
+			"not a duration": "every minute",
+			"no unit":        "60",
+			"zero":           "0s",
+			"negative":       "-1m",
+			"empty":          "",
+		} {
+			t.Run(key+" "+name, func(t *testing.T) {
+				settings, err := config.Configure(context.TODO(), newConfig(t, "[connectivity]\n"+key+" = \""+value+"\"\n"))
+				require.Error(t, err)
+				assert.ErrorContains(t, err, key)
+				assert.Nil(t, settings)
+			})
+		}
+	}
+
+	for name, toml := range map[string]string{
+		"stale_after equal to last_seen_write_interval":     "[connectivity]\nlast_seen_write_interval = \"5m\"\nstale_after = \"5m\"\n",
+		"stale_after shorter than last_seen_write_interval": "[connectivity]\nlast_seen_write_interval = \"1m\"\nstale_after = \"30s\"\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			settings, err := config.Configure(context.TODO(), newConfig(t, toml))
+			require.Error(t, err)
+			assert.ErrorContains(t, err, "must be longer than last_seen_write_interval")
+			assert.Nil(t, settings)
+		})
+	}
+}
+
+func TestConfigureNatsTransport(t *testing.T) {
+	newConfig := func(t *testing.T, toml string) *config.BaseConfig {
+		cfg := newTestConfig(t)
+		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
+		require.NoError(t, cfg.Load(strings.NewReader(toml)))
+		return cfg
+	}
+	configure := func(t *testing.T, cfg *config.BaseConfig) *config.Config {
+		settings, err := config.Configure(context.TODO(), cfg)
+		require.NoError(t, err)
+		if settings.NatsConn != nil {
+			t.Cleanup(settings.NatsConn.Close)
+		}
+		return settings
+	}
+
+	newDefaultConfig := func(t *testing.T, toml string) *config.BaseConfig {
+		cfg := newDefaultTestConfig(t)
+		cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
+		require.NoError(t, cfg.Load(strings.NewReader(toml)))
+		return cfg
+	}
+
+	t.Run("nats is the default", func(t *testing.T) {
+		cfg := newDefaultConfig(t, "")
+		assert.Equal(t, "nats", cfg.Transport.Type)
+		assert.Nil(t, cfg.Transport.Nats)
+		assert.Equal(t, &config.NatsConfig{Urls: []string{"nats://localhost:4222"}}, cfg.Nats)
+		require.NoError(t, cfg.Validate())
+
+		// the default settings, with the server of the test instead of localhost
+		_, url := natstest.RunServer(t, false)
+		cfg = newDefaultConfig(t, "[nats]\nurls = [\""+url+"\"]\n")
+		assert.Equal(t, []string{url}, cfg.Nats.Urls)
+
+		settings := configure(t, cfg)
+		require.NotNil(t, settings.NatsConn)
+		assert.Equal(t, "maeve-manager", settings.NatsConn.Opts.Name)
+		assert.IsType(t, &natstransport.Emitter{}, settings.MsgEmitter)
+		assert.IsType(t, &natstransport.Listener{}, settings.MsgListener)
+
+		assertHeartbeatRoundTrip(t, settings, url, "ocpp")
+	})
+
+	t.Run("mqtt needs no further keys and no nats without the event relay and the leased job runner", func(t *testing.T) {
+		cfg := newDefaultConfig(t, "[transport]\ntype = \"mqtt\"\n[events]\nrelay_enabled = false\n[jobs]\nrunner = \"local\"\n")
+		assert.Equal(t, "mqtt", cfg.Transport.Type)
+		assert.Equal(t, []string{"mqtt://localhost:1883"}, cfg.Transport.Mqtt.Urls)
+		require.NoError(t, cfg.Validate())
+
+		settings := configure(t, cfg)
+		assert.Nil(t, settings.NatsConn)
+		assert.IsType(t, &mqtt.Emitter{}, settings.MsgEmitter)
+		assert.IsType(t, &mqtt.Listener{}, settings.MsgListener)
+	})
+
+	t.Run("the nats section is not read with mqtt", func(t *testing.T) {
+		cfg := newConfig(t, "[nats]\nurls = []\nconnect_timeout = \"not a duration\"\n")
+		require.NoError(t, cfg.Validate())
+
+		settings := configure(t, cfg)
+		assert.Nil(t, settings.NatsConn)
+	})
+
+	t.Run("nats works end to end with the defaults", func(t *testing.T) {
+		_, url := natstest.RunServer(t, false)
+		cfg := newConfig(t, "[transport]\ntype = \"nats\"\n[nats]\nurls = [\""+url+"\"]\n")
+
+		settings := configure(t, cfg)
+		require.NotNil(t, settings.NatsConn)
+		assert.True(t, settings.NatsConn.IsConnected())
+		assert.Equal(t, "maeve-manager", settings.NatsConn.Opts.Name)
+		assert.Equal(t, 5*time.Second, settings.NatsConn.Opts.Timeout)
+		assert.Equal(t, 2*time.Second, settings.NatsConn.Opts.ReconnectWait)
+		assert.Equal(t, -1, settings.NatsConn.Opts.MaxReconnect)
+		assert.IsType(t, &natstransport.Emitter{}, settings.MsgEmitter)
+		assert.IsType(t, &natstransport.Listener{}, settings.MsgListener)
+
+		assertHeartbeatRoundTrip(t, settings, url, "ocpp")
+	})
+
+	t.Run("nats with all settings", func(t *testing.T) {
+		_, url := natstest.RunServer(t, false)
+		cfg := newConfig(t, `
+[transport]
+type = "nats"
+nats.subject_prefix = "csms"
+nats.queue_group = "replicas"
+nats.workers = 4
+
+[nats]
+urls = ["`+url+`"]
+name = "manager-1"
+connect_timeout = "3s"
+reconnect_wait = "250ms"
+max_reconnects = 7
+`)
+		assert.Equal(t, &config.NatsTransportConfig{SubjectPrefix: "csms", QueueGroup: "replicas", Workers: 4}, cfg.Transport.Nats)
+
+		settings := configure(t, cfg)
+		assert.Equal(t, "manager-1", settings.NatsConn.Opts.Name)
+		assert.Equal(t, 3*time.Second, settings.NatsConn.Opts.Timeout)
+		assert.Equal(t, 250*time.Millisecond, settings.NatsConn.Opts.ReconnectWait)
+		assert.Equal(t, 7, settings.NatsConn.Opts.MaxReconnect)
+
+		assertHeartbeatRoundTrip(t, settings, url, "csms")
+	})
+
+	t.Run("invalid nats settings", func(t *testing.T) {
+		for name, tc := range map[string]struct {
+			toml    string
+			wantErr string
+		}{
+			"no nats section":          {toml: "", wantErr: "[nats] section is required"},
+			"no urls":                  {toml: "[nats]\nurls = []\n", wantErr: "Urls"},
+			"empty url":                {toml: "[nats]\nurls = [\"\"]\n", wantErr: "Urls"},
+			"bad connect timeout":      {toml: "[nats]\nurls = [\"nats://127.0.0.1:4222\"]\nconnect_timeout = \"soon\"\n", wantErr: "connect timeout"},
+			"negative connect timeout": {toml: "[nats]\nurls = [\"nats://127.0.0.1:4222\"]\nconnect_timeout = \"-1s\"\n", wantErr: "connect timeout must be positive"},
+			"zero reconnect wait":      {toml: "[nats]\nurls = [\"nats://127.0.0.1:4222\"]\nreconnect_wait = \"0s\"\n", wantErr: "reconnect wait must be positive"},
+			"cert without key":         {toml: "[nats]\nurls = [\"nats://127.0.0.1:4222\"]\ntls_cert_file = \"cert.pem\"\n", wantErr: "TlsKeyFile"},
+			"missing creds file":       {toml: "[nats]\nurls = [\"nats://127.0.0.1:4222\"]\ncreds_file = \"testdata/missing.creds\"\n", wantErr: "creds file"},
+			"too many workers":         {toml: "[transport.nats]\nworkers = 2000\n[nats]\nurls = [\"nats://127.0.0.1:4222\"]\n", wantErr: "Workers"},
+			"prefix with a dot":        {toml: "[transport.nats]\nsubject_prefix = \"a.b\"\n[nats]\nurls = [\"nats://127.0.0.1:4222\"]\n", wantErr: "subject prefix"},
+		} {
+			t.Run(name, func(t *testing.T) {
+				cfg := newConfig(t, "[transport]\ntype = \"nats\"\n"+tc.toml)
+				settings, err := config.Configure(context.TODO(), cfg)
+				require.Error(t, err)
+				assert.Nil(t, settings)
+				assert.ErrorContains(t, err, tc.wantErr)
+			})
+		}
+	})
+}
+
+// assertHeartbeatRoundTrip sends a heartbeat to the configured manager as the gateway
+// would and waits for the answer.
+func assertHeartbeatRoundTrip(t *testing.T, settings *config.Config, url, prefix string) {
+	t.Helper()
+	conn, err := settings.MsgListener.Connect(context.TODO(), transport.OcppVersion16, nil, settings.Ocpp16Handler)
+	require.NoError(t, err)
+	defer func() { assert.NoError(t, conn.Disconnect(context.TODO())) }()
+
+	gateway, err := nats.Connect(url)
+	require.NoError(t, err)
+	defer gateway.Close()
+	responses, err := gateway.SubscribeSync(prefix + ".out.ocpp16._.CP001")
+	require.NoError(t, err)
+	require.NoError(t, gateway.Flush())
+
+	require.NoError(t, gateway.Publish(prefix+".in.ocpp16._.CP001",
+		[]byte(`{"type":2,"action":"Heartbeat","id":"hb-1","request":{}}`)))
+	got, err := responses.NextMsg(5 * time.Second)
+	require.NoError(t, err)
+	var resp transport.Message
+	require.NoError(t, json.Unmarshal(got.Data, &resp))
+	assert.Equal(t, transport.MessageTypeCallResult, resp.MessageType)
+	assert.Equal(t, "hb-1", resp.MessageId)
 }

@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/thoughtworks/maeve-csms/manager/api"
 	"github.com/thoughtworks/maeve-csms/manager/entitlements"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/ocpi"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
@@ -551,16 +552,25 @@ func newSingleTenantRouter(t *testing.T, engine store.Engine, c clock.PassiveClo
 }
 
 // newRouter creates the router of an API server as the manager mounts it: behind the
-// authorisation of every operation, and with the limits of the entitlements of the
-// tenants in the store. callerOf gives the caller of a request, in place of the token
-// verification of the manager; nil is a request without a caller. The middlewares run
-// after the caller is known and before the operation is.
+// authorisation of every operation, with the limits of the entitlements of the tenants
+// in the store, and with the domain events in the outbox of the store. callerOf gives
+// the caller of a request, in place of the token verification of the manager; nil is a
+// request without a caller. The middlewares run after the caller is known and before
+// the operation is.
 func newRouter(t *testing.T, engine store.Engine, c clock.PassiveClock, ocpiApi ocpi.Api, scoper *tenancy.Scoper, callerOf func(*http.Request) *tenancy.Principal, middlewares ...func(http.Handler) http.Handler) *chi.Mux {
 	t.Helper()
 
+	domainEvents := &events.OutboxEmitter{Store: engine, Orgs: scoper.Resolver, Clock: c, Product: events.Product}
 	enforcer := &entitlements.Enforcer{Tenants: engine, Counter: engine, Mode: scoper.Mode}
-	srv, err := api.NewServer(engine, c, ocpiApi, api.WithScoper(scoper), api.WithEntitlements(enforcer))
+	srv, err := api.NewServer(engine, c, ocpiApi, domainEvents, api.WithScoper(scoper), api.WithEntitlements(enforcer))
 	require.NoError(t, err)
+	return routerOf(t, srv, scoper, callerOf, middlewares...)
+}
+
+// routerOf mounts an API server as newRouter does.
+func routerOf(t *testing.T, srv *api.Server, scoper *tenancy.Scoper, callerOf func(*http.Request) *tenancy.Principal, middlewares ...func(http.Handler) http.Handler) *chi.Mux {
+	t.Helper()
+
 	swagger, err := api.GetSwagger()
 	require.NoError(t, err)
 	permissions, err := api.BuildPermissionIndex(swagger)
@@ -575,6 +585,7 @@ func newRouter(t *testing.T, engine store.Engine, c clock.PassiveClock, ocpiApi 
 			next.ServeHTTP(w, req)
 		})
 	})
+	r.Use(api.ActorMiddleware)
 	r.Use(middlewares...)
 	r.Mount("/", api.HandlerWithOptions(srv, api.ChiServerOptions{
 		Middlewares: []api.MiddlewareFunc{api.AuthzMiddleware(scoper, permissions, "")},
@@ -1238,6 +1249,8 @@ func TestTransactionsReturnOcpp16Transaction(t *testing.T) {
 		OrgResolver:      &tenancy.Resolver{Stations: engine},
 		TransactionStore: engine,
 		ReservationStore: engine,
+		Tx:               engine,
+		Events:           events.NopEmitter{},
 	}
 	startResponse, err := startHandler.HandleCall(ctx, "cs001", &types.StartTransactionJson{
 		ConnectorId: 2,
@@ -1307,6 +1320,8 @@ func TestTransactionsReturnOcpp16Transaction(t *testing.T) {
 		TokenStore:       engine,
 		OrgResolver:      &tenancy.Resolver{Stations: engine},
 		TransactionStore: engine,
+		Tx:               engine,
+		Events:           events.NopEmitter{},
 	}
 	reason := types.StopTransactionJsonReasonEVDisconnected
 	_, err = stopHandler.HandleCall(ctx, "cs001", &types.StopTransactionJson{
