@@ -26,6 +26,7 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 	"golang.org/x/exp/slog"
 )
 
@@ -102,7 +103,7 @@ func New(opts ...Opt) *Transport {
 	}
 
 	if t.tracer == nil {
-		t.tracer = trace.NewNoopTracerProvider().Tracer("")
+		t.tracer = noop.NewTracerProvider().Tracer("")
 	}
 
 	return t

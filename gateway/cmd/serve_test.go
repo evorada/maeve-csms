@@ -24,6 +24,7 @@ import (
 	natstransport "github.com/thoughtworks/maeve-csms/gateway/transport/nats"
 	"github.com/thoughtworks/maeve-csms/gateway/transport/nats/natstest"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 	"nhooyr.io/websocket"
 )
 
@@ -295,7 +296,7 @@ func TestNewTransportRejectsBadSettings(t *testing.T) {
 }
 
 func noopTracer() trace.Tracer {
-	return trace.NewNoopTracerProvider().Tracer("")
+	return noop.NewTracerProvider().Tracer("")
 }
 
 func openSession(ctx context.Context, t *testing.T, tr transport.Transport, delivered chan *pipe.GatewayMessage) transport.Session {

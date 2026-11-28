@@ -124,11 +124,15 @@ func initProvider(collectorAddr string) (func(context.Context) error, error) {
 
 		ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
-		//nolint:staticcheck // grpc.DialContext is deprecated in newer versions, but we're on v1.56
-		conn, err := grpc.DialContext(ctx, collectorAddr,
+		// grpc.DialContext and grpc.WithBlock are deprecated in favour of grpc.NewClient, which
+		// does not wait for the connection. They stay (grpc supports them throughout 1.x) so that
+		// start-up still waits up to a second for the collector and fails when it is not there.
+		//lint:ignore SA1019 see the comment above
+		conn, err := grpc.DialContext(ctx, collectorAddr, //nolint:staticcheck
 			// Note the use of insecure transport here. TLS is recommended in production.
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(), //nolint:staticcheck // grpc.WithBlock is deprecated in newer versions
+			//lint:ignore SA1019 see the comment above
+			grpc.WithBlock(), //nolint:staticcheck
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create gRPC connection to collector: %w", err)
