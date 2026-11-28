@@ -110,7 +110,7 @@ func TestOnboardingOfAStationThatIsNotRegistered(t *testing.T) {
 	refused := startTransaction()
 	assert.Equal(t, types.StartTransactionResponseJsonIdTagInfoStatusInvalid, refused.IdTagInfo.Status)
 	assert.Equal(t, -1, refused.TransactionId)
-	_, total, err := engine.ListTransactionsForChargeStation(ctx, stationKey, "", nil, nil, 10, 0)
+	_, total, err := engine.ListTransactionsForChargeStation(ctx, stationKey, "", nil, nil, 10, 0, nil)
 	require.NoError(t, err)
 	assert.Zero(t, total)
 	pending, _, err := engine.ListChargeStations(ctx, store.ChargeStationFilter{
@@ -309,7 +309,7 @@ func TestAPendingStationIsApprovedAndCharges(t *testing.T) {
 	started := call("StartTransaction", "s1", start)
 	assert.Equal(t, "Accepted", status(started, "idTagInfo", "status"))
 	assert.Positive(t, status(started, "transactionId"))
-	_, total, err := engine.ListTransactionsForChargeStation(ctx, stationKey, "", nil, nil, 10, 0)
+	_, total, err := engine.ListTransactionsForChargeStation(ctx, stationKey, "", nil, nil, 10, 0, nil)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), total)
 }

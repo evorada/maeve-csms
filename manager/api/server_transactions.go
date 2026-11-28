@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/render"
@@ -14,7 +16,46 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
+// sessionOrgIds returns the orgs whose sessions (transactions and meter values) the
+// caller may read in the history of a charge station: the orgs that it may reach, as
+// for the list of the charge stations (Server.stationOrgIds). A session stays with the
+// org that owned the charge station when it started, so a charge station that was
+// transferred has sessions of an org that its new owner may not reach.
+//
+// AuthzMiddleware has checked that the caller may reach the charge station as it is
+// owned now. Without a caller, or when its scope cannot be resolved, the request is
+// answered and false is reported.
+func (s *Server) sessionOrgIds(w http.ResponseWriter, r *http.Request) ([]string, bool) {
+	p, ok := s.caller(w, r)
+	if !ok {
+		return nil, false
+	}
+	orgIds, err := s.stationOrgIds(r.Context(), p)
+	if err != nil {
+		renderScopeError(w, r, err)
+		return nil, false
+	}
+	return orgIds, true
+}
+
+// ownedByOneOf reports whether what the org orgId owns belongs to one of the orgs. A
+// store that does not keep the org of a transaction (Firestore) gives it no org: it has
+// one org, and every caller that reaches the charge station may read its history.
+func ownedByOneOf(orgId string, orgIds []string) bool {
+	if len(orgIds) == 0 {
+		return false
+	}
+	return orgId == "" || slices.Contains(orgIds, strings.ToLower(orgId))
+}
+
+// ListTransactions answers a page of the transactions of the charge station that belong
+// to the orgs that the caller may reach. The total counts those only.
 func (s *Server) ListTransactions(w http.ResponseWriter, r *http.Request, csId string, params ListTransactionsParams) {
+	orgIds, ok := s.sessionOrgIds(w, r)
+	if !ok {
+		return
+	}
+
 	status := "all"
 	if params.Status != nil {
 		status = string(*params.Status)
@@ -40,12 +81,18 @@ func (s *Server) ListTransactions(w http.ResponseWriter, r *http.Request, csId s
 		endDate = &parsed
 	}
 
-	transactions, total, err := s.store.ListTransactionsForChargeStation(
-		r.Context(), csId, status, startDate, endDate, limit, offset,
-	)
-	if err != nil {
-		_ = render.Render(w, r, ErrInternalError(err))
-		return
+	var transactions []*store.Transaction
+	var total int64
+	// no org is every org for the store: a caller that reaches no org gets nothing
+	if len(orgIds) > 0 {
+		var err error
+		transactions, total, err = s.store.ListTransactionsForChargeStation(
+			r.Context(), csId, status, startDate, endDate, limit, offset, orgIds,
+		)
+		if err != nil {
+			_ = render.Render(w, r, ErrInternalError(err))
+			return
+		}
 	}
 
 	response := &TransactionList{
@@ -82,14 +129,22 @@ func (s *Server) ListTransactions(w http.ResponseWriter, r *http.Request, csId s
 	_ = render.Render(w, r, response)
 }
 
+// GetTransactionDetails answers with a transaction of the charge station. A transaction
+// of an org that the caller may not reach (of a previous owner of the charge station) is
+// answered exactly like a transaction that does not exist.
 func (s *Server) GetTransactionDetails(w http.ResponseWriter, r *http.Request, csId string, transactionId string) {
+	orgIds, ok := s.sessionOrgIds(w, r)
+	if !ok {
+		return
+	}
+
 	txn, err := s.store.FindTransaction(r.Context(), csId, transactionId)
 	if err != nil {
 		_ = render.Render(w, r, ErrInternalError(err))
 		return
 	}
 
-	if txn == nil {
+	if txn == nil || !ownedByOneOf(txn.OrgId, orgIds) {
 		w.WriteHeader(http.StatusNotFound)
 		errMsg := "Transaction not found"
 		_ = render.Render(w, r, &Status{

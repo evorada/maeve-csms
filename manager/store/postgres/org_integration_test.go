@@ -41,6 +41,10 @@ func TestCountConnectorsForOrgs(t *testing.T) {
 	storetest.TestCountConnectorsForOrgs(t, emptyTestStore)
 }
 
+func TestHistoryPerOrg(t *testing.T) {
+	storetest.TestHistoryPerOrg(t, emptyTestStore)
+}
+
 func orgTestToken(uid, orgId string) *store.Token {
 	return &store.Token{
 		CountryCode: "GB",
@@ -175,7 +179,7 @@ func orgRowCounts(t *testing.T) map[string]map[string]int {
 	ctx := context.Background()
 	counts := map[string]map[string]int{}
 	for _, table := range []string{
-		"charge_stations", "locations", "tokens", "transactions",
+		"charge_stations", "locations", "tokens", "transactions", "meter_values",
 		"reservations", "charging_profiles", "ocpi_registrations", "ocpi_parties",
 	} {
 		rows, err := testPool.Query(ctx, `SELECT org_id::text, COUNT(*) FROM `+table+` GROUP BY org_id`)
@@ -198,7 +202,7 @@ func TestAssignLegacyOrg(t *testing.T) {
 	ctx := context.Background()
 	s := testStore
 
-	// one row of the legacy org and one row of org B in each of the eight tables
+	// one row of the legacy org and one row of org B in each of the nine tables
 	seed := func(chargeStationId string, id int, orgId string) {
 		t.Helper()
 		// a location and a token must name their org
@@ -211,6 +215,10 @@ func TestAssignLegacyOrg(t *testing.T) {
 		require.NoError(t, s.SetLocation(ctx, &store.Location{Id: "loc-" + suffix, Name: "Location", OrgId: locationOrgId}))
 		require.NoError(t, s.SetToken(ctx, orgTestToken("TOKEN-"+suffix, locationOrgId)))
 		require.NoError(t, s.CreateTransaction(ctx, chargeStationId, "tx-"+suffix, "TOKEN", "ISO14443", nil, 0, false))
+		// a meter value of the main meter: it has the org of its charge station
+		require.NoError(t, s.StoreMeterValues(ctx, chargeStationId, 0, "", []store.MeterValue{{
+			Timestamp: "2026-11-28T09:00:00Z", SampledValues: []store.SampledValue{{Value: 1000}},
+		}}))
 		require.NoError(t, s.CreateReservation(ctx, &store.Reservation{
 			ReservationId:   id,
 			ChargeStationId: chargeStationId,
@@ -243,7 +251,7 @@ func TestAssignLegacyOrg(t *testing.T) {
 	seed("cs-org-b", 2, testOrgB)
 
 	before := orgRowCounts(t)
-	require.Len(t, before, 8)
+	require.Len(t, before, 9)
 	for table, counts := range before {
 		require.Equal(t, map[string]int{store.LegacyOrgId: 1, testOrgB: 1}, counts, table)
 	}
@@ -259,7 +267,7 @@ func TestAssignLegacyOrg(t *testing.T) {
 	// only the rows of the legacy org move
 	rows, err = s.AssignLegacyOrg(ctx, testOrgA)
 	require.NoError(t, err)
-	assert.Equal(t, int64(8), rows)
+	assert.Equal(t, int64(9), rows)
 	for table, counts := range orgRowCounts(t) {
 		assert.Equal(t, map[string]int{testOrgA: 1, testOrgB: 1}, counts, table)
 	}

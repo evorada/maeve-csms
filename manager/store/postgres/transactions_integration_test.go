@@ -225,7 +225,7 @@ func TestTransaction_UpdateDetails_AllFieldsAreReadBack(t *testing.T) {
 	assert.Equal(t, "RFID", got.TokenType)
 	assert.Len(t, got.MeterValues, 1)
 
-	listed, total, err := testStore.ListTransactionsForChargeStation(ctx, "cs001", "all", nil, nil, 10, 0)
+	listed, total, err := testStore.ListTransactionsForChargeStation(ctx, "cs001", "all", nil, nil, 10, 0, nil)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), total)
 	require.Len(t, listed, 1)
@@ -394,7 +394,7 @@ func TestTransaction_SameIdOnTwoStations(t *testing.T) {
 	assert.Zero(t, got2.UpdatedSeqNoCount)
 
 	// each charge station lists its own transaction
-	listed, total, err := testStore.ListTransactionsForChargeStation(ctx, "cs002", "active", nil, nil, 10, 0)
+	listed, total, err := testStore.ListTransactionsForChargeStation(ctx, "cs002", "active", nil, nil, 10, 0, nil)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), total)
 	require.Len(t, listed, 1)

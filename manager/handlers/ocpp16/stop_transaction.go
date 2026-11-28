@@ -163,10 +163,10 @@ func (s StopTransactionHandler) endTransaction(ctx context.Context, chargeStatio
 	return s.Events.Emit(ctx, sessionCompletedEvent(chargeStationId, req.TransactionId, ended, details))
 }
 
-// sessionCompletedEvent is the session.completed event of an ended transaction. The
-// stop (time, meter, energy, reason) is what the handler wrote, details; the rest comes
-// from the stored transaction. So a store that does not keep the details (Firestore)
-// still gives the event its stop.
+// sessionCompletedEvent is the session.completed event of an ended transaction, in the
+// org of the transaction (sessionOrgId). The stop (time, meter, energy, reason) is what
+// the handler wrote, details; the rest comes from the stored transaction. So a store
+// that does not keep the details (Firestore) still gives the event its stop.
 func sessionCompletedEvent(chargeStationId string, ocppTransactionId int, transaction *store.Transaction, details *store.TransactionDetails) events.Event {
 	stoppedAt := details.StoppedAt.UTC()
 	data := events.SessionCompletedData{
@@ -197,12 +197,29 @@ func sessionCompletedEvent(chargeStationId string, ocppTransactionId int, transa
 	}
 	return events.Event{
 		Type:         events.TypeSessionCompleted,
+		OrgId:        sessionOrgId(transaction),
 		StationKey:   chargeStationId,
 		ResourceType: events.ResourceSession,
 		ResourceId:   transaction.TransactionId,
 		Actor:        events.StationActor(chargeStationId),
 		Data:         data,
 	}
+}
+
+// sessionOrgId returns the org of the session events of a transaction: the org that
+// owns the transaction. A transaction keeps its org when its charge station moves to
+// another org, so the events of a session that runs during the move still go to the org
+// that the session belongs to.
+//
+// It is "" when the store gives the transaction no org: a store that does not keep the
+// org of a transaction (Firestore), or the legacy org (store.LegacyOrgId), which is not
+// an org of its own. The event then belongs to the org of the charge station, which the
+// emitter resolves.
+func sessionOrgId(transaction *store.Transaction) string {
+	if transaction == nil || transaction.OrgId == store.LegacyOrgId {
+		return ""
+	}
+	return transaction.OrgId
 }
 
 // transactionMeterStartWh returns the energy register (Wh) at the start of the

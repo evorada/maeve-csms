@@ -118,6 +118,14 @@ type faultyTransactionStore struct {
 	createdIds       []string
 	nextIdErr        error
 	updateDetailsErr error
+	findErr          error
+}
+
+func (s *faultyTransactionStore) FindTransaction(ctx context.Context, chargeStationId, transactionId string) (*store.Transaction, error) {
+	if s.findErr != nil {
+		return nil, s.findErr
+	}
+	return s.TransactionStore.FindTransaction(ctx, chargeStationId, transactionId)
 }
 
 func (s *faultyTransactionStore) CreateTransaction(ctx context.Context, chargeStationId, transactionId, idToken, tokenType string, meterValues []store.MeterValue, seqNo int, offline bool) error {
@@ -631,6 +639,11 @@ func TestStartTransactionReturnsStoreErrors(t *testing.T) {
 		{
 			name:  "transaction details update fails",
 			fault: func(s *faultyTransactionStore) { s.updateDetailsErr = storeErr },
+		},
+		{
+			// the org of session.started is read from the stored transaction
+			name:  "reading the stored transaction fails",
+			fault: func(s *faultyTransactionStore) { s.findErr = storeErr },
 		},
 	}
 

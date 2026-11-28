@@ -310,9 +310,17 @@ func (s *Store) UpdateTransactionCost(ctx context.Context, chargeStationId, tran
 	return nil
 }
 
-func (s *Store) ListTransactionsForChargeStation(ctx context.Context, chargeStationId, status string, startDate, endDate *time.Time, limit, offset int) ([]*store.Transaction, int64, error) {
+// ListTransactionsForChargeStation lists a page of the transactions of a charge station
+// and counts them. With orgIds, only the transactions of these orgs are listed and
+// counted.
+func (s *Store) ListTransactionsForChargeStation(ctx context.Context, chargeStationId, status string, startDate, endDate *time.Time, limit, offset int, orgIds []string) ([]*store.Transaction, int64, error) {
+	orgs, err := orgIdArray(orgIds)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to list transactions: %w", err)
+	}
 	params := ListTransactionsFilteredParams{
 		ChargeStationID: chargeStationId,
+		OrgIds:          orgs,
 		Limit:           int32(limit),
 		Offset:          int32(offset),
 	}
@@ -334,6 +342,7 @@ func (s *Store) ListTransactionsForChargeStation(ctx context.Context, chargeStat
 
 	countParams := CountTransactionsFilteredParams{
 		ChargeStationID: chargeStationId,
+		OrgIds:          orgs,
 	}
 	if status != "" {
 		countParams.Status = pgtype.Text{String: status, Valid: true}

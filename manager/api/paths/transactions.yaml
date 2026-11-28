@@ -7,6 +7,10 @@ paths:
 
         by status, date range, and pagination.
 
+        Only the transactions of the orgs that the caller may reach are listed and counted
+        in `total`: a transaction stays with the org that owned the charge station when it
+        started, also after the charge station is transferred to another org.
+
         '
       operationId: listTransactions
       x-permission: cpms.session.read
@@ -99,6 +103,10 @@ paths:
 
         all meter values.
 
+        A transaction of an org that the caller may not reach (a transaction of a previous
+        owner of the charge station) is answered with 404, like a transaction that does
+        not exist.
+
         '
       operationId: getTransactionDetails
       x-permission: cpms.session.read
@@ -137,7 +145,8 @@ paths:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
-          description: Transaction not found
+          description: Unknown charge station, or a transaction that does not exist or
+            belongs to an org that the caller may not reach
           content:
             application/json:
               schema:

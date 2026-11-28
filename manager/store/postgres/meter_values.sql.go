@@ -14,14 +14,16 @@ import (
 const CountMeterValues = `-- name: CountMeterValues :one
 SELECT COUNT(*) FROM meter_values
 WHERE charge_station_id = $1
-  AND ($2::int IS NULL OR evse_id = $2::int)
-  AND ($3::text IS NULL OR transaction_id = $3::text)
-  AND ($4::timestamp IS NULL OR timestamp >= $4::timestamp)
-  AND ($5::timestamp IS NULL OR timestamp <= $5::timestamp)
+  AND (cardinality($2::uuid[]) = 0 OR org_id = ANY($2::uuid[]))
+  AND ($3::int IS NULL OR evse_id = $3::int)
+  AND ($4::text IS NULL OR transaction_id = $4::text)
+  AND ($5::timestamp IS NULL OR timestamp >= $5::timestamp)
+  AND ($6::timestamp IS NULL OR timestamp <= $6::timestamp)
 `
 
 type CountMeterValuesParams struct {
 	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
+	OrgIds          []pgtype.UUID    `db:"org_ids" json:"org_ids"`
 	ConnectorID     pgtype.Int4      `db:"connector_id" json:"connector_id"`
 	TransactionID   pgtype.Text      `db:"transaction_id" json:"transaction_id"`
 	StartTime       pgtype.Timestamp `db:"start_time" json:"start_time"`
@@ -31,6 +33,7 @@ type CountMeterValuesParams struct {
 func (q *Queries) CountMeterValues(ctx context.Context, arg CountMeterValuesParams) (int64, error) {
 	row := q.db.QueryRow(ctx, CountMeterValues,
 		arg.ChargeStationID,
+		arg.OrgIds,
 		arg.ConnectorID,
 		arg.TransactionID,
 		arg.StartTime,
@@ -42,7 +45,7 @@ func (q *Queries) CountMeterValues(ctx context.Context, arg CountMeterValuesPara
 }
 
 const GetAllMeterValuesByStation = `-- name: GetAllMeterValuesByStation :many
-SELECT id, charge_station_id, evse_id, transaction_id, timestamp, sampled_values, received_at FROM meter_values
+SELECT id, charge_station_id, evse_id, transaction_id, timestamp, sampled_values, received_at, org_id FROM meter_values
 WHERE charge_station_id = $1 AND evse_id = $2
 ORDER BY timestamp DESC
 `
@@ -69,6 +72,7 @@ func (q *Queries) GetAllMeterValuesByStation(ctx context.Context, arg GetAllMete
 			&i.Timestamp,
 			&i.SampledValues,
 			&i.ReceivedAt,
+			&i.OrgID,
 		); err != nil {
 			return nil, err
 		}
@@ -81,7 +85,7 @@ func (q *Queries) GetAllMeterValuesByStation(ctx context.Context, arg GetAllMete
 }
 
 const GetMeterValuesByStationAndEvse = `-- name: GetMeterValuesByStationAndEvse :many
-SELECT id, charge_station_id, evse_id, transaction_id, timestamp, sampled_values, received_at FROM meter_values
+SELECT id, charge_station_id, evse_id, transaction_id, timestamp, sampled_values, received_at, org_id FROM meter_values
 WHERE charge_station_id = $1 AND evse_id = $2
 ORDER BY timestamp DESC
 LIMIT $3
@@ -110,6 +114,7 @@ func (q *Queries) GetMeterValuesByStationAndEvse(ctx context.Context, arg GetMet
 			&i.Timestamp,
 			&i.SampledValues,
 			&i.ReceivedAt,
+			&i.OrgID,
 		); err != nil {
 			return nil, err
 		}
@@ -122,12 +127,13 @@ func (q *Queries) GetMeterValuesByStationAndEvse(ctx context.Context, arg GetMet
 }
 
 const QueryMeterValues = `-- name: QueryMeterValues :many
-SELECT id, charge_station_id, evse_id, transaction_id, timestamp, sampled_values, received_at FROM meter_values
+SELECT id, charge_station_id, evse_id, transaction_id, timestamp, sampled_values, received_at, org_id FROM meter_values
 WHERE charge_station_id = $1
-  AND ($4::int IS NULL OR evse_id = $4::int)
-  AND ($5::text IS NULL OR transaction_id = $5::text)
-  AND ($6::timestamp IS NULL OR timestamp >= $6::timestamp)
-  AND ($7::timestamp IS NULL OR timestamp <= $7::timestamp)
+  AND (cardinality($4::uuid[]) = 0 OR org_id = ANY($4::uuid[]))
+  AND ($5::int IS NULL OR evse_id = $5::int)
+  AND ($6::text IS NULL OR transaction_id = $6::text)
+  AND ($7::timestamp IS NULL OR timestamp >= $7::timestamp)
+  AND ($8::timestamp IS NULL OR timestamp <= $8::timestamp)
 ORDER BY timestamp DESC
 LIMIT $2 OFFSET $3
 `
@@ -136,18 +142,21 @@ type QueryMeterValuesParams struct {
 	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
 	Limit           int32            `db:"limit" json:"limit"`
 	Offset          int32            `db:"offset" json:"offset"`
+	OrgIds          []pgtype.UUID    `db:"org_ids" json:"org_ids"`
 	ConnectorID     pgtype.Int4      `db:"connector_id" json:"connector_id"`
 	TransactionID   pgtype.Text      `db:"transaction_id" json:"transaction_id"`
 	StartTime       pgtype.Timestamp `db:"start_time" json:"start_time"`
 	EndTime         pgtype.Timestamp `db:"end_time" json:"end_time"`
 }
 
-// The optional filters are nullable parameters: NULL means "no filter".
+// The optional filters are nullable parameters: NULL means "no filter". No org is every
+// org.
 func (q *Queries) QueryMeterValues(ctx context.Context, arg QueryMeterValuesParams) ([]MeterValue, error) {
 	rows, err := q.db.Query(ctx, QueryMeterValues,
 		arg.ChargeStationID,
 		arg.Limit,
 		arg.Offset,
+		arg.OrgIds,
 		arg.ConnectorID,
 		arg.TransactionID,
 		arg.StartTime,
@@ -168,6 +177,7 @@ func (q *Queries) QueryMeterValues(ctx context.Context, arg QueryMeterValuesPara
 			&i.Timestamp,
 			&i.SampledValues,
 			&i.ReceivedAt,
+			&i.OrgID,
 		); err != nil {
 			return nil, err
 		}
@@ -180,8 +190,15 @@ func (q *Queries) QueryMeterValues(ctx context.Context, arg QueryMeterValuesPara
 }
 
 const StoreMeterValue = `-- name: StoreMeterValue :exec
-INSERT INTO meter_values (charge_station_id, evse_id, transaction_id, timestamp, sampled_values)
-VALUES ($1, $2, $3, $4, $5)
+
+INSERT INTO meter_values (charge_station_id, evse_id, transaction_id, timestamp, sampled_values, org_id)
+VALUES (
+    $1, $2, $3, $4, $5,
+    COALESCE(
+        (SELECT t.org_id FROM transactions t WHERE t.charge_station_id = $1::varchar AND t.id = $3::varchar),
+        (SELECT cs.org_id FROM charge_stations cs WHERE cs.charge_station_id = $1::varchar),
+        '00000000-0000-0000-0000-000000000000'::uuid)
+)
 `
 
 type StoreMeterValueParams struct {
@@ -192,6 +209,9 @@ type StoreMeterValueParams struct {
 	SampledValues   []byte           `db:"sampled_values" json:"sampled_values"`
 }
 
+// StoreMeterValue stores a meter value for the org that owns it: the org of its
+// transaction when the transaction is known, else the org of its charge station, else
+// the legacy org (a charge station that is not registered).
 func (q *Queries) StoreMeterValue(ctx context.Context, arg StoreMeterValueParams) error {
 	_, err := q.db.Exec(ctx, StoreMeterValue,
 		arg.ChargeStationID,

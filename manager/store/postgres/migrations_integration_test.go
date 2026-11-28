@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/postgres"
 )
 
@@ -828,4 +829,147 @@ func TestMigration_TokensUniquePerOrg(t *testing.T) {
 	assert.Equal(t, newConstraints, uniqueConstraints())
 	assert.Equal(t, newIndexes, lookupIndexes())
 	assert.Equal(t, seeded, tokens())
+}
+
+// Migration 000045 adds the org that owns a standalone meter value. The meter values
+// that are there before the migration get the org of their transaction when the
+// transaction is known, else the org that owns their charge station, else the legacy
+// org. A new meter value must name its org, and the migration is reversible with meter
+// values in the table.
+func TestMigration_AddMeterValuesOrg(t *testing.T) {
+	ctx := context.Background()
+
+	const (
+		versionBefore = 44
+		versionAfter  = 45
+		legacyOrgId   = "00000000-0000-0000-0000-000000000000"
+		oldOwner      = "0193b2c4-0000-7000-8000-0000000000a1"
+		newOwner      = "0193b2c4-0000-7000-8000-0000000000b2"
+		otherOwner    = "0193b2c4-0000-7000-8000-0000000000c3"
+	)
+
+	migrationConnString, pool := migrationTestDatabase(t, "maeve_migration_000045")
+
+	// orgColumn returns whether meter_values has the org column and, when it has, whether
+	// it may be NULL and its default.
+	orgColumn := func() (exists bool, nullable string, columnDefault *string) {
+		rows, err := pool.Query(ctx, `
+			SELECT is_nullable, column_default FROM information_schema.columns
+			WHERE table_schema = 'public' AND table_name = 'meter_values' AND column_name = 'org_id' AND data_type = 'uuid'`)
+		require.NoError(t, err)
+		defer rows.Close()
+		for rows.Next() {
+			exists = true
+			require.NoError(t, rows.Scan(&nullable, &columnDefault))
+		}
+		require.NoError(t, rows.Err())
+		return exists, nullable, columnDefault
+	}
+	// meterValueOrgs returns the org of every meter value, by the name in its samples.
+	meterValueOrgs := func() map[string]string {
+		rows, err := pool.Query(ctx, `SELECT sampled_values->>'name', org_id::text FROM meter_values`)
+		require.NoError(t, err)
+		defer rows.Close()
+		orgs := map[string]string{}
+		for rows.Next() {
+			var name, orgId string
+			require.NoError(t, rows.Scan(&name, &orgId))
+			orgs[name] = orgId
+		}
+		require.NoError(t, rows.Err())
+		return orgs
+	}
+	meterValueCount := func() int {
+		var count int
+		require.NoError(t, pool.QueryRow(ctx, `SELECT COUNT(*) FROM meter_values`).Scan(&count))
+		return count
+	}
+
+	// 1. the schema before the migration. The charge station cs-moved belonged to the old
+	// owner when its transaction tx-1 ran and belongs to the new owner now; cs-other has
+	// a transaction with the same id; cs-unknown is not registered.
+	migrateTo(t, migrationConnString, versionBefore)
+	exists, _, _ := orgColumn()
+	require.False(t, exists)
+	for _, statement := range []string{
+		`INSERT INTO charge_stations (charge_station_id, security_profile, org_id)
+		 VALUES ('cs-moved', 0, '` + newOwner + `'), ('cs-other', 0, '` + otherOwner + `')`,
+		`INSERT INTO transactions (id, charge_station_id, token_uid, token_type, start_timestamp, org_id)
+		 VALUES ('tx-1', 'cs-moved', 'TOKEN', 'ISO14443', '2026-11-28 09:00:00', '` + oldOwner + `'),
+		        ('tx-1', 'cs-other', 'TOKEN', 'ISO14443', '2026-11-28 09:00:00', '` + otherOwner + `'),
+		        ('tx-2', 'cs-unknown', 'TOKEN', 'ISO14443', '2026-11-28 09:00:00', '` + legacyOrgId + `')`,
+		`INSERT INTO meter_values (charge_station_id, evse_id, transaction_id, timestamp, sampled_values)
+		 VALUES ('cs-moved', 1, 'tx-1', '2026-11-28 09:10:00', '{"name": "of a transaction of the old owner"}'),
+		        ('cs-moved', 0, NULL, '2026-11-28 09:20:00', '{"name": "without a transaction"}'),
+		        ('cs-moved', 1, 'tx-gone', '2026-11-28 09:30:00', '{"name": "of a transaction that is not known"}'),
+		        ('cs-other', 1, 'tx-1', '2026-11-28 09:40:00', '{"name": "of the transaction with the same id of another station"}'),
+		        ('cs-unknown', 1, 'tx-2', '2026-11-28 09:50:00', '{"name": "of a transaction of a station that is not registered"}'),
+		        ('cs-unknown', 0, NULL, '2026-11-28 10:00:00', '{"name": "of a station that is not registered"}')`,
+	} {
+		_, err := pool.Exec(ctx, statement)
+		require.NoError(t, err, statement)
+	}
+	migrated := map[string]string{
+		"of a transaction of the old owner":                      oldOwner,
+		"without a transaction":                                  newOwner,
+		"of a transaction that is not known":                     newOwner,
+		"of the transaction with the same id of another station": otherOwner,
+		"of a transaction of a station that is not registered":   legacyOrgId,
+		"of a station that is not registered":                    legacyOrgId,
+	}
+
+	// 2. up: every meter value has an org, and a new one must name its org
+	migrateTo(t, migrationConnString, versionAfter)
+	exists, nullable, columnDefault := orgColumn()
+	require.True(t, exists)
+	assert.Equal(t, "NO", nullable)
+	assert.Nil(t, columnDefault)
+	assert.Equal(t, migrated, meterValueOrgs())
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO meter_values (charge_station_id, evse_id, timestamp, sampled_values)
+		VALUES ('cs-moved', 0, '2026-11-28 11:00:00', '{"name": "new"}')`)
+	require.Error(t, err, "org_id has no default")
+	_, err = pool.Exec(ctx, `
+		INSERT INTO meter_values (charge_station_id, evse_id, timestamp, sampled_values, org_id)
+		VALUES ('cs-moved', 0, '2026-11-28 11:00:00', '{"name": "new"}', $1)`, otherOwner)
+	require.NoError(t, err)
+
+	// 3. down with meter values in the table: the column goes, the meter values stay
+	migrateTo(t, migrationConnString, versionBefore)
+	exists, _, _ = orgColumn()
+	require.False(t, exists)
+	assert.Equal(t, 7, meterValueCount())
+
+	// 4. up again: the orgs are derived again. The org that the new meter value was given
+	// is not restored: it is the one of its charge station now.
+	migrateUp(t, migrationConnString)
+	exists, nullable, _ = orgColumn()
+	require.True(t, exists)
+	assert.Equal(t, "NO", nullable)
+	migrated["new"] = newOwner
+	assert.Equal(t, migrated, meterValueOrgs())
+
+	// the store reads the migrated meter values by org, and gives a new one its org
+	_, err = pool.Exec(ctx, `UPDATE meter_values SET sampled_values = '[]'`)
+	require.NoError(t, err)
+	migratedStore, err := postgres.NewStore(ctx, migrationConnString)
+	require.NoError(t, err)
+	defer migratedStore.Close()
+
+	meterValueTimes := func(orgId string) []string {
+		result, err := migratedStore.QueryMeterValues(ctx, store.MeterValuesFilter{ChargeStationId: "cs-moved", OrgIds: []string{orgId}, Limit: 50})
+		require.NoError(t, err)
+		times := []string{}
+		for _, mv := range result.MeterValues {
+			times = append(times, mv.MeterValue.Timestamp)
+		}
+		assert.Equal(t, len(times), result.Total)
+		return times
+	}
+	require.NoError(t, migratedStore.StoreMeterValues(ctx, "cs-moved", 1, "tx-1", []store.MeterValue{{Timestamp: "2026-11-28T12:00:00Z"}}))
+	require.NoError(t, migratedStore.StoreMeterValues(ctx, "cs-moved", 0, "", []store.MeterValue{{Timestamp: "2026-11-28T12:10:00Z"}}))
+	assert.Equal(t, []string{"2026-11-28T12:00:00Z", "2026-11-28T09:10:00Z"}, meterValueTimes(oldOwner))
+	assert.Equal(t, []string{"2026-11-28T12:10:00Z", "2026-11-28T11:00:00Z", "2026-11-28T09:30:00Z", "2026-11-28T09:20:00Z"}, meterValueTimes(newOwner))
+	assert.Empty(t, meterValueTimes(otherOwner))
 }

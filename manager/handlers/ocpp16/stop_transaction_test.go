@@ -565,7 +565,7 @@ func TestStopTransactionHandlerForUnknownTransaction(t *testing.T) {
 	assert.Equal(t, expected, found)
 
 	// it is listed as a completed transaction
-	completed, total, err := engine.ListTransactionsForChargeStation(context.Background(), stopTransactionChargeStationId, "completed", nil, nil, 10, 0)
+	completed, total, err := engine.ListTransactionsForChargeStation(context.Background(), stopTransactionChargeStationId, "completed", nil, nil, 10, 0, nil)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), total)
 	assert.Len(t, completed, 1)

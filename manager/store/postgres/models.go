@@ -392,6 +392,7 @@ type MeterValue struct {
 	Timestamp       pgtype.Timestamp `db:"timestamp" json:"timestamp"`
 	SampledValues   []byte           `db:"sampled_values" json:"sampled_values"`
 	ReceivedAt      pgtype.Timestamp `db:"received_at" json:"received_at"`
+	OrgID           pgtype.UUID      `db:"org_id" json:"org_id"`
 }
 
 type OcpiParty struct {

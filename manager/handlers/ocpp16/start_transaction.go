@@ -43,7 +43,8 @@ const refusedTransactionId = -1
 // nothing is recorded, and it gets Invalid with the transaction id -1.
 //
 // The transaction, its details, the reservation it uses and the session.started event
-// are stored in one transaction. Once it is stored, a transaction whose idTag is
+// are stored in one transaction. The event belongs to the org of the stored transaction,
+// like the later events of the session. Once it is stored, a transaction whose idTag is
 // accepted is given to the CommandTracker (when there is one), which links it to the
 // remote start that asked for it; nothing the tracker does changes the answer.
 type StartTransactionHandler struct {
@@ -125,7 +126,15 @@ func (t StartTransactionHandler) HandleCall(ctx context.Context, chargeStationId
 			t.consumeReservation(ctx, chargeStationId, req, auth.Token)
 		}
 
-		return t.Events.Emit(ctx, sessionStartedEvent(chargeStationId, req, transactionId, transactionUuid, details, auth.Status))
+		// the event belongs to the org that the store gave the transaction: read here,
+		// in the transaction that created it, so that the two cannot differ when the
+		// charge station moves to another org at the same time
+		stored, err := t.TransactionStore.FindTransaction(ctx, chargeStationId, transactionUuid)
+		if err != nil {
+			return err
+		}
+
+		return t.Events.Emit(ctx, sessionStartedEvent(chargeStationId, req, transactionId, transactionUuid, details, auth.Status, sessionOrgId(stored)))
 	})
 	if err != nil {
 		return nil, err
@@ -182,11 +191,14 @@ func (t StartTransactionHandler) createTransaction(ctx context.Context, chargeSt
 }
 
 // sessionStartedEvent is the session.started event of a transaction with the details
-// that were stored for it, and the authorisation status that the station gets.
+// that were stored for it, and the authorisation status that the station gets. orgId is
+// the org of the stored transaction (sessionOrgId): "" leaves it to the emitter, which
+// takes the org of the charge station.
 func sessionStartedEvent(chargeStationId string, req *types.StartTransactionJson, transactionId int, transactionUuid string,
-	details *store.TransactionDetails, authStatus string) events.Event {
+	details *store.TransactionDetails, authStatus, orgId string) events.Event {
 	return events.Event{
 		Type:         events.TypeSessionStarted,
+		OrgId:        orgId,
 		StationKey:   chargeStationId,
 		ResourceType: events.ResourceSession,
 		ResourceId:   transactionUuid,

@@ -221,6 +221,7 @@ type Querier interface {
 	ListTokens(ctx context.Context, arg ListTokensParams) ([]Token, error)
 	ListTokensForOrgs(ctx context.Context, arg ListTokensForOrgsParams) ([]Token, error)
 	ListTransactions(ctx context.Context) ([]Transaction, error)
+	// The transactions of a charge station, of the given orgs: no org is every org.
 	ListTransactionsFiltered(ctx context.Context, arg ListTransactionsFilteredParams) ([]Transaction, error)
 	ListVariableMonitoring(ctx context.Context, arg ListVariableMonitoringParams) ([]VariableMonitoring, error)
 	// A charge station that moves to another org, with its EVSEs, their connectors, its
@@ -252,7 +253,8 @@ type Querier interface {
 	// not lock the whole table. The subquery has an alias only for sqlc, which would find
 	// published_at ambiguous without it.
 	PurgePublishedOutboxEventsBatch(ctx context.Context, publishedAt pgtype.Timestamptz) (int64, error)
-	// The optional filters are nullable parameters: NULL means "no filter".
+	// The optional filters are nullable parameters: NULL means "no filter". No org is every
+	// org.
 	QueryMeterValues(ctx context.Context, arg QueryMeterValuesParams) ([]MeterValue, error)
 	// Like the other connectivity statements, it decides in its WHERE clause whether the
 	// event still applies, so that the events of one station that several manager replicas
@@ -291,6 +293,9 @@ type Querier interface {
 	SetTenantStatus(ctx context.Context, arg SetTenantStatusParams) (int64, error)
 	// Unlock Connector Request
 	SetUnlockConnectorRequest(ctx context.Context, arg SetUnlockConnectorRequestParams) (UnlockConnectorRequest, error)
+	// StoreMeterValue stores a meter value for the org that owns it: the org of its
+	// transaction when the transaction is known, else the org of its charge station, else
+	// the legacy org (a charge station that is not registered).
 	StoreMeterValue(ctx context.Context, arg StoreMeterValueParams) error
 	TouchStationLastSeen(ctx context.Context, arg TouchStationLastSeenParams) error
 	TransferChargingProfiles(ctx context.Context, arg TransferChargingProfilesParams) error

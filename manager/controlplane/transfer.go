@@ -339,7 +339,7 @@ func (s *Server) stationCharging(ctx context.Context, stationKey string) (bool, 
 			return true, nil
 		}
 	}
-	_, active, err := s.Stations.ListTransactionsForChargeStation(ctx, stationKey, "active", nil, nil, 1, 0)
+	_, active, err := s.Stations.ListTransactionsForChargeStation(ctx, stationKey, "active", nil, nil, 1, 0, nil)
 	if err != nil {
 		return false, fmt.Errorf("active transactions of %s: %w", stationKey, err)
 	}

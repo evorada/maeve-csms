@@ -125,7 +125,7 @@ func (s *Server) transactionOn(ctx context.Context, evse *store.AssetEvse) (bool
 	}
 
 	for offset := 0; ; offset += activeTransactionsPage {
-		transactions, total, err := s.store.ListTransactionsForChargeStation(ctx, evse.StationKey, "active", nil, nil, activeTransactionsPage, offset)
+		transactions, total, err := s.store.ListTransactionsForChargeStation(ctx, evse.StationKey, "active", nil, nil, activeTransactionsPage, offset, nil)
 		if err != nil {
 			return false, fmt.Errorf("active transactions of %s: %w", evse.StationKey, err)
 		}

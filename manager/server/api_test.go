@@ -407,3 +407,41 @@ func TestRequestLogNamesTheCaller(t *testing.T) {
 	assert.NotContains(t, logged.String(), refused)
 	assert.NotContains(t, logged.String(), strings.Split(refused, ".")[2])
 }
+
+// A manager without tenants (single mode, here with the caller of dev mode) has one
+// org: the history of a charge station is all that the charge station stored.
+func TestDevModeReadsTheWholeHistoryOfAChargeStation(t *testing.T) {
+	ctx := context.Background()
+	engine := inmemory.NewStore(clock.RealClock{})
+	handler := newApiHandler(engine, devVerifier)
+	storeMeterValue := func(evseId int, transactionId, timestamp string) {
+		t.Helper()
+		require.NoError(t, engine.StoreMeterValues(ctx, "cs001", evseId, transactionId, []store.MeterValue{{
+			Timestamp: timestamp, SampledValues: []store.SampledValue{{Value: 1500}},
+		}}))
+	}
+
+	// what a charge station stores before and after it is registered
+	require.NoError(t, engine.CreateTransaction(ctx, "cs001", "tx-1", "TAG", "ISO14443", nil, 0, false))
+	storeMeterValue(1, "tx-1", "2026-11-28T09:00:00Z")
+	require.NoError(t, engine.SetChargeStationAuth(ctx, "cs001", &store.ChargeStationAuth{SecurityProfile: store.TLSWithBasicAuth}))
+	require.NoError(t, engine.CreateTransaction(ctx, "cs001", "tx-2", "TAG", "ISO14443", nil, 0, false))
+	storeMeterValue(1, "tx-2", "2026-11-28T10:00:00Z")
+	storeMeterValue(0, "", "2026-11-28T10:10:00Z")
+
+	var list struct {
+		Total int `json:"total"`
+	}
+	rr := get(handler, "/api/v0/cs/cs001/transactions", "")
+	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &list))
+	assert.Equal(t, 2, list.Total)
+	for _, transactionId := range []string{"tx-1", "tx-2"} {
+		rr = get(handler, "/api/v0/cs/cs001/transaction/"+transactionId, "")
+		assert.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+	}
+	rr = get(handler, "/api/v0/cs/cs001/meter-values", "")
+	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &list))
+	assert.Equal(t, 3, list.Total)
+}

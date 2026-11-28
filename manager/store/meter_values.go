@@ -7,6 +7,11 @@ import "context"
 // MeterValuesStore stores standalone meter values received via MeterValues messages.
 // These are separate from transaction-associated meter values which are stored
 // as part of TransactionEvent messages.
+//
+// A meter value belongs to an org: the org of its transaction when the store knows the
+// transaction, else the org that owns the charge station when the meter value is stored
+// (LegacyOrgId when the charge station is not registered). It keeps that org when the
+// charge station moves to another org. Firestore does not store it.
 type MeterValuesStore interface {
 	// StoreMeterValues stores meter values received from a charge station.
 	// The transactionId can be empty if the meter values are not associated with a transaction.
@@ -31,6 +36,11 @@ type MeterValuesFilter struct {
 	EndTime         *string // Optional: ISO 8601 timestamp
 	Limit           int     // Max results per page (default: 100)
 	Offset          int     // Number of results to skip
+
+	// OrgIds narrows the result, and its total, to the meter values that belong to one
+	// of these orgs (see MeterValuesStore). Optional: without orgs the meter values of
+	// every org are returned.
+	OrgIds []string
 }
 
 // MeterValuesResult contains paginated meter values query results.

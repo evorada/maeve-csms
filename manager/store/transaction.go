@@ -35,8 +35,8 @@ type Transaction struct {
 
 	// OrgId is the org (UUID) that owns the transaction. It is read-only: the store
 	// takes it from the charge station when the transaction is created (LegacyOrgId
-	// when the charge station is not registered). Firestore does not store it: it
-	// always reads as "".
+	// when the charge station is not registered), and it stays the same when the charge
+	// station moves to another org. Firestore does not store it: it always reads as "".
 	OrgId string `firestore:"-"`
 }
 
@@ -87,8 +87,14 @@ type TransactionStore interface {
 	// UpdateTransactionCost stores the most recent running cost for a transaction as
 	// communicated by the CSMS via the CostUpdated message.
 	UpdateTransactionCost(ctx context.Context, chargeStationId, transactionId string, totalCost float64) error
-	// ListTransactionsForChargeStation retrieves transactions for a specific charge station with filtering and pagination
-	ListTransactionsForChargeStation(ctx context.Context, chargeStationId, status string, startDate, endDate *time.Time, limit, offset int) ([]*Transaction, int64, error)
+	// ListTransactionsForChargeStation retrieves transactions for a specific charge station with filtering and pagination.
+	//
+	// orgIds narrows the list, and its total, to the transactions that belong to one of
+	// these orgs (Transaction.OrgId); without orgs the transactions of every org are
+	// listed. A transaction keeps its org when its charge station moves to another org,
+	// so a charge station can have transactions of more than one org. A store that does
+	// not keep the org of a transaction (Firestore) lists every transaction.
+	ListTransactionsForChargeStation(ctx context.Context, chargeStationId, status string, startDate, endDate *time.Time, limit, offset int, orgIds []string) ([]*Transaction, int64, error)
 	// UpdateTransactionDetails merges the non-nil fields of details into the stored
 	// transaction. Returns an error wrapping ErrNotFound if the transaction does not exist.
 	UpdateTransactionDetails(ctx context.Context, chargeStationId, transactionId string, details *TransactionDetails) error

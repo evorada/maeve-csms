@@ -356,7 +356,7 @@ func TestStartTransactionAtAStationThatMayNotCharge(t *testing.T) {
 			TransactionId: -1,
 		}, resp, station)
 
-		transactions, total, err := f.engine.ListTransactionsForChargeStation(ctx, station, "", nil, nil, 10, 0)
+		transactions, total, err := f.engine.ListTransactionsForChargeStation(ctx, station, "", nil, nil, 10, 0, nil)
 		require.NoError(t, err)
 		assert.Zero(t, total, station)
 		assert.Empty(t, transactions, "no transaction is recorded at %s", station)

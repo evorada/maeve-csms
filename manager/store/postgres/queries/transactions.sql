@@ -66,9 +66,12 @@ WHERE charge_station_id = sqlc.arg('charge_station_id') AND id = sqlc.arg('id');
 -- name: NextOcpp16TransactionId :one
 SELECT nextval('ocpp16_transaction_id_seq')::integer AS id;
 
+-- The transactions of a charge station, of the given orgs: no org is every org.
+
 -- name: ListTransactionsFiltered :many
 SELECT * FROM transactions
 WHERE charge_station_id = $1
+    AND (cardinality(sqlc.arg('org_ids')::uuid[]) = 0 OR org_id = ANY(sqlc.arg('org_ids')::uuid[]))
     AND (sqlc.narg('status')::text IS NULL 
         OR (sqlc.narg('status')::text = 'active' AND stop_timestamp IS NULL)
         OR (sqlc.narg('status')::text = 'completed' AND stop_timestamp IS NOT NULL)
@@ -81,6 +84,7 @@ LIMIT $2 OFFSET $3;
 -- name: CountTransactionsFiltered :one
 SELECT COUNT(*) FROM transactions
 WHERE charge_station_id = $1
+    AND (cardinality(sqlc.arg('org_ids')::uuid[]) = 0 OR org_id = ANY(sqlc.arg('org_ids')::uuid[]))
     AND (sqlc.narg('status')::text IS NULL 
         OR (sqlc.narg('status')::text = 'active' AND stop_timestamp IS NULL)
         OR (sqlc.narg('status')::text = 'completed' AND stop_timestamp IS NOT NULL)

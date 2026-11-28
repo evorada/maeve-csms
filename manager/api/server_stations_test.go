@@ -578,7 +578,7 @@ func TestDecommissionChargeStationWhileCharging(t *testing.T) {
 	const conflict = `{"status":"Conflict","error":"active_transaction: a transaction is running on the charge station; force decommissions it all the same"}`
 
 	activeTransactions := func(t *testing.T, engine store.Engine) int64 {
-		_, active, err := engine.ListTransactionsForChargeStation(ctx, stationOfA, "active", nil, nil, 10, 0)
+		_, active, err := engine.ListTransactionsForChargeStation(ctx, stationOfA, "active", nil, nil, 10, 0, nil)
 		require.NoError(t, err)
 		return active
 	}

@@ -34,11 +34,14 @@ The API is described by an OpenAPI spec that is split over several files:
    `TestEveryOperationHasPermission` fails, when an operation has none; the test also lists the permission of
    every operation, so add the new one there. An operation on a charge station has the station key as the path
    parameter `csId` (`/cs/{csId}/...`): `api.AuthzMiddleware` answers `404` for a charge station outside the
-   scope of the caller before the operation runs. Any other operation scopes what it reads and writes itself,
-   with the `tenancy.Scoper` of the server. A request with a token whose path or query parameters cannot be
-   read (a number that is not one, a required query parameter that is missing) is answered `400` by the
-   generated code before the permission and the scope are checked; the answer says nothing about the charge
-   station.
+   scope of the caller before the operation runs. An operation that reads the sessions of a charge station (its
+   transactions and meter values) also narrows them to the orgs of the caller (`Server.sessionOrgIds`): a
+   session keeps the org that owned the charge station when it started, so a charge station that was
+   transferred has sessions of an org that its new owner may not reach. Any other operation scopes what it
+   reads and writes itself, with the `tenancy.Scoper` of the server. A request with a token whose path or query
+   parameters cannot be read (a number that is not one, a required query parameter that is missing) is answered
+   `400` by the generated code before the permission and the scope are checked; the answer says nothing about
+   the charge station.
 
    An operation that creates or changes something that a tenant owns has one of `tenancy.WritePermissions` and
    is answered with `403` and the error `tenant_suspended` while that tenant is suspended: on a charge station
