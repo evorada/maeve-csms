@@ -187,7 +187,11 @@ var wantPermissions = map[string]string{
 	"POST /commands/{commandId}:cancel":                 tenancy.PermConnectorCommand,
 	"DELETE /certificate/{certificateHash}":             tenancy.PermCertificateWrite,
 	"GET /certificate/{certificateHash}":                tenancy.PermStationRead,
+	"GET /cs":                                           tenancy.PermStationRead,
+	"GET /cs/{csId}":                                    tenancy.PermStationRead,
+	"PATCH /cs/{csId}":                                  tenancy.PermStationWrite,
 	"POST /cs/{csId}":                                   tenancy.PermStationWrite,
+	"POST /cs/{csId}/decommission":                      tenancy.PermStationWrite,
 	"GET /cs/{csId}/auth":                               tenancy.PermStationWrite,
 	"POST /cs/{csId}/availability":                      tenancy.PermConnectorCommand,
 	"POST /cs/{csId}/cache/clear":                       tenancy.PermConnectorCommand,
@@ -257,6 +261,7 @@ var wantPermissions = map[string]string{
 	"GET /token":                                        tenancy.PermTokenRead,
 	"POST /token":                                       tenancy.PermTokenWrite,
 	"GET /token/{tokenUid}":                             tenancy.PermTokenRead,
+	"DELETE /token/{tokenUid}":                          tenancy.PermTokenWrite,
 }
 
 func TestEveryOperationHasPermission(t *testing.T) {
@@ -270,8 +275,9 @@ func TestEveryOperationHasPermission(t *testing.T) {
 		operations += len(item.Operations())
 
 		// the charge station of an operation is always the path parameter csId, which
-		// is what the authorisation looks at
-		if path == "/cs" || strings.HasPrefix(path, "/cs/") {
+		// is what the authorisation looks at; /cs itself (the list of the charge
+		// stations) has none and scopes itself
+		if strings.HasPrefix(path, "/cs/") {
 			assert.True(t, path == "/cs/{csId}" || strings.HasPrefix(path, "/cs/{csId}/"), "path %s", path)
 			assert.Equal(t, 1, strings.Count(path, "{csId}"), "path %s", path)
 		} else {
@@ -765,8 +771,10 @@ var refusedForSuspendedTenant = []string{
 	"DELETE /cs/{csId}/monitoring/{monitorId}",
 	"PATCH /cs/{csId}/configuration",
 	"PATCH /cs/{csId}/variables",
+	"PATCH /cs/{csId}",
 	"POST /cs/{csId}",
 	"POST /cs/{csId}/certificates",
+	"POST /cs/{csId}/decommission",
 	"POST /cs/{csId}/display-message",
 	"POST /cs/{csId}/local-list",
 	"POST /cs/{csId}/monitoring",
@@ -784,6 +792,7 @@ var refusedForSuspendedTenant = []string{
 	"PUT /evses/{evseUid}/connectors/{connectorUid}",
 	"DELETE /evses/{evseUid}/connectors/{connectorUid}",
 	"POST /token",
+	"DELETE /token/{tokenUid}",
 }
 
 // setTenantStatus changes the status of a tenant like the control plane does: the

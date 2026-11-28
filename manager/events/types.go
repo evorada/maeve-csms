@@ -21,6 +21,7 @@ const (
 	TypeCommandCompleted       = "command.completed"
 	TypeCommandProgress        = "command.progress"
 	TypeLocationUpdated        = "location.updated"
+	TypeStationDecommissioned  = "station.decommissioned"
 )
 
 // The types of the resources that the events are about, with the form of their ids.
@@ -44,6 +45,7 @@ var AllTypes = []string{
 	TypeCommandCompleted,
 	TypeCommandProgress,
 	TypeLocationUpdated,
+	TypeStationDecommissioned,
 }
 
 // The changes that a location.updated event reports.

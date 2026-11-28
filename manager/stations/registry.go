@@ -32,6 +32,17 @@ func Lookup(ctx context.Context, s store.ChargeStationRegistryStore, stationKey 
 	return record, nil
 }
 
+// Decommissioned reports whether the station was taken out of service. A decommissioned
+// station keeps its record and its authentication details, but may no longer connect, and
+// its id is not registered again. A station without a record is not decommissioned.
+func Decommissioned(ctx context.Context, s store.ChargeStationRegistryStore, stationKey string) (bool, error) {
+	record, err := Lookup(ctx, s, stationKey)
+	if err != nil {
+		return false, err
+	}
+	return record.State == store.StationStateDecommissioned, nil
+}
+
 func syntheticRecord(stationKey string) *store.ChargeStation {
 	return &store.ChargeStation{
 		StationKey: stationKey,

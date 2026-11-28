@@ -11,6 +11,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/thoughtworks/maeve-csms/manager/stations"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"golang.org/x/exp/slog"
@@ -19,7 +20,8 @@ import (
 const (
 	// ErrorUnknownHost is the error of a 404 when no tenant has the host.
 	ErrorUnknownHost = "unknown_host"
-	// ErrorUnknownStation is the error of a 404 when the station is not registered.
+	// ErrorUnknownStation is the error of a 404 when the station is not registered, or is
+	// decommissioned.
 	ErrorUnknownStation = "unknown_station"
 
 	// maxCertificateHashLength is the limit of the certificate hash in the public API.
@@ -116,6 +118,16 @@ func (h *handler) stationAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if auth == nil {
+		writeError(w, http.StatusNotFound, ErrorUnknownStation)
+		return
+	}
+	// a decommissioned station is kept for its history, but may no longer connect
+	decommissioned, err := stations.Decommissioned(r.Context(), h.engine, res.StationKey)
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	if decommissioned {
 		writeError(w, http.StatusNotFound, ErrorUnknownStation)
 		return
 	}

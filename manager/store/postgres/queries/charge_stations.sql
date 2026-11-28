@@ -286,6 +286,12 @@ SET state = sqlc.arg('state')::text,
     updated_at = NOW()
 WHERE charge_station_id = sqlc.arg('charge_station_id');
 
+-- name: SetStationLocation :execrows
+UPDATE charge_stations
+SET location_id = sqlc.arg('location_id')::uuid,
+    updated_at = NOW()
+WHERE charge_station_id = sqlc.arg('charge_station_id');
+
 -- The state and status lists are never NULL: an empty list selects every state or
 -- status. A station without a status row has never connected.
 

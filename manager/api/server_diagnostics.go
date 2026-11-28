@@ -96,7 +96,7 @@ func (s *Server) GetChargeStationLogStatus(w http.ResponseWriter, r *http.Reques
 
 	if logStatus == nil {
 		resp := LogStatus{
-			Status: Idle,
+			Status: LogStatusStatusIdle,
 		}
 		_ = render.Render(w, r, &resp)
 		return

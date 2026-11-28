@@ -2570,3 +2570,180 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ValidationError'
+    ChargeStationState:
+      type: string
+      description: |
+        Where a charge station is in its life: `pending` waits for approval, `active` may
+        charge, `decommissioned` was taken out of service and is kept for its history
+      enum:
+      - pending
+      - active
+      - decommissioned
+    ConnectorStatusFilter:
+      type: string
+      description: An OCPP status of a connector (OCPP 1.6, and `Occupied` of OCPP 2.0.1)
+      enum:
+      - Available
+      - Preparing
+      - Charging
+      - SuspendedEVSE
+      - SuspendedEV
+      - Finishing
+      - Reserved
+      - Unavailable
+      - Faulted
+      - Occupied
+    ChargeStationRecord:
+      type: object
+      description: |
+        The registry record of a charge station, with what it reported at its last boot
+        (null before its first boot) and whether its connection is open
+      required:
+      - cs_id
+      - org_id
+      - location_id
+      - display_name
+      - max_capacity_kw
+      - allow_any_token
+      - state
+      - state_changed_at
+      - state_reason
+      - ocpp_version
+      - vendor
+      - model
+      - serial_number
+      - firmware_version
+      - iccid
+      - imsi
+      - meter_serial_number
+      - meter_type
+      - last_boot_at
+      - connected
+      - last_heartbeat
+      properties:
+        cs_id:
+          type: string
+          description: The charge station identifier (its station key)
+        org_id:
+          type: string
+          format: uuid
+          x-go-type: string
+          description: The org that owns the charge station
+        location_id:
+          type: string
+          format: uuid
+          x-go-type: string
+          nullable: true
+          description: The location of the charge station
+        display_name:
+          type: string
+          nullable: true
+        max_capacity_kw:
+          type: number
+          format: double
+          nullable: true
+          description: The most power that the charge station can deliver in total, in kW
+        allow_any_token:
+          type: boolean
+          description: Whether the charge station accepts idTags that are not known
+        state:
+          $ref: '#/components/schemas/ChargeStationState'
+        state_changed_at:
+          type: string
+          format: date-time
+        state_reason:
+          type: string
+          nullable: true
+        ocpp_version:
+          type: string
+          nullable: true
+        vendor:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        serial_number:
+          type: string
+          nullable: true
+        firmware_version:
+          type: string
+          nullable: true
+        iccid:
+          type: string
+          nullable: true
+        imsi:
+          type: string
+          nullable: true
+        meter_serial_number:
+          type: string
+          nullable: true
+        meter_type:
+          type: string
+          nullable: true
+        last_boot_at:
+          type: string
+          format: date-time
+          nullable: true
+        connected:
+          type: boolean
+          description: Whether the connection of the charge station is open
+        last_heartbeat:
+          type: string
+          format: date-time
+          nullable: true
+        evses:
+          type: array
+          description: The EVSEs of the charge station, ordered by OCPP EVSE id (only when one charge station is read)
+          items:
+            $ref: '#/components/schemas/AssetEvse'
+    ChargeStationPage:
+      type: object
+      description: A page of charge stations
+      required:
+      - items
+      - next_cursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChargeStationRecord'
+        next_cursor:
+          type: string
+          nullable: true
+          description: The cursor of the next page; null after the last page
+    ChargeStationPatch:
+      type: object
+      description: |
+        The fields of the registry record of a charge station that can be changed, as a
+        JSON merge patch: a field that is left out stays as it is, `null` clears it
+      properties:
+        display_name:
+          type: string
+          nullable: true
+          maxLength: 255
+        location_id:
+          type: string
+          format: uuid
+          x-go-type: string
+          nullable: true
+        max_capacity_kw:
+          type: number
+          format: double
+          nullable: true
+          exclusiveMinimum: true
+          minimum: 0
+          maximum: 9999999.999
+        allow_any_token:
+          type: boolean
+    DecommissionRequest:
+      type: object
+      description: Why a charge station is decommissioned, and whether it is while it charges
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+        force:
+          type: boolean
+          default: false
+          description: Decommission the charge station also while a transaction is running on it

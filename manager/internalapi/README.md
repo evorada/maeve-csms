@@ -83,7 +83,7 @@ The same station in single-tenant mode:
 | 200    | see above | The station is registered |
 | 400    | `{"status": "Bad Request", "error": "stationId: station id contains '#'"}` | A parameter is missing, empty or given more than once, or the station id is not valid |
 | 404    | `{"status": "Not Found", "error": "unknown_host"}` | Multi-tenant mode: no tenant has the host |
-| 404    | `{"status": "Not Found", "error": "unknown_station"}` | The station is not registered (for the tenant of the host) |
+| 404    | `{"status": "Not Found", "error": "unknown_station"}` | The station is not registered (for the tenant of the host), or it is decommissioned |
 | 500    | `{"status": "Internal Server Error"}` | The lookup failed; the manager logs the reason |
 
 ## Look up a certificate

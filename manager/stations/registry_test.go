@@ -74,3 +74,33 @@ func TestLookupReturnsStoreErrors(t *testing.T) {
 	assert.ErrorIs(t, err, storeErr)
 	assert.Nil(t, got)
 }
+
+func TestDecommissioned(t *testing.T) {
+	ctx := context.Background()
+	storeErr := errors.New("connection refused")
+
+	for name, tc := range map[string]struct {
+		registry store.ChargeStationRegistryStore
+		want     bool
+		wantErr  error
+	}{
+		"decommissioned": {registry: registryStub{record: &store.ChargeStation{State: store.StationStateDecommissioned}}, want: true},
+		"active":         {registry: registryStub{record: &store.ChargeStation{State: store.StationStateActive}}},
+		"pending":        {registry: registryStub{record: &store.ChargeStation{State: store.StationStatePending}}},
+		"without record": {registry: inmemory.NewStore(clock.RealClock{})},
+		"without registry": {registry: registryStub{
+			err: fmt.Errorf("LookupChargeStation: %w", store.ErrNotImplemented),
+		}},
+		"a store error": {registry: registryStub{err: storeErr}, wantErr: storeErr},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := stations.Decommissioned(ctx, tc.registry, "k7f2.CP001")
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}

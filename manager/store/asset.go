@@ -167,4 +167,15 @@ type AssetStore interface {
 	LookupAssetConnector(ctx context.Context, connectorUid string) (*AssetConnector, error)
 	LookupAssetConnectorByOcpp(ctx context.Context, stationKey string, ocppEvseId, ocppConnectorId int) (*AssetConnector, error)
 	DeleteAssetConnector(ctx context.Context, connectorUid string) error
+
+	// MoveChargeStationToLocation sets the location of the charge station and moves every
+	// EVSE of the station that is elsewhere to the location (a new Version each), all
+	// together. A station or a location that does not exist is ErrNotFound. The caller
+	// checks that the location belongs to the org of the station.
+	MoveChargeStationToLocation(ctx context.Context, stationKey, locationId string) error
+	// DecommissionChargeStation moves the charge station to the state decommissioned, with
+	// the reason (nil clears it), and sets every EVSE of the station that is not REMOVED
+	// to REMOVED (a new Version each), all together. A station that does not exist is
+	// ErrNotFound.
+	DecommissionChargeStation(ctx context.Context, stationKey string, reason *string) error
 }

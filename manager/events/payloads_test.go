@@ -149,6 +149,16 @@ func TestPayloadFieldNames(t *testing.T) {
 				`"change":"created","evse_uid":"0193b2c4-0000-7000-8000-000000000002",` +
 				`"connector_uid":"0193b2c4-0000-7000-8000-000000000003","publish":true,"publish_changed":false}`,
 		},
+		"station.decommissioned": {
+			payload: events.StationDecommissionedData{StationKey: "k7f2.CP001", StationId: "CP001",
+				LocationId: ptr("0193b2c4-0000-7000-8000-000000000001"), Reason: ptr("replaced"), Actor: "user:alice"},
+			want: `{"station_key":"k7f2.CP001","station_id":"CP001","location_id":"0193b2c4-0000-7000-8000-000000000001",` +
+				`"reason":"replaced","actor":"user:alice"}`,
+		},
+		"station.decommissioned without location and reason": {
+			payload: events.StationDecommissionedData{StationKey: "k7f2.CP001", StationId: "CP001", Actor: "svc:maeve"},
+			want:    `{"station_key":"k7f2.CP001","station_id":"CP001","location_id":null,"reason":null,"actor":"svc:maeve"}`,
+		},
 		"location.updated of a location": {
 			payload: events.LocationUpdatedData{LocationId: "0193b2c4-0000-7000-8000-000000000001", OcpiId: "LOC1",
 				PartyRef: "cpo-1", Change: events.LocationChangeUpdated, PublishChanged: true},
@@ -176,11 +186,11 @@ func TestStationActorAndConnectorResourceId(t *testing.T) {
 
 // Every type of the catalogue is one that the emitter accepts.
 func TestAllTypesCanBeEmitted(t *testing.T) {
-	assert.Len(t, events.AllTypes, 10)
+	assert.Len(t, events.AllTypes, 11)
 	assert.Equal(t, []string{
 		"station.registered", "station.connected", "station.disconnected", "connector.status_changed",
 		"session.started", "session.updated", "session.completed", "command.completed", "command.progress",
-		"location.updated",
+		"location.updated", "station.decommissioned",
 	}, events.AllTypes)
 
 	s := inmemory.NewStore(clocktest.NewFakePassiveClock(testNow))

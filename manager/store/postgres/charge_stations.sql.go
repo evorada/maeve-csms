@@ -1332,6 +1332,26 @@ func (q *Queries) SetChargeStationTrigger(ctx context.Context, arg SetChargeStat
 	return i, err
 }
 
+const SetStationLocation = `-- name: SetStationLocation :execrows
+UPDATE charge_stations
+SET location_id = $1::uuid,
+    updated_at = NOW()
+WHERE charge_station_id = $2
+`
+
+type SetStationLocationParams struct {
+	LocationID      pgtype.UUID `db:"location_id" json:"location_id"`
+	ChargeStationID string      `db:"charge_station_id" json:"charge_station_id"`
+}
+
+func (q *Queries) SetStationLocation(ctx context.Context, arg SetStationLocationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, SetStationLocation, arg.LocationID, arg.ChargeStationID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const UpdateChargeStationCertificate = `-- name: UpdateChargeStationCertificate :one
 UPDATE charge_station_certificates
 SET certificate = $3,

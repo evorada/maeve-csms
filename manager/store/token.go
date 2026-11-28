@@ -56,4 +56,8 @@ type TokenStore interface {
 	// ListTokensForOrgs lists the tokens of the given orgs, the token that was created
 	// last first. Firestore stores no org: it lists every token.
 	ListTokensForOrgs(ctx context.Context, orgIds []string, offset, limit int) ([]*Token, error)
+	// DeleteToken deletes the tokens of the org with the UID: the token of every party of
+	// the org that has the UID. Deleting a token that does not exist does nothing.
+	// Firestore stores no org: it returns ErrNotImplemented.
+	DeleteToken(ctx context.Context, orgId, tokenUid string) error
 }

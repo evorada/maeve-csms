@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/render"
 	"github.com/thoughtworks/maeve-csms/manager/entitlements"
 	"github.com/thoughtworks/maeve-csms/manager/events"
+	"github.com/thoughtworks/maeve-csms/manager/stations"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"golang.org/x/exp/slog"
@@ -59,6 +60,17 @@ func (s *Server) RegisterChargeStation(w http.ResponseWriter, r *http.Request, c
 		existing, err := s.store.LookupChargeStationAuth(ctx, csId)
 		if err != nil {
 			return fmt.Errorf("look up the charge station: %w", err)
+		}
+		// a decommissioned charge station is kept for its history: its id is not taken
+		// into service again
+		if existing != nil {
+			decommissioned, err := stations.Decommissioned(ctx, s.store, csId)
+			if err != nil {
+				return err
+			}
+			if decommissioned {
+				return answerWith(ErrConflict(errorStationDecommissioned + ": the charge station is decommissioned; its id cannot be registered again"))
+			}
 		}
 
 		// A charge station that is new adds to the connectors of its tenant: it is only
@@ -118,6 +130,11 @@ func (s *Server) RegisterChargeStation(w http.ResponseWriter, r *http.Request, c
 			_ = render.Render(w, r, ErrLimitExceeded(exceeded))
 			return
 		}
+		var answer *assetAnswer
+		if errors.As(err, &answer) {
+			_ = render.Render(w, r, answer.answer)
+			return
+		}
 		slog.Error("registering a charge station", "chargeStationId", csId, "org", orgId, "err", err)
 		_ = render.Render(w, r, errInternal)
 		return
@@ -133,6 +150,16 @@ func (s *Server) LookupChargeStationAuth(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	if auth == nil {
+		_ = render.Render(w, r, ErrNotFound)
+		return
+	}
+	// a decommissioned charge station may no longer connect
+	decommissioned, err := stations.Decommissioned(r.Context(), s.store, csId)
+	if err != nil {
+		_ = render.Render(w, r, ErrInternalError(err))
+		return
+	}
+	if decommissioned {
 		_ = render.Render(w, r, ErrNotFound)
 		return
 	}

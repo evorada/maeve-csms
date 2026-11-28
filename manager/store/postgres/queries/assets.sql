@@ -97,6 +97,19 @@ SELECT * FROM asset_evses WHERE station_key = $1 ORDER BY ocpp_evse_id;
 -- name: DeleteAssetEvse :exec
 DELETE FROM asset_evses WHERE id = $1;
 
+-- The EVSEs of a charge station that is moved or decommissioned. An EVSE that is already
+-- where the change would put it keeps its version.
+
+-- name: MoveStationEvses :exec
+UPDATE asset_evses
+SET location_id = @location_id, version = version + 1, updated_at = NOW()
+WHERE station_key = @station_key AND location_id <> @location_id;
+
+-- name: RemoveStationEvses :exec
+UPDATE asset_evses
+SET status = 'REMOVED', version = version + 1, updated_at = NOW()
+WHERE station_key = @station_key AND status <> 'REMOVED';
+
 -- A connector belongs to the org of its EVSE. Returns no row when there is no such EVSE.
 -- name: CreateAssetConnector :one
 INSERT INTO asset_connectors (

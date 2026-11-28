@@ -1696,7 +1696,7 @@ func TestChargeStationEventsReturnCategory(t *testing.T) {
 	getJson(t, r, "/cs/cs001/logs/status", gotLogStatus)
 	lastUpdate := c.Now()
 	assert.Equal(t, &api.LogStatus{
-		Status:     api.Uploading,
+		Status:     api.LogStatusStatusUploading,
 		RequestId:  &requestId,
 		LastUpdate: &lastUpdate,
 	}, gotLogStatus)

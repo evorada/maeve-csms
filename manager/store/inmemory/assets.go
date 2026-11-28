@@ -668,3 +668,53 @@ func copyAssetConnector(connector *store.AssetConnector) *store.AssetConnector {
 	c.AdhocTariffRef = copyOrNil(connector.AdhocTariffRef)
 	return &c
 }
+
+func (s *Store) MoveChargeStationToLocation(_ context.Context, stationKey, locationId string) error {
+	id, ok := assetKey(locationId)
+	if !ok {
+		return fmt.Errorf("move charge station %s: location %s: %w", stationKey, locationId, store.ErrNotFound)
+	}
+	s.Lock()
+	defer s.Unlock()
+	registered := s.chargeStations[stationKey]
+	if registered == nil {
+		return fmt.Errorf("move charge station %s: %w", stationKey, store.ErrNotFound)
+	}
+	if s.assetLocations[id] == nil {
+		return fmt.Errorf("move charge station %s: location %s: %w", stationKey, locationId, store.ErrNotFound)
+	}
+	now := s.clock.Now().UTC()
+	registered.LocationId = &id
+	registered.UpdatedAt = now
+	// the stored EVSEs are only ever handed out as copies, so they change in place
+	for _, evse := range s.assetEvses {
+		if evse.StationKey == stationKey && evse.LocationId != id {
+			evse.LocationId = id
+			evse.Version++
+			evse.UpdatedAt = now
+		}
+	}
+	return nil
+}
+
+func (s *Store) DecommissionChargeStation(_ context.Context, stationKey string, reason *string) error {
+	s.Lock()
+	defer s.Unlock()
+	registered := s.chargeStations[stationKey]
+	if registered == nil {
+		return fmt.Errorf("decommission charge station %s: %w", stationKey, store.ErrNotFound)
+	}
+	now := s.clock.Now().UTC()
+	registered.State = store.StationStateDecommissioned
+	registered.StateReason = clonePtr(reason)
+	registered.StateChangedAt = now
+	registered.UpdatedAt = now
+	for _, evse := range s.assetEvses {
+		if evse.StationKey == stationKey && evse.Status != store.AssetEvseStatusRemoved {
+			evse.Status = store.AssetEvseStatusRemoved
+			evse.Version++
+			evse.UpdatedAt = now
+		}
+	}
+	return nil
+}

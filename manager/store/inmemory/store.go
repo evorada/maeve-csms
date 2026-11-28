@@ -549,6 +549,18 @@ func (s *Store) ListTokens(_ context.Context, offset int, limit int) ([]*store.T
 	return s.listTokens(offset, limit, func(*store.Token) bool { return true }), nil
 }
 
+// DeleteToken deletes the tokens of the org with the UID, of every party.
+func (s *Store) DeleteToken(_ context.Context, orgId, tokenUid string) error {
+	s.Lock()
+	defer s.Unlock()
+	for key, entry := range s.tokens {
+		if entry.token.Uid == tokenUid && strings.EqualFold(entry.token.OrgId, orgId) {
+			delete(s.tokens, key)
+		}
+	}
+	return nil
+}
+
 // ListTokensForOrgs lists the tokens of the given orgs.
 func (s *Store) ListTokensForOrgs(_ context.Context, orgIds []string, offset, limit int) ([]*store.Token, error) {
 	s.Lock()

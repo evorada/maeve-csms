@@ -306,13 +306,9 @@ func (s *Server) ListAssetLocations(w http.ResponseWriter, r *http.Request, para
 	if !ok {
 		return
 	}
-	limit := store.DefaultPageLimit
-	if params.Limit != nil {
-		if *params.Limit < 1 || *params.Limit > store.MaxPageLimit {
-			_ = render.Render(w, r, ErrInvalidRequest(fmt.Errorf("limit must be 1 to %d", store.MaxPageLimit)))
-			return
-		}
-		limit = *params.Limit
+	limit, ok := pageLimit(w, r, params.Limit)
+	if !ok {
+		return
 	}
 	orgIds, err := s.scoper.OrgIds(r.Context(), p)
 	if err != nil {

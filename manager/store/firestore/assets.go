@@ -84,3 +84,11 @@ func (s *Store) LookupAssetConnectorByOcpp(context.Context, string, int, int) (*
 func (s *Store) DeleteAssetConnector(context.Context, string) error {
 	return fmt.Errorf("DeleteAssetConnector: %w", store.ErrNotImplemented)
 }
+
+func (s *Store) MoveChargeStationToLocation(context.Context, string, string) error {
+	return fmt.Errorf("MoveChargeStationToLocation: %w", store.ErrNotImplemented)
+}
+
+func (s *Store) DecommissionChargeStation(context.Context, string, *string) error {
+	return fmt.Errorf("DecommissionChargeStation: %w", store.ErrNotImplemented)
+}

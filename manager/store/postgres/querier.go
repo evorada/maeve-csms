@@ -71,6 +71,7 @@ type Querier interface {
 	DeleteRemoteStopTransactionRequest(ctx context.Context, chargeStationID string) error
 	DeleteResetRequest(ctx context.Context, chargeStationID string) error
 	DeleteTenantHostnames(ctx context.Context, orgID pgtype.UUID) error
+	DeleteToken(ctx context.Context, arg DeleteTokenParams) error
 	DeleteTokenForOrg(ctx context.Context, arg DeleteTokenForOrgParams) error
 	DeleteUnlockConnectorRequest(ctx context.Context, chargeStationID string) error
 	DeleteVariableMonitoring(ctx context.Context, arg DeleteVariableMonitoringParams) error
@@ -207,6 +208,9 @@ type Querier interface {
 	LookupChargeStationCertificateQuery(ctx context.Context, chargeStationID string) (ChargeStationCertificateQuery, error)
 	MarkCommandSent(ctx context.Context, arg MarkCommandSentParams) (Command, error)
 	MarkOutboxEventPublished(ctx context.Context, arg MarkOutboxEventPublishedParams) error
+	// The EVSEs of a charge station that is moved or decommissioned. An EVSE that is already
+	// where the change would put it keeps its version.
+	MoveStationEvses(ctx context.Context, arg MoveStationEvsesParams) error
 	NextOcpp16TransactionId(ctx context.Context) (int32, error)
 	NextQueuedCommandForUpdate(ctx context.Context, arg NextQueuedCommandForUpdateParams) (Command, error)
 	// Deletes at most 10000 of the events published before $1, so that one statement does
@@ -220,6 +224,7 @@ type Querier interface {
 	// handle at the same time cannot interleave between a read and a write.
 	RecordStationConnected(ctx context.Context, arg RecordStationConnectedParams) (int64, error)
 	RecordStationDisconnected(ctx context.Context, arg RecordStationDisconnectedParams) (int64, error)
+	RemoveStationEvses(ctx context.Context, stationKey string) error
 	SetCertificate(ctx context.Context, arg SetCertificateParams) (Certificate, error)
 	// SetChargeStationAuth without an org (NULL) registers a new charge station in the
 	// legacy org and leaves the org of a charge station that is already there as it is.
@@ -243,6 +248,7 @@ type Querier interface {
 	SetRemoteStopTransactionRequest(ctx context.Context, arg SetRemoteStopTransactionRequestParams) (RemoteStopTransactionRequest, error)
 	// Reset Request
 	SetResetRequest(ctx context.Context, arg SetResetRequestParams) (ResetRequest, error)
+	SetStationLocation(ctx context.Context, arg SetStationLocationParams) (int64, error)
 	SetTenantStatus(ctx context.Context, arg SetTenantStatusParams) (int64, error)
 	// Unlock Connector Request
 	SetUnlockConnectorRequest(ctx context.Context, arg SetUnlockConnectorRequestParams) (UnlockConnectorRequest, error)

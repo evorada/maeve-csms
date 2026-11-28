@@ -627,6 +627,36 @@ func (q *Queries) ListAssetLocations(ctx context.Context, arg ListAssetLocations
 	return items, nil
 }
 
+const MoveStationEvses = `-- name: MoveStationEvses :exec
+
+UPDATE asset_evses
+SET location_id = $1, version = version + 1, updated_at = NOW()
+WHERE station_key = $2 AND location_id <> $1
+`
+
+type MoveStationEvsesParams struct {
+	LocationID pgtype.UUID `db:"location_id" json:"location_id"`
+	StationKey string      `db:"station_key" json:"station_key"`
+}
+
+// The EVSEs of a charge station that is moved or decommissioned. An EVSE that is already
+// where the change would put it keeps its version.
+func (q *Queries) MoveStationEvses(ctx context.Context, arg MoveStationEvsesParams) error {
+	_, err := q.db.Exec(ctx, MoveStationEvses, arg.LocationID, arg.StationKey)
+	return err
+}
+
+const RemoveStationEvses = `-- name: RemoveStationEvses :exec
+UPDATE asset_evses
+SET status = 'REMOVED', version = version + 1, updated_at = NOW()
+WHERE station_key = $1 AND status <> 'REMOVED'
+`
+
+func (q *Queries) RemoveStationEvses(ctx context.Context, stationKey string) error {
+	_, err := q.db.Exec(ctx, RemoveStationEvses, stationKey)
+	return err
+}
+
 const UpdateAssetConnector = `-- name: UpdateAssetConnector :one
 UPDATE asset_connectors SET
     ocpp_connector_id = $1,

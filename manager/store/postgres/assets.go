@@ -824,3 +824,66 @@ func assetConnectorFromRow(row AssetConnector) *store.AssetConnector {
 		UpdatedAt:        fromPgTimestamptz(row.UpdatedAt),
 	}
 }
+
+// MoveChargeStationToLocation sets the location of the station and moves its EVSEs, in a
+// transaction of its own or in a savepoint inside the transaction of the caller.
+func (s *Store) MoveChargeStationToLocation(ctx context.Context, stationKey, locationId string) error {
+	id, ok := assetId(locationId)
+	if !ok {
+		// not a UUID: no location has this id
+		return fmt.Errorf("move charge station %s: location %s: %w", stationKey, locationId, store.ErrNotFound)
+	}
+
+	tx, err := s.begin(ctx)
+	if err != nil {
+		return fmt.Errorf("move charge station %s: begin transaction: %w", stationKey, err)
+	}
+	defer rollback(ctx, tx)
+	q := New(tx)
+
+	rows, err := q.SetStationLocation(ctx, SetStationLocationParams{LocationID: id, ChargeStationID: stationKey})
+	if err != nil {
+		// a location that does not exist is a foreign key violation: ErrNotFound
+		return assetWriteError("move charge station "+stationKey, err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("move charge station %s: %w", stationKey, store.ErrNotFound)
+	}
+	if err := q.MoveStationEvses(ctx, MoveStationEvsesParams{LocationID: id, StationKey: stationKey}); err != nil {
+		return assetWriteError("move the EVSEs of charge station "+stationKey, err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("move charge station %s: commit: %w", stationKey, err)
+	}
+	return nil
+}
+
+// DecommissionChargeStation changes the state of the station and removes its EVSEs, in a
+// transaction of its own or in a savepoint inside the transaction of the caller.
+func (s *Store) DecommissionChargeStation(ctx context.Context, stationKey string, reason *string) error {
+	tx, err := s.begin(ctx)
+	if err != nil {
+		return fmt.Errorf("decommission charge station %s: begin transaction: %w", stationKey, err)
+	}
+	defer rollback(ctx, tx)
+	q := New(tx)
+
+	rows, err := q.SetChargeStationState(ctx, SetChargeStationStateParams{
+		State:           string(store.StationStateDecommissioned),
+		StateReason:     toPgText(reason),
+		ChargeStationID: stationKey,
+	})
+	if err != nil {
+		return fmt.Errorf("decommission charge station %s: %w", stationKey, err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("decommission charge station %s: %w", stationKey, store.ErrNotFound)
+	}
+	if err := q.RemoveStationEvses(ctx, stationKey); err != nil {
+		return fmt.Errorf("remove the EVSEs of charge station %s: %w", stationKey, err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("decommission charge station %s: commit: %w", stationKey, err)
+	}
+	return nil
+}

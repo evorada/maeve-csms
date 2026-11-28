@@ -654,4 +654,101 @@ func TestAssetStore(t *testing.T, newStore func(t *testing.T) store.Engine) {
 		_, _, err = s.ListAssetLocations(ctx, store.AssetLocationFilter{OrgIds: []string{orgA}, Page: store.PageRequest{Cursor: "not a cursor"}})
 		assert.ErrorIs(t, err, store.ErrInvalidCursor)
 	})
+
+	t.Run("a charge station moves to a location with its EVSEs", func(t *testing.T) {
+		s := newStore(t)
+		registerAssetStations(t, s)
+		plaza := createAssetLocation(t, s, testAssetLocation("Plaza"))
+		garage := createAssetLocation(t, s, testAssetLocation("Garage"))
+		first := createAssetEvse(t, s, testAssetEvse(plaza.Id, assetStationA, 1, 1))
+		second := createAssetEvse(t, s, testAssetEvse(garage.Id, assetStationA, 2, 1, 2))
+		ofB := createAssetEvse(t, s, testAssetEvse(plaza.Id, assetStationB, 1, 1))
+
+		require.NoError(t, s.MoveChargeStationToLocation(ctx, assetStationA, garage.Id))
+
+		cs, err := s.LookupChargeStation(ctx, assetStationA)
+		require.NoError(t, err)
+		require.NotNil(t, cs)
+		assert.Equal(t, &garage.Id, cs.LocationId)
+		moved := lookupAssetEvse(t, s, first.Id)
+		assert.Equal(t, garage.Id, moved.LocationId)
+		assert.Equal(t, int64(2), moved.Version, "a moved EVSE has a new version")
+		assert.Equal(t, []int{1}, connectorIds(moved), "its connectors go with it")
+		assert.Equal(t, second, lookupAssetEvse(t, s, second.Id), "an EVSE that is already there is left as it is")
+		assert.Equal(t, ofB, lookupAssetEvse(t, s, ofB.Id), "the EVSEs of another station stay")
+		assert.Equal(t, []string{ofB.Id}, evseUids(listAssetEvses(t, s, plaza.Id)))
+
+		// again: nothing changes
+		require.NoError(t, s.MoveChargeStationToLocation(ctx, assetStationA, garage.Id))
+		assert.Equal(t, moved, lookupAssetEvse(t, s, first.Id))
+
+		// the other station moves on its own
+		require.NoError(t, s.MoveChargeStationToLocation(ctx, assetStationB, garage.Id))
+		cs, err = s.LookupChargeStation(ctx, assetStationB)
+		require.NoError(t, err)
+		assert.Equal(t, &garage.Id, cs.LocationId)
+		assert.Equal(t, garage.Id, lookupAssetEvse(t, s, ofB.Id).LocationId)
+
+		assert.ErrorIs(t, s.MoveChargeStationToLocation(ctx, "k7f2.UNKNOWN", plaza.Id), store.ErrNotFound)
+		assert.ErrorIs(t, s.MoveChargeStationToLocation(ctx, assetStationA, testAssetId(99)), store.ErrNotFound)
+		assert.ErrorIs(t, s.MoveChargeStationToLocation(ctx, assetStationA, "not-a-uuid"), store.ErrNotFound)
+		cs, err = s.LookupChargeStation(ctx, assetStationA)
+		require.NoError(t, err)
+		assert.Equal(t, &garage.Id, cs.LocationId, "a refused move changes nothing")
+		assert.Equal(t, moved, lookupAssetEvse(t, s, first.Id))
+	})
+
+	t.Run("a decommissioned charge station has its EVSEs removed", func(t *testing.T) {
+		s := newStore(t)
+		registerAssetStations(t, s)
+		plaza := createAssetLocation(t, s, testAssetLocation("Plaza"))
+		active := createAssetEvse(t, s, testAssetEvse(plaza.Id, assetStationA, 1, 1))
+		planned := testAssetEvse(plaza.Id, assetStationA, 2, 1)
+		planned.Status = store.AssetEvseStatusPlanned
+		createAssetEvse(t, s, planned)
+		removed := testAssetEvse(plaza.Id, assetStationA, 3, 1)
+		removed.Status = store.AssetEvseStatusRemoved
+		createAssetEvse(t, s, removed)
+		ofB := createAssetEvse(t, s, testAssetEvse(plaza.Id, assetStationB, 1, 1))
+		before, err := s.LookupChargeStation(ctx, assetStationA)
+		require.NoError(t, err)
+
+		require.NoError(t, s.DecommissionChargeStation(ctx, assetStationA, ptr("taken down")))
+
+		cs, err := s.LookupChargeStation(ctx, assetStationA)
+		require.NoError(t, err)
+		require.NotNil(t, cs)
+		assert.Equal(t, store.StationStateDecommissioned, cs.State)
+		assert.Equal(t, ptr("taken down"), cs.StateReason)
+		assert.False(t, cs.StateChangedAt.Before(before.StateChangedAt))
+		assert.Equal(t, before.CreatedAt, cs.CreatedAt)
+		for _, evse := range []*store.AssetEvse{active, planned} {
+			got := lookupAssetEvse(t, s, evse.Id)
+			assert.Equal(t, store.AssetEvseStatusRemoved, got.Status)
+			assert.Equal(t, int64(2), got.Version)
+			assert.Equal(t, plaza.Id, got.LocationId, "a removed EVSE stays at its location")
+		}
+		assert.Equal(t, removed, lookupAssetEvse(t, s, removed.Id), "an EVSE that was removed already is left as it is")
+		assert.Equal(t, ofB, lookupAssetEvse(t, s, ofB.Id), "the EVSEs of another station stay")
+		other, err := s.LookupChargeStation(ctx, assetStationB)
+		require.NoError(t, err)
+		assert.Equal(t, store.StationStateActive, other.State)
+
+		// without a reason the reason is cleared
+		require.NoError(t, s.DecommissionChargeStation(ctx, assetStationA, nil))
+		cs, err = s.LookupChargeStation(ctx, assetStationA)
+		require.NoError(t, err)
+		assert.Equal(t, store.StationStateDecommissioned, cs.State)
+		assert.Nil(t, cs.StateReason)
+		assert.Equal(t, int64(2), lookupAssetEvse(t, s, active.Id).Version)
+
+		assert.ErrorIs(t, s.DecommissionChargeStation(ctx, "k7f2.UNKNOWN", nil), store.ErrNotFound)
+	})
+}
+
+func listAssetEvses(t *testing.T, s store.Engine, locationId string) []*store.AssetEvse {
+	t.Helper()
+	evses, err := s.ListAssetEvsesForLocation(context.Background(), locationId)
+	require.NoError(t, err)
+	return evses
 }

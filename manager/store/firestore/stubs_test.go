@@ -240,6 +240,15 @@ func TestStubsReturnErrNotImplemented(t *testing.T) {
 		"DeleteAssetConnector": func() error {
 			return s.DeleteAssetConnector(ctx, "connector001")
 		},
+		"MoveChargeStationToLocation": func() error {
+			return s.MoveChargeStationToLocation(ctx, "cs001", "location001")
+		},
+		"DecommissionChargeStation": func() error {
+			return s.DecommissionChargeStation(ctx, "cs001", nil)
+		},
+		"DeleteToken": func() error {
+			return s.DeleteToken(ctx, "org001", "token001")
+		},
 		"LookupChargeStation": func() error {
 			_, err := s.LookupChargeStation(ctx, "cs001")
 			return err

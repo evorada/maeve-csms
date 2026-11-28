@@ -191,4 +191,28 @@ func TestTokensPerOrg(t *testing.T, newStore func(t *testing.T) store.Engine) {
 		require.NoError(t, err)
 		assert.Len(t, all, 4)
 	})
+
+	t.Run("deleting a token deletes the tokens of its org with the UID and nothing else", func(t *testing.T) {
+		s := newStore(t)
+		require.NoError(t, s.SetToken(ctx, testToken(orgA, "TWK", "SAMEUID")))
+		require.NoError(t, s.SetToken(ctx, testToken(orgA, "EVO", "SAMEUID")))
+		require.NoError(t, s.SetToken(ctx, testToken(orgA, "TWK", "OTHERUID")))
+		require.NoError(t, s.SetToken(ctx, testToken(orgB, "TWK", "SAMEUID")))
+
+		require.NoError(t, s.DeleteToken(ctx, orgA, "SAMEUID"))
+
+		got, err := s.LookupTokenForOrg(ctx, orgA, "SAMEUID")
+		require.NoError(t, err)
+		assert.Nil(t, got, "the token of every party of the org is deleted")
+		all, err := s.ListTokens(ctx, 0, 10)
+		require.NoError(t, err)
+		assert.ElementsMatch(t, []string{orgB + "/TWK/SAMEUID", orgA + "/TWK/OTHERUID"}, tokenKeys(all))
+
+		// deleting what is not there does nothing
+		require.NoError(t, s.DeleteToken(ctx, orgA, "SAMEUID"))
+		require.NoError(t, s.DeleteToken(ctx, orgC, "OTHERUID"))
+		all, err = s.ListTokens(ctx, 0, 10)
+		require.NoError(t, err)
+		assert.Len(t, all, 2)
+	})
 }

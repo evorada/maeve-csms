@@ -405,6 +405,59 @@ func TestStationAuthOfASuspendedTenantIsStillReturned(t *testing.T) {
 	}
 }
 
+// A decommissioned station keeps its auth details, but may no longer connect: it is
+// answered like a station that is not registered, the only answer of a 404 that the
+// gateway takes as "not known". The pending and active stations of the tenant, and a
+// station of a backend without a registry, still connect.
+func TestStationAuthOfADecommissionedStationIsNotFound(t *testing.T) {
+	ctx := context.Background()
+	handler, engine := multiTenantHandler(t)
+	require.NoError(t, engine.SetChargeStationAuth(ctx, "aaaa.CP002", &store.ChargeStationAuth{Base64SHA256Password: passwordA, OrgId: orgA}))
+	require.NoError(t, engine.DecommissionChargeStation(ctx, "aaaa.CP001", nil))
+	require.NoError(t, engine.SetChargeStationState(ctx, "aaaa.CP002", store.StationStatePending, nil))
+
+	status, body := get(t, handler, stationAuthUrl("a.example", "CP001"))
+	assert.Equal(t, http.StatusNotFound, status)
+	assert.JSONEq(t, `{"status":"Not Found","error":"unknown_station"}`, body)
+	auth, err := engine.LookupChargeStationAuth(ctx, "aaaa.CP001")
+	require.NoError(t, err)
+	assert.NotNil(t, auth, "the auth details are kept")
+
+	status, _ = get(t, handler, stationAuthUrl("a.example", "CP002"))
+	assert.Equal(t, http.StatusOK, status, "a pending station")
+	status, _ = get(t, handler, stationAuthUrl("b.example", "CP001"))
+	assert.Equal(t, http.StatusOK, status, "the station with the same id of another tenant")
+
+	t.Run("a registry that cannot be read fails the lookup", func(t *testing.T) {
+		failing := failingRegistry{Engine: engine}
+		resolver := &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine}
+		status, body := get(t, internalapi.NewHandler(resolver, failing), stationAuthUrl("b.example", "CP001"))
+		assert.Equal(t, http.StatusInternalServerError, status)
+		assert.JSONEq(t, `{"status":"Internal Server Error"}`, body)
+	})
+
+	t.Run("a backend without a registry lets the station connect", func(t *testing.T) {
+		withoutRegistry := failingRegistry{Engine: engine, err: store.ErrNotImplemented}
+		resolver := &tenancy.Resolver{Mode: tenancy.ModeMulti, Tenants: engine, Stations: engine}
+		status, _ := get(t, internalapi.NewHandler(resolver, withoutRegistry), stationAuthUrl("b.example", "CP001"))
+		assert.Equal(t, http.StatusOK, status)
+	})
+}
+
+// failingRegistry cannot read the registry records of the stations: with err, or with
+// an error of a database that is down.
+type failingRegistry struct {
+	store.Engine
+	err error
+}
+
+func (f failingRegistry) LookupChargeStation(context.Context, string) (*store.ChargeStation, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return nil, errors.New("database is down")
+}
+
 // failingEngine fails the lookups of the internal API.
 type failingEngine struct {
 	store.Engine

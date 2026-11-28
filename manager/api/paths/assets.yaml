@@ -1063,3 +1063,392 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+  /cs:
+    get:
+      summary: List charge stations
+      description: |
+        Lists the charge stations of the orgs that the caller may reach, ordered by station
+        key, one page at a time. `next_cursor` is the `cursor` of the next page, and `null`
+        after the last page. Every filter that is given narrows the list; a repeated `state`
+        or `status` matches any of its values.
+      operationId: listChargeStations
+      x-permission: cpms.station.read
+      parameters:
+      - name: limit
+        in: query
+        description: Maximum number of charge stations to return
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 50
+      - name: cursor
+        in: query
+        description: The `next_cursor` of the previous page; the first page without it
+        required: false
+        schema:
+          type: string
+      - name: location_id
+        in: query
+        description: Only charge stations at this location
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: state
+        in: query
+        description: Only charge stations in one of these states
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: array
+          items:
+            $ref: '../schemas/schemas.yaml#/components/schemas/ChargeStationState'
+      - name: connected
+        in: query
+        description: Only charge stations whose connection is open (true) or not (false)
+        required: false
+        schema:
+          type: boolean
+      - name: status
+        in: query
+        description: |
+          Only charge stations with a connector (connector 0, the charge station as a whole,
+          included) whose current OCPP status is one of these
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: array
+          items:
+            $ref: '../schemas/schemas.yaml#/components/schemas/ConnectorStatusFilter'
+      - name: vendor
+        in: query
+        description: Only charge stations whose vendor (from their last boot) is this, ignoring case
+        required: false
+        schema:
+          type: string
+      - name: model
+        in: query
+        description: Only charge stations whose model (from their last boot) is this, ignoring case
+        required: false
+        schema:
+          type: string
+      - name: q
+        in: query
+        description: Only charge stations whose station key, display name, serial number or ICCID contains this text, ignoring case
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: A page of charge stations
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/ChargeStationPage'
+        '400':
+          description: The limit is out of range, the cursor is not one of a previous page, or a filter has a value that is not known
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep the registry of the charge stations
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+  /cs/{csId}:
+    get:
+      summary: Read a charge station
+      description: |
+        Returns the registry record of the charge station with what it reported at its last
+        boot, whether its connection is open, and its EVSEs with their connectors and live
+        status.
+      operationId: getChargeStation
+      x-permission: cpms.station.read
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        required: true
+        schema:
+          type: string
+          maxLength: 80
+      responses:
+        '200':
+          description: The charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/ChargeStationRecord'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep the registry of the charge stations
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+    patch:
+      summary: Change a charge station
+      description: |
+        Changes the registry record of the charge station as a JSON merge patch (RFC 7396):
+        a field that the body leaves out stays as it is, `null` clears it. A new
+        `location_id` moves the charge station and its EVSEs to that location of the org of
+        the charge station; it can only be cleared while the charge station has no EVSEs.
+        A decommissioned charge station cannot be changed.
+      operationId: updateChargeStation
+      x-permission: cpms.station.write
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        required: true
+        schema:
+          type: string
+          maxLength: 80
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/schemas.yaml#/components/schemas/ChargeStationPatch'
+      responses:
+        '200':
+          description: The charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/ChargeStationRecord'
+        '400':
+          description: The body is not a JSON object
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: The charge station is decommissioned (error `station_decommissioned`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '422':
+          description: Fields of the body break a rule, or the location is not a location of the org of the charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/ValidationErrors'
+        '501':
+          description: The storage engine of the manager does not keep the registry of the charge stations
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+    post:
+      summary: Register a new charge station
+      description: 'Registers a new charge station. The system will assume that the
+        charge station
+
+        has not yet been provisioned and will place the charge station into a pending
+        state
+
+        so it can been configured when it sends a boot notification.
+
+        '
+      operationId: registerChargeStation
+      x-permission: cpms.station.write
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        schema:
+          type: string
+          maxLength: 80
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/schemas.yaml#/components/schemas/ChargeStationAuth'
+      responses:
+        '201':
+          description: Created
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, the tenant is suspended (error `tenant_suspended`), or the charge station is new and a hard limit on the connectors of the tenant is used up (the error starts with `entitlement_limit_exceeded`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: The charge station is decommissioned (error `station_decommissioned`); its id cannot be registered again
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+  /cs/{csId}/decommission:
+    post:
+      summary: Decommission a charge station
+      description: |
+        Takes the charge station out of service: its state becomes `decommissioned` and its
+        EVSEs `REMOVED`, and it can no longer connect (an open connection is not closed).
+        It stays in the registry for its history, and its id cannot be registered again.
+        While a transaction is running on it, it is only decommissioned with `force`.
+      operationId: decommissionChargeStation
+      x-permission: cpms.station.write
+      parameters:
+      - name: csId
+        in: path
+        description: The charge station identifier
+        required: true
+        schema:
+          type: string
+          maxLength: 80
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/schemas.yaml#/components/schemas/DecommissionRequest'
+      responses:
+        '200':
+          description: The decommissioned charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/ChargeStationRecord'
+        '400':
+          description: The body is not a JSON document of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: |
+            The charge station is decommissioned already (error `station_decommissioned`), or
+            a transaction is running on it and `force` is not true (error `active_transaction`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '422':
+          description: Fields of the body break a rule
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/ValidationErrors'
+        '501':
+          description: The storage engine of the manager does not keep the registry of the charge stations
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'

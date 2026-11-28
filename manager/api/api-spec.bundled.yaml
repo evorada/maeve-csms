@@ -14,7 +14,255 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /cs:
+    get:
+      summary: List charge stations
+      description: |
+        Lists the charge stations of the orgs that the caller may reach, ordered by station
+        key, one page at a time. `next_cursor` is the `cursor` of the next page, and `null`
+        after the last page. Every filter that is given narrows the list; a repeated `state`
+        or `status` matches any of its values.
+      operationId: listChargeStations
+      x-permission: cpms.station.read
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of charge stations to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          description: The `next_cursor` of the previous page; the first page without it
+          required: false
+          schema:
+            type: string
+        - name: location_id
+          in: query
+          description: Only charge stations at this location
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: state
+          in: query
+          description: Only charge stations in one of these states
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/ChargeStationState'
+        - name: connected
+          in: query
+          description: Only charge stations whose connection is open (true) or not (false)
+          required: false
+          schema:
+            type: boolean
+        - name: status
+          in: query
+          description: |
+            Only charge stations with a connector (connector 0, the charge station as a whole,
+            included) whose current OCPP status is one of these
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/ConnectorStatusFilter'
+        - name: vendor
+          in: query
+          description: Only charge stations whose vendor (from their last boot) is this, ignoring case
+          required: false
+          schema:
+            type: string
+        - name: model
+          in: query
+          description: Only charge stations whose model (from their last boot) is this, ignoring case
+          required: false
+          schema:
+            type: string
+        - name: q
+          in: query
+          description: Only charge stations whose station key, display name, serial number or ICCID contains this text, ignoring case
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A page of charge stations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeStationPage'
+        '400':
+          description: The limit is out of range, the cursor is not one of a previous page, or a filter has a value that is not known
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep the registry of the charge stations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
   /cs/{csId}:
+    get:
+      summary: Read a charge station
+      description: |
+        Returns the registry record of the charge station with what it reported at its last
+        boot, whether its connection is open, and its EVSEs with their connectors and live
+        status.
+      operationId: getChargeStation
+      x-permission: cpms.station.read
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          required: true
+          schema:
+            type: string
+            maxLength: 80
+      responses:
+        '200':
+          description: The charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeStationRecord'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep the registry of the charge stations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    patch:
+      summary: Change a charge station
+      description: |
+        Changes the registry record of the charge station as a JSON merge patch (RFC 7396):
+        a field that the body leaves out stays as it is, `null` clears it. A new
+        `location_id` moves the charge station and its EVSEs to that location of the org of
+        the charge station; it can only be cleared while the charge station has no EVSEs.
+        A decommissioned charge station cannot be changed.
+      operationId: updateChargeStation
+      x-permission: cpms.station.write
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          required: true
+          schema:
+            type: string
+            maxLength: 80
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeStationPatch'
+      responses:
+        '200':
+          description: The charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeStationRecord'
+        '400':
+          description: The body is not a JSON object
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: The charge station is decommissioned (error `station_decommissioned`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '422':
+          description: Fields of the body break a rule, or the location is not a location of the org of the charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrors'
+        '501':
+          description: The storage engine of the manager does not keep the registry of the charge stations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
     post:
       summary: Register a new charge station
       description: |
@@ -53,6 +301,93 @@ paths:
                 $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: The charge station is decommissioned (error `station_decommissioned`); its id cannot be registered again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/decommission:
+    post:
+      summary: Decommission a charge station
+      description: |
+        Takes the charge station out of service: its state becomes `decommissioned` and its
+        EVSEs `REMOVED`, and it can no longer connect (an open connection is not closed).
+        It stays in the registry for its history, and its id cannot be registered again.
+        While a transaction is running on it, it is only decommissioned with `force`.
+      operationId: decommissionChargeStation
+      x-permission: cpms.station.write
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          required: true
+          schema:
+            type: string
+            maxLength: 80
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecommissionRequest'
+      responses:
+        '200':
+          description: The decommissioned charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeStationRecord'
+        '400':
+          description: The body is not a JSON document of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: |
+            The charge station is decommissioned already (error `station_decommissioned`), or
+            a transaction is running on it and `force` is not true (error `active_transaction`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '422':
+          description: Fields of the body break a rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrors'
+        '501':
+          description: The storage engine of the manager does not keep the registry of the charge stations
           content:
             application/json:
               schema:
@@ -366,7 +701,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Status'
         '404':
-          description: Unknown charge station
+          description: Unknown charge station, or a decommissioned one
           content:
             application/json:
               schema:
@@ -1597,6 +1932,67 @@ paths:
                 $ref: '#/components/schemas/Status'
         '404':
           description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    delete:
+      summary: Delete an authorization token
+      description: |
+        Deletes the token of the org with the UID (the token of every party of the org
+        that has the UID), in the org of the caller or in `orgId`. Deleting a token that
+        does not exist succeeds as well.
+      operationId: deleteToken
+      x-permission: cpms.token.write
+      parameters:
+        - required: true
+          in: path
+          name: tokenUid
+          schema:
+            type: string
+            maxLength: 36
+        - required: false
+          in: query
+          name: orgId
+          description: The org that owns the token. Without it the token is deleted in the org of the caller
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted, or there was no such token
+        '400':
+          description: '`orgId` is missing for a caller whose own org is not a tenant here'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: The org is outside the scope of the caller
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager cannot delete the token of one org
           content:
             application/json:
               schema:
@@ -7561,3 +7957,180 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ValidationError'
+    ChargeStationState:
+      type: string
+      description: |
+        Where a charge station is in its life: `pending` waits for approval, `active` may
+        charge, `decommissioned` was taken out of service and is kept for its history
+      enum:
+        - pending
+        - active
+        - decommissioned
+    ConnectorStatusFilter:
+      type: string
+      description: An OCPP status of a connector (OCPP 1.6, and `Occupied` of OCPP 2.0.1)
+      enum:
+        - Available
+        - Preparing
+        - Charging
+        - SuspendedEVSE
+        - SuspendedEV
+        - Finishing
+        - Reserved
+        - Unavailable
+        - Faulted
+        - Occupied
+    ChargeStationRecord:
+      type: object
+      description: |
+        The registry record of a charge station, with what it reported at its last boot
+        (null before its first boot) and whether its connection is open
+      required:
+        - cs_id
+        - org_id
+        - location_id
+        - display_name
+        - max_capacity_kw
+        - allow_any_token
+        - state
+        - state_changed_at
+        - state_reason
+        - ocpp_version
+        - vendor
+        - model
+        - serial_number
+        - firmware_version
+        - iccid
+        - imsi
+        - meter_serial_number
+        - meter_type
+        - last_boot_at
+        - connected
+        - last_heartbeat
+      properties:
+        cs_id:
+          type: string
+          description: The charge station identifier (its station key)
+        org_id:
+          type: string
+          format: uuid
+          x-go-type: string
+          description: The org that owns the charge station
+        location_id:
+          type: string
+          format: uuid
+          x-go-type: string
+          nullable: true
+          description: The location of the charge station
+        display_name:
+          type: string
+          nullable: true
+        max_capacity_kw:
+          type: number
+          format: double
+          nullable: true
+          description: The most power that the charge station can deliver in total, in kW
+        allow_any_token:
+          type: boolean
+          description: Whether the charge station accepts idTags that are not known
+        state:
+          $ref: '#/components/schemas/ChargeStationState'
+        state_changed_at:
+          type: string
+          format: date-time
+        state_reason:
+          type: string
+          nullable: true
+        ocpp_version:
+          type: string
+          nullable: true
+        vendor:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        serial_number:
+          type: string
+          nullable: true
+        firmware_version:
+          type: string
+          nullable: true
+        iccid:
+          type: string
+          nullable: true
+        imsi:
+          type: string
+          nullable: true
+        meter_serial_number:
+          type: string
+          nullable: true
+        meter_type:
+          type: string
+          nullable: true
+        last_boot_at:
+          type: string
+          format: date-time
+          nullable: true
+        connected:
+          type: boolean
+          description: Whether the connection of the charge station is open
+        last_heartbeat:
+          type: string
+          format: date-time
+          nullable: true
+        evses:
+          type: array
+          description: The EVSEs of the charge station, ordered by OCPP EVSE id (only when one charge station is read)
+          items:
+            $ref: '#/components/schemas/AssetEvse'
+    ChargeStationPage:
+      type: object
+      description: A page of charge stations
+      required:
+        - items
+        - next_cursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChargeStationRecord'
+        next_cursor:
+          type: string
+          nullable: true
+          description: The cursor of the next page; null after the last page
+    ChargeStationPatch:
+      type: object
+      description: |
+        The fields of the registry record of a charge station that can be changed, as a
+        JSON merge patch: a field that is left out stays as it is, `null` clears it
+      properties:
+        display_name:
+          type: string
+          nullable: true
+          maxLength: 255
+        location_id:
+          type: string
+          format: uuid
+          x-go-type: string
+          nullable: true
+        max_capacity_kw:
+          type: number
+          format: double
+          nullable: true
+          exclusiveMinimum: true
+          minimum: 0
+          maximum: 9999999.999
+        allow_any_token:
+          type: boolean
+    DecommissionRequest:
+      type: object
+      description: Why a charge station is decommissioned, and whether it is while it charges
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+        force:
+          type: boolean
+          default: false
+          description: Decommission the charge station also while a transaction is running on it

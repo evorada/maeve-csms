@@ -175,3 +175,15 @@ type LocationUpdatedData struct {
 	Publish        bool `json:"publish"`
 	PublishChanged bool `json:"publish_changed"`
 }
+
+// StationDecommissionedData is the payload of station.decommissioned: the station was
+// taken out of service. Its EVSEs are REMOVED, it can no longer connect, and its record
+// is kept. LocationId is the location of the station and Reason the reason given for the
+// decommissioning, both null when there is none; Actor is who decommissioned it.
+type StationDecommissionedData struct {
+	StationKey string  `json:"station_key"`
+	StationId  string  `json:"station_id"`
+	LocationId *string `json:"location_id"`
+	Reason     *string `json:"reason"`
+	Actor      string  `json:"actor"`
+}
