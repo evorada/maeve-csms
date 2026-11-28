@@ -19,7 +19,7 @@ start_docker_compose_for_maeve_csms() {
     chmod 755 $CSMS_DIR/config/certificates/csms.key
     export USER_ID=$(id -u)
     export GROUP_ID=$(id -g)
-    docker-compose up -d
+    docker compose up -d
     if [ $? -eq 0 ]; then
         echo "Docker Compose started successfully"
     else
@@ -47,11 +47,11 @@ start_docker_compose_for_everest() {
 
 # Function to stop Docker Compose
 stop_docker_compose_for_everest() {
-    cd "$EVEREST_DIR" && docker-compose down
+    cd "$EVEREST_DIR" && docker compose down
 }
 
 stop_docker_compose_for_maeve_csms() {
-    cd "$CSMS_DIR" && docker-compose down
+    cd "$CSMS_DIR" && docker compose down
 }
 
 # Function to check health endpoint
@@ -83,11 +83,11 @@ run_tests() {
     cd "$CSMS_DIR"
 
     echo "=== CSMS Manager Logs ==="
-    docker-compose logs --no-color manager 2>&1 | tail -200
+    docker compose logs --no-color manager 2>&1 | tail -200
     echo "=== CSMS Gateway Logs ==="
-    docker-compose logs --no-color gateway 2>&1 | tail -100
+    docker compose logs --no-color gateway 2>&1 | tail -100
     echo "=== EVerest Manager Logs ==="
-    cd "$EVEREST_DIR" && docker-compose logs --no-color manager 2>&1 | tail -100
+    cd "$EVEREST_DIR" && docker compose logs --no-color manager 2>&1 | tail -100
     echo "=== End of Logs ==="
 
     cd "$EVEREST_DIR" && stop_docker_compose_for_everest
