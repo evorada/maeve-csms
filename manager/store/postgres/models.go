@@ -8,6 +8,64 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AssetConnector struct {
+	ID               pgtype.UUID        `db:"id" json:"id"`
+	OrgID            pgtype.UUID        `db:"org_id" json:"org_id"`
+	EvseUid          pgtype.UUID        `db:"evse_uid" json:"evse_uid"`
+	OcppConnectorID  int32              `db:"ocpp_connector_id" json:"ocpp_connector_id"`
+	OcpiID           string             `db:"ocpi_id" json:"ocpi_id"`
+	Standard         string             `db:"standard" json:"standard"`
+	Format           string             `db:"format" json:"format"`
+	PowerType        string             `db:"power_type" json:"power_type"`
+	MaxVoltage       int32              `db:"max_voltage" json:"max_voltage"`
+	MaxAmperage      int32              `db:"max_amperage" json:"max_amperage"`
+	MaxElectricPower pgtype.Int4        `db:"max_electric_power" json:"max_electric_power"`
+	TariffRef        pgtype.UUID        `db:"tariff_ref" json:"tariff_ref"`
+	AdhocTariffRef   pgtype.UUID        `db:"adhoc_tariff_ref" json:"adhoc_tariff_ref"`
+	Version          int64              `db:"version" json:"version"`
+	CreatedAt        pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
+type AssetEvse struct {
+	ID                pgtype.UUID        `db:"id" json:"id"`
+	OrgID             pgtype.UUID        `db:"org_id" json:"org_id"`
+	LocationID        pgtype.UUID        `db:"location_id" json:"location_id"`
+	StationKey        string             `db:"station_key" json:"station_key"`
+	OcppEvseID        int32              `db:"ocpp_evse_id" json:"ocpp_evse_id"`
+	EvseID            pgtype.Text        `db:"evse_id" json:"evse_id"`
+	PhysicalReference pgtype.Text        `db:"physical_reference" json:"physical_reference"`
+	Status            string             `db:"status" json:"status"`
+	Version           int64              `db:"version" json:"version"`
+	CreatedAt         pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
+type AssetLocation struct {
+	ID                 pgtype.UUID        `db:"id" json:"id"`
+	OrgID              pgtype.UUID        `db:"org_id" json:"org_id"`
+	PartyRef           string             `db:"party_ref" json:"party_ref"`
+	OcpiID             string             `db:"ocpi_id" json:"ocpi_id"`
+	Name               pgtype.Text        `db:"name" json:"name"`
+	Address            string             `db:"address" json:"address"`
+	City               string             `db:"city" json:"city"`
+	PostalCode         pgtype.Text        `db:"postal_code" json:"postal_code"`
+	State              pgtype.Text        `db:"state" json:"state"`
+	Country            string             `db:"country" json:"country"`
+	Latitude           string             `db:"latitude" json:"latitude"`
+	Longitude          string             `db:"longitude" json:"longitude"`
+	TimeZone           string             `db:"time_zone" json:"time_zone"`
+	ParkingType        pgtype.Text        `db:"parking_type" json:"parking_type"`
+	Publish            bool               `db:"publish" json:"publish"`
+	OpeningTimes       []byte             `db:"opening_times" json:"opening_times"`
+	Facilities         []string           `db:"facilities" json:"facilities"`
+	ChargingWhenClosed pgtype.Bool        `db:"charging_when_closed" json:"charging_when_closed"`
+	ExternalRefs       []string           `db:"external_refs" json:"external_refs"`
+	Version            int64              `db:"version" json:"version"`
+	CreatedAt          pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
 type Certificate struct {
 	CertificateHash string           `db:"certificate_hash" json:"certificate_hash"`
 	CertificateType string           `db:"certificate_type" json:"certificate_type"`
@@ -16,13 +74,23 @@ type Certificate struct {
 }
 
 type ChargeStation struct {
-	ChargeStationID        string           `db:"charge_station_id" json:"charge_station_id"`
-	SecurityProfile        int32            `db:"security_profile" json:"security_profile"`
-	Base64Sha256Password   pgtype.Text      `db:"base64_sha256_password" json:"base64_sha256_password"`
-	InvalidUsernameAllowed bool             `db:"invalid_username_allowed" json:"invalid_username_allowed"`
-	CreatedAt              pgtype.Timestamp `db:"created_at" json:"created_at"`
-	UpdatedAt              pgtype.Timestamp `db:"updated_at" json:"updated_at"`
-	OrgID                  pgtype.UUID      `db:"org_id" json:"org_id"`
+	ChargeStationID             string             `db:"charge_station_id" json:"charge_station_id"`
+	SecurityProfile             int32              `db:"security_profile" json:"security_profile"`
+	Base64Sha256Password        pgtype.Text        `db:"base64_sha256_password" json:"base64_sha256_password"`
+	InvalidUsernameAllowed      bool               `db:"invalid_username_allowed" json:"invalid_username_allowed"`
+	CreatedAt                   pgtype.Timestamp   `db:"created_at" json:"created_at"`
+	UpdatedAt                   pgtype.Timestamp   `db:"updated_at" json:"updated_at"`
+	OrgID                       pgtype.UUID        `db:"org_id" json:"org_id"`
+	LocationID                  pgtype.UUID        `db:"location_id" json:"location_id"`
+	DisplayName                 pgtype.Text        `db:"display_name" json:"display_name"`
+	MaxCapacityKw               pgtype.Numeric     `db:"max_capacity_kw" json:"max_capacity_kw"`
+	AllowAnyToken               bool               `db:"allow_any_token" json:"allow_any_token"`
+	State                       string             `db:"state" json:"state"`
+	StateChangedAt              pgtype.Timestamptz `db:"state_changed_at" json:"state_changed_at"`
+	StateReason                 pgtype.Text        `db:"state_reason" json:"state_reason"`
+	Onboarding                  []byte             `db:"onboarding" json:"onboarding"`
+	PendingBase64Sha256Password pgtype.Text        `db:"pending_base64_sha256_password" json:"pending_base64_sha256_password"`
+	SharedCredentials           bool               `db:"shared_credentials" json:"shared_credentials"`
 }
 
 type ChargeStationCertificate struct {
@@ -102,14 +170,19 @@ type ChargeStationEvent struct {
 }
 
 type ChargeStationRuntime struct {
-	ChargeStationID string           `db:"charge_station_id" json:"charge_station_id"`
-	OcppVersion     string           `db:"ocpp_version" json:"ocpp_version"`
-	Vendor          pgtype.Text      `db:"vendor" json:"vendor"`
-	Model           pgtype.Text      `db:"model" json:"model"`
-	SerialNumber    pgtype.Text      `db:"serial_number" json:"serial_number"`
-	FirmwareVersion pgtype.Text      `db:"firmware_version" json:"firmware_version"`
-	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
-	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ChargeStationID   string             `db:"charge_station_id" json:"charge_station_id"`
+	OcppVersion       string             `db:"ocpp_version" json:"ocpp_version"`
+	Vendor            pgtype.Text        `db:"vendor" json:"vendor"`
+	Model             pgtype.Text        `db:"model" json:"model"`
+	SerialNumber      pgtype.Text        `db:"serial_number" json:"serial_number"`
+	FirmwareVersion   pgtype.Text        `db:"firmware_version" json:"firmware_version"`
+	CreatedAt         pgtype.Timestamp   `db:"created_at" json:"created_at"`
+	UpdatedAt         pgtype.Timestamp   `db:"updated_at" json:"updated_at"`
+	Iccid             pgtype.Text        `db:"iccid" json:"iccid"`
+	Imsi              pgtype.Text        `db:"imsi" json:"imsi"`
+	MeterSerialNumber pgtype.Text        `db:"meter_serial_number" json:"meter_serial_number"`
+	MeterType         pgtype.Text        `db:"meter_type" json:"meter_type"`
+	LastBootAt        pgtype.Timestamptz `db:"last_boot_at" json:"last_boot_at"`
 }
 
 type ChargeStationSetting struct {
@@ -185,6 +258,7 @@ type Command struct {
 	SentAt           pgtype.Timestamptz `db:"sent_at" json:"sent_at"`
 	CompletedAt      pgtype.Timestamptz `db:"completed_at" json:"completed_at"`
 	ExpiresAt        pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
+	RedactPaths      []string           `db:"redact_paths" json:"redact_paths"`
 }
 
 type ConnectorStatus struct {

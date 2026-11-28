@@ -3,6 +3,7 @@
 package registry
 
 import (
+	"bytes"
 	"context"
 	"crypto/x509"
 	"encoding/json"
@@ -48,15 +49,29 @@ type RemoteRegistry struct {
 }
 
 type stationAuthResponse struct {
-	OrgId                  string `json:"orgId"`
-	OrgKey                 string `json:"orgKey"`
-	StationKey             string `json:"stationKey"`
-	SecurityProfile        *int   `json:"securityProfile"`
-	Base64SHA256Password   string `json:"base64SHA256Password"`
-	InvalidUsernameAllowed bool   `json:"invalidUsernameAllowed"`
+	OrgId      string `json:"orgId"`
+	OrgKey     string `json:"orgKey"`
+	StationKey string `json:"stationKey"`
+	// SecurityProfile is left out for a station that is not known and may connect for
+	// its onboarding.
+	SecurityProfile             *int                `json:"securityProfile"`
+	Base64SHA256Password        string              `json:"base64SHA256Password"`
+	PendingBase64SHA256Password string              `json:"pendingBase64SHA256Password"`
+	InvalidUsernameAllowed      bool                `json:"invalidUsernameAllowed"`
+	Onboarding                  *onboardingResponse `json:"onboarding"`
 	// AcceptedCertOrgNames is nil when the manager has no list of a tenant for the
 	// station, which is not the same as an empty list.
 	AcceptedCertOrgNames *[]string `json:"acceptedCertOrgNames"`
+}
+
+type onboardingResponse struct {
+	OpenSP1              bool   `json:"openSp1"`
+	Base64SHA256Password string `json:"base64SHA256Password"`
+}
+
+type onboardingConnectionRequest struct {
+	Transport  string `json:"transport"`
+	Credential string `json:"credential"`
 }
 
 type statusResponse struct {
@@ -103,7 +118,8 @@ func chargeStationFromResponse(clientId string, body []byte) (*ChargeStation, er
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshaling data: %w", err)
 	}
-	if resp.SecurityProfile == nil {
+	// only a station that may connect for its onboarding has no security profile
+	if resp.SecurityProfile == nil && resp.Onboarding == nil {
 		return nil, errors.New("station auth has no security profile")
 	}
 	if resp.OrgKey != "" && !validOrgKey(resp.OrgKey) {
@@ -118,13 +134,22 @@ func chargeStationFromResponse(clientId string, body []byte) (*ChargeStation, er
 	}
 
 	cs := &ChargeStation{
-		ClientId:               clientId,
-		StationKey:             resp.StationKey,
-		OrgId:                  resp.OrgId,
-		OrgKey:                 resp.OrgKey,
-		SecurityProfile:        SecurityProfile(*resp.SecurityProfile),
-		Base64SHA256Password:   resp.Base64SHA256Password,
-		InvalidUsernameAllowed: resp.InvalidUsernameAllowed,
+		ClientId:                    clientId,
+		StationKey:                  resp.StationKey,
+		OrgId:                       resp.OrgId,
+		OrgKey:                      resp.OrgKey,
+		Base64SHA256Password:        resp.Base64SHA256Password,
+		PendingBase64SHA256Password: resp.PendingBase64SHA256Password,
+		InvalidUsernameAllowed:      resp.InvalidUsernameAllowed,
+	}
+	if resp.SecurityProfile != nil {
+		cs.SecurityProfile = SecurityProfile(*resp.SecurityProfile)
+	}
+	if resp.Onboarding != nil {
+		cs.Onboarding = &Onboarding{
+			OpenSP1:              resp.Onboarding.OpenSP1,
+			Base64SHA256Password: resp.Onboarding.Base64SHA256Password,
+		}
 	}
 	if resp.AcceptedCertOrgNames != nil {
 		cs.HasTenantOrgNames = true
@@ -154,6 +179,35 @@ func errorOfResponse(body []byte) string {
 		return ""
 	}
 	return resp.Error
+}
+
+// RecordOnboardingConnection records the connection with PUT /station-onboarding of the
+// internal API. A 429 of the manager is ErrPendingLimitReached; any other answer than 200
+// is an error.
+func (r RemoteRegistry) RecordOnboardingConnection(ctx context.Context, host, clientId, transport, credential string) error {
+	query := url.Values{}
+	query.Set("host", host)
+	query.Set("stationId", clientId)
+	body, err := json.Marshal(onboardingConnectionRequest{Transport: transport, Credential: credential})
+	if err != nil {
+		return fmt.Errorf("recording onboarding connection: %w", err)
+	}
+
+	status, respBody, err := r.do(ctx, http.MethodPut, "/station-onboarding?"+query.Encode(), body)
+	if err != nil {
+		return err
+	}
+	switch status {
+	case http.StatusOK:
+		return nil
+	case http.StatusTooManyRequests:
+		return ErrPendingLimitReached
+	default:
+		if reason := errorOfResponse(respBody); reason != "" {
+			return fmt.Errorf("recording onboarding connection: http status %d: %s", status, reason)
+		}
+		return fmt.Errorf("recording onboarding connection: http status %d", status)
+	}
 }
 
 type CertificateResponse struct {
@@ -195,11 +249,24 @@ func (r RemoteRegistry) LookupCertificate(ctx context.Context, certHash string) 
 
 // get requests a path of the internal API and returns the status code and the body.
 func (r RemoteRegistry) get(ctx context.Context, path string) (int, []byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSuffix(r.ManagerApiAddr, "/")+internalApiPath+path, nil)
+	return r.do(ctx, http.MethodGet, path, nil)
+}
+
+// do sends a request with a JSON body (none when body is nil) to a path of the internal
+// API and returns the status code and the body of the response.
+func (r RemoteRegistry) do(ctx context.Context, method, path string, body []byte) (int, []byte, error) {
+	var reqBody io.Reader
+	if body != nil {
+		reqBody = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, strings.TrimSuffix(r.ManagerApiAddr, "/")+internalApiPath+path, reqBody)
 	if err != nil {
 		return 0, nil, fmt.Errorf("creating http request: %w", err)
 	}
 	req.Header.Set("accept", "application/json")
+	if body != nil {
+		req.Header.Set("content-type", "application/json")
+	}
 
 	client := r.HTTPClient
 	if client == nil {
@@ -213,9 +280,9 @@ func (r RemoteRegistry) get(ctx context.Context, path string) (int, []byte, erro
 		_ = resp.Body.Close()
 	}()
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return 0, nil, fmt.Errorf("reading http body: %w", err)
 	}
-	return resp.StatusCode, body, nil
+	return resp.StatusCode, respBody, nil
 }

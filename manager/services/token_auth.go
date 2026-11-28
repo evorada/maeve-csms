@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
+	"github.com/thoughtworks/maeve-csms/manager/stations"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"go.opentelemetry.io/otel/attribute"
@@ -20,11 +21,16 @@ type TokenAuthService interface {
 }
 
 // OcppTokenAuthService authorises a token with the tokens of the org that owns the
-// charge station: a token that only another org has is Unknown.
+// charge station: a token that only another org has is Unknown. No token is accepted at
+// a charge station that may not charge (see stations.ChargingAllowed): it is Invalid
+// there.
 type OcppTokenAuthService struct {
 	TokenStore  store.TokenStore
 	OrgResolver tenancy.StationOrgResolver
 	Clock       clock.PassiveClock
+	// Registry holds the state of the charge station. When it is nil every charge station
+	// may charge.
+	Registry store.ChargeStationRegistryStore
 }
 
 func (o *OcppTokenAuthService) Authorize(ctx context.Context, chargeStationId string, token ocpp201.IdTokenType) ocpp201.IdTokenInfoType {
@@ -32,6 +38,20 @@ func (o *OcppTokenAuthService) Authorize(ctx context.Context, chargeStationId st
 	span.SetAttributes(
 		attribute.String("token_auth.id", token.IdToken),
 		attribute.String("token_auth.type", string(token.Type)))
+
+	allowed, err := stations.ChargingAllowed(ctx, o.Registry, chargeStationId)
+	if err != nil {
+		span.RecordError(err)
+		span.SetAttributes(attribute.String("token_auth.status", string(ocpp201.AuthorizationStatusEnumTypeUnknown)))
+		return ocpp201.IdTokenInfoType{Status: ocpp201.AuthorizationStatusEnumTypeUnknown}
+	}
+	if !allowed {
+		// a pending or decommissioned station: whatever the token, nothing may start
+		span.SetAttributes(
+			attribute.Bool("token_auth.charging_not_allowed", true),
+			attribute.String("token_auth.status", string(ocpp201.AuthorizationStatusEnumTypeInvalid)))
+		return ocpp201.IdTokenInfoType{Status: ocpp201.AuthorizationStatusEnumTypeInvalid}
+	}
 
 	var tokenInfo *ocpp201.IdTokenInfoType
 

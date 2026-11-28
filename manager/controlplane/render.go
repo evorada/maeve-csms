@@ -58,6 +58,19 @@ func writeError(w http.ResponseWriter, status int, code string) {
 	writeJSON(w, status, Error{Status: http.StatusText(status), Error: &code})
 }
 
+// writeProblem answers a request that cannot be done with a fixed code, the field of the
+// request that it is about (none when empty) and why, for the caller.
+func writeProblem(w http.ResponseWriter, status int, code, field, message string) {
+	answer := Error{Status: http.StatusText(status), Error: &code}
+	if field != "" {
+		answer.Field = &field
+	}
+	if message != "" {
+		answer.Message = &message
+	}
+	writeJSON(w, status, answer)
+}
+
 func writeInvalid(w http.ResponseWriter, problem *invalidField) {
 	code := codeInvalidField
 	if problem.code != "" {

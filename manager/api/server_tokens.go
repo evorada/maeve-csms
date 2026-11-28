@@ -3,6 +3,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -14,6 +15,7 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"golang.org/x/exp/slog"
 )
 
 func (s *Server) SetToken(w http.ResponseWriter, r *http.Request) {
@@ -149,6 +151,35 @@ func (s *Server) LookupToken(w http.ResponseWriter, r *http.Request, tokenUid st
 	}
 
 	_ = render.Render(w, r, resp)
+}
+
+// DeleteToken deletes the token with the UID of the org of the caller, or of the
+// requested org. Deleting a token that does not exist succeeds as well.
+func (s *Server) DeleteToken(w http.ResponseWriter, r *http.Request, tokenUid string, params DeleteTokenParams) {
+	// the org must be one that the caller may write to: out of its scope is 404, a
+	// suspended tenant 403
+	orgId, ok := s.targetOrg(w, r, params.OrgId)
+	if !ok {
+		return
+	}
+	if err := s.store.DeleteToken(r.Context(), orgId, tokenUid); err != nil {
+		if errors.Is(err, store.ErrNotImplemented) {
+			_ = render.Render(w, r, errTokenDeleteNotAvailable)
+			return
+		}
+		slog.Error("deleting a token", "org", orgId, "err", err)
+		_ = render.Render(w, r, errInternal)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// errTokenDeleteNotAvailable answers the deletion of a token by a manager whose storage
+// engine cannot delete the token of one org.
+var errTokenDeleteNotAvailable = &ErrResponse{
+	HTTPStatusCode: http.StatusNotImplemented,
+	StatusText:     http.StatusText(http.StatusNotImplemented),
+	ErrorText:      "the storage engine of the manager cannot delete the token of one org",
 }
 
 func newToken(tok *store.Token) (*Token, error) {

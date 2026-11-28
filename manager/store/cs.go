@@ -16,9 +16,13 @@ const (
 )
 
 type ChargeStationAuth struct {
-	SecurityProfile        SecurityProfile
-	Base64SHA256Password   string
-	InvalidUsernameAllowed bool
+	SecurityProfile      SecurityProfile
+	Base64SHA256Password string
+	// PendingBase64SHA256Password is the hash of the new password of a station while the
+	// station is being told to use it; the station may connect with either password
+	// until then. Firestore does not store it: it always reads as "".
+	PendingBase64SHA256Password string
+	InvalidUsernameAllowed      bool
 	// OrgId is the org (UUID) that owns the charge station. Setting the auth details
 	// without an org registers a new charge station in LegacyOrgId and leaves the org
 	// of a charge station that is already registered as it is. Firestore does not
@@ -59,12 +63,21 @@ type ChargeStationSettingsStore interface {
 	DeleteChargeStationSettings(ctx context.Context, chargeStationId string) error
 }
 
+// ChargeStationRuntimeDetails is what a charge station reported about itself when it
+// last booted. Firestore stores the OCPP version only.
 type ChargeStationRuntimeDetails struct {
 	OcppVersion     string
 	FirmwareVersion *string
 	Model           *string
 	Vendor          *string
 	SerialNumber    *string
+	// Iccid and Imsi identify the SIM card of the modem of the station.
+	Iccid             *string
+	Imsi              *string
+	MeterSerialNumber *string
+	MeterType         *string
+	// LastBootAt is when the CSMS received the last BootNotification of the station.
+	LastBootAt *time.Time
 }
 
 type ChargeStationRuntimeDetailsStore interface {

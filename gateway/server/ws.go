@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -264,42 +265,15 @@ func (s *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	span.SetAttributes(
 		attribute.String("csId", stationKey),
-		attribute.String("tenant.org_key", cs.OrgKey),
-		attribute.Int("ocpp.security_profile", int(cs.SecurityProfile)))
+		attribute.String("tenant.org_key", cs.OrgKey))
 
-	switch cs.SecurityProfile {
-	case registry.UnsecuredTransportWithBasicAuth:
-		if r.TLS != nil || !checkAuthorization(r.Context(), r, cs) {
-			if r.TLS != nil {
-				span.SetAttributes(attribute.String("auth.failure_reason", "tls for unsecured transport"))
-			}
-			span.SetStatus(codes.Error, "unauthorized")
-			span.SetAttributes(semconv.HTTPStatusCode(http.StatusUnauthorized))
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+	if cs.Onboarding != nil {
+		// a station that is not registered, or waits for approval: it is admitted with the
+		// onboarding rules of its tenant, never with its security profile
+		if !s.admitForOnboarding(w, r, host, clientId, cs) {
 			return
 		}
-	case registry.TLSWithBasicAuth:
-		if r.TLS == nil || !checkAuthorization(r.Context(), r, cs) {
-			if r.TLS == nil {
-				span.SetAttributes(attribute.String("auth.failure_reason", "no tls for secured transport"))
-			}
-			span.SetStatus(codes.Error, "unauthorized")
-			span.SetAttributes(semconv.HTTPStatusCode(http.StatusUnauthorized))
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-			return
-		}
-	case registry.TLSWithClientSideCertificates:
-		if r.TLS == nil || !checkCertificate(r.Context(), r, s.orgNames, cs) {
-			if r.TLS == nil {
-				span.SetAttributes(attribute.String("auth.failure_reason", "no tls for secured transport"))
-			}
-			span.SetStatus(codes.Error, "unauthorized")
-			span.SetAttributes(semconv.HTTPStatusCode(http.StatusUnauthorized))
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-			return
-		}
-	default:
-		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+	} else if !admit(w, r, s.orgNames, cs) {
 		return
 	}
 
@@ -396,6 +370,130 @@ func (s *WebsocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	publish(session, sock.disconnectedEvent(readErr))
 }
 
+// admit checks the credentials of a charge station that exists against its security
+// profile. When they do not fit, the request is answered (401) and false is returned.
+func admit(w http.ResponseWriter, r *http.Request, orgNames []string, cs *registry.ChargeStation) bool {
+	span := trace.SpanFromContext(r.Context())
+	span.SetAttributes(attribute.Int("ocpp.security_profile", int(cs.SecurityProfile)))
+
+	switch cs.SecurityProfile {
+	case registry.UnsecuredTransportWithBasicAuth:
+		if r.TLS != nil || !checkAuthorization(r.Context(), r, cs) {
+			if r.TLS != nil {
+				span.SetAttributes(attribute.String("auth.failure_reason", "tls for unsecured transport"))
+			}
+			span.SetStatus(codes.Error, "unauthorized")
+			span.SetAttributes(semconv.HTTPStatusCode(http.StatusUnauthorized))
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return false
+		}
+	case registry.TLSWithBasicAuth:
+		if r.TLS == nil || !checkAuthorization(r.Context(), r, cs) {
+			if r.TLS == nil {
+				span.SetAttributes(attribute.String("auth.failure_reason", "no tls for secured transport"))
+			}
+			span.SetStatus(codes.Error, "unauthorized")
+			span.SetAttributes(semconv.HTTPStatusCode(http.StatusUnauthorized))
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return false
+		}
+	case registry.TLSWithClientSideCertificates:
+		if r.TLS == nil || !checkCertificate(r.Context(), r, orgNames, cs) {
+			if r.TLS == nil {
+				span.SetAttributes(attribute.String("auth.failure_reason", "no tls for secured transport"))
+			}
+			span.SetStatus(codes.Error, "unauthorized")
+			span.SetAttributes(semconv.HTTPStatusCode(http.StatusUnauthorized))
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return false
+		}
+	default:
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return false
+	}
+	return true
+}
+
+// admitForOnboarding admits a charge station with the onboarding rules of its tenant (see
+// checkOnboarding) and records the connection with the registry. When the station is not
+// admitted the request is answered and false is returned: 401 for credentials that the
+// rules do not accept, 429 when the tenant has as many pending stations as it allows,
+// 503 when the connection cannot be recorded.
+func (s *WebsocketHandler) admitForOnboarding(w http.ResponseWriter, r *http.Request, host, clientId string, cs *registry.ChargeStation) bool {
+	span := trace.SpanFromContext(r.Context())
+	span.SetAttributes(attribute.Bool("ocpp.onboarding", true))
+
+	credential, ok := checkOnboarding(r.Context(), r, cs)
+	if !ok {
+		span.SetStatus(codes.Error, "unauthorized")
+		span.SetAttributes(semconv.HTTPStatusCode(http.StatusUnauthorized))
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return false
+	}
+	span.SetAttributes(attribute.String("onboarding.credential", credential))
+
+	err := s.deviceRegistry.RecordOnboardingConnection(r.Context(), host, clientId, getScheme(r), credential)
+	if errors.Is(err, registry.ErrPendingLimitReached) {
+		slog.Warn("refusing a charge station that is not registered: its tenant has as many pending stations as it allows",
+			"host", host, "stationId", clientId)
+		span.SetStatus(codes.Error, "pending limit reached")
+		span.SetAttributes(semconv.HTTPStatusCode(http.StatusTooManyRequests))
+		http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+		return false
+	}
+	if err != nil {
+		slog.Error("recording an onboarding connection", "host", host, "stationId", clientId, "err", err)
+		span.SetStatus(codes.Error, "recording onboarding connection failed")
+		span.RecordError(err)
+		span.SetAttributes(semconv.HTTPStatusCode(http.StatusServiceUnavailable))
+		http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+		return false
+	}
+	return true
+}
+
+// checkOnboarding returns the credential with which the onboarding rules of its tenant
+// admit the charge station: basic auth (any username) with the onboarding password of
+// the tenant or the new password of the station, or, without TLS and when the tenant
+// allows it, nothing at all. ok is false when the rules do not admit it. A client
+// certificate is not a credential for the onboarding.
+func checkOnboarding(ctx context.Context, r *http.Request, cs *registry.ChargeStation) (credential string, ok bool) {
+	span := trace.SpanFromContext(ctx)
+
+	_, password, hasBasicAuth := r.BasicAuth()
+	if hasBasicAuth {
+		hash := passwordHash(password)
+		switch {
+		case hashMatches(hash, cs.Onboarding.Base64SHA256Password):
+			return registry.OnboardingCredentialOnboardingPassword, true
+		case hashMatches(hash, cs.PendingBase64SHA256Password):
+			return registry.OnboardingCredentialPendingPassword, true
+		}
+	}
+	if r.TLS == nil && cs.Onboarding.OpenSP1 {
+		return registry.OnboardingCredentialOpen, true
+	}
+
+	if hasBasicAuth {
+		span.SetAttributes(attribute.String("auth.failure_reason", "invalid password"))
+	} else {
+		span.SetAttributes(attribute.String("auth.failure_reason", "no basic auth"))
+	}
+	return "", false
+}
+
+// passwordHash returns the base64 encoded SHA-256 hash of a password, the form in which
+// the manager keeps the passwords.
+func passwordHash(password string) string {
+	sum := sha256.Sum256([]byte(password))
+	return base64.StdEncoding.EncodeToString(sum[:])
+}
+
+// hashMatches reports whether hash is want; an empty want matches nothing.
+func hashMatches(hash, want string) bool {
+	return want != "" && subtle.ConstantTimeCompare([]byte(hash), []byte(want)) == 1
+}
+
 func getScheme(r *http.Request) string {
 	if r.TLS != nil {
 		return "wss"
@@ -417,9 +515,10 @@ func checkAuthorization(ctx context.Context, r *http.Request, cs *registry.Charg
 			attribute.String("auth.username", username))
 		return false
 	}
-	sha256pw := sha256.Sum256([]byte(password))
-	b64sha256 := base64.StdEncoding.EncodeToString(sha256pw[:])
-	result := b64sha256 == cs.Base64SHA256Password
+	// the new password of a station is accepted next to its password while the station
+	// is being told to use it
+	hash := passwordHash(password)
+	result := hashMatches(hash, cs.Base64SHA256Password) || hashMatches(hash, cs.PendingBase64SHA256Password)
 
 	if !result {
 		span.SetAttributes(attribute.String("auth.failure_reason", "invalid password"))

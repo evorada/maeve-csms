@@ -191,3 +191,86 @@ func TestBootNotificationSendsTheQueuedCommandsOfTheStation(t *testing.T) {
 		assert.Equal(t, types.BootNotificationResponseJsonStatusAccepted, got.(*types.BootNotificationResponseJson).Status)
 	})
 }
+
+// The identity that a station reports at boot is recorded for the registry, with the time
+// of the boot.
+func TestBootNotificationRecordsTheIdentityOfTheStation(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 11, 28, 9, 30, 0, 0, time.UTC)
+	engine := inmemory.NewStore(clock.RealClock{})
+	require.NoError(t, engine.SetChargeStationAuth(ctx, "k7f2.CP001", &store.ChargeStationAuth{}))
+	handler := handlers.BootNotificationHandler{
+		Clock:               clockTest.NewFakePassiveClock(now),
+		RuntimeDetailsStore: engine,
+		SettingsStore:       engine,
+		StatusStore:         engine,
+		HeartbeatInterval:   10,
+	}
+	ptr := func(s string) *string { return &s }
+
+	_, err := handler.HandleCall(ctx, "k7f2.CP001", &types.BootNotificationJson{
+		ChargePointVendor:       "Acme",
+		ChargePointModel:        "Volt 22",
+		ChargePointSerialNumber: ptr("SN-1001"),
+		FirmwareVersion:         ptr("1.2.3"),
+		Iccid:                   ptr("89340711000000000019"),
+		Imsi:                    ptr("214070000000001"),
+		MeterSerialNumber:       ptr("MTR-77"),
+		MeterType:               ptr("DZG DVH4013"),
+	})
+	require.NoError(t, err)
+
+	record, err := engine.LookupChargeStation(ctx, "k7f2.CP001")
+	require.NoError(t, err)
+	require.NotNil(t, record)
+	assert.Equal(t, &store.ChargeStationRuntimeDetails{
+		OcppVersion:       "1.6",
+		FirmwareVersion:   ptr("1.2.3"),
+		Model:             ptr("Volt 22"),
+		Vendor:            ptr("Acme"),
+		SerialNumber:      ptr("SN-1001"),
+		Iccid:             ptr("89340711000000000019"),
+		Imsi:              ptr("214070000000001"),
+		MeterSerialNumber: ptr("MTR-77"),
+		MeterType:         ptr("DZG DVH4013"),
+		LastBootAt:        &now,
+	}, record.Runtime)
+}
+
+// failingRuntimeStore fails every write of the runtime details.
+type failingRuntimeStore struct {
+	store.ChargeStationRuntimeDetailsStore
+}
+
+func (failingRuntimeStore) SetChargeStationRuntimeDetails(context.Context, string, *store.ChargeStationRuntimeDetails) error {
+	return errors.New("database is down")
+}
+
+// A station whose identity cannot be recorded is answered as any other: the failure is
+// only logged, and the rest of the boot is handled.
+func TestBootNotificationIsAcceptedWhenTheIdentityCannotBeRecorded(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 11, 28, 9, 30, 0, 0, time.UTC)
+	engine := inmemory.NewStore(clock.RealClock{})
+	newHandler := func(runtime store.ChargeStationRuntimeDetailsStore) handlers.BootNotificationHandler {
+		return handlers.BootNotificationHandler{
+			Clock:               clockTest.NewFakePassiveClock(now),
+			RuntimeDetailsStore: runtime,
+			SettingsStore:       engine,
+			StatusStore:         engine,
+			HeartbeatInterval:   10,
+		}
+	}
+	req := &types.BootNotificationJson{ChargePointVendor: "Acme", ChargePointModel: "Volt 22"}
+
+	recorded, err := newHandler(engine).HandleCall(ctx, "k7f2.CP001", req)
+	require.NoError(t, err)
+	notRecorded, err := newHandler(failingRuntimeStore{}).HandleCall(ctx, "k7f2.CP002", req)
+	require.NoError(t, err)
+
+	assert.Equal(t, recorded, notRecorded)
+	assert.Equal(t, types.BootNotificationResponseJsonStatusAccepted, notRecorded.(*types.BootNotificationResponseJson).Status)
+	status, err := engine.GetChargeStationStatus(ctx, "k7f2.CP002")
+	require.NoError(t, err)
+	assert.True(t, status.Connected, "the status is still updated")
+}

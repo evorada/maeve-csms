@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/render"
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
+	"github.com/thoughtworks/maeve-csms/manager/stations"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
@@ -132,6 +133,23 @@ func (s *Server) answerThroughQueueWithPermission(w http.ResponseWriter, r *http
 		s.renderQueued(w, r, code, cmd)
 	}
 	return true
+}
+
+// refusedUnlessChargingAllowed answers an operation that starts charging, or reserves a
+// connector for it, without the command queue (see queueFor), when the charge station
+// may not charge: 409 station_not_active, as the command queue answers such a command.
+// It reports whether it answered the request.
+func (s *Server) refusedUnlessChargingAllowed(w http.ResponseWriter, r *http.Request, csId string) bool {
+	allowed, err := stations.ChargingAllowed(r.Context(), s.store, csId)
+	if err != nil {
+		renderInternalError(w, r, "looking up the state of a charge station", err)
+		return true
+	}
+	if !allowed {
+		_ = render.Render(w, r, ErrConflict(errorStationNotActive+": the charge station is pending or decommissioned"))
+		return true
+	}
+	return false
 }
 
 // renderQueuedOperation answers a command that an operation answering an

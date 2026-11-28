@@ -246,6 +246,19 @@ func (s *Store) SetCommandProgress(ctx context.Context, id string, progress json
 	return copyCommand(cmd), nil
 }
 
+func (s *Store) RedactCommandPayload(_ context.Context, id string, payload json.RawMessage) error {
+	key, ok := commandKey(id)
+	if !ok {
+		return nil
+	}
+	s.Lock()
+	defer s.Unlock()
+	if cmd := s.commands[key]; cmd != nil {
+		cmd.Payload = slices.Clone(payload)
+	}
+	return nil
+}
+
 func (s *Store) ListQueuedStationKeys(_ context.Context, now time.Time, afterStationKey string, limit int) ([]string, error) {
 	if limit < 1 {
 		return nil, fmt.Errorf("list queued station keys: limit must be positive: %d", limit)
@@ -336,6 +349,7 @@ func (s *Store) firstCommands(limit int, match func(*store.Command) bool, order 
 func copyCommand(cmd *store.Command) *store.Command {
 	c := *cmd
 	c.Payload = slices.Clone(cmd.Payload)
+	c.RedactPaths = slices.Clone(cmd.RedactPaths)
 	c.Result = slices.Clone(cmd.Result)
 	c.Progress = slices.Clone(cmd.Progress)
 	c.ErrorCode = copyOrNil(cmd.ErrorCode)

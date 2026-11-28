@@ -26,8 +26,13 @@ import (
 // is one), which records it on the remote stop that asked for it; nothing the tracker
 // does changes the answer.
 type StopTransactionHandler struct {
-	Clock            clock.PassiveClock
-	TokenStore       store.TokenStore
+	Clock      clock.PassiveClock
+	TokenStore store.TokenStore
+	// RegistryStore holds allow_any_token of the charge station. The idTagInfo of the
+	// response says Accepted for an unknown idTag when it is set, as Authorize and
+	// StartTransaction did, so that the station does not cache the idTag as Invalid.
+	// When RegistryStore is nil, an unknown idTag is Invalid.
+	RegistryStore    store.ChargeStationRegistryStore
 	OrgResolver      tenancy.StationOrgResolver
 	TransactionStore store.TransactionStore
 	Tx               store.Transactor
@@ -55,7 +60,7 @@ func (s StopTransactionHandler) HandleCall(ctx context.Context, chargeStationId 
 
 	var idTagInfo *types.StopTransactionResponseJsonIdTagInfo
 	if req.IdTag != nil {
-		auth, err := authorizeIdTag(ctx, s.TokenStore, s.OrgResolver, s.Clock, chargeStationId, *req.IdTag)
+		auth, err := authorizeIdTag(ctx, s.TokenStore, s.RegistryStore, s.OrgResolver, s.Clock, chargeStationId, *req.IdTag)
 		if err != nil {
 			return nil, err
 		}

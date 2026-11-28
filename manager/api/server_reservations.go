@@ -45,6 +45,9 @@ func (s *Server) CreateReservation(w http.ResponseWriter, r *http.Request, csId 
 	}) {
 		return
 	}
+	if s.refusedUnlessChargingAllowed(w, r, csId) {
+		return
+	}
 
 	// Build reservation
 	reservation := &store.Reservation{

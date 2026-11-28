@@ -35,9 +35,10 @@ func newAuthorizeHandler(t *testing.T, tokens ...*store.Token) handlers.Authoriz
 	}
 
 	return handlers.AuthorizeHandler{
-		TokenStore:  engine,
-		OrgResolver: &tenancy.Resolver{Stations: engine},
-		Clock:       clk,
+		TokenStore:    engine,
+		RegistryStore: engine,
+		OrgResolver:   &tenancy.Resolver{Stations: engine},
+		Clock:         clk,
 	}
 }
 

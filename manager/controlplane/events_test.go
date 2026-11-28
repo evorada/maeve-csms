@@ -380,7 +380,7 @@ func TestEventsRefuseParametersThatAreNotValid(t *testing.T) {
 		{"type=cpms.cpms.session.completed", "type", "must be a type of the manifest"},
 		{"type=other.session.completed", "type", "must be a type of the manifest"},
 		{"type=Session.Completed", "type", "must be a type of the manifest"},
-		{"type=station.pending", "type", "must be a type of the manifest"},
+		{"type=station.renamed", "type", "must be a type of the manifest"},
 		{"type=session.completed&type=nothing", "type", "must be a type of the manifest"},
 	}
 	for _, tc := range cases {

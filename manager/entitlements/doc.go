@@ -22,7 +22,8 @@
 // org itself. With the scope subtree it is shared by the org named in pool_org_id and
 // every tenant below that org; without pool_org_id by the org itself and the tenants
 // below it. What is counted is what the ConnectorCounter knows: today the connectors
-// that registered charge stations have reported a status for, so a charge station that
+// that registered charge stations that are active have reported a status for (a pending
+// or decommissioned charge station takes up nothing), so a charge station that
 // is registered and has not reported yet takes up nothing. A counter of the connectors
 // that are stored as such should take its place once they exist.
 //

@@ -14,7 +14,255 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /cs:
+    get:
+      summary: List charge stations
+      description: |
+        Lists the charge stations of the orgs that the caller may reach, ordered by station
+        key, one page at a time. `next_cursor` is the `cursor` of the next page, and `null`
+        after the last page. Every filter that is given narrows the list; a repeated `state`
+        or `status` matches any of its values.
+      operationId: listChargeStations
+      x-permission: cpms.station.read
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of charge stations to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          description: The `next_cursor` of the previous page; the first page without it
+          required: false
+          schema:
+            type: string
+        - name: location_id
+          in: query
+          description: Only charge stations at this location
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: state
+          in: query
+          description: Only charge stations in one of these states
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/ChargeStationState'
+        - name: connected
+          in: query
+          description: Only charge stations whose connection is open (true) or not (false)
+          required: false
+          schema:
+            type: boolean
+        - name: status
+          in: query
+          description: |
+            Only charge stations with a connector (connector 0, the charge station as a whole,
+            included) whose current OCPP status is one of these
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/ConnectorStatusFilter'
+        - name: vendor
+          in: query
+          description: Only charge stations whose vendor (from their last boot) is this, ignoring case
+          required: false
+          schema:
+            type: string
+        - name: model
+          in: query
+          description: Only charge stations whose model (from their last boot) is this, ignoring case
+          required: false
+          schema:
+            type: string
+        - name: q
+          in: query
+          description: Only charge stations whose station key, display name, serial number or ICCID contains this text, ignoring case
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A page of charge stations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeStationPage'
+        '400':
+          description: The limit is out of range, the cursor is not one of a previous page, or a filter has a value that is not known
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep the registry of the charge stations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
   /cs/{csId}:
+    get:
+      summary: Read a charge station
+      description: |
+        Returns the registry record of the charge station with what it reported at its last
+        boot, whether its connection is open, and its EVSEs with their connectors and live
+        status.
+      operationId: getChargeStation
+      x-permission: cpms.station.read
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          required: true
+          schema:
+            type: string
+            maxLength: 80
+      responses:
+        '200':
+          description: The charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeStationRecord'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep the registry of the charge stations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    patch:
+      summary: Change a charge station
+      description: |
+        Changes the registry record of the charge station as a JSON merge patch (RFC 7396):
+        a field that the body leaves out stays as it is, `null` clears it. A new
+        `location_id` moves the charge station and its EVSEs to that location of the org of
+        the charge station; it can only be cleared while the charge station has no EVSEs.
+        A decommissioned charge station cannot be changed.
+      operationId: updateChargeStation
+      x-permission: cpms.station.write
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          required: true
+          schema:
+            type: string
+            maxLength: 80
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeStationPatch'
+      responses:
+        '200':
+          description: The charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeStationRecord'
+        '400':
+          description: The body is not a JSON object
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: The charge station is decommissioned (error `station_decommissioned`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '422':
+          description: Fields of the body break a rule, or the location is not a location of the org of the charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrors'
+        '501':
+          description: The storage engine of the manager does not keep the registry of the charge stations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
     post:
       summary: Register a new charge station
       description: |
@@ -53,6 +301,280 @@ paths:
                 $ref: '#/components/schemas/Status'
         '404':
           description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: The charge station is decommissioned (error `station_decommissioned`); its id cannot be registered again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/decommission:
+    post:
+      summary: Decommission a charge station
+      description: |
+        Takes the charge station out of service: its state becomes `decommissioned` and its
+        EVSEs `REMOVED`, and it can no longer connect (an open connection is not closed).
+        It stays in the registry for its history, and its id cannot be registered again.
+        While a transaction is running on it, it is only decommissioned with `force`.
+      operationId: decommissionChargeStation
+      x-permission: cpms.station.write
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          required: true
+          schema:
+            type: string
+            maxLength: 80
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecommissionRequest'
+      responses:
+        '200':
+          description: The decommissioned charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeStationRecord'
+        '400':
+          description: The body is not a JSON document of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: |
+            The charge station is decommissioned already (error `station_decommissioned`), or
+            a transaction is running on it and `force` is not true (error `active_transaction`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '422':
+          description: Fields of the body break a rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrors'
+        '501':
+          description: The storage engine of the manager does not keep the registry of the charge stations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/approve:
+    post:
+      summary: Approve a pending charge station
+      description: |
+        Approves a charge station that connected without being registered and waits for
+        approval (state `pending`): it gets a location, its EVSEs with their connectors, and
+        a password of its own, and becomes `active` and may charge.
+
+        `password_mode` says how the charge station gets its password:
+        - `rotate` (default): a new password is sent to the charge station through the
+          command queue (OCPP 1.6 `ChangeConfiguration` of `AuthorizationKey`, OCPP 2.0.1
+          `SetVariables` of `SecurityCtrlr.BasicAuthPassword`); the answer is 202 and the
+          charge station stays `pending` (onboarding status `approving`) until it takes the
+          password, then it becomes `active` (event `station.approved`). When it does not
+          take it, the onboarding status becomes `credentials_failed` (event
+          `station.approval_failed`) and the charge station can be approved again. The
+          password is never shown and the command keeps it only until it is sent.
+        - `manual`: the charge station becomes `active` at once with a new password, which
+          the answer shows once (`password`) and which is set on the charge station by hand.
+        - `keep_onboarding`: the charge station becomes `active` at once and keeps the
+          onboarding password of its tenant, which it connected with (`shared_credentials`).
+      operationId: approveChargeStation
+      x-permission: cpms.station.write
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          required: true
+          schema:
+            type: string
+            maxLength: 80
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApproveRequest'
+      responses:
+        '200':
+          description: The charge station is approved and active (`manual`, `keep_onboarding`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalResult'
+        '202':
+          description: The new password is being sent to the charge station (`rotate`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalResult'
+        '400':
+          description: The body is not a JSON document of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: |
+            The charge station is not pending (error `invalid_state`), its new password is
+            being sent to it (error `approval_in_progress`), its connectors would go beyond
+            the connector limit of the tenant (error `entitlement_exceeded`), its OCPP
+            version is not known because it has not booted (`rotate`, error
+            `station_version_unknown`), or an EVSE id is taken (error `already_exists`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '422':
+          description: |
+            Fields of the body break a rule: the location is not one of the org of the
+            charge station, an EVSE or a connector is not valid, or `keep_onboarding` is
+            asked for a charge station that did not connect with the onboarding password of
+            its tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrors'
+        '501':
+          description: The storage engine of the manager does not keep the registry of the charge stations, or (`rotate`) the commands
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /cs/{csId}/reject:
+    post:
+      summary: Reject a pending charge station
+      description: |
+        Refuses a charge station that connected without being registered and waits for
+        approval (state `pending`): it is `decommissioned` with the state reason
+        `rejected: <reason>` and can no longer connect (an open connection is not closed).
+        Its id cannot be registered or onboarded again. A new password that is still
+        queued for it is not sent.
+      operationId: rejectChargeStation
+      x-permission: cpms.station.write
+      parameters:
+        - name: csId
+          in: path
+          description: The charge station identifier
+          required: true
+          schema:
+            type: string
+            maxLength: 80
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectRequest'
+      responses:
+        '200':
+          description: The rejected charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeStationRecord'
+        '400':
+          description: The body is not a JSON document of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown charge station
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: The charge station is not pending (error `invalid_state`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '422':
+          description: Fields of the body break a rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrors'
+        '501':
+          description: The storage engine of the manager does not keep the registry of the charge stations
           content:
             application/json:
               schema:
@@ -366,7 +888,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Status'
         '404':
-          description: Unknown charge station
+          description: Unknown charge station, or a decommissioned one
           content:
             application/json:
               schema:
@@ -911,9 +1433,10 @@ paths:
                 $ref: '#/components/schemas/Status'
         '409':
           description: |
-            The reservation id is in use by a reservation of another charge station, or
-            the OCPP version of the charge station could not be found when the command was
-            queued (error `station_version_unknown`)
+            The reservation id is in use by a reservation of another charge station, the
+            OCPP version of the charge station could not be found when the command was
+            queued (error `station_version_unknown`), or the charge station may not charge
+            because it is pending or decommissioned (error `station_not_active`)
           content:
             application/json:
               schema:
@@ -1365,7 +1888,8 @@ paths:
         '409':
           description: |
             The OCPP version of the charge station could not be found when the command
-            was queued (error `station_version_unknown`)
+            was queued (error `station_version_unknown`), or the charge station may not
+            charge because it is pending or decommissioned (error `station_not_active`)
           content:
             application/json:
               schema:
@@ -1607,6 +2131,67 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Status'
+    delete:
+      summary: Delete an authorization token
+      description: |
+        Deletes the token of the org with the UID (the token of every party of the org
+        that has the UID), in the org of the caller or in `orgId`. Deleting a token that
+        does not exist succeeds as well.
+      operationId: deleteToken
+      x-permission: cpms.token.write
+      parameters:
+        - required: true
+          in: path
+          name: tokenUid
+          schema:
+            type: string
+            maxLength: 36
+        - required: false
+          in: query
+          name: orgId
+          description: The org that owns the token. Without it the token is deleted in the org of the caller
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted, or there was no such token
+        '400':
+          description: '`orgId` is missing for a caller whose own org is not a tenant here'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: The org is outside the scope of the caller
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager cannot delete the token of one org
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
   /certificate:
     post:
       summary: Upload a certificate
@@ -1769,8 +2354,9 @@ paths:
     post:
       summary: Registers a location with the CSMS
       description: |
-        Registers a location with the CSMS.
+        Registers a location with the CSMS. Deprecated: locations, their EVSEs and their connectors are managed with `/locations`.
       operationId: registerLocation
+      deprecated: true
       x-permission: cpms.station.write
       parameters:
         - name: locationId
@@ -3735,7 +4321,9 @@ paths:
         '409':
           description: |
             The OCPP version of the charge station is not known because it never booted
-            (error `station_version_unknown`)
+            (error `station_version_unknown`), or the command would start charging
+            (`RemoteStartTransaction`, `RequestStartTransaction`, `ReserveNow`) at a
+            charge station that is pending or decommissioned (error `station_not_active`)
           content:
             application/json:
               schema:
@@ -3960,6 +4548,1070 @@ paths:
                 $ref: '#/components/schemas/Command'
         '501':
           description: The storage engine of the manager does not keep commands
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /locations:
+    get:
+      summary: List locations
+      description: |
+        Lists the locations of the orgs that the caller may reach, ordered by id, one page at
+        a time. `next_cursor` is the `cursor` of the next page, and `null` after the last
+        page.
+      operationId: listAssetLocations
+      x-permission: cpms.station.read
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of locations to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          description: The `next_cursor` of the previous page; the first page without it
+          required: false
+          schema:
+            type: string
+        - name: q
+          in: query
+          description: Only locations whose name, address, city or `ocpi_id` contains this text, ignoring case
+          required: false
+          schema:
+            type: string
+        - name: party_ref
+          in: query
+          description: Only locations of this party
+          required: false
+          schema:
+            type: string
+        - name: publish
+          in: query
+          description: Only locations that are published (true) or not (false)
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: A page of locations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetLocationPage'
+        '400':
+          description: The limit is out of range or the cursor is not one of a previous page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    post:
+      summary: Create a location
+      description: |
+        Creates a location of the org in `org_id`, or of the org of the caller when there is
+        none. `ocpi_id` defaults to the id of the location and `publish` to true.
+      operationId: createAssetLocation
+      x-permission: cpms.station.write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetLocationInput'
+      responses:
+        '201':
+          description: The location
+          headers:
+            Location:
+              description: Where the location can be read
+              schema:
+                type: string
+            ETag:
+              description: The version of the location, as `"<version>"`
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetLocation'
+        '400':
+          description: The body cannot be read, or `org_id` is missing for a caller whose own org is not a tenant here
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: The org is outside the scope of the caller
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: The party already has a location with the `ocpi_id` (error `already_exists`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '422':
+          description: Fields of the location break a rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrors'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /locations/{locationId}:
+    get:
+      summary: Read a location
+      operationId: getAssetLocation
+      x-permission: cpms.station.read
+      parameters:
+        - name: locationId
+          in: path
+          description: The location identifier
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: expand
+          in: query
+          description: '`evses` adds the EVSEs of the location, with their connectors'
+          required: false
+          schema:
+            type: string
+            enum:
+              - evses
+      responses:
+        '200':
+          description: The location
+          headers:
+            ETag:
+              description: The version of the location, as `"<version>"`
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetLocation'
+        '400':
+          description: The location id is not a UUID, or `expand` is not known
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    put:
+      summary: Change a location
+      description: |
+        Replaces the fields of the location with the body. `ocpi_id` and `publish` keep
+        their value when the body leaves them out; `org_id`, when given, must be the org of
+        the location. With `If-Match` the location is only changed while it has that
+        version.
+      operationId: updateAssetLocation
+      x-permission: cpms.station.write
+      parameters:
+        - name: locationId
+          in: path
+          description: The location identifier
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: If-Match
+          in: header
+          description: The version that the location must have, as `"<version>"` (the `ETag` of a read)
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetLocationInput'
+      responses:
+        '200':
+          description: The changed location
+          headers:
+            ETag:
+              description: The version of the location, as `"<version>"`
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetLocation'
+        '400':
+          description: The body or `If-Match` cannot be read, or the location id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: The party already has another location with the `ocpi_id` (error `already_exists`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '412':
+          description: The location does not have the version in `If-Match` (error `version_conflict`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '422':
+          description: Fields of the location break a rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrors'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    delete:
+      summary: Delete a location
+      description: A location with EVSEs cannot be deleted.
+      operationId: deleteAssetLocation
+      x-permission: cpms.station.write
+      parameters:
+        - name: locationId
+          in: path
+          description: The location identifier
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          description: The location id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: EVSEs are at the location (error `in_use`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /locations/{locationId}/ocpi:
+    get:
+      summary: Render a location as OCPI
+      description: |
+        The OCPI 2.2.1 Location that the parties connected through OCPI receive for the
+        location: its EVSEs, with the live status of the active ones, and their connectors.
+      operationId: getAssetLocationOcpi
+      x-permission: cpms.station.read
+      parameters:
+        - name: locationId
+          in: path
+          description: The location identifier
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The OCPI 2.2.1 Location
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          description: The location id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: The party of the location is not a party of its tenant (error `unknown_party`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /locations/{locationId}/evses:
+    get:
+      summary: List the EVSEs of a location
+      description: The EVSEs of the location with their connectors, ordered by OCPP EVSE id.
+      operationId: listAssetEvses
+      x-permission: cpms.station.read
+      parameters:
+        - name: locationId
+          in: path
+          description: The location identifier
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The EVSEs of the location
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssetEvse'
+        '400':
+          description: The location id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    post:
+      summary: Create an EVSE at a location
+      description: |
+        Creates an EVSE of the charge station `cs_id` at the location, with its connectors
+        (at least one). The charge station must be an active charge station of the org of
+        the location. `evse_id` defaults to the eMI3 id made of the party of the location,
+        the station id and `ocpp_evse_id`; `status` defaults to `ACTIVE`. A charge station
+        without a location gets this one.
+      operationId: createAssetEvse
+      x-permission: cpms.station.write
+      parameters:
+        - name: locationId
+          in: path
+          description: The location identifier
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetEvseInput'
+      responses:
+        '201':
+          description: The EVSE
+          headers:
+            Location:
+              description: Where the EVSE can be read
+              schema:
+                type: string
+            ETag:
+              description: The version of the EVSE, as `"<version>"`
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetEvse'
+        '400':
+          description: The body cannot be read, or the location id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: |
+            The charge station waits for approval (error `station_pending`) or is
+            decommissioned (error `station_decommissioned`), or it already has an EVSE with
+            the `ocpp_evse_id`, or another EVSE has the `evse_id` (error `already_exists`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '422':
+          description: Fields of the EVSE or of its connectors break a rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrors'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /evses/{evseUid}:
+    get:
+      summary: Read an EVSE
+      operationId: getAssetEvse
+      x-permission: cpms.station.read
+      parameters:
+        - name: evseUid
+          in: path
+          description: The EVSE identifier (`uid`)
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The EVSE with its connectors
+          headers:
+            ETag:
+              description: The version of the EVSE, as `"<version>"`
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetEvse'
+        '400':
+          description: The EVSE id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown EVSE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    put:
+      summary: Change an EVSE
+      description: |
+        Replaces the fields of the EVSE with the body. The connectors are not changed (they
+        have operations of their own): `connectors` in the body is ignored. `evse_id` and
+        `status` keep their value when the body leaves them out. A new `cs_id` must be an
+        active charge station of the org of the EVSE. With `If-Match` the EVSE is only
+        changed while it has that version.
+      operationId: updateAssetEvse
+      x-permission: cpms.station.write
+      parameters:
+        - name: evseUid
+          in: path
+          description: The EVSE identifier (`uid`)
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: If-Match
+          in: header
+          description: The version that the EVSE must have, as `"<version>"` (the `ETag` of a read)
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetEvseInput'
+      responses:
+        '200':
+          description: The changed EVSE
+          headers:
+            ETag:
+              description: The version of the EVSE, as `"<version>"`
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetEvse'
+        '400':
+          description: The body or `If-Match` cannot be read, or the EVSE id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown EVSE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: |
+            The new charge station waits for approval (error `station_pending`) or is
+            decommissioned (error `station_decommissioned`), or the OCPP EVSE id or the
+            `evse_id` is taken (error `already_exists`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '412':
+          description: The EVSE does not have the version in `If-Match` (error `version_conflict`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '422':
+          description: Fields of the EVSE break a rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrors'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    delete:
+      summary: Delete an EVSE
+      description: Deletes the EVSE and its connectors, unless a transaction is running on it.
+      operationId: deleteAssetEvse
+      x-permission: cpms.station.write
+      parameters:
+        - name: evseUid
+          in: path
+          description: The EVSE identifier (`uid`)
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          description: The EVSE id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown EVSE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: A transaction is running on the EVSE (error `active_transaction`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /evses/{evseUid}/connectors:
+    post:
+      summary: Create a connector of an EVSE
+      description: '`ocpi_id` defaults to `ocpp_connector_id`.'
+      operationId: createAssetConnector
+      x-permission: cpms.station.write
+      parameters:
+        - name: evseUid
+          in: path
+          description: The EVSE identifier (`uid`)
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetConnectorInput'
+      responses:
+        '201':
+          description: The connector
+          headers:
+            ETag:
+              description: The version of the connector, as `"<version>"`
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetConnector'
+        '400':
+          description: The body cannot be read, or the EVSE id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown EVSE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: The EVSE already has a connector with the `ocpp_connector_id` or the `ocpi_id` (error `already_exists`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '422':
+          description: Fields of the connector break a rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrors'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /evses/{evseUid}/connectors/{connectorUid}:
+    put:
+      summary: Change a connector
+      description: |
+        Replaces the fields of the connector with the body. `ocpi_id` keeps its value when
+        the body leaves it out. With `If-Match` the connector is only changed while it has
+        that version.
+      operationId: updateAssetConnector
+      x-permission: cpms.station.write
+      parameters:
+        - name: evseUid
+          in: path
+          description: The EVSE identifier (`uid`)
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: connectorUid
+          in: path
+          description: The connector identifier (`uid`)
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: If-Match
+          in: header
+          description: The version that the connector must have, as `"<version>"` (the `ETag` of a read)
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetConnectorInput'
+      responses:
+        '200':
+          description: The changed connector
+          headers:
+            ETag:
+              description: The version of the connector, as `"<version>"`
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetConnector'
+        '400':
+          description: The body or `If-Match` cannot be read, or an id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown EVSE, or the EVSE has no such connector
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: Another connector of the EVSE has the `ocpp_connector_id` or the `ocpi_id` (error `already_exists`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '412':
+          description: The connector does not have the version in `If-Match` (error `version_conflict`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '422':
+          description: Fields of the connector break a rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrors'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+    delete:
+      summary: Delete a connector
+      description: |
+        Deletes the connector, unless a transaction is running on its EVSE or it is the last
+        connector of the EVSE (delete the EVSE instead).
+      operationId: deleteAssetConnector
+      x-permission: cpms.station.write
+      parameters:
+        - name: evseUid
+          in: path
+          description: The EVSE identifier (`uid`)
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: connectorUid
+          in: path
+          description: The connector identifier (`uid`)
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          description: An id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '404':
+          description: Unknown EVSE, or the EVSE has no such connector
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '409':
+          description: |
+            A transaction is running on the EVSE (error `active_transaction`), or the
+            connector is the last one of the EVSE (error `last_connector`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep assets
           content:
             application/json:
               schema:
@@ -6016,3 +7668,803 @@ components:
         total:
           type: integer
           description: Number of commands that match the filters
+    OpeningTimes:
+      type: object
+      description: The opening times of a location (OCPI 2.2.1 Hours)
+      required:
+        - twentyfourseven
+      properties:
+        twentyfourseven:
+          type: boolean
+          description: Open all the time; `regular_hours` must then be empty, otherwise it needs at least one period
+        regular_hours:
+          type: array
+          items:
+            $ref: '#/components/schemas/RegularHours'
+        exceptional_openings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExceptionalPeriod'
+        exceptional_closings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExceptionalPeriod'
+    RegularHours:
+      type: object
+      description: One opening period of a weekday, in the local time of the location
+      required:
+        - weekday
+        - period_begin
+        - period_end
+      properties:
+        weekday:
+          type: integer
+          minimum: 1
+          maximum: 7
+          description: 1 is Monday, 7 is Sunday
+        period_begin:
+          type: string
+          description: Time of day, `HH:MM`
+        period_end:
+          type: string
+          description: Time of day, `HH:MM`
+    ExceptionalPeriod:
+      type: object
+      description: A period in which the location is open or closed against its regular hours
+      required:
+        - period_begin
+        - period_end
+      properties:
+        period_begin:
+          type: string
+          format: date-time
+        period_end:
+          type: string
+          format: date-time
+    AssetLocationInput:
+      type: object
+      description: The fields of a location that its owner sets
+      required:
+        - party_ref
+        - address
+        - city
+        - country
+        - coordinates
+        - time_zone
+      properties:
+        org_id:
+          type: string
+          format: uuid
+          description: |
+            The org of the location: on a create the org of the caller when left out, or an
+            org in its scope; on a change the org that the location has
+        ocpi_id:
+          type: string
+          maxLength: 36
+          description: The OCPI id of the location, unique per party
+        party_ref:
+          type: string
+          description: The id of the party of the tenant that publishes the location
+        name:
+          type: string
+          maxLength: 255
+        address:
+          type: string
+          maxLength: 45
+        city:
+          type: string
+          maxLength: 45
+        postal_code:
+          type: string
+          maxLength: 10
+        state:
+          type: string
+          maxLength: 20
+        country:
+          type: string
+          description: ISO 3166-1 alpha-3 code, e.g. BEL
+        coordinates:
+          $ref: '#/components/schemas/GeoLocation'
+        time_zone:
+          type: string
+          description: IANA time zone, e.g. Europe/Brussels
+        parking_type:
+          type: string
+          description: OCPI ParkingType, e.g. ON_STREET
+        publish:
+          type: boolean
+          default: true
+          description: Whether the location is published through OCPI
+        opening_times:
+          $ref: '#/components/schemas/OpeningTimes'
+        facilities:
+          type: array
+          description: OCPI Facility values, each at most once
+          items:
+            type: string
+        charging_when_closed:
+          type: boolean
+        external_refs:
+          type: array
+          maxItems: 3
+          description: References of the location in other systems
+          items:
+            type: string
+            maxLength: 255
+    AssetLocation:
+      type: object
+      description: A location of an org, with the charge stations at it
+      required:
+        - id
+        - org_id
+        - ocpi_id
+        - party_ref
+        - name
+        - address
+        - city
+        - postal_code
+        - state
+        - country
+        - coordinates
+        - time_zone
+        - parking_type
+        - publish
+        - opening_times
+        - facilities
+        - charging_when_closed
+        - external_refs
+        - version
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          x-go-type: string
+        org_id:
+          type: string
+          format: uuid
+          x-go-type: string
+        ocpi_id:
+          type: string
+        party_ref:
+          type: string
+        name:
+          type: string
+          nullable: true
+        address:
+          type: string
+        city:
+          type: string
+        postal_code:
+          type: string
+          nullable: true
+        state:
+          type: string
+          nullable: true
+        country:
+          type: string
+        coordinates:
+          $ref: '#/components/schemas/GeoLocation'
+        time_zone:
+          type: string
+        parking_type:
+          type: string
+          nullable: true
+        publish:
+          type: boolean
+        opening_times:
+          allOf:
+            - $ref: '#/components/schemas/OpeningTimes'
+          nullable: true
+        facilities:
+          type: array
+          items:
+            type: string
+        charging_when_closed:
+          type: boolean
+          nullable: true
+        external_refs:
+          type: array
+          items:
+            type: string
+        version:
+          type: integer
+          format: int64
+          description: Changes with every change of the location; the `ETag` of the location
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        evses:
+          type: array
+          description: The EVSEs of the location, with `expand=evses`
+          items:
+            $ref: '#/components/schemas/AssetEvse'
+    AssetLocationPage:
+      type: object
+      description: A page of locations
+      required:
+        - items
+        - next_cursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssetLocation'
+        next_cursor:
+          type: string
+          nullable: true
+          description: The cursor of the next page; null after the last page
+    AssetEvseStatus:
+      type: string
+      description: Where an EVSE is in its life; the live status of an `ACTIVE` EVSE comes from its charge station
+      enum:
+        - ACTIVE
+        - PLANNED
+        - REMOVED
+    AssetEvseInput:
+      type: object
+      description: The fields of an EVSE that its owner sets
+      required:
+        - cs_id
+        - ocpp_evse_id
+      properties:
+        cs_id:
+          type: string
+          maxLength: 80
+          description: The charge station of the EVSE, as in `/cs/{csId}`
+        ocpp_evse_id:
+          type: integer
+          minimum: 1
+          description: The OCPP 2.0.1 EVSE id; for OCPP 1.6 the connector id (one EVSE per connector)
+        evse_id:
+          type: string
+          maxLength: 48
+          description: The eMI3 EVSE id, e.g. BE*TWK*E12345*1
+        physical_reference:
+          type: string
+          maxLength: 16
+          description: What is printed on the EVSE
+        status:
+          $ref: '#/components/schemas/AssetEvseStatus'
+        connectors:
+          type: array
+          description: The connectors of a new EVSE, at least one
+          items:
+            $ref: '#/components/schemas/AssetConnectorInput'
+    AssetEvse:
+      type: object
+      description: An EVSE of a charge station at a location
+      required:
+        - uid
+        - location_id
+        - cs_id
+        - ocpp_evse_id
+        - evse_id
+        - physical_reference
+        - status
+        - live_status
+        - connectors
+        - version
+        - created_at
+        - updated_at
+      properties:
+        uid:
+          type: string
+          format: uuid
+          x-go-type: string
+          description: The id of the EVSE, also its OCPI uid
+        location_id:
+          type: string
+          format: uuid
+          x-go-type: string
+        cs_id:
+          type: string
+        ocpp_evse_id:
+          type: integer
+        evse_id:
+          type: string
+          nullable: true
+        physical_reference:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/AssetEvseStatus'
+        live_status:
+          type: string
+          description: |
+            The OCPI status of the EVSE: `REMOVED` and `PLANNED` as `status` says, otherwise
+            from the status that its charge station reported (`UNKNOWN` without one)
+          enum:
+            - AVAILABLE
+            - BLOCKED
+            - CHARGING
+            - INOPERATIVE
+            - OUTOFORDER
+            - PLANNED
+            - REMOVED
+            - RESERVED
+            - UNKNOWN
+        connectors:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssetConnector'
+        version:
+          type: integer
+          format: int64
+          description: Changes with every change of the EVSE (not of its connectors); the `ETag` of the EVSE
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    AssetConnectorInput:
+      type: object
+      description: The fields of a connector that its owner sets
+      required:
+        - ocpp_connector_id
+        - standard
+        - format
+        - power_type
+        - max_voltage
+        - max_amperage
+      properties:
+        ocpp_connector_id:
+          type: integer
+          minimum: 1
+          description: The OCPP 2.0.1 connector id within the EVSE; 1 for OCPP 1.6
+        ocpi_id:
+          type: string
+          maxLength: 36
+          description: The OCPI id of the connector within the EVSE
+        standard:
+          type: string
+          description: OCPI ConnectorType, e.g. IEC_62196_T2
+        format:
+          type: string
+          description: SOCKET or CABLE
+        power_type:
+          type: string
+          description: AC_1_PHASE, AC_2_PHASE, AC_2_PHASE_SPLIT, AC_3_PHASE or DC
+        max_voltage:
+          type: integer
+          format: int32
+          minimum: 1
+        max_amperage:
+          type: integer
+          format: int32
+          minimum: 1
+        max_electric_power:
+          type: integer
+          format: int32
+          minimum: 1
+          description: In W
+        tariff_ref:
+          type: string
+          format: uuid
+          x-go-type: string
+          description: The id of the tariff of the connector
+        adhoc_tariff_ref:
+          type: string
+          format: uuid
+          x-go-type: string
+          description: The id of the ad hoc payment tariff of the connector
+    AssetConnector:
+      type: object
+      description: A connector of an EVSE
+      required:
+        - uid
+        - evse_uid
+        - ocpp_connector_id
+        - ocpi_id
+        - standard
+        - format
+        - power_type
+        - max_voltage
+        - max_amperage
+        - max_electric_power
+        - tariff_ref
+        - adhoc_tariff_ref
+        - version
+        - created_at
+        - updated_at
+      properties:
+        uid:
+          type: string
+          format: uuid
+          x-go-type: string
+        evse_uid:
+          type: string
+          format: uuid
+          x-go-type: string
+        ocpp_connector_id:
+          type: integer
+        ocpi_id:
+          type: string
+        standard:
+          type: string
+        format:
+          type: string
+        power_type:
+          type: string
+        max_voltage:
+          type: integer
+          format: int32
+        max_amperage:
+          type: integer
+          format: int32
+        max_electric_power:
+          type: integer
+          format: int32
+          nullable: true
+        tariff_ref:
+          type: string
+          format: uuid
+          x-go-type: string
+          nullable: true
+        adhoc_tariff_ref:
+          type: string
+          format: uuid
+          x-go-type: string
+          nullable: true
+        version:
+          type: integer
+          format: int64
+          description: Changes with every change of the connector; the `ETag` of the connector
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ValidationError:
+      type: object
+      description: A field that breaks a rule
+      required:
+        - field
+        - reason
+      properties:
+        field:
+          type: string
+          description: The JSON path of the field, e.g. `coordinates.latitude` or `connectors[0].format`
+        reason:
+          type: string
+    ValidationErrors:
+      type: object
+      description: The fields of a request that break a rule
+      required:
+        - status
+        - errors
+      properties:
+        status:
+          type: string
+          enum:
+            - invalid
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationError'
+    ChargeStationState:
+      type: string
+      description: |
+        Where a charge station is in its life: `pending` waits for approval, `active` may
+        charge, `decommissioned` was taken out of service and is kept for its history
+      enum:
+        - pending
+        - active
+        - decommissioned
+    ConnectorStatusFilter:
+      type: string
+      description: An OCPP status of a connector (OCPP 1.6, and `Occupied` of OCPP 2.0.1)
+      enum:
+        - Available
+        - Preparing
+        - Charging
+        - SuspendedEVSE
+        - SuspendedEV
+        - Finishing
+        - Reserved
+        - Unavailable
+        - Faulted
+        - Occupied
+    ChargeStationRecord:
+      type: object
+      description: |
+        The registry record of a charge station, with what it reported at its last boot
+        (null before its first boot) and whether its connection is open
+      required:
+        - cs_id
+        - org_id
+        - location_id
+        - display_name
+        - max_capacity_kw
+        - allow_any_token
+        - state
+        - state_changed_at
+        - state_reason
+        - ocpp_version
+        - vendor
+        - model
+        - serial_number
+        - firmware_version
+        - iccid
+        - imsi
+        - meter_serial_number
+        - meter_type
+        - last_boot_at
+        - connected
+        - last_heartbeat
+      properties:
+        cs_id:
+          type: string
+          description: The charge station identifier (its station key)
+        org_id:
+          type: string
+          format: uuid
+          x-go-type: string
+          description: The org that owns the charge station
+        location_id:
+          type: string
+          format: uuid
+          x-go-type: string
+          nullable: true
+          description: The location of the charge station
+        display_name:
+          type: string
+          nullable: true
+        max_capacity_kw:
+          type: number
+          format: double
+          nullable: true
+          description: The most power that the charge station can deliver in total, in kW
+        allow_any_token:
+          type: boolean
+          description: Whether the charge station accepts idTags that are not known
+        state:
+          $ref: '#/components/schemas/ChargeStationState'
+        state_changed_at:
+          type: string
+          format: date-time
+        state_reason:
+          type: string
+          nullable: true
+        ocpp_version:
+          type: string
+          nullable: true
+        vendor:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        serial_number:
+          type: string
+          nullable: true
+        firmware_version:
+          type: string
+          nullable: true
+        iccid:
+          type: string
+          nullable: true
+        imsi:
+          type: string
+          nullable: true
+        meter_serial_number:
+          type: string
+          nullable: true
+        meter_type:
+          type: string
+          nullable: true
+        last_boot_at:
+          type: string
+          format: date-time
+          nullable: true
+        connected:
+          type: boolean
+          description: Whether the connection of the charge station is open
+        last_heartbeat:
+          type: string
+          format: date-time
+          nullable: true
+        evses:
+          type: array
+          description: The EVSEs of the charge station, ordered by OCPP EVSE id (only when one charge station is read)
+          items:
+            $ref: '#/components/schemas/AssetEvse'
+        onboarding:
+          $ref: '#/components/schemas/StationOnboarding'
+    ChargeStationPage:
+      type: object
+      description: A page of charge stations
+      required:
+        - items
+        - next_cursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChargeStationRecord'
+        next_cursor:
+          type: string
+          nullable: true
+          description: The cursor of the next page; null after the last page
+    ChargeStationPatch:
+      type: object
+      description: |
+        The fields of the registry record of a charge station that can be changed, as a
+        JSON merge patch: a field that is left out stays as it is, `null` clears it
+      properties:
+        display_name:
+          type: string
+          nullable: true
+          maxLength: 255
+        location_id:
+          type: string
+          format: uuid
+          x-go-type: string
+          nullable: true
+        max_capacity_kw:
+          type: number
+          format: double
+          nullable: true
+          exclusiveMinimum: true
+          minimum: 0
+          maximum: 9999999.999
+        allow_any_token:
+          type: boolean
+    DecommissionRequest:
+      type: object
+      description: Why a charge station is decommissioned, and whether it is while it charges
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+        force:
+          type: boolean
+          default: false
+          description: Decommission the charge station also while a transaction is running on it
+    ApproveRequest:
+      type: object
+      description: How a pending charge station is approved
+      required:
+        - location_id
+        - evses
+      properties:
+        location_id:
+          type: string
+          format: uuid
+          x-go-type: string
+          description: The location of the charge station, a location of its org
+        display_name:
+          type: string
+          maxLength: 255
+        allow_any_token:
+          type: boolean
+          default: false
+          description: Whether the charge station accepts idTags that are not known
+        max_capacity_kw:
+          type: number
+          format: double
+          description: The most power that the charge station can deliver in total, in kW
+        security_profile:
+          type: string
+          description: |
+            The security profile of the charge station: `SP1` (no TLS, password) or `SP2`
+            (TLS, password); by default the one of the transport it connected with
+            (`ws`: SP1, `wss`: SP2)
+          enum:
+            - SP1
+            - SP2
+        password_mode:
+          type: string
+          default: rotate
+          description: How the charge station gets its password (see the operation)
+          enum:
+            - rotate
+            - manual
+            - keep_onboarding
+        evses:
+          type: array
+          minItems: 1
+          description: The EVSEs of the charge station, at least one, each with at least one connector
+          items:
+            $ref: '#/components/schemas/ApprovalEvseInput'
+    ApprovalEvseInput:
+      type: object
+      description: An EVSE of a charge station that is approved, with its connectors
+      required:
+        - ocpp_evse_id
+        - connectors
+      properties:
+        ocpp_evse_id:
+          type: integer
+          minimum: 1
+          description: The OCPP 2.0.1 EVSE id; for OCPP 1.6 the connector id (one EVSE per connector)
+        evse_id:
+          type: string
+          maxLength: 48
+          description: The eMI3 EVSE id, e.g. BE*TWK*E12345*1; made from the party of the location when left out
+        physical_reference:
+          type: string
+          maxLength: 16
+          description: What is printed on the EVSE
+        status:
+          $ref: '#/components/schemas/AssetEvseStatus'
+        connectors:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/AssetConnectorInput'
+    ApprovalResult:
+      type: object
+      description: The charge station that was approved, and the password that it was given by hand
+      required:
+        - station
+      properties:
+        station:
+          $ref: '#/components/schemas/ChargeStationRecord'
+        password:
+          type: string
+          description: |
+            The new password of the charge station (`manual` only): it is shown once, is
+            not stored, and is set on the charge station by hand
+    RejectRequest:
+      type: object
+      description: Why a pending charge station is rejected
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    StationOnboarding:
+      type: object
+      description: |
+        What is known about a pending charge station, which connected without being
+        registered (only for pending charge stations)
+      required:
+        - status
+        - first_seen_at
+        - last_seen_at
+        - transport
+        - credential
+      properties:
+        status:
+          type: string
+          description: |
+            `awaiting_approval` before an approval, `approving` while the new password of
+            an approval is being sent to it, `credentials_failed` when it did not take it
+          enum:
+            - awaiting_approval
+            - approving
+            - credentials_failed
+        first_seen_at:
+          type: string
+          format: date-time
+        last_seen_at:
+          type: string
+          format: date-time
+          description: The time of its last connection or BootNotification
+        transport:
+          type: string
+          description: The transport of its last connection
+          enum:
+            - ws
+            - wss
+        credential:
+          type: string
+          description: What it connected with last
+          enum:
+            - open
+            - onboarding_password
+            - pending_password
+        error:
+          type: string
+          description: Why it did not take its new password (`credentials_failed`)
+        command_id:
+          type: string
+          format: uuid
+          x-go-type: string
+          description: The command that sends its new password (`/commands/{commandId}`)

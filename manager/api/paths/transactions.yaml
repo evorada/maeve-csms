@@ -222,7 +222,8 @@ paths:
         '409':
           description: |
             The OCPP version of the charge station could not be found when the command
-            was queued (error `station_version_unknown`)
+            was queued (error `station_version_unknown`), or the charge station may not
+            charge because it is pending or decommissioned (error `station_not_active`)
           content:
             application/json:
               schema:

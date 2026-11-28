@@ -30,19 +30,29 @@ const transactionIdAttempts = 3
 // with.
 const idTagTokenType = "ISO14443"
 
+// refusedTransactionId is the transaction id of a StartTransaction.conf for which no
+// transaction was recorded.
+const refusedTransactionId = -1
+
 // StartTransactionHandler records the transaction that a charge station has started.
 //
 // The transaction is recorded whatever the authorisation status of the idTag: OCPP 1.6
 // requires a transaction id in every StartTransaction.conf, and the station sends a
 // StopTransaction.req for it (or keeps charging when StopTransactionOnInvalidId is false).
+// The exception is a charge station that may not charge (pending or decommissioned):
+// nothing is recorded, and it gets Invalid with the transaction id -1.
 //
 // The transaction, its details, the reservation it uses and the session.started event
 // are stored in one transaction. Once it is stored, a transaction whose idTag is
 // accepted is given to the CommandTracker (when there is one), which links it to the
 // remote start that asked for it; nothing the tracker does changes the answer.
 type StartTransactionHandler struct {
-	Clock            clock.PassiveClock
-	TokenStore       store.TokenStore
+	Clock      clock.PassiveClock
+	TokenStore store.TokenStore
+	// RegistryStore holds the state and allow_any_token of the charge station: an unknown
+	// idTag is accepted when allow_any_token is set. When RegistryStore is nil, every
+	// charge station may charge and no unknown idTag is accepted.
+	RegistryStore    store.ChargeStationRegistryStore
 	OrgResolver      tenancy.StationOrgResolver
 	TransactionStore store.TransactionStore
 	ReservationStore store.ReservationStore
@@ -56,7 +66,20 @@ func (t StartTransactionHandler) HandleCall(ctx context.Context, chargeStationId
 
 	slog.Info("starting transaction", slog.Any("request", req))
 
-	auth, err := authorizeIdTag(ctx, t.TokenStore, t.OrgResolver, t.Clock, chargeStationId, req.IdTag)
+	allowed, err := chargingAllowed(ctx, t.RegistryStore, chargeStationId)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		slog.Warn("refusing a transaction of a charge station that may not charge",
+			slog.String("chargeStationId", chargeStationId), slog.Int("connectorId", req.ConnectorId))
+		return &types.StartTransactionResponseJson{
+			IdTagInfo:     types.StartTransactionResponseJsonIdTagInfo{Status: types.StartTransactionResponseJsonIdTagInfoStatusInvalid},
+			TransactionId: refusedTransactionId,
+		}, nil
+	}
+
+	auth, err := authorizeIdTag(ctx, t.TokenStore, t.RegistryStore, t.OrgResolver, t.Clock, chargeStationId, req.IdTag)
 	if err != nil {
 		return nil, err
 	}

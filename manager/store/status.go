@@ -91,7 +91,8 @@ type StatusStore interface {
 	// CountConnectorsForOrgs counts the connectors that the charge stations of the given
 	// orgs have reported a status for: the distinct (charge station, connector) pairs
 	// with a connector id above 0 (connector 0 is the charge station as a whole). Only
-	// registered charge stations count. Firestore stores no org: it returns
-	// ErrNotImplemented.
+	// registered charge stations that are active count: not one that is pending (it
+	// connected without being registered and is not approved) or decommissioned.
+	// Firestore stores no org: it returns ErrNotImplemented.
 	CountConnectorsForOrgs(ctx context.Context, orgIds []string) (int, error)
 }

@@ -11,6 +11,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const DeleteToken = `-- name: DeleteToken :exec
+DELETE FROM tokens
+WHERE org_id = $1 AND uid = $2
+`
+
+type DeleteTokenParams struct {
+	OrgID pgtype.UUID `db:"org_id" json:"org_id"`
+	Uid   string      `db:"uid" json:"uid"`
+}
+
+func (q *Queries) DeleteToken(ctx context.Context, arg DeleteTokenParams) error {
+	_, err := q.db.Exec(ctx, DeleteToken, arg.OrgID, arg.Uid)
+	return err
+}
+
 const DeleteTokenForOrg = `-- name: DeleteTokenForOrg :exec
 DELETE FROM tokens
 WHERE org_id = $1 AND country_code = $2 AND party_id = $3 AND uid = $4

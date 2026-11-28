@@ -46,3 +46,7 @@ RETURNING *;
 -- name: DeleteTokenForOrg :exec
 DELETE FROM tokens
 WHERE org_id = $1 AND country_code = $2 AND party_id = $3 AND uid = $4;
+
+-- name: DeleteToken :exec
+DELETE FROM tokens
+WHERE org_id = $1 AND uid = $2;

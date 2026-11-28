@@ -82,7 +82,7 @@ func TestValidationMiddlewareWithUnknownMethod(t *testing.T) {
 	server := httptest.NewServer(r)
 	defer server.Close()
 
-	req := httptest.NewRequest(http.MethodGet, "/cs/cs001", strings.NewReader(""))
+	req := httptest.NewRequest(http.MethodDelete, "/cs/cs001", strings.NewReader(""))
 	req.Header.Set("content-type", "application/json")
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)

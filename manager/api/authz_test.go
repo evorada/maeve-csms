@@ -59,8 +59,10 @@ func newMultiTenant(t *testing.T) *multiTenant {
 
 	partner := orgPartner
 	for _, tenant := range []*store.Tenant{
-		{OrgId: orgA, ParentId: &partner, Path: store.OrgPathLabel(orgPartner) + "." + store.OrgPathLabel(orgA), Slug: "tenant-a", OrgKey: "aaaa"},
-		{OrgId: orgB, ParentId: &partner, Path: store.OrgPathLabel(orgPartner) + "." + store.OrgPathLabel(orgB), Slug: "tenant-b", OrgKey: "bbbb"},
+		{OrgId: orgA, ParentId: &partner, Path: store.OrgPathLabel(orgPartner) + "." + store.OrgPathLabel(orgA), Slug: "tenant-a", OrgKey: "aaaa",
+			Parties: []store.TenantParty{{Id: partyOfA, Role: "CPO", CountryCode: "BE", PartyId: "AAA"}}},
+		{OrgId: orgB, ParentId: &partner, Path: store.OrgPathLabel(orgPartner) + "." + store.OrgPathLabel(orgB), Slug: "tenant-b", OrgKey: "bbbb",
+			Parties: []store.TenantParty{{Id: partyOfB, Role: "CPO", CountryCode: "NL", PartyId: "BBB"}}},
 		{OrgId: orgC, Path: store.OrgPathLabel(orgC), Slug: "tenant-c", OrgKey: "cccc"},
 	} {
 		require.NoError(t, engine.PutTenant(ctx, tenant))
@@ -180,67 +182,88 @@ func stationOperations(index map[string]string) []string {
 // A new operation needs a line here: the permission of an operation is a decision,
 // not a default.
 var wantPermissions = map[string]string{
-	"POST /certificate":                              tenancy.PermCertificateWrite,
-	"GET /commands/{commandId}":                      tenancy.PermStationRead,
-	"POST /commands/{commandId}:cancel":              tenancy.PermConnectorCommand,
-	"DELETE /certificate/{certificateHash}":          tenancy.PermCertificateWrite,
-	"GET /certificate/{certificateHash}":             tenancy.PermStationRead,
-	"POST /cs/{csId}":                                tenancy.PermStationWrite,
-	"GET /cs/{csId}/auth":                            tenancy.PermStationWrite,
-	"POST /cs/{csId}/availability":                   tenancy.PermConnectorCommand,
-	"POST /cs/{csId}/cache/clear":                    tenancy.PermConnectorCommand,
-	"DELETE /cs/{csId}/certificate":                  tenancy.PermStationWrite,
-	"GET /cs/{csId}/certificates":                    tenancy.PermStationRead,
-	"POST /cs/{csId}/certificates":                   tenancy.PermStationWrite,
-	"GET /cs/{csId}/charging-profile":                tenancy.PermStationRead,
-	"GET /cs/{csId}/commands":                        tenancy.PermStationRead,
-	"POST /cs/{csId}/commands":                       tenancy.PermConnectorCommand,
-	"POST /cs/{csId}/charging-profile":               tenancy.PermConnectorCommand,
-	"DELETE /cs/{csId}/charging-profile/{profileId}": tenancy.PermConnectorCommand,
-	"GET /cs/{csId}/composite-schedule":              tenancy.PermStationRead,
-	"GET /cs/{csId}/configuration":                   tenancy.PermStationRead,
-	"PATCH /cs/{csId}/configuration":                 tenancy.PermStationWrite,
-	"GET /cs/{csId}/connectors":                      tenancy.PermStationRead,
-	"POST /cs/{csId}/data-transfer":                  tenancy.PermConnectorCommand,
-	"POST /cs/{csId}/diagnostics":                    tenancy.PermConnectorCommand,
-	"GET /cs/{csId}/diagnostics/status":              tenancy.PermStationRead,
-	"POST /cs/{csId}/display-message":                tenancy.PermStationWrite,
-	"DELETE /cs/{csId}/display-message/{messageId}":  tenancy.PermStationWrite,
-	"GET /cs/{csId}/display-messages":                tenancy.PermStationRead,
-	"GET /cs/{csId}/events":                          tenancy.PermStationRead,
-	"GET /cs/{csId}/firmware/status":                 tenancy.PermStationRead,
-	"POST /cs/{csId}/firmware/update":                tenancy.PermConnectorCommand,
-	"GET /cs/{csId}/local-list":                      tenancy.PermStationRead,
-	"POST /cs/{csId}/local-list":                     tenancy.PermTokenWrite,
-	"GET /cs/{csId}/local-list/version":              tenancy.PermStationRead,
-	"POST /cs/{csId}/logs":                           tenancy.PermConnectorCommand,
-	"GET /cs/{csId}/logs/status":                     tenancy.PermStationRead,
-	"GET /cs/{csId}/meter-values":                    tenancy.PermSessionRead,
-	"POST /cs/{csId}/monitoring":                     tenancy.PermStationWrite,
-	"POST /cs/{csId}/monitoring/base":                tenancy.PermStationWrite,
-	"POST /cs/{csId}/monitoring/level":               tenancy.PermStationWrite,
-	"POST /cs/{csId}/monitoring/report":              tenancy.PermConnectorCommand,
-	"DELETE /cs/{csId}/monitoring/{monitorId}":       tenancy.PermStationWrite,
-	"POST /cs/{csId}/reconfigure":                    tenancy.PermStationWrite,
-	"GET /cs/{csId}/reports":                         tenancy.PermStationRead,
-	"POST /cs/{csId}/reservation":                    tenancy.PermConnectorCommand,
-	"DELETE /cs/{csId}/reservation/{reservationId}":  tenancy.PermConnectorCommand,
-	"GET /cs/{csId}/reservations":                    tenancy.PermStationRead,
-	"POST /cs/{csId}/reset":                          tenancy.PermConnectorCommand,
-	"POST /cs/{csId}/start-transaction":              tenancy.PermConnectorCommand,
-	"GET /cs/{csId}/status":                          tenancy.PermStationRead,
-	"POST /cs/{csId}/stop-transaction":               tenancy.PermConnectorCommand,
-	"GET /cs/{csId}/transaction/{transactionId}":     tenancy.PermSessionRead,
-	"GET /cs/{csId}/transactions":                    tenancy.PermSessionRead,
-	"POST /cs/{csId}/trigger":                        tenancy.PermConnectorCommand,
-	"POST /cs/{csId}/unlock-connector":               tenancy.PermConnectorCommand,
-	"GET /cs/{csId}/variables":                       tenancy.PermStationRead,
-	"PATCH /cs/{csId}/variables":                     tenancy.PermStationWrite,
-	"POST /location/{locationId}":                    tenancy.PermStationWrite,
-	"POST /register":                                 tenancy.PermOcpiConnection,
-	"GET /token":                                     tenancy.PermTokenRead,
-	"POST /token":                                    tenancy.PermTokenWrite,
-	"GET /token/{tokenUid}":                          tenancy.PermTokenRead,
+	"POST /certificate":                                 tenancy.PermCertificateWrite,
+	"GET /commands/{commandId}":                         tenancy.PermStationRead,
+	"POST /commands/{commandId}:cancel":                 tenancy.PermConnectorCommand,
+	"DELETE /certificate/{certificateHash}":             tenancy.PermCertificateWrite,
+	"GET /certificate/{certificateHash}":                tenancy.PermStationRead,
+	"GET /cs":                                           tenancy.PermStationRead,
+	"GET /cs/{csId}":                                    tenancy.PermStationRead,
+	"PATCH /cs/{csId}":                                  tenancy.PermStationWrite,
+	"POST /cs/{csId}":                                   tenancy.PermStationWrite,
+	"POST /cs/{csId}/decommission":                      tenancy.PermStationWrite,
+	"POST /cs/{csId}/approve":                           tenancy.PermStationWrite,
+	"POST /cs/{csId}/reject":                            tenancy.PermStationWrite,
+	"GET /cs/{csId}/auth":                               tenancy.PermStationWrite,
+	"POST /cs/{csId}/availability":                      tenancy.PermConnectorCommand,
+	"POST /cs/{csId}/cache/clear":                       tenancy.PermConnectorCommand,
+	"DELETE /cs/{csId}/certificate":                     tenancy.PermStationWrite,
+	"GET /cs/{csId}/certificates":                       tenancy.PermStationRead,
+	"POST /cs/{csId}/certificates":                      tenancy.PermStationWrite,
+	"GET /cs/{csId}/charging-profile":                   tenancy.PermStationRead,
+	"GET /cs/{csId}/commands":                           tenancy.PermStationRead,
+	"POST /cs/{csId}/commands":                          tenancy.PermConnectorCommand,
+	"POST /cs/{csId}/charging-profile":                  tenancy.PermConnectorCommand,
+	"DELETE /cs/{csId}/charging-profile/{profileId}":    tenancy.PermConnectorCommand,
+	"GET /cs/{csId}/composite-schedule":                 tenancy.PermStationRead,
+	"GET /cs/{csId}/configuration":                      tenancy.PermStationRead,
+	"PATCH /cs/{csId}/configuration":                    tenancy.PermStationWrite,
+	"GET /cs/{csId}/connectors":                         tenancy.PermStationRead,
+	"POST /cs/{csId}/data-transfer":                     tenancy.PermConnectorCommand,
+	"POST /cs/{csId}/diagnostics":                       tenancy.PermConnectorCommand,
+	"GET /cs/{csId}/diagnostics/status":                 tenancy.PermStationRead,
+	"POST /cs/{csId}/display-message":                   tenancy.PermStationWrite,
+	"DELETE /cs/{csId}/display-message/{messageId}":     tenancy.PermStationWrite,
+	"GET /cs/{csId}/display-messages":                   tenancy.PermStationRead,
+	"GET /cs/{csId}/events":                             tenancy.PermStationRead,
+	"GET /cs/{csId}/firmware/status":                    tenancy.PermStationRead,
+	"POST /cs/{csId}/firmware/update":                   tenancy.PermConnectorCommand,
+	"GET /cs/{csId}/local-list":                         tenancy.PermStationRead,
+	"POST /cs/{csId}/local-list":                        tenancy.PermTokenWrite,
+	"GET /cs/{csId}/local-list/version":                 tenancy.PermStationRead,
+	"POST /cs/{csId}/logs":                              tenancy.PermConnectorCommand,
+	"GET /cs/{csId}/logs/status":                        tenancy.PermStationRead,
+	"GET /cs/{csId}/meter-values":                       tenancy.PermSessionRead,
+	"POST /cs/{csId}/monitoring":                        tenancy.PermStationWrite,
+	"POST /cs/{csId}/monitoring/base":                   tenancy.PermStationWrite,
+	"POST /cs/{csId}/monitoring/level":                  tenancy.PermStationWrite,
+	"POST /cs/{csId}/monitoring/report":                 tenancy.PermConnectorCommand,
+	"DELETE /cs/{csId}/monitoring/{monitorId}":          tenancy.PermStationWrite,
+	"POST /cs/{csId}/reconfigure":                       tenancy.PermStationWrite,
+	"GET /cs/{csId}/reports":                            tenancy.PermStationRead,
+	"POST /cs/{csId}/reservation":                       tenancy.PermConnectorCommand,
+	"DELETE /cs/{csId}/reservation/{reservationId}":     tenancy.PermConnectorCommand,
+	"GET /cs/{csId}/reservations":                       tenancy.PermStationRead,
+	"POST /cs/{csId}/reset":                             tenancy.PermConnectorCommand,
+	"POST /cs/{csId}/start-transaction":                 tenancy.PermConnectorCommand,
+	"GET /cs/{csId}/status":                             tenancy.PermStationRead,
+	"POST /cs/{csId}/stop-transaction":                  tenancy.PermConnectorCommand,
+	"GET /cs/{csId}/transaction/{transactionId}":        tenancy.PermSessionRead,
+	"GET /cs/{csId}/transactions":                       tenancy.PermSessionRead,
+	"POST /cs/{csId}/trigger":                           tenancy.PermConnectorCommand,
+	"POST /cs/{csId}/unlock-connector":                  tenancy.PermConnectorCommand,
+	"GET /cs/{csId}/variables":                          tenancy.PermStationRead,
+	"PATCH /cs/{csId}/variables":                        tenancy.PermStationWrite,
+	"POST /location/{locationId}":                       tenancy.PermStationWrite,
+	"GET /locations":                                    tenancy.PermStationRead,
+	"POST /locations":                                   tenancy.PermStationWrite,
+	"GET /locations/{locationId}":                       tenancy.PermStationRead,
+	"PUT /locations/{locationId}":                       tenancy.PermStationWrite,
+	"DELETE /locations/{locationId}":                    tenancy.PermStationWrite,
+	"GET /locations/{locationId}/ocpi":                  tenancy.PermStationRead,
+	"GET /locations/{locationId}/evses":                 tenancy.PermStationRead,
+	"POST /locations/{locationId}/evses":                tenancy.PermStationWrite,
+	"GET /evses/{evseUid}":                              tenancy.PermStationRead,
+	"PUT /evses/{evseUid}":                              tenancy.PermStationWrite,
+	"DELETE /evses/{evseUid}":                           tenancy.PermStationWrite,
+	"POST /evses/{evseUid}/connectors":                  tenancy.PermStationWrite,
+	"PUT /evses/{evseUid}/connectors/{connectorUid}":    tenancy.PermStationWrite,
+	"DELETE /evses/{evseUid}/connectors/{connectorUid}": tenancy.PermStationWrite,
+	"POST /register":                                    tenancy.PermOcpiConnection,
+	"GET /token":                                        tenancy.PermTokenRead,
+	"POST /token":                                       tenancy.PermTokenWrite,
+	"GET /token/{tokenUid}":                             tenancy.PermTokenRead,
+	"DELETE /token/{tokenUid}":                          tenancy.PermTokenWrite,
 }
 
 func TestEveryOperationHasPermission(t *testing.T) {
@@ -254,8 +277,9 @@ func TestEveryOperationHasPermission(t *testing.T) {
 		operations += len(item.Operations())
 
 		// the charge station of an operation is always the path parameter csId, which
-		// is what the authorisation looks at
-		if path == "/cs" || strings.HasPrefix(path, "/cs/") {
+		// is what the authorisation looks at; /cs itself (the list of the charge
+		// stations) has none and scopes itself
+		if strings.HasPrefix(path, "/cs/") {
 			assert.True(t, path == "/cs/{csId}" || strings.HasPrefix(path, "/cs/{csId}/"), "path %s", path)
 			assert.Equal(t, 1, strings.Count(path, "{csId}"), "path %s", path)
 		} else {
@@ -749,8 +773,12 @@ var refusedForSuspendedTenant = []string{
 	"DELETE /cs/{csId}/monitoring/{monitorId}",
 	"PATCH /cs/{csId}/configuration",
 	"PATCH /cs/{csId}/variables",
+	"PATCH /cs/{csId}",
 	"POST /cs/{csId}",
 	"POST /cs/{csId}/certificates",
+	"POST /cs/{csId}/decommission",
+	"POST /cs/{csId}/approve",
+	"POST /cs/{csId}/reject",
 	"POST /cs/{csId}/display-message",
 	"POST /cs/{csId}/local-list",
 	"POST /cs/{csId}/monitoring",
@@ -758,7 +786,17 @@ var refusedForSuspendedTenant = []string{
 	"POST /cs/{csId}/monitoring/level",
 	"POST /cs/{csId}/reconfigure",
 	"POST /location/{locationId}",
+	"POST /locations",
+	"PUT /locations/{locationId}",
+	"DELETE /locations/{locationId}",
+	"POST /locations/{locationId}/evses",
+	"PUT /evses/{evseUid}",
+	"DELETE /evses/{evseUid}",
+	"POST /evses/{evseUid}/connectors",
+	"PUT /evses/{evseUid}/connectors/{connectorUid}",
+	"DELETE /evses/{evseUid}/connectors/{connectorUid}",
 	"POST /token",
+	"DELETE /token/{tokenUid}",
 }
 
 // setTenantStatus changes the status of a tenant like the control plane does: the
@@ -783,6 +821,12 @@ func TestSuspendedTenantCannotWrite(t *testing.T) {
 	bodies := map[string]string{
 		"POST /token":                 tokenBody("NEWTOKEN", ""),
 		"POST /location/{locationId}": locationBody("New location", ""),
+	}
+	// the assets of A that the asset operations write to, with what they are sent
+	asset := m.assetsOf(t, orgA, stationOfA)
+	assetPaths := asset.paths()
+	for operation, body := range asset.bodies() {
+		bodies[operation] = body
 	}
 
 	m.setTenantStatus(t, orgA, store.TenantStatusSuspended)
@@ -809,6 +853,9 @@ func TestSuspendedTenantCannotWrite(t *testing.T) {
 				return
 			}
 
+			if assetPath, ok := assetPaths[operation]; ok {
+				path = assetPath
+			}
 			rr := serve(r, as(callerOfA, method, path, bodies[operation]))
 			require.Equal(t, http.StatusForbidden, rr.Code, rr.Body.String())
 			assert.JSONEq(t, suspendedBody, rr.Body.String())
@@ -844,6 +891,10 @@ func TestSuspendedTenantCannotWrite(t *testing.T) {
 		auth, err = m.engine.LookupChargeStationAuth(ctx, stationOfA)
 		require.NoError(t, err)
 		assert.Equal(t, &store.ChargeStationAuth{SecurityProfile: store.TLSWithBasicAuth, OrgId: orgA}, auth)
+		asset.assertUnchanged(t)
+		locations, _, err := m.engine.ListAssetLocations(ctx, store.AssetLocationFilter{OrgIds: []string{orgA}})
+		require.NoError(t, err)
+		assert.Len(t, locations, 1, "no location was created")
 	})
 
 	t.Run("reading through the operations of the manager", func(t *testing.T) {

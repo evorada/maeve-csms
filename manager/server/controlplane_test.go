@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -32,6 +34,11 @@ type controlPlaneRoute struct {
 	target string
 }
 
+// resourceActionRoute is the route that the control plane registers besides those of its
+// spec: it reads the URN of a resource whose ":" or "/" are not encoded, which does not
+// fit the route of the transfer in the spec.
+const resourceActionRoute = "POST /resources/*"
+
 // controlPlaneRoutes returns every route that the handler of the control plane
 // registers, as a request for the given org, after checking that they are the
 // operations of the spec of the control plane, no more and no less.
@@ -45,6 +52,8 @@ func controlPlaneRoutes(t *testing.T, orgId string) []controlPlaneRoute {
 		registered = append(registered, method+" "+route)
 		return nil
 	}))
+	require.Contains(t, registered, resourceActionRoute)
+	registered = slices.DeleteFunc(registered, func(route string) bool { return route == resourceActionRoute })
 	sort.Strings(registered)
 
 	swagger, err := controlplane.GetSwagger()
@@ -57,16 +66,43 @@ func controlPlaneRoutes(t *testing.T, orgId string) []controlPlaneRoute {
 	}
 	sort.Strings(specified)
 	require.Equal(t, specified, registered)
-	require.Len(t, registered, 7, "a new operation: check that the tests of the control plane cover it")
+	require.Len(t, registered, 9, "a new operation: check that the tests of the control plane cover it")
 
-	result := make([]controlPlaneRoute, 0, len(registered))
+	result := make([]controlPlaneRoute, 0, len(registered)+1)
 	for _, route := range registered {
 		method, path, _ := strings.Cut(route, " ")
 		target := controlplane.BasePath + strings.ReplaceAll(path, "{orgId}", orgId)
+		// the route of the spec: the whole URN is encoded
+		target = strings.ReplaceAll(target, "{urn}", strings.ReplaceAll(url.PathEscape("urn:cpms:"+orgId+":station/aaaa.CP001"), ":", "%3A"))
 		require.NotContains(t, target, "{", "a parameter that this test does not know")
+		// the inventory needs the type of the resources
+		if strings.HasSuffix(target, "/inventory") {
+			target += "?type=station"
+		}
 		result = append(result, controlPlaneRoute{method: method, target: target})
 	}
+	// the same transfer through the route that reads the path itself
+	result = append(result, controlPlaneRoute{method: http.MethodPost, target: transferTarget("urn:cpms:" + orgId + ":station/aaaa.CP001")})
 	return result
+}
+
+// transferTarget is the path of the transfer of the resource, with every character of
+// the URN that is not allowed in a path segment percent-encoded, as Go encodes it: its
+// "/" is encoded, its ":" are not.
+func transferTarget(urn string) string {
+	return controlplane.BasePath + "/resources/" + url.PathEscape(urn) + ":transfer"
+}
+
+// isTransfer reports whether the route is the transfer of a resource, which needs the
+// permission to write charge stations besides the one to manage tenants.
+func isTransfer(route controlPlaneRoute) bool {
+	return strings.HasSuffix(route.target, ":transfer")
+}
+
+// isInventory reports whether the route is the inventory of a tenant, which needs the
+// permission to read charge stations besides the one to manage tenants.
+func isInventory(route controlPlaneRoute) bool {
+	return strings.Contains(route.target, "/inventory?")
 }
 
 // serviceToken returns a token of the platform for one of its services.
@@ -169,6 +205,11 @@ func TestControlPlaneRefusesEveryCallerButAPlatformServiceThatMayManageTenants(t
 		token := serviceToken(platform, "svc:provisioner", tenancy.PermTenantManage)
 		for _, route := range routes {
 			rr := send(handler, route, token)
+			if isTransfer(route) || isInventory(route) {
+				assert.Equal(t, http.StatusForbidden, rr.Code, "%s %s: %s", route.method, route.target, rr.Body.String())
+				assert.JSONEq(t, `{"status":"Forbidden","error":"forbidden"}`, rr.Body.String())
+				continue
+			}
 			assert.Equal(t, http.StatusOK, rr.Code, "%s %s: %s", route.method, route.target, rr.Body.String())
 		}
 
@@ -183,13 +224,50 @@ func TestControlPlaneRefusesEveryCallerButAPlatformServiceThatMayManageTenants(t
 	})
 }
 
+func TestControlPlaneServesTheInventoryOfTheOrgOfTheToken(t *testing.T) {
+	handler, platform, engine := newMultiTenantInternalHandler(t)
+	require.NoError(t, engine.SetChargeStationAuth(context.Background(), "aaaa.CP001", &store.ChargeStationAuth{
+		SecurityProfile: store.TLSWithBasicAuth,
+		OrgId:           orgA,
+	}))
+	reader := func(orgId string) string {
+		claims := platform.Claims(time.Now())
+		claims["sub"] = "svc:inventory"
+		claims["org"] = orgId
+		claims["org_scope"] = string(tenancy.OrgScopeSelf)
+		claims["perms"] = []string{tenancy.PermTenantManage, tenancy.PermStationRead}
+		return platform.Sign(claims)
+	}
+	route := controlPlaneRoute{http.MethodGet, controlplane.BasePath + "/tenants/" + orgA + "/inventory?type=station"}
+
+	rr := send(handler, route, reader(orgA))
+	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+	var answer controlplane.Inventory
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &answer))
+	assert.Equal(t, 1, answer.Count)
+	assert.Equal(t, []controlplane.InventoryItem{{
+		Id: "aaaa.CP001", Urn: "urn:cpms:" + orgA + ":station/aaaa.CP001", Attrs: map[string]string{"state": "active"},
+	}}, answer.Items)
+
+	rr = send(handler, route, reader(testutil.PlatformOrgId))
+	assert.Equal(t, http.StatusNotFound, rr.Code, "an org that the token does not reach")
+}
+
 func TestControlPlaneChangesWhatTheGatewayLookupsAnswer(t *testing.T) {
 	handler, platform, _ := newMultiTenantInternalHandler(t)
 	token := serviceToken(platform, "svc:provisioner", tenancy.PermTenantManage)
 	// the answer for a charge station that is not registered says whether its host
-	// belongs to a tenant
+	// belongs to a tenant: such a tenant onboards the station (the default), otherwise
+	// the host is not known
+	const onboarding = "onboarding"
 	lookup := func(host string) string {
 		rr := get(handler, "/_internal/v1/station-auth?host="+host+"&stationId=CP001", "")
+		if rr.Code == http.StatusOK {
+			var answer internalapi.StationAuthResponse
+			require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &answer))
+			require.NotNil(t, answer.Onboarding)
+			return onboarding
+		}
 		require.Equal(t, http.StatusNotFound, rr.Code)
 		var answer internalapi.StatusResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &answer))
@@ -197,13 +275,13 @@ func TestControlPlaneChangesWhatTheGatewayLookupsAnswer(t *testing.T) {
 	}
 
 	// the lookup keeps the tenant of the host from now on
-	require.Equal(t, internalapi.ErrorUnknownStation, lookup("a.example.com"))
+	require.Equal(t, onboarding, lookup("a.example.com"))
 	require.Equal(t, internalapi.ErrorUnknownHost, lookup("changed.example.com"))
 
 	rr := send(handler, controlPlaneRoute{http.MethodPut, controlplane.BasePath + "/tenants/" + orgA}, token)
 	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
 
-	assert.Equal(t, internalapi.ErrorUnknownStation, lookup("changed.example.com"))
+	assert.Equal(t, onboarding, lookup("changed.example.com"))
 	assert.Equal(t, internalapi.ErrorUnknownHost, lookup("a.example.com"), "the host that the tenant gave up must not be answered from the cache")
 }
 

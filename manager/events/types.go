@@ -20,6 +20,13 @@ const (
 	TypeSessionCompleted       = "session.completed"
 	TypeCommandCompleted       = "command.completed"
 	TypeCommandProgress        = "command.progress"
+	TypeLocationUpdated        = "location.updated"
+	TypeStationDecommissioned  = "station.decommissioned"
+	TypeStationPending         = "station.pending"
+	TypeStationApproved        = "station.approved"
+	TypeStationApprovalFailed  = "station.approval_failed"
+	TypeStationRejected        = "station.rejected"
+	TypeStationTransferred     = "station.transferred"
 )
 
 // The types of the resources that the events are about, with the form of their ids.
@@ -28,6 +35,7 @@ const (
 	ResourceConnector = "connector" // id: "<station_key>#<connector_id>" (ConnectorResourceId)
 	ResourceSession   = "session"   // id: the id that the transaction is stored with
 	ResourceCommand   = "command"   // id: command id
+	ResourceLocation  = "location"  // id: asset location id
 )
 
 // AllTypes lists every type of the catalogue.
@@ -41,7 +49,36 @@ var AllTypes = []string{
 	TypeSessionCompleted,
 	TypeCommandCompleted,
 	TypeCommandProgress,
+	TypeLocationUpdated,
+	TypeStationDecommissioned,
+	TypeStationPending,
+	TypeStationApproved,
+	TypeStationApprovalFailed,
+	TypeStationRejected,
+	TypeStationTransferred,
 }
+
+// The changes that a location.updated event reports.
+const (
+	LocationChangeCreated = "created"
+	LocationChangeUpdated = "updated"
+	LocationChangeDeleted = "deleted"
+	// LocationChangeTransferred is a location that moved to another org with its charge
+	// station: the event is emitted in the old and in the new org.
+	LocationChangeTransferred = "transferred"
+)
+
+// The ways in which the password of an approved station is set (StationApprovedData).
+const (
+	// PasswordModeRotate sends a new password of the station to it.
+	PasswordModeRotate = "rotate"
+	// PasswordModeManual gives the new password of the station to the operator, who sets
+	// it on the station.
+	PasswordModeManual = "manual"
+	// PasswordModeKeepOnboarding keeps the onboarding password of the tenant, which the
+	// station connected with.
+	PasswordModeKeepOnboarding = "keep_onboarding"
+)
 
 // DisconnectReasonStale is the reason of a station.disconnected event when the station
 // showed no sign of life for too long and the manager marked it disconnected. The other

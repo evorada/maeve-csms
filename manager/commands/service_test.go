@@ -311,3 +311,86 @@ func TestCheckPayloadChecksAsEnqueueDoes(t *testing.T) {
 	assert.Zero(t, total)
 	assert.Empty(t, f.emitter.sent())
 }
+
+// A command that starts charging is refused for a station that may not charge (pending
+// or decommissioned); every other command is queued for it as for any station.
+func TestEnqueueRefusesChargingAtAStationThatMayNotCharge(t *testing.T) {
+	ctx := context.Background()
+	remoteStart := `{"connectorId":1,"idTag":"TAG1"}`
+	reserveNow := `{"connectorId":1,"expiryDate":"2026-11-28T12:00:00Z","idTag":"TAG1","reservationId":7}`
+
+	pending := func(t *testing.T) *fixture {
+		f := newFixture(t)
+		f.service.Registry = f.store
+		_, err := f.store.RecordOnboardingConnection(ctx, testStation, testOrgId, store.OnboardingTransportWs,
+			store.OnboardingCredentialOpen, 50, testStart)
+		require.NoError(t, err)
+		return f
+	}
+	decommissioned := func(t *testing.T) *fixture {
+		f := newFixture(t)
+		f.service.Registry = f.store
+		require.NoError(t, f.store.SetChargeStationAuth(ctx, testStation, &store.ChargeStationAuth{OrgId: testOrgId}))
+		require.NoError(t, f.store.DecommissionChargeStation(ctx, testStation, nil))
+		return f
+	}
+
+	for name, newStation := range map[string]func(t *testing.T) *fixture{"pending": pending, "decommissioned": decommissioned} {
+		t.Run(name, func(t *testing.T) {
+			for action, payload := range map[string]string{"RemoteStartTransaction": remoteStart, "ReserveNow": reserveNow} {
+				f := newStation(t)
+				_, err := f.service.Enqueue(ctx, newCommand(action, payload))
+				assert.ErrorIs(t, err, commands.ErrStationNotActive, action)
+
+				stored, _, err := f.store.ListCommands(ctx, store.CommandFilter{})
+				require.NoError(t, err)
+				assert.Empty(t, stored, "nothing is stored")
+				assert.Empty(t, f.emitter.sent(), "nothing reaches the station")
+			}
+		})
+	}
+
+	t.Run("other commands are queued for a pending station", func(t *testing.T) {
+		f := pending(t)
+		cmd := f.enqueue("ChangeConfiguration", `{"key":"HeartbeatInterval","value":"60"}`)
+		assert.Equal(t, store.CommandStatusSent, cmd.Status)
+		require.Len(t, f.waitSent(1), 1)
+	})
+
+	t.Run("an active station is not affected", func(t *testing.T) {
+		f := newFixture(t)
+		f.service.Registry = f.store
+		require.NoError(t, f.store.SetChargeStationAuth(ctx, testStation, &store.ChargeStationAuth{OrgId: testOrgId}))
+		cmd := f.enqueue("RemoteStartTransaction", remoteStart)
+		assert.Equal(t, store.CommandStatusSent, cmd.Status)
+	})
+
+	t.Run("a registry that cannot be read refuses the command", func(t *testing.T) {
+		f := newFixture(t)
+		f.service.Registry = failingRegistry{}
+		_, err := f.service.Enqueue(ctx, newCommand("RemoteStartTransaction", remoteStart))
+		assert.Error(t, err)
+		assert.NotErrorIs(t, err, commands.ErrStationNotActive)
+		// a command that does not start charging does not read it
+		_, err = f.service.Enqueue(ctx, newCommand("Reset", `{"type":"Soft"}`))
+		assert.NoError(t, err)
+	})
+}
+
+// failingRegistry cannot read the registry.
+type failingRegistry struct {
+	store.ChargeStationRegistryStore
+}
+
+func (failingRegistry) LookupChargeStation(context.Context, string) (*store.ChargeStation, error) {
+	return nil, errors.New("database is down")
+}
+
+func TestStartsCharging(t *testing.T) {
+	for _, action := range []string{"RemoteStartTransaction", "RequestStartTransaction", "ReserveNow"} {
+		assert.True(t, commands.StartsCharging(action), action)
+	}
+	for _, action := range []string{"RemoteStopTransaction", "ChangeConfiguration", "TriggerMessage", "Reset", "CancelReservation", "UnlockConnector"} {
+		assert.False(t, commands.StartsCharging(action), action)
+	}
+}

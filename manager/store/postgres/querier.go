@@ -15,14 +15,29 @@ type Querier interface {
 	AddMeterValues(ctx context.Context, arg AddMeterValuesParams) error
 	CancelReservation(ctx context.Context, reservationID int32) error
 	ClaimUnpublishedOutboxEvents(ctx context.Context, limit int32) ([]OutboxEvent, error)
+	// The approved station becomes active with the auth details of its approval; its pending
+	// password and its onboarding are cleared.
+	CompleteChargeStationApproval(ctx context.Context, arg CompleteChargeStationApprovalParams) error
+	CountAssetEvsesForLocation(ctx context.Context, locationID pgtype.UUID) (int64, error)
 	CountChargeStationEvents(ctx context.Context, chargeStationID string) (int64, error)
+	CountChargeStationRecords(ctx context.Context, arg CountChargeStationRecordsParams) (int64, error)
 	// The same conditions as ListCommands.
 	CountCommands(ctx context.Context, arg CountCommandsParams) (int64, error)
 	CountConnectorsForOrgs(ctx context.Context, orgIds []pgtype.UUID) (int64, error)
 	CountDeviceReports(ctx context.Context, chargeStationID string) (int64, error)
+	CountInventoryConnectors(ctx context.Context, arg CountInventoryConnectorsParams) (int64, error)
+	CountInventoryLocations(ctx context.Context, orgID pgtype.UUID) (int64, error)
+	CountInventoryStations(ctx context.Context, arg CountInventoryStationsParams) (int64, error)
+	CountInventoryTokens(ctx context.Context, arg CountInventoryTokensParams) (int64, error)
 	CountMeterValues(ctx context.Context, arg CountMeterValuesParams) (int64, error)
 	CountTransactionsFiltered(ctx context.Context, arg CountTransactionsFilteredParams) (int64, error)
+	// A connector belongs to the org of its EVSE. Returns no row when there is no such EVSE.
+	CreateAssetConnector(ctx context.Context, arg CreateAssetConnectorParams) (AssetConnector, error)
+	CreateAssetEvse(ctx context.Context, arg CreateAssetEvseParams) (AssetEvse, error)
+	CreateAssetLocation(ctx context.Context, arg CreateAssetLocationParams) (AssetLocation, error)
 	CreateOrUpdateDisplayMessage(ctx context.Context, arg CreateOrUpdateDisplayMessageParams) error
+	// A station that was registered at the same moment is left as it is (no row).
+	CreatePendingChargeStation(ctx context.Context, arg CreatePendingChargeStationParams) (int64, error)
 	// The reservation belongs to the org of its charge station, or to the legacy org when
 	// the charge station is not registered.
 	CreateReservation(ctx context.Context, arg CreateReservationParams) error
@@ -33,6 +48,9 @@ type Querier interface {
 	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
 	DeleteAllDisplayMessages(ctx context.Context, chargeStationID string) error
 	DeleteAllLocalAuthListEntries(ctx context.Context, chargeStationID string) error
+	DeleteAssetConnector(ctx context.Context, id pgtype.UUID) error
+	DeleteAssetEvse(ctx context.Context, id pgtype.UUID) error
+	DeleteAssetLocation(ctx context.Context, id pgtype.UUID) error
 	DeleteCertificate(ctx context.Context, certificateHash string) error
 	DeleteChargeStationCertificateDeletion(ctx context.Context, chargeStationID string) error
 	DeleteChargeStationCertificateQuery(ctx context.Context, chargeStationID string) error
@@ -62,6 +80,7 @@ type Querier interface {
 	DeleteRemoteStopTransactionRequest(ctx context.Context, chargeStationID string) error
 	DeleteResetRequest(ctx context.Context, chargeStationID string) error
 	DeleteTenantHostnames(ctx context.Context, orgID pgtype.UUID) error
+	DeleteToken(ctx context.Context, arg DeleteTokenParams) error
 	DeleteTokenForOrg(ctx context.Context, arg DeleteTokenForOrgParams) error
 	DeleteUnlockConnectorRequest(ctx context.Context, chargeStationID string) error
 	DeleteVariableMonitoring(ctx context.Context, arg DeleteVariableMonitoringParams) error
@@ -71,6 +90,12 @@ type Querier interface {
 	FindActiveTransaction(ctx context.Context, chargeStationID string) (Transaction, error)
 	GetActiveReservations(ctx context.Context, chargeStationID string) ([]Reservation, error)
 	GetAllMeterValuesByStation(ctx context.Context, arg GetAllMeterValuesByStationParams) ([]MeterValue, error)
+	GetAssetConnector(ctx context.Context, id pgtype.UUID) (AssetConnector, error)
+	GetAssetConnectorByOcpp(ctx context.Context, arg GetAssetConnectorByOcppParams) (AssetConnector, error)
+	GetAssetEvse(ctx context.Context, id pgtype.UUID) (AssetEvse, error)
+	GetAssetEvseByOcpp(ctx context.Context, arg GetAssetEvseByOcppParams) (AssetEvse, error)
+	GetAssetLocation(ctx context.Context, id pgtype.UUID) (AssetLocation, error)
+	GetAssetLocationByOcpiId(ctx context.Context, arg GetAssetLocationByOcpiIdParams) (AssetLocation, error)
 	GetCertificate(ctx context.Context, certificateHash string) (Certificate, error)
 	// Auth
 	GetChargeStationAuth(ctx context.Context, chargeStationID string) (ChargeStation, error)
@@ -82,6 +107,11 @@ type Querier interface {
 	GetChargeStationClearCache(ctx context.Context, chargeStationID string) (ChargeStationClearCache, error)
 	// Data Transfer
 	GetChargeStationDataTransfer(ctx context.Context, chargeStationID string) (ChargeStationDataTransfer, error)
+	GetChargeStationOnboardingForUpdate(ctx context.Context, chargeStationID string) (GetChargeStationOnboardingForUpdateRow, error)
+	// Registry: the record of a charge station with what it reported at its last boot.
+	// created_at and updated_at are TIMESTAMP columns written with NOW() in the time zone
+	// of the session; the cast reads them back as the same instant.
+	GetChargeStationRecord(ctx context.Context, chargeStationID string) (GetChargeStationRecordRow, error)
 	// Runtime
 	GetChargeStationRuntime(ctx context.Context, chargeStationID string) (ChargeStationRuntime, error)
 	// Settings
@@ -136,6 +166,11 @@ type Querier interface {
 	InsertTenant(ctx context.Context, arg InsertTenantParams) error
 	InsertTenantHostname(ctx context.Context, arg InsertTenantHostnameParams) error
 	ListAllLocations(ctx context.Context, arg ListAllLocationsParams) ([]Location, error)
+	ListAssetConnectorsByEvses(ctx context.Context, evseUids []pgtype.UUID) ([]AssetConnector, error)
+	ListAssetEvsesByLocation(ctx context.Context, locationID pgtype.UUID) ([]AssetEvse, error)
+	ListAssetEvsesByStation(ctx context.Context, stationKey string) ([]AssetEvse, error)
+	// The query is a LIKE pattern: the store escapes %, _ and \ in it.
+	ListAssetLocations(ctx context.Context, arg ListAssetLocationsParams) ([]AssetLocation, error)
 	ListCertificates(ctx context.Context) ([]Certificate, error)
 	ListChargeStationCertificateDeletions(ctx context.Context, arg ListChargeStationCertificateDeletionsParams) ([]ChargeStationCertificateDeletion, error)
 	ListChargeStationCertificateQueries(ctx context.Context, arg ListChargeStationCertificateQueriesParams) ([]ChargeStationCertificateQuery, error)
@@ -144,6 +179,9 @@ type Querier interface {
 	ListChargeStationClearCaches(ctx context.Context, arg ListChargeStationClearCachesParams) ([]ChargeStationClearCache, error)
 	ListChargeStationDataTransfers(ctx context.Context, arg ListChargeStationDataTransfersParams) ([]ChargeStationDataTransfer, error)
 	ListChargeStationEvents(ctx context.Context, arg ListChargeStationEventsParams) ([]ChargeStationEvent, error)
+	// The state and status lists are never NULL: an empty list selects every state or
+	// status. A station without a status row has never connected.
+	ListChargeStationRecords(ctx context.Context, arg ListChargeStationRecordsParams) ([]ListChargeStationRecordsRow, error)
 	ListChargeStationSettings(ctx context.Context, arg ListChargeStationSettingsParams) ([]ChargeStationSetting, error)
 	ListChargeStationTriggers(ctx context.Context, arg ListChargeStationTriggersParams) ([]ChargeStationTrigger, error)
 	ListCommands(ctx context.Context, arg ListCommandsParams) ([]Command, error)
@@ -156,6 +194,20 @@ type Querier interface {
 	ListDisplayMessagesByStateAndPriority(ctx context.Context, arg ListDisplayMessagesByStateAndPriorityParams) ([]DisplayMessage, error)
 	ListExpiredQueuedCommands(ctx context.Context, arg ListExpiredQueuedCommandsParams) ([]Command, error)
 	ListFirmwareUpdateRequests(ctx context.Context, arg ListFirmwareUpdateRequestsParams) ([]FirmwareUpdateRequest, error)
+	// The id of a connector is its subject key (store.ConnectorSubjectKey): the station key
+	// and the OCPP EVSE id, followed by the OCPP connector id when the EVSE has more than
+	// one connector.
+	ListInventoryConnectors(ctx context.Context, arg ListInventoryConnectorsParams) ([]ListInventoryConnectorsRow, error)
+	// Locations have no inactive state.
+	ListInventoryLocations(ctx context.Context, arg ListInventoryLocationsParams) ([]ListInventoryLocationsRow, error)
+	// The inventory of an org: what it owns itself (org_id), never what the orgs below it
+	// own. A page holds the items whose id sorts after after_id, byte by byte (COLLATE "C",
+	// as the other backends compare), and row_limit items at most. Without include_inactive
+	// the decommissioned stations, the connectors of a REMOVED EVSE or of a station that is
+	// not active, and the tokens that are not valid are left out.
+	ListInventoryStations(ctx context.Context, arg ListInventoryStationsParams) ([]ListInventoryStationsRow, error)
+	// The id of a token is {country_code}*{party_id}*{uid} (store.TokenInventoryId).
+	ListInventoryTokens(ctx context.Context, arg ListInventoryTokensParams) ([]ListInventoryTokensRow, error)
 	ListLocations(ctx context.Context, arg ListLocationsParams) ([]Location, error)
 	ListLogRequests(ctx context.Context, arg ListLogRequestsParams) ([]LogRequest, error)
 	ListOcpiPartiesForRole(ctx context.Context, role string) ([]OcpiParty, error)
@@ -171,15 +223,29 @@ type Querier interface {
 	ListTransactions(ctx context.Context) ([]Transaction, error)
 	ListTransactionsFiltered(ctx context.Context, arg ListTransactionsFilteredParams) ([]Transaction, error)
 	ListVariableMonitoring(ctx context.Context, arg ListVariableMonitoringParams) ([]VariableMonitoring, error)
+	// A charge station that moves to another org, with its EVSEs, their connectors, its
+	// charging profiles and maybe its location. The station row is locked first, so that
+	// transfers of one station happen one after the other.
+	LockChargeStation(ctx context.Context, chargeStationID string) (LockChargeStationRow, error)
+	// Serialises the onboarding connections of one org until the transaction ends, so that
+	// its pending stations are counted and created one connection at a time. lock_class is
+	// a constant of the store that names this lock (see LockStationCommands).
+	LockOrgOnboarding(ctx context.Context, arg LockOrgOnboardingParams) error
 	// Serialises the claims of one station until the transaction ends. The two-key form of
 	// the advisory lock has a key space of its own, apart from the one-key locks (such as
 	// the outbox relay lock); lock_class is a constant of the store that names this lock.
 	// Two stations whose keys hash alike only wait for each other's claims.
 	LockStationCommands(ctx context.Context, arg LockStationCommandsParams) error
+	// The connectors of the EVSEs of the station with the tariffs that they refer to, locked
+	// until the transaction ends.
+	LockStationConnectors(ctx context.Context, stationKey string) ([]LockStationConnectorsRow, error)
 	LookupChargeStationCertificateDeletion(ctx context.Context, chargeStationID string) (ChargeStationCertificateDeletion, error)
 	LookupChargeStationCertificateQuery(ctx context.Context, chargeStationID string) (ChargeStationCertificateQuery, error)
 	MarkCommandSent(ctx context.Context, arg MarkCommandSentParams) (Command, error)
 	MarkOutboxEventPublished(ctx context.Context, arg MarkOutboxEventPublishedParams) error
+	// The EVSEs of a charge station that is moved or decommissioned. An EVSE that is already
+	// where the change would put it keeps its version.
+	MoveStationEvses(ctx context.Context, arg MoveStationEvsesParams) error
 	NextOcpp16TransactionId(ctx context.Context) (int32, error)
 	NextQueuedCommandForUpdate(ctx context.Context, arg NextQueuedCommandForUpdateParams) (Command, error)
 	// Deletes at most 10000 of the events published before $1, so that one statement does
@@ -193,6 +259,9 @@ type Querier interface {
 	// handle at the same time cannot interleave between a read and a write.
 	RecordStationConnected(ctx context.Context, arg RecordStationConnectedParams) (int64, error)
 	RecordStationDisconnected(ctx context.Context, arg RecordStationDisconnectedParams) (int64, error)
+	RedactCommandPayload(ctx context.Context, arg RedactCommandPayloadParams) error
+	RejectPendingChargeStation(ctx context.Context, arg RejectPendingChargeStationParams) error
+	RemoveStationEvses(ctx context.Context, stationKey string) error
 	SetCertificate(ctx context.Context, arg SetCertificateParams) (Certificate, error)
 	// SetChargeStationAuth without an org (NULL) registers a new charge station in the
 	// legacy org and leaves the org of a charge station that is already there as it is.
@@ -202,8 +271,11 @@ type Querier interface {
 	SetChargeStationChangeAvailability(ctx context.Context, arg SetChargeStationChangeAvailabilityParams) (ChargeStationChangeAvailability, error)
 	SetChargeStationClearCache(ctx context.Context, arg SetChargeStationClearCacheParams) (ChargeStationClearCache, error)
 	SetChargeStationDataTransfer(ctx context.Context, arg SetChargeStationDataTransferParams) (ChargeStationDataTransfer, error)
+	SetChargeStationOnboarding(ctx context.Context, arg SetChargeStationOnboardingParams) error
+	SetChargeStationPendingPassword(ctx context.Context, arg SetChargeStationPendingPasswordParams) error
 	SetChargeStationRuntime(ctx context.Context, arg SetChargeStationRuntimeParams) (ChargeStationRuntime, error)
 	SetChargeStationSettings(ctx context.Context, arg SetChargeStationSettingsParams) (ChargeStationSetting, error)
+	SetChargeStationState(ctx context.Context, arg SetChargeStationStateParams) (int64, error)
 	SetChargeStationTrigger(ctx context.Context, arg SetChargeStationTriggerParams) (ChargeStationTrigger, error)
 	SetCommandProgress(ctx context.Context, arg SetCommandProgressParams) (Command, error)
 	// Location ids are global. SetLocation returns no row, and changes nothing, when the
@@ -215,16 +287,33 @@ type Querier interface {
 	SetRemoteStopTransactionRequest(ctx context.Context, arg SetRemoteStopTransactionRequestParams) (RemoteStopTransactionRequest, error)
 	// Reset Request
 	SetResetRequest(ctx context.Context, arg SetResetRequestParams) (ResetRequest, error)
+	SetStationLocation(ctx context.Context, arg SetStationLocationParams) (int64, error)
 	SetTenantStatus(ctx context.Context, arg SetTenantStatusParams) (int64, error)
 	// Unlock Connector Request
 	SetUnlockConnectorRequest(ctx context.Context, arg SetUnlockConnectorRequestParams) (UnlockConnectorRequest, error)
 	StoreMeterValue(ctx context.Context, arg StoreMeterValueParams) error
 	TouchStationLastSeen(ctx context.Context, arg TouchStationLastSeenParams) error
+	TransferChargingProfiles(ctx context.Context, arg TransferChargingProfilesParams) error
+	// A location only moves to another org when no other station and no EVSE of another
+	// station is at it: no row is changed otherwise.
+	TransferLocation(ctx context.Context, arg TransferLocationParams) (int64, error)
+	// Tariffs belong to an org: the connectors of a station that moves to another org lose
+	// theirs.
+	TransferStationConnectors(ctx context.Context, arg TransferStationConnectorsParams) (int64, error)
+	TransferStationEvses(ctx context.Context, arg TransferStationEvsesParams) (int64, error)
+	TransferStationRow(ctx context.Context, arg TransferStationRowParams) error
 	TransitionCommand(ctx context.Context, arg TransitionCommandParams) (Command, error)
 	// The key of the lock is a constant of the store (outboxRelayLockKey): a transaction
 	// that holds it is the only relay batch of every manager that shares the database.
 	TryLockOutboxRelay(ctx context.Context, lockKey int64) (bool, error)
+	// An update that names a version that is not stored returns no row.
+	UpdateAssetConnector(ctx context.Context, arg UpdateAssetConnectorParams) (AssetConnector, error)
+	// An update that names a version that is not stored returns no row.
+	UpdateAssetEvse(ctx context.Context, arg UpdateAssetEvseParams) (AssetEvse, error)
+	// An update that names a version that is not stored returns no row.
+	UpdateAssetLocation(ctx context.Context, arg UpdateAssetLocationParams) (AssetLocation, error)
 	UpdateChargeStationCertificate(ctx context.Context, arg UpdateChargeStationCertificateParams) (ChargeStationCertificate, error)
+	UpdateChargeStationRecord(ctx context.Context, arg UpdateChargeStationRecordParams) (pgtype.Timestamptz, error)
 	UpdateHeartbeat(ctx context.Context, arg UpdateHeartbeatParams) error
 	UpdateReservationStatus(ctx context.Context, arg UpdateReservationStatusParams) error
 	// The entitlement and config documents are only replaced by a document of the same or

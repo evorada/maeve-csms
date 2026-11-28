@@ -19,7 +19,11 @@ const fullConfig = `{
 	"accepted_cert_org_names": ["Charge Co", "Charge Co Services"],
 	"heartbeat_interval_s": 120,
 	"default_tariff_ref": "tariff-standard",
-	"onboarding_mode": "preregistered_only"
+	"onboarding_mode": "preregistered_only",
+	"onboarding_open_sp1": false,
+	"onboarding_password_sha256": "XohImNooBHFR0OVvjcYpJ3NgPQ1qq73WKhHvch0VQtg=",
+	"onboarding_max_pending": 10,
+	"onboarding_boot_interval_s": 120
 }`
 
 func TestConfigSchema(t *testing.T) {
@@ -53,6 +57,7 @@ func TestConfigSchema(t *testing.T) {
 	assert.ElementsMatch(t, []string{
 		"version", "default_security_profile", "accepted_cert_org_names",
 		"heartbeat_interval_s", "default_tariff_ref", "onboarding_mode",
+		"onboarding_open_sp1", "onboarding_password_sha256", "onboarding_max_pending", "onboarding_boot_interval_s",
 	}, names)
 
 	// the defaults that the schema shows are the defaults that the manager applies
@@ -62,6 +67,14 @@ func TestConfigSchema(t *testing.T) {
 	assert.JSONEq(t, `"pending_approval"`, string(*schema.Properties["onboarding_mode"].Default))
 	assert.Equal(t, tenancy.OnboardingPendingApproval, defaults.Onboarding())
 	assert.JSONEq(t, `[]`, string(*schema.Properties["accepted_cert_org_names"].Default))
+	assert.JSONEq(t, `true`, string(*schema.Properties["onboarding_open_sp1"].Default))
+	assert.True(t, defaults.OnboardingWithoutPassword())
+	assert.JSONEq(t, `50`, string(*schema.Properties["onboarding_max_pending"].Default))
+	assert.Equal(t, 50, defaults.OnboardingMaxPendingStations())
+	assert.JSONEq(t, `60`, string(*schema.Properties["onboarding_boot_interval_s"].Default))
+	assert.Equal(t, 60*time.Second, defaults.OnboardingBootInterval())
+	assert.Nil(t, schema.Properties["onboarding_password_sha256"].Default, "there is no onboarding password unless the tenant sets one")
+	assert.Empty(t, defaults.OnboardingPassword())
 
 	t.Run("a caller cannot change the schema", func(t *testing.T) {
 		tenancy.ConfigSchema()[0] = 'x'
@@ -71,17 +84,22 @@ func TestConfigSchema(t *testing.T) {
 
 func TestValidateConfigAcceptsAValidConfig(t *testing.T) {
 	for name, doc := range map[string]string{
-		"every setting":           fullConfig,
-		"only the version":        `{"version":1}`,
-		"version zero":            `{"version":0}`,
-		"an empty list of names":  `{"version":1,"accepted_cert_org_names":[]}`,
-		"the lowest heartbeat":    `{"version":1,"heartbeat_interval_s":60}`,
-		"the highest heartbeat":   `{"version":1,"heartbeat_interval_s":86400}`,
-		"the first profile":       `{"version":1,"default_security_profile":"SP1"}`,
-		"pending approval":        `{"version":1,"onboarding_mode":"pending_approval"}`,
-		"twenty names":            `{"version":1,"accepted_cert_org_names":["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20"]}`,
-		"whitespace around it":    " \n{\"version\":1}\n ",
-		"a name of 64 characters": `{"version":1,"accepted_cert_org_names":["0123456789012345678901234567890123456789012345678901234567890123"]}`,
+		"every setting":                            fullConfig,
+		"only the version":                         `{"version":1}`,
+		"version zero":                             `{"version":0}`,
+		"an empty list of names":                   `{"version":1,"accepted_cert_org_names":[]}`,
+		"the lowest heartbeat":                     `{"version":1,"heartbeat_interval_s":60}`,
+		"the highest heartbeat":                    `{"version":1,"heartbeat_interval_s":86400}`,
+		"the first profile":                        `{"version":1,"default_security_profile":"SP1"}`,
+		"pending approval":                         `{"version":1,"onboarding_mode":"pending_approval"}`,
+		"twenty names":                             `{"version":1,"accepted_cert_org_names":["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20"]}`,
+		"whitespace around it":                     " \n{\"version\":1}\n ",
+		"a name of 64 characters":                  `{"version":1,"accepted_cert_org_names":["0123456789012345678901234567890123456789012345678901234567890123"]}`,
+		"onboarding without a limit or a password": `{"version":1,"onboarding_max_pending":0,"onboarding_open_sp1":false}`,
+		"the most pending stations":                `{"version":1,"onboarding_max_pending":10000}`,
+		"the shortest boot interval":               `{"version":1,"onboarding_boot_interval_s":10}`,
+		"the longest boot interval":                `{"version":1,"onboarding_boot_interval_s":86400}`,
+		"an onboarding password with + and /":      `{"version":1,"onboarding_password_sha256":"+/+/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			assert.NoError(t, tenancy.ValidateConfig(json.RawMessage(doc)))
@@ -106,6 +124,14 @@ func TestValidateConfigRefusesAnInvalidConfig(t *testing.T) {
 		{name: "session rules", doc: `{"version":1,"session_rules":{"max_kwh":50}}`, fields: []string{"session_rules"}},
 		{name: "a setting in another case", doc: `{"version":1,"Default_Security_Profile":"SP1"}`, fields: []string{"Default_Security_Profile"}},
 		{name: "an onboarding mode that does not exist", doc: `{"version":1,"onboarding_mode":"open"}`, fields: []string{"onboarding_mode"}},
+		{name: "an onboarding password that is not a hash", doc: `{"version":1,"onboarding_password_sha256":"secret"}`, fields: []string{"onboarding_password_sha256"}},
+		{name: "an onboarding password that is not base64", doc: `{"version":1,"onboarding_password_sha256":"XohImNooBHFR0OVvjcYpJ3NgPQ1qq73WKhHvch0VQt-="}`, fields: []string{"onboarding_password_sha256"}},
+		{name: "an empty onboarding password", doc: `{"version":1,"onboarding_password_sha256":""}`, fields: []string{"onboarding_password_sha256"}},
+		{name: "onboarding without a password as a text", doc: `{"version":1,"onboarding_open_sp1":"false"}`, fields: []string{"onboarding_open_sp1"}},
+		{name: "a negative number of pending stations", doc: `{"version":1,"onboarding_max_pending":-1}`, fields: []string{"onboarding_max_pending"}},
+		{name: "too many pending stations", doc: `{"version":1,"onboarding_max_pending":10001}`, fields: []string{"onboarding_max_pending"}},
+		{name: "a boot interval below the minimum", doc: `{"version":1,"onboarding_boot_interval_s":9}`, fields: []string{"onboarding_boot_interval_s"}},
+		{name: "a boot interval above the maximum", doc: `{"version":1,"onboarding_boot_interval_s":86401}`, fields: []string{"onboarding_boot_interval_s"}},
 		{name: "no version", doc: `{"default_security_profile":"SP3"}`, fields: []string{"version"}},
 		{name: "an empty object", doc: `{}`, fields: []string{"version"}},
 		{name: "a negative version", doc: `{"version":-1}`, fields: []string{"version"}},
@@ -160,15 +186,23 @@ func TestParseConfig(t *testing.T) {
 	cfg, err := tenancy.ParseConfig(json.RawMessage(fullConfig))
 	require.NoError(t, err)
 
-	heartbeat, tariff := 120, "tariff-standard"
+	heartbeat, tariff, openSP1, maxPending, bootInterval := 120, "tariff-standard", false, 10, 120
 	assert.Equal(t, &tenancy.TenantConfig{
-		Version:                12,
-		DefaultSecurityProfile: "SP3",
-		AcceptedCertOrgNames:   []string{"Charge Co", "Charge Co Services"},
-		HeartbeatIntervalS:     &heartbeat,
-		DefaultTariffRef:       &tariff,
-		OnboardingMode:         tenancy.OnboardingPreregisteredOnly,
+		Version:                  12,
+		DefaultSecurityProfile:   "SP3",
+		AcceptedCertOrgNames:     []string{"Charge Co", "Charge Co Services"},
+		HeartbeatIntervalS:       &heartbeat,
+		DefaultTariffRef:         &tariff,
+		OnboardingMode:           tenancy.OnboardingPreregisteredOnly,
+		OnboardingOpenSP1:        &openSP1,
+		OnboardingPasswordSHA256: "XohImNooBHFR0OVvjcYpJ3NgPQ1qq73WKhHvch0VQtg=",
+		OnboardingMaxPending:     &maxPending,
+		OnboardingBootIntervalS:  &bootInterval,
 	}, cfg)
+	assert.False(t, cfg.OnboardingWithoutPassword())
+	assert.Equal(t, "XohImNooBHFR0OVvjcYpJ3NgPQ1qq73WKhHvch0VQtg=", cfg.OnboardingPassword())
+	assert.Equal(t, 10, cfg.OnboardingMaxPendingStations())
+	assert.Equal(t, 2*time.Minute, cfg.OnboardingBootInterval())
 	assert.Equal(t, store.TLSWithClientSideCertificates, cfg.SecurityProfile())
 	assert.Equal(t, tenancy.OnboardingPreregisteredOnly, cfg.Onboarding())
 	assert.Equal(t, 2*time.Minute, cfg.HeartbeatInterval(5*time.Minute))
@@ -194,8 +228,27 @@ func TestTenantConfigDefaults(t *testing.T) {
 			assert.Equal(t, store.SecurityProfile(1), cfg.SecurityProfile())
 			assert.Equal(t, tenancy.OnboardingPendingApproval, cfg.Onboarding())
 			assert.Equal(t, global, cfg.HeartbeatInterval(global))
+			assert.True(t, cfg.OnboardingWithoutPassword())
+			assert.Empty(t, cfg.OnboardingPassword())
+			assert.Equal(t, 50, cfg.OnboardingMaxPendingStations())
+			assert.Equal(t, time.Minute, cfg.OnboardingBootInterval())
 		})
 	}
+
+	t.Run("onboarding settings outside the limits are not applied", func(t *testing.T) {
+		for value, want := range map[int]int{0: 0, 10000: 10000, -1: 50, 10001: 50} {
+			value := value
+			cfg := &tenancy.TenantConfig{OnboardingMaxPending: &value}
+			assert.Equal(t, want, cfg.OnboardingMaxPendingStations(), value)
+		}
+		for seconds, want := range map[int]time.Duration{10: 10 * time.Second, 86400: 24 * time.Hour, 9: time.Minute, 0: time.Minute, 86401: time.Minute} {
+			seconds := seconds
+			cfg := &tenancy.TenantConfig{OnboardingBootIntervalS: &seconds}
+			assert.Equal(t, want, cfg.OnboardingBootInterval(), seconds)
+		}
+		openSP1 := true
+		assert.True(t, (&tenancy.TenantConfig{OnboardingOpenSP1: &openSP1}).OnboardingWithoutPassword())
+	})
 
 	t.Run("the security profiles", func(t *testing.T) {
 		for value, want := range map[string]store.SecurityProfile{

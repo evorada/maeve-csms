@@ -161,6 +161,9 @@ func TestStubsReturnErrNotImplemented(t *testing.T) {
 			_, err := s.SetCommandProgress(ctx, "01936b2e-0000-7000-8000-000000000001", []byte(`{}`), time.Now(), nil)
 			return err
 		},
+		"RedactCommandPayload": func() error {
+			return s.RedactCommandPayload(ctx, "01936b2e-0000-7000-8000-000000000001", []byte(`{}`))
+		},
 		"ListQueuedStationKeys": func() error {
 			_, err := s.ListQueuedStationKeys(ctx, time.Now(), "", 10)
 			return err
@@ -175,6 +178,125 @@ func TestStubsReturnErrNotImplemented(t *testing.T) {
 		},
 		"DeleteCompletedCommandsBefore": func() error {
 			_, err := s.DeleteCompletedCommandsBefore(ctx, time.Now(), 10)
+			return err
+		},
+		"CreateAssetLocation": func() error {
+			return s.CreateAssetLocation(ctx, &store.AssetLocation{})
+		},
+		"UpdateAssetLocation": func() error {
+			return s.UpdateAssetLocation(ctx, &store.AssetLocation{})
+		},
+		"LookupAssetLocation": func() error {
+			_, err := s.LookupAssetLocation(ctx, "loc001")
+			return err
+		},
+		"LookupAssetLocationByOcpiId": func() error {
+			_, err := s.LookupAssetLocationByOcpiId(ctx, "party001", "loc001")
+			return err
+		},
+		"ListAssetLocations": func() error {
+			_, _, err := s.ListAssetLocations(ctx, store.AssetLocationFilter{})
+			return err
+		},
+		"DeleteAssetLocation": func() error {
+			return s.DeleteAssetLocation(ctx, "loc001")
+		},
+		"CreateAssetEvse": func() error {
+			return s.CreateAssetEvse(ctx, &store.AssetEvse{})
+		},
+		"UpdateAssetEvse": func() error {
+			return s.UpdateAssetEvse(ctx, &store.AssetEvse{})
+		},
+		"LookupAssetEvse": func() error {
+			_, err := s.LookupAssetEvse(ctx, "evse001")
+			return err
+		},
+		"LookupAssetEvseByOcpp": func() error {
+			_, err := s.LookupAssetEvseByOcpp(ctx, "cs001", 1)
+			return err
+		},
+		"ListAssetEvsesForLocation": func() error {
+			_, err := s.ListAssetEvsesForLocation(ctx, "loc001")
+			return err
+		},
+		"ListAssetEvsesForStation": func() error {
+			_, err := s.ListAssetEvsesForStation(ctx, "cs001")
+			return err
+		},
+		"DeleteAssetEvse": func() error {
+			return s.DeleteAssetEvse(ctx, "evse001")
+		},
+		"CreateAssetConnector": func() error {
+			return s.CreateAssetConnector(ctx, &store.AssetConnector{})
+		},
+		"UpdateAssetConnector": func() error {
+			return s.UpdateAssetConnector(ctx, &store.AssetConnector{})
+		},
+		"LookupAssetConnector": func() error {
+			_, err := s.LookupAssetConnector(ctx, "connector001")
+			return err
+		},
+		"LookupAssetConnectorByOcpp": func() error {
+			_, err := s.LookupAssetConnectorByOcpp(ctx, "cs001", 1, 1)
+			return err
+		},
+		"DeleteAssetConnector": func() error {
+			return s.DeleteAssetConnector(ctx, "connector001")
+		},
+		"MoveChargeStationToLocation": func() error {
+			return s.MoveChargeStationToLocation(ctx, "cs001", "location001")
+		},
+		"DecommissionChargeStation": func() error {
+			return s.DecommissionChargeStation(ctx, "cs001", nil)
+		},
+		"TransferChargeStation": func() error {
+			_, err := s.TransferChargeStation(ctx, store.TransferParams{StationKey: "cs001"})
+			return err
+		},
+		"DeleteToken": func() error {
+			return s.DeleteToken(ctx, "org001", "token001")
+		},
+		"LookupChargeStation": func() error {
+			_, err := s.LookupChargeStation(ctx, "cs001")
+			return err
+		},
+		"UpdateChargeStation": func() error {
+			return s.UpdateChargeStation(ctx, &store.ChargeStation{StationKey: "cs001"})
+		},
+		"SetChargeStationState": func() error {
+			return s.SetChargeStationState(ctx, "cs001", store.StationStateDecommissioned, nil)
+		},
+		"ListChargeStations": func() error {
+			_, _, err := s.ListChargeStations(ctx, store.ChargeStationFilter{})
+			return err
+		},
+		"CountChargeStations": func() error {
+			_, err := s.CountChargeStations(ctx, "org001")
+			return err
+		},
+		"RecordOnboardingConnection": func() error {
+			_, err := s.RecordOnboardingConnection(ctx, "cs001", "org001", "ws", "open", 50, time.Now())
+			return err
+		},
+		"RecordOnboardingBoot": func() error {
+			_, _, err := s.RecordOnboardingBoot(ctx, "cs001", time.Now())
+			return err
+		},
+		"SetOnboarding": func() error {
+			return s.SetOnboarding(ctx, "cs001", &store.StationOnboarding{}, nil)
+		},
+		"CompleteApproval": func() error {
+			return s.CompleteApproval(ctx, "cs001", &store.PendingApproval{}, &store.ChargeStationAuth{}, false)
+		},
+		"RejectChargeStation": func() error {
+			return s.RejectChargeStation(ctx, "cs001", "")
+		},
+		"ListInventory": func() error {
+			_, _, err := s.ListInventory(ctx, "org001", store.InventoryStation, false, store.PageRequest{})
+			return err
+		},
+		"CountInventory": func() error {
+			_, err := s.CountInventory(ctx, "org001", store.InventoryStation, false)
 			return err
 		},
 	}

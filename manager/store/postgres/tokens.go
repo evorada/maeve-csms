@@ -137,6 +137,18 @@ func (s *Store) ListTokensForOrgs(ctx context.Context, orgIds []string, offset, 
 	return result, nil
 }
 
+// DeleteToken deletes the tokens of the org with the UID, of every party.
+func (s *Store) DeleteToken(ctx context.Context, orgId, tokenUid string) error {
+	id, err := pgUUID(orgId)
+	if err != nil {
+		return fmt.Errorf("delete token: invalid org id %q: %w", orgId, err)
+	}
+	if err := s.writeQueries(ctx).DeleteToken(ctx, DeleteTokenParams{OrgID: id, Uid: tokenUid}); err != nil {
+		return fmt.Errorf("delete token %s of org %s: %w", tokenUid, orgId, err)
+	}
+	return nil
+}
+
 // ListTokens retrieves a paginated list of tokens
 func (s *Store) ListTokens(ctx context.Context, offset int, limit int) ([]*store.Token, error) {
 	limitInt32, err := safeIntToInt32(limit)

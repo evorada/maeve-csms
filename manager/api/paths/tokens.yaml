@@ -156,3 +156,64 @@ paths:
             application/json:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+    delete:
+      summary: Delete an authorization token
+      description: |
+        Deletes the token of the org with the UID (the token of every party of the org
+        that has the UID), in the org of the caller or in `orgId`. Deleting a token that
+        does not exist succeeds as well.
+      operationId: deleteToken
+      x-permission: cpms.token.write
+      parameters:
+      - required: true
+        in: path
+        name: tokenUid
+        schema:
+          type: string
+          maxLength: 36
+      - required: false
+        in: query
+        name: orgId
+        description: The org that owns the token. Without it the token is deleted in the org of the caller
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Deleted, or there was no such token
+        '400':
+          description: '`orgId` is missing for a caller whose own org is not a tenant here'
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: The org is outside the scope of the caller
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager cannot delete the token of one org
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'

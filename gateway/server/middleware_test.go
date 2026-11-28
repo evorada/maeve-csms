@@ -157,6 +157,10 @@ func (e errorRegistry) LookupCertificate(context.Context, string) (*x509.Certifi
 	return nil, fmt.Errorf("expected error")
 }
 
+func (e errorRegistry) RecordOnboardingConnection(context.Context, string, string, string, string) error {
+	return fmt.Errorf("expected error")
+}
+
 func TestTLSOffloadWithClientCertificateRetrievalError(t *testing.T) {
 	r := chi.NewRouter()
 	reg := errorRegistry{}

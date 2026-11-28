@@ -141,6 +141,77 @@ func TestPayloadFieldNames(t *testing.T) {
 				`"progress":{"state":"transaction_started","transactionId":"tx","ocppTransactionId":17,"connectorId":1},` +
 				`"progress_at":"2026-11-27T10:30:00Z"}`,
 		},
+		"location.updated of a connector": {
+			payload: events.LocationUpdatedData{LocationId: "0193b2c4-0000-7000-8000-000000000001", OcpiId: "LOC1",
+				PartyRef: "cpo-1", Change: events.LocationChangeCreated, EvseUid: "0193b2c4-0000-7000-8000-000000000002",
+				ConnectorUid: "0193b2c4-0000-7000-8000-000000000003", Publish: true},
+			want: `{"location_id":"0193b2c4-0000-7000-8000-000000000001","ocpi_id":"LOC1","party_ref":"cpo-1",` +
+				`"change":"created","evse_uid":"0193b2c4-0000-7000-8000-000000000002",` +
+				`"connector_uid":"0193b2c4-0000-7000-8000-000000000003","publish":true,"publish_changed":false}`,
+		},
+		"station.decommissioned": {
+			payload: events.StationDecommissionedData{StationKey: "k7f2.CP001", StationId: "CP001",
+				LocationId: ptr("0193b2c4-0000-7000-8000-000000000001"), Reason: ptr("replaced"), Actor: "user:alice"},
+			want: `{"station_key":"k7f2.CP001","station_id":"CP001","location_id":"0193b2c4-0000-7000-8000-000000000001",` +
+				`"reason":"replaced","actor":"user:alice"}`,
+		},
+		"station.decommissioned without location and reason": {
+			payload: events.StationDecommissionedData{StationKey: "k7f2.CP001", StationId: "CP001", Actor: "svc:maeve"},
+			want:    `{"station_key":"k7f2.CP001","station_id":"CP001","location_id":null,"reason":null,"actor":"svc:maeve"}`,
+		},
+		"station.pending": {
+			payload: events.StationPendingData{StationKey: "k7f2.CP001", StationId: "CP001", Vendor: "Acme", Model: "Volt 22",
+				SerialNumber: ptr("SN-1"), FirmwareVersion: ptr("1.2.3"), Iccid: ptr("89340711000000000019"), Imsi: ptr("214070000000001"),
+				FirstSeenAt: payloadTime, Transport: "ws", Credential: "open"},
+			want: `{"station_key":"k7f2.CP001","station_id":"CP001","vendor":"Acme","model":"Volt 22","serial_number":"SN-1",` +
+				`"firmware_version":"1.2.3","iccid":"89340711000000000019","imsi":"214070000000001",` +
+				`"first_seen_at":"2026-11-27T10:30:00Z","transport":"ws","credential":"open"}`,
+		},
+		"station.pending without the optional fields": {
+			payload: events.StationPendingData{StationKey: "k7f2.CP001", StationId: "CP001", Vendor: "Acme", Model: "Volt 22",
+				FirstSeenAt: payloadTime, Transport: "wss", Credential: "onboarding_password"},
+			want: `{"station_key":"k7f2.CP001","station_id":"CP001","vendor":"Acme","model":"Volt 22",` +
+				`"first_seen_at":"2026-11-27T10:30:00Z","transport":"wss","credential":"onboarding_password"}`,
+		},
+		"station.approved": {
+			payload: events.StationApprovedData{StationKey: "k7f2.CP001", StationId: "CP001", LocationId: "0193b2c4-0000-7000-8000-000000000001",
+				EvseCount: 2, ConnectorCount: 3, PasswordMode: events.PasswordModeKeepOnboarding, SharedCredentials: true, Actor: "user:alice"},
+			want: `{"station_key":"k7f2.CP001","station_id":"CP001","location_id":"0193b2c4-0000-7000-8000-000000000001",` +
+				`"evse_count":2,"connector_count":3,"password_mode":"keep_onboarding","shared_credentials":true,"actor":"user:alice"}`,
+		},
+		"station.approval_failed": {
+			payload: events.StationApprovalFailedData{StationKey: "k7f2.CP001", StationId: "CP001", CommandId: "0193b2c4-0000-7000-8000-00000000c0de",
+				Result: "NotSupported"},
+			want: `{"station_key":"k7f2.CP001","station_id":"CP001","command_id":"0193b2c4-0000-7000-8000-00000000c0de","result":"NotSupported","error":null}`,
+		},
+		"station.rejected": {
+			payload: events.StationRejectedData{StationKey: "k7f2.CP001", StationId: "CP001", Reason: ptr("not ours"), Actor: "user:alice"},
+			want:    `{"station_key":"k7f2.CP001","station_id":"CP001","reason":"not ours","actor":"user:alice"}`,
+		},
+		"station.transferred": {
+			payload: events.StationTransferredData{StationKey: "k7f2.CP001", StationId: "CP001",
+				FromOrgId: "0193b2c4-0000-7000-8000-0000000000a1", ToOrgId: "0193b2c4-0000-7000-8000-0000000000b2",
+				LocationId: ptr("0193b2c4-0000-7000-8000-000000000001"), LocationMoved: true, EvsesMoved: 2, ConnectorsMoved: 3,
+				ClearedTariffRefs: []string{"0193b2c4-0000-7000-8000-00000000ta01"}, Actor: "svc:platform", Reason: ptr("sold")},
+			want: `{"station_key":"k7f2.CP001","station_id":"CP001","from_org_id":"0193b2c4-0000-7000-8000-0000000000a1",` +
+				`"to_org_id":"0193b2c4-0000-7000-8000-0000000000b2","location_id":"0193b2c4-0000-7000-8000-000000000001",` +
+				`"location_moved":true,"evses_moved":2,"connectors_moved":3,"cleared_tariff_refs":["0193b2c4-0000-7000-8000-00000000ta01"],` +
+				`"actor":"svc:platform","reason":"sold"}`,
+		},
+		"station.transferred without a location": {
+			payload: events.StationTransferredData{StationKey: "k7f2.CP001", StationId: "CP001",
+				FromOrgId: "0193b2c4-0000-7000-8000-0000000000a1", ToOrgId: "0193b2c4-0000-7000-8000-0000000000b2",
+				ClearedTariffRefs: []string{}, Actor: "svc:platform"},
+			want: `{"station_key":"k7f2.CP001","station_id":"CP001","from_org_id":"0193b2c4-0000-7000-8000-0000000000a1",` +
+				`"to_org_id":"0193b2c4-0000-7000-8000-0000000000b2","location_id":null,"location_moved":false,"evses_moved":0,` +
+				`"connectors_moved":0,"cleared_tariff_refs":[],"actor":"svc:platform","reason":null}`,
+		},
+		"location.updated of a location": {
+			payload: events.LocationUpdatedData{LocationId: "0193b2c4-0000-7000-8000-000000000001", OcpiId: "LOC1",
+				PartyRef: "cpo-1", Change: events.LocationChangeUpdated, PublishChanged: true},
+			want: `{"location_id":"0193b2c4-0000-7000-8000-000000000001","ocpi_id":"LOC1","party_ref":"cpo-1",` +
+				`"change":"updated","publish":false,"publish_changed":true}`,
+		},
 	} {
 		got, err := json.Marshal(tc.payload)
 		require.NoError(t, err, name)
@@ -162,10 +233,12 @@ func TestStationActorAndConnectorResourceId(t *testing.T) {
 
 // Every type of the catalogue is one that the emitter accepts.
 func TestAllTypesCanBeEmitted(t *testing.T) {
-	assert.Len(t, events.AllTypes, 9)
+	assert.Len(t, events.AllTypes, 16)
 	assert.Equal(t, []string{
 		"station.registered", "station.connected", "station.disconnected", "connector.status_changed",
 		"session.started", "session.updated", "session.completed", "command.completed", "command.progress",
+		"location.updated", "station.decommissioned", "station.pending", "station.approved",
+		"station.approval_failed", "station.rejected", "station.transferred",
 	}, events.AllTypes)
 
 	s := inmemory.NewStore(clocktest.NewFakePassiveClock(testNow))

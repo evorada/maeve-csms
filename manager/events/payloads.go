@@ -157,3 +157,113 @@ type CommandProgressData struct {
 	Progress   json.RawMessage `json:"progress"`
 	ProgressAt time.Time       `json:"progress_at"`
 }
+
+// LocationUpdatedData is the payload of location.updated: a location, an EVSE at it or a
+// connector of such an EVSE was created, changed or deleted. Change is what happened to
+// the connector when ConnectorUid is set, otherwise to the EVSE when EvseUid is set,
+// otherwise to the location. The location fields are those that the location has after
+// the change (before it, for a location that was deleted).
+type LocationUpdatedData struct {
+	LocationId   string `json:"location_id"`
+	OcpiId       string `json:"ocpi_id"`
+	PartyRef     string `json:"party_ref"`
+	Change       string `json:"change"` // LocationChange*
+	EvseUid      string `json:"evse_uid,omitempty"`
+	ConnectorUid string `json:"connector_uid,omitempty"`
+	// Publish is whether the location is published through OCPI, and PublishChanged
+	// whether the change turned it on or off.
+	Publish        bool `json:"publish"`
+	PublishChanged bool `json:"publish_changed"`
+}
+
+// StationDecommissionedData is the payload of station.decommissioned: the station was
+// taken out of service. Its EVSEs are REMOVED, it can no longer connect, and its record
+// is kept. LocationId is the location of the station and Reason the reason given for the
+// decommissioning, both null when there is none; Actor is who decommissioned it.
+type StationDecommissionedData struct {
+	StationKey string  `json:"station_key"`
+	StationId  string  `json:"station_id"`
+	LocationId *string `json:"location_id"`
+	Reason     *string `json:"reason"`
+	Actor      string  `json:"actor"`
+}
+
+// StationPendingData is the payload of station.pending: a station that is not registered
+// connected, booted and waits for approval; it cannot charge until then. It is emitted at
+// the first BootNotification of the station while it is pending. Vendor, model and the
+// optional fields are what the station reported in that BootNotification; FirstSeenAt,
+// Transport ("ws" | "wss") and Credential ("open" | "onboarding_password" |
+// "pending_password") are those of its connections.
+type StationPendingData struct {
+	StationKey      string    `json:"station_key"`
+	StationId       string    `json:"station_id"`
+	Vendor          string    `json:"vendor"`
+	Model           string    `json:"model"`
+	SerialNumber    *string   `json:"serial_number,omitempty"`
+	FirmwareVersion *string   `json:"firmware_version,omitempty"`
+	Iccid           *string   `json:"iccid,omitempty"`
+	Imsi            *string   `json:"imsi,omitempty"`
+	FirstSeenAt     time.Time `json:"first_seen_at"`
+	Transport       string    `json:"transport"`
+	Credential      string    `json:"credential"`
+}
+
+// StationApprovedData is the payload of station.approved: an operator approved a pending
+// station, which is active now and may charge. LocationId is where it is,
+// EvseCount and ConnectorCount what it was given; PasswordMode is how its password was
+// set (PasswordMode*) and SharedCredentials whether it is the onboarding password of the
+// tenant. Actor is who approved it.
+type StationApprovedData struct {
+	StationKey        string `json:"station_key"`
+	StationId         string `json:"station_id"`
+	LocationId        string `json:"location_id"`
+	EvseCount         int    `json:"evse_count"`
+	ConnectorCount    int    `json:"connector_count"`
+	PasswordMode      string `json:"password_mode"`
+	SharedCredentials bool   `json:"shared_credentials"`
+	Actor             string `json:"actor"`
+}
+
+// StationApprovalFailedData is the payload of station.approval_failed: a pending station
+// did not take the new password of its approval, and stays pending. CommandId is the
+// command that sent the password; Result is what came of it: the status the station
+// answered (e.g. "Rejected", "NotSupported"), the error code of its CallError, "timeout"
+// or "cancelled"; Error describes it, or is null.
+type StationApprovalFailedData struct {
+	StationKey string  `json:"station_key"`
+	StationId  string  `json:"station_id"`
+	CommandId  string  `json:"command_id"`
+	Result     string  `json:"result"`
+	Error      *string `json:"error"`
+}
+
+// StationRejectedData is the payload of station.rejected: an operator refused a pending
+// station, which is decommissioned and can no longer connect. Reason is the reason given,
+// or null; Actor is who rejected it.
+type StationRejectedData struct {
+	StationKey string  `json:"station_key"`
+	StationId  string  `json:"station_id"`
+	Reason     *string `json:"reason"`
+	Actor      string  `json:"actor"`
+}
+
+// StationTransferredData is the payload of station.transferred: a charge station moved
+// from one org to another, with its EVSEs and their connectors, and with its location
+// when LocationMoved. It is emitted in both orgs. The station key does not change; the
+// history of the station (transactions, meter values) stays with the old org.
+// LocationId is where the station and its EVSEs are now (null without a location),
+// ClearedTariffRefs the tariffs of the old org that the connectors lost, Reason the
+// reason given (or null) and Actor who transferred the station.
+type StationTransferredData struct {
+	StationKey        string   `json:"station_key"`
+	StationId         string   `json:"station_id"`
+	FromOrgId         string   `json:"from_org_id"`
+	ToOrgId           string   `json:"to_org_id"`
+	LocationId        *string  `json:"location_id"`
+	LocationMoved     bool     `json:"location_moved"`
+	EvsesMoved        int      `json:"evses_moved"`
+	ConnectorsMoved   int      `json:"connectors_moved"`
+	ClearedTariffRefs []string `json:"cleared_tariff_refs"`
+	Actor             string   `json:"actor"`
+	Reason            *string  `json:"reason"`
+}

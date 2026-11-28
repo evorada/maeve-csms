@@ -58,6 +58,19 @@ func (p *ConfigProvider) HeartbeatIntervalForStation(ctx context.Context, charge
 	return cfg.HeartbeatInterval(global)
 }
 
+// StoredConfigForOrg returns the config that is stored for the tenant of an org. ok is
+// false when there is none: the org is not a tenant (always so in single mode), or the
+// stored config of the tenant cannot be read. A tenant that was never sent a config has
+// the zero config and ok. The config is shared with the cache of the resolver and must
+// not be changed.
+func (p *ConfigProvider) StoredConfigForOrg(ctx context.Context, orgId string) (cfg *TenantConfig, ok bool, err error) {
+	cfg, ok, err = p.lookup(ctx, orgId)
+	if err != nil || !ok {
+		return nil, false, err
+	}
+	return cfg, true, nil
+}
+
 // AcceptedCertOrgNames returns the organisation names that the tenant of an org accepts
 // in the client certificate of a charge station. An empty list means that the tenant
 // does not want the organisation checked.

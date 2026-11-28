@@ -12,8 +12,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/thoughtworks/maeve-csms/manager/adminui"
 	"github.com/thoughtworks/maeve-csms/manager/api"
+	"github.com/thoughtworks/maeve-csms/manager/commands"
 	"github.com/thoughtworks/maeve-csms/manager/config"
 	"github.com/thoughtworks/maeve-csms/manager/controlplane"
+	"github.com/thoughtworks/maeve-csms/manager/entitlements"
+	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/internalapi"
 	"github.com/thoughtworks/maeve-csms/manager/services"
 	"github.com/thoughtworks/maeve-csms/manager/store"
@@ -38,6 +41,15 @@ type InternalDeps struct {
 	CSCertProvider services.ChargeStationCertificateProvider
 	// DefaultOrgId is the org of what is created through the admin pages.
 	DefaultOrgId string
+	// Events stores the domain events of the changes made through the control plane.
+	// Without it the control plane cannot transfer charge stations (500).
+	Events events.Emitter
+	// Entitlements checks the limits of a tenant that gets a charge station through the
+	// control plane. Nothing is limited without it.
+	Entitlements *entitlements.Enforcer
+	// Commands cancels the queued commands of a charge station that is transferred to
+	// another org. Without it (a storage engine that keeps no commands) none are.
+	Commands *commands.Service
 }
 
 // NewInternalHandler creates the handler of the internal listener. It serves the
@@ -66,10 +78,15 @@ func NewInternalHandler(d InternalDeps) http.Handler {
 	r.With(logger).Mount("/_internal/v1", internalapi.NewHandler(d.Resolver, d.Engine))
 
 	controlPlane := &controlplane.Server{
-		Tenants:  d.Engine,
-		Resolver: d.Resolver,
-		Outbox:   d.Engine,
-		Scoper:   d.Scoper,
+		Tenants:      d.Engine,
+		Resolver:     d.Resolver,
+		Outbox:       d.Engine,
+		Scoper:       d.Scoper,
+		Stations:     d.Engine,
+		Events:       d.Events,
+		Entitlements: d.Entitlements,
+		Commands:     d.Commands,
+		Inventory:    d.Engine,
 	}
 	if d.Resolver != nil {
 		controlPlane.Mode = d.Resolver.Mode

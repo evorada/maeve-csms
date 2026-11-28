@@ -6,6 +6,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -69,5 +70,20 @@ func TestCountConnectorsForOrgs(t *testing.T, newStore func(t *testing.T) store.
 	t.Run("a charge station that is registered without connectors counts nothing", func(t *testing.T) {
 		require.NoError(t, s.SetChargeStationAuth(ctx, "aaaa.CP003", &store.ChargeStationAuth{SecurityProfile: store.TLSWithBasicAuth, OrgId: orgA}))
 		assert.Equal(t, 2, count(orgA))
+	})
+
+	t.Run("the connectors of a charge station that is not active are not counted", func(t *testing.T) {
+		// a station that connected without being registered reports whatever it likes
+		_, err := s.RecordOnboardingConnection(ctx, "aaaa.NEW01", orgA, store.OnboardingTransportWs, store.OnboardingCredentialOpen, 50, time.Now())
+		require.NoError(t, err)
+		report("aaaa.NEW01", 1, 2, 3, 4, 5, 6, 7, 8)
+		require.NoError(t, s.SetChargeStationAuth(ctx, "aaaa.CP004", &store.ChargeStationAuth{SecurityProfile: store.TLSWithBasicAuth, OrgId: orgA}))
+		report("aaaa.CP004", 1, 2)
+		require.NoError(t, s.SetChargeStationState(ctx, "aaaa.CP004", store.StationStateDecommissioned, nil))
+		assert.Equal(t, 2, count(orgA))
+
+		// once it is active its connectors count
+		require.NoError(t, s.SetChargeStationState(ctx, "aaaa.NEW01", store.StationStateActive, nil))
+		assert.Equal(t, 10, count(orgA))
 	})
 }

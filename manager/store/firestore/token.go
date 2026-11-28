@@ -122,3 +122,9 @@ func (s *Store) ListTokens(context context.Context, offset int, limit int) ([]*s
 func (s *Store) ListTokensForOrgs(ctx context.Context, _ []string, offset, limit int) ([]*store.Token, error) {
 	return s.ListTokens(ctx, offset, limit)
 }
+
+// DeleteToken is not implemented: Firestore stores no org, so it cannot delete only the
+// token of one org.
+func (s *Store) DeleteToken(context.Context, string, string) error {
+	return fmt.Errorf("DeleteToken: %w", store.ErrNotImplemented)
+}

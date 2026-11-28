@@ -1,58 +1,4 @@
 paths:
-  /cs/{csId}:
-    post:
-      summary: Register a new charge station
-      description: 'Registers a new charge station. The system will assume that the
-        charge station
-
-        has not yet been provisioned and will place the charge station into a pending
-        state
-
-        so it can been configured when it sends a boot notification.
-
-        '
-      operationId: registerChargeStation
-      x-permission: cpms.station.write
-      parameters:
-      - name: csId
-        in: path
-        description: The charge station identifier
-        schema:
-          type: string
-          maxLength: 80
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '../schemas/schemas.yaml#/components/schemas/ChargeStationAuth'
-      responses:
-        '201':
-          description: Created
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
-        '403':
-          description: The caller does not have the permission of the operation, the tenant is suspended (error `tenant_suspended`), or the charge station is new and a hard limit on the connectors of the tenant is used up (the error starts with `entitlement_limit_exceeded`)
-          content:
-            application/json:
-              schema:
-                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
-        '404':
-          description: Unknown charge station
-          content:
-            application/json:
-              schema:
-                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
-        default:
-          description: Unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
   /cs/{csId}/auth:
     get:
       summary: Returns the authentication details
@@ -91,7 +37,7 @@ paths:
               schema:
                 $ref: '../schemas/schemas.yaml#/components/schemas/Status'
         '404':
-          description: Unknown charge station
+          description: Unknown charge station, or a decommissioned one
           content:
             application/json:
               schema:

@@ -81,6 +81,14 @@ type Store struct {
 	relayMu                          sync.Mutex // held by the relay batch that runs
 	// commands by the canonical text of their id (see commandKey)
 	commands map[string]*store.Command
+	// the asset model by the canonical text of the ids (see assetKey); EVSEs are stored
+	// without their connectors
+	assetLocations  map[string]*store.AssetLocation
+	assetEvses      map[string]*store.AssetEvse
+	assetConnectors map[string]*store.AssetConnector
+	// the registry records by station key, without their org (the org of the auth
+	// details) and runtime details (chargeStationRuntimeDetails)
+	chargeStations map[string]*store.ChargeStation
 }
 
 func NewStore(clock clock.PassiveClock) *Store {
@@ -132,6 +140,10 @@ func NewStore(clock clock.PassiveClock) *Store {
 		tenantsByOrgKey:                  make(map[string]string),
 		tenantsBySlug:                    make(map[string]string),
 		commands:                         make(map[string]*store.Command),
+		assetLocations:                   make(map[string]*store.AssetLocation),
+		assetEvses:                       make(map[string]*store.AssetEvse),
+		assetConnectors:                  make(map[string]*store.AssetConnector),
+		chargeStations:                   make(map[string]*store.ChargeStation),
 	}
 }
 
@@ -246,6 +258,7 @@ func (s *Store) SetChargeStationAuth(_ context.Context, chargeStationId string, 
 		}
 	}
 	s.chargeStationAuth[chargeStationId] = auth
+	s.registerChargeStation(chargeStationId)
 	return nil
 }
 
@@ -381,14 +394,14 @@ func (s *Store) ListChargeStationInstallCertificates(_ context.Context, pageSize
 func (s *Store) SetChargeStationRuntimeDetails(_ context.Context, chargeStationId string, details *store.ChargeStationRuntimeDetails) error {
 	s.Lock()
 	defer s.Unlock()
-	s.chargeStationRuntimeDetails[chargeStationId] = details
+	s.chargeStationRuntimeDetails[chargeStationId] = copyRuntimeDetails(details)
 	return nil
 }
 
 func (s *Store) LookupChargeStationRuntimeDetails(_ context.Context, chargeStationId string) (*store.ChargeStationRuntimeDetails, error) {
 	s.Lock()
 	defer s.Unlock()
-	return s.chargeStationRuntimeDetails[chargeStationId], nil
+	return copyRuntimeDetails(s.chargeStationRuntimeDetails[chargeStationId]), nil
 }
 
 func (s *Store) SetChargeStationTriggerMessage(ctx context.Context, chargeStationId string, triggerMessage *store.ChargeStationTriggerMessage) error {
@@ -534,6 +547,18 @@ func (s *Store) ListTokens(_ context.Context, offset int, limit int) ([]*store.T
 	s.Lock()
 	defer s.Unlock()
 	return s.listTokens(offset, limit, func(*store.Token) bool { return true }), nil
+}
+
+// DeleteToken deletes the tokens of the org with the UID, of every party.
+func (s *Store) DeleteToken(_ context.Context, orgId, tokenUid string) error {
+	s.Lock()
+	defer s.Unlock()
+	for key, entry := range s.tokens {
+		if entry.token.Uid == tokenUid && strings.EqualFold(entry.token.OrgId, orgId) {
+			delete(s.tokens, key)
+		}
+	}
+	return nil
 }
 
 // ListTokensForOrgs lists the tokens of the given orgs.
@@ -1668,8 +1693,12 @@ func (s *Store) CountConnectorsForOrgs(_ context.Context, orgIds []string) (int,
 
 	count := 0
 	for chargeStationId, connectors := range s.connectorStatuses {
-		// a status of a charge station that is not registered belongs to no org
+		// a status of a charge station that is not registered belongs to no org, and one
+		// that is not active has no connectors in use
 		if s.chargeStationAuth[chargeStationId] == nil || !wanted[strings.ToLower(s.orgIdForStation(chargeStationId))] {
+			continue
+		}
+		if registered := s.chargeStations[chargeStationId]; registered != nil && registered.State != store.StationStateActive {
 			continue
 		}
 		for connectorId := range connectors {

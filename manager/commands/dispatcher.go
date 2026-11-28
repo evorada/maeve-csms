@@ -116,6 +116,16 @@ type ResultHook interface {
 	AfterResult(ctx context.Context, cmd *store.Command)
 }
 
+// CompletionHook follows a command to its final status, whatever it is.
+type CompletionHook interface {
+	// AfterCompletion is told about a command that has just reached a final status
+	// (accepted, rejected, failed, timeout or cancelled), once that status is stored, and
+	// again when an answer arrives after the command timed out. It runs in the handling
+	// of the answer, of the sweep or of the cancellation, and must not fail it: it logs
+	// its own errors.
+	AfterCompletion(ctx context.Context, cmd *store.Command)
+}
+
 // Sweeper is a step of the sweep job of the queue that runs after Dispatcher.Sweep.
 type Sweeper interface {
 	Sweep(ctx context.Context) error
@@ -148,6 +158,9 @@ type Dispatcher struct {
 	// AfterResult are told, in order, about each command that its station accepted or
 	// rejected, once that status is stored.
 	AfterResult []ResultHook
+	// AfterCompletion are told, in order, about each command that reached a final
+	// status, once that status is stored; before AfterResult.
+	AfterCompletion []CompletionHook
 	// AfterSweep run, in order, after Sweep in the sweep job.
 	AfterSweep []Sweeper
 }
@@ -175,7 +188,7 @@ func (d *Dispatcher) kickSettled(ctx context.Context, stationKey string) error {
 }
 
 func (d *Dispatcher) completer() completer {
-	return completer{store: d.Store, tx: d.Tx, events: d.Events}
+	return completer{store: d.Store, tx: d.Tx, events: d.Events, hooks: d.AfterCompletion}
 }
 
 // Kick sends the oldest queued command of the station when the station is connected and
@@ -229,7 +242,21 @@ func (d *Dispatcher) Kick(ctx context.Context, stationKey string) error {
 			return err
 		}
 		slog.Info("command sent", "commandId", cmd.Id, "stationKey", stationKey, "action", cmd.Action)
+		d.redactSent(ctx, cmd)
 		return nil
+	}
+}
+
+// redactSent replaces the secrets of the payload of a command that has been sent: they
+// are no longer needed. When that fails they are replaced when the command completes.
+func (d *Dispatcher) redactSent(ctx context.Context, cmd *store.Command) {
+	redacted, changed := RedactPayload(cmd.Payload, cmd.RedactPaths)
+	if !changed {
+		return
+	}
+	if err := d.Store.RedactCommandPayload(ctx, cmd.Id, redacted); err != nil {
+		slog.Error("replacing the secrets of a sent command; they are replaced when it completes",
+			"commandId", cmd.Id, "stationKey", cmd.StationKey, "action", cmd.Action, "err", err)
 	}
 }
 

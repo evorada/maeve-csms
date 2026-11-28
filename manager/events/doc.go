@@ -16,7 +16,9 @@
 // AllTypes lists the event types (Type* constants); each has a payload type
 // (*Data structs) and is about a resource (Resource* constants). The connectivity
 // tracker emits station.connected and station.disconnected, the OCPP 1.6 handlers
-// connector.status_changed and session.started, session.updated and session.completed.
+// connector.status_changed and session.started, session.updated and session.completed,
+// the API location.updated for every change of a location, an EVSE or a connector, and
+// station.decommissioned.
 //
 // # The envelope
 //

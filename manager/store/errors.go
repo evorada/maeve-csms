@@ -15,4 +15,15 @@ var (
 	ErrNotFound = errors.New("not found")
 	// ErrAlreadyExists is returned when a create would violate a uniqueness constraint.
 	ErrAlreadyExists = errors.New("already exists")
+	// ErrVersionConflict is returned when an optimistic update names a version that is not
+	// the stored version of the record any more.
+	ErrVersionConflict = errors.New("version conflict")
+	// ErrInUse is returned when a delete is refused because other records refer to the
+	// record.
+	ErrInUse = errors.New("in use")
+	// ErrLimitExceeded is returned when a create would go beyond a limit on the number of
+	// records, such as the most pending charge stations of an org.
+	ErrLimitExceeded = errors.New("limit exceeded")
+	// ErrInvalidState is returned when the state of a record does not allow the change.
+	ErrInvalidState = errors.New("invalid state")
 )

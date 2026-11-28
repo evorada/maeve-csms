@@ -27,8 +27,13 @@ check (`/health`), the Prometheus metrics (`/metrics`) and the OpenAPI document 
 administration API (`/api/openapi.json`), all without authentication. It also serves the
 control plane (`/_control/v1`, specified in
 [`controlplane-spec.yaml`](../manager/controlplane/controlplane-spec.yaml)), through
-which the platform creates, updates, suspends and resumes tenants and reads the domain
-events of its orgs again (`GET /_control/v1/events`): the only part of the
+which the platform creates, updates, suspends and resumes tenants, reads the domain
+events of its orgs again (`GET /_control/v1/events`), lists what a tenant owns
+(`GET /_control/v1/tenants/{orgId}/inventory?type=station|connector|location|token`,
+which also needs the permission `cpms.station.read` and, like the events, a token that
+reaches the org) and transfers a charge station to
+another org (`POST /_control/v1/resources/{urn}:transfer`, which also needs the
+permission `cpms.station.write`): the only part of the
 listener that needs a token, and the token must be one of a platform service (subject
 `svc:...`) with the permission `cpms.tenant.manage`. The legacy pages `/transactions` (the transactions of every
 organization) and `/adminui` (registers charge stations and tokens) are off by default;

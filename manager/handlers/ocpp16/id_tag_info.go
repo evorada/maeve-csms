@@ -11,6 +11,7 @@ import (
 	"golang.org/x/exp/slog"
 	"k8s.io/utils/clock"
 
+	"github.com/thoughtworks/maeve-csms/manager/stations"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 )
@@ -45,15 +46,21 @@ type idTagAuthorization struct {
 
 // authorizeIdTag looks the idTag up in the tokens of the org that owns the charge
 // station and returns the authorisation that an OCPP 1.6 station gets for it:
-//   - an unknown idTag is Invalid (also when another org has a token with that UID)
+//   - an unknown idTag is Invalid (also when another org has a token with that UID),
+//     unless the charge station accepts any token (allow_any_token in its registry
+//     record): then it is Accepted
 //   - a token that is not valid is Blocked
 //   - a token whose expiry time has been reached is Expired
 //   - any other token is Accepted
 //
 // An accepted token that must not be cached (cache mode NEVER) gets the current time
 // as its expiry date, so that the station drops it from its authorisation cache at
-// once. Otherwise the expiry date is the expiry time of the token, if it has one.
-func authorizeIdTag(ctx context.Context, tokens store.TokenStore, orgs tenancy.StationOrgResolver, clk clock.PassiveClock, chargeStationId, idTag string) (idTagAuthorization, error) {
+// once. Otherwise the expiry date is the expiry time of the token, if it has one. An
+// unknown idTag accepted through allow_any_token has neither expiry date nor group.
+//
+// The registry is only read for an unknown idTag; a nil registry, a backend without
+// one and a station without a record accept no unknown idTag.
+func authorizeIdTag(ctx context.Context, tokens store.TokenStore, registry store.ChargeStationRegistryStore, orgs tenancy.StationOrgResolver, clk clock.PassiveClock, chargeStationId, idTag string) (idTagAuthorization, error) {
 	span := trace.SpanFromContext(ctx)
 	span.SetAttributes(attribute.String("authorize.token", idTag))
 
@@ -67,8 +74,17 @@ func authorizeIdTag(ctx context.Context, tokens store.TokenStore, orgs tenancy.S
 		return idTagAuthorization{}, err
 	}
 	if tok == nil {
-		span.SetAttributes(attribute.String("authorize.status", idTagStatusInvalid))
-		return idTagAuthorization{Status: idTagStatusInvalid}, nil
+		status := idTagStatusInvalid
+		allowAny, err := acceptsAnyToken(ctx, registry, chargeStationId)
+		if err != nil {
+			return idTagAuthorization{}, err
+		}
+		if allowAny {
+			status = idTagStatusAccepted
+			span.SetAttributes(attribute.Bool("authorize.allow_any_token", true))
+		}
+		span.SetAttributes(attribute.String("authorize.status", status))
+		return idTagAuthorization{Status: status}, nil
 	}
 
 	now := clk.Now()
@@ -90,6 +106,32 @@ func authorizeIdTag(ctx context.Context, tokens store.TokenStore, orgs tenancy.S
 
 	span.SetAttributes(attribute.String("authorize.status", auth.Status))
 	return auth, nil
+}
+
+// chargingAllowed reports whether a transaction may start at the charge station (see
+// stations.ChargingAllowed). When it may not, the span says so.
+func chargingAllowed(ctx context.Context, registry store.ChargeStationRegistryStore, chargeStationId string) (bool, error) {
+	allowed, err := stations.ChargingAllowed(ctx, registry, chargeStationId)
+	if err != nil {
+		return false, err
+	}
+	if !allowed {
+		trace.SpanFromContext(ctx).SetAttributes(attribute.Bool("authorize.charging_not_allowed", true))
+	}
+	return allowed, nil
+}
+
+// acceptsAnyToken reports whether the charge station accepts idTags that the token
+// store does not know.
+func acceptsAnyToken(ctx context.Context, registry store.ChargeStationRegistryStore, chargeStationId string) (bool, error) {
+	if registry == nil {
+		return false, nil
+	}
+	record, err := stations.Lookup(ctx, registry, chargeStationId)
+	if err != nil {
+		return false, err
+	}
+	return record.AllowAnyToken, nil
 }
 
 // parentIdTag returns the group of the token as an OCPP 1.6 parentIdTag. A group that

@@ -37,6 +37,10 @@ func (s *Store) SetCommandProgress(context.Context, string, json.RawMessage, tim
 	return nil, fmt.Errorf("SetCommandProgress: %w", store.ErrNotImplemented)
 }
 
+func (s *Store) RedactCommandPayload(context.Context, string, json.RawMessage) error {
+	return fmt.Errorf("RedactCommandPayload: %w", store.ErrNotImplemented)
+}
+
 func (s *Store) ListQueuedStationKeys(context.Context, time.Time, string, int) ([]string, error) {
 	return nil, fmt.Errorf("ListQueuedStationKeys: %w", store.ErrNotImplemented)
 }

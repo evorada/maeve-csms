@@ -2,9 +2,9 @@
 INSERT INTO commands (
     id, org_id, station_key, ocpp_version, action, payload, status, result,
     error_code, error_description, progress, progress_at, actor, jti,
-    created_at, sent_at, completed_at, expires_at
+    created_at, sent_at, completed_at, expires_at, redact_paths
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18);
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19);
 
 -- name: GetCommand :one
 SELECT * FROM commands WHERE id = $1;
@@ -71,6 +71,10 @@ RETURNING *;
 UPDATE commands SET progress = sqlc.arg('progress'), progress_at = sqlc.arg('progress_at')
 WHERE id = sqlc.arg('id')
 RETURNING *;
+
+-- name: RedactCommandPayload :exec
+UPDATE commands SET payload = sqlc.arg('payload')
+WHERE id = sqlc.arg('id');
 
 -- name: ListQueuedStationKeys :many
 SELECT DISTINCT station_key FROM commands

@@ -50,6 +50,36 @@
       "type": "string",
       "enum": ["pending_approval", "preregistered_only"],
       "default": "pending_approval"
+    },
+    "onboarding_open_sp1": {
+      "title": "Onboarding without a password",
+      "description": "With pending_approval: a charge station that is not registered may connect without TLS (security profile 1) and without a password, and waits for approval. Without it such a station needs the onboarding password.",
+      "type": "boolean",
+      "default": true
+    },
+    "onboarding_password_sha256": {
+      "title": "Onboarding password",
+      "description": "With pending_approval: the SHA-256 hash, base64 encoded, of the password with which a charge station that is not registered may connect (with or without TLS) and wait for approval. Without it there is no onboarding password.",
+      "type": "string",
+      "minLength": 44,
+      "maxLength": 44,
+      "pattern": "^[A-Za-z0-9+/]{43}=$"
+    },
+    "onboarding_max_pending": {
+      "title": "Most pending charge stations",
+      "description": "The most charge stations that wait for approval at the same time. A station that is not registered is refused while there are that many.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000,
+      "default": 50
+    },
+    "onboarding_boot_interval_s": {
+      "title": "Boot interval of pending charge stations",
+      "description": "The seconds after which a charge station that waits for approval sends its next BootNotification.",
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 86400,
+      "default": 60
     }
   }
 }
