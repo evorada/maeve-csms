@@ -211,7 +211,7 @@ func TestAPendingStationIsApprovedAndCharges(t *testing.T) {
 	apiHandler := server.NewApiHandler(server.ApiDeps{Engine: engine, Verifier: operatorOf(orgId), Scoper: scoper,
 		Events: domainEvents, Commands: queue, Entitlements: &entitlements.Enforcer{Tenants: engine, Counter: engine, Mode: tenancy.ModeMulti}})
 	router := handlers.NewRouter(calls, clk, engine, domainEvents, resolver, &tenancy.ConfigProvider{Resolver: resolver},
-		nil, nil, nil, 5*time.Minute, schemas.OcppSchemas, dispatcher, nil)
+		nil, nil, nil, 5*time.Minute, schemas.OcppSchemas, dispatcher, nil, nil)
 	query := "?" + url.Values{"host": {"a.example"}, "stationId": {"CP777"}}.Encode()
 
 	stationAuth := func() internalapi.StationAuthResponse {

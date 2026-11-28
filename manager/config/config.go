@@ -29,6 +29,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/store/firestore"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
 	"github.com/thoughtworks/maeve-csms/manager/store/postgres"
+	"github.com/thoughtworks/maeve-csms/manager/tariffs"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	mqtt2 "github.com/thoughtworks/maeve-csms/manager/transport/mqtt"
@@ -457,6 +458,18 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		c.Connectivity.OnConnected = c.CommandDispatcher
 	}
 
+	// a new transaction is charged with the tariff that applies where and for whom it
+	// starts. The price of the tariff service is what a session without a tariff costs.
+	tariffSelector := &tariffs.Selector{
+		Assets:   c.Storage,
+		Registry: c.Storage,
+		Tariffs:  c.Storage,
+		Groups:   c.Storage,
+		Tokens:   c.Storage,
+		Tenants:  c.TenantConfig,
+		Fallback: c.TariffService != nil,
+	}
+
 	if cfg.Ocpp.Ocpp16Enabled {
 		c.Ocpp16Handler = ocpp16.NewRouter(c.MsgEmitter,
 			clock.RealClock{},
@@ -470,7 +483,8 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 			heartbeatInterval,
 			schemas.OcppSchemas,
 			commandObserver(c.CommandDispatcher),
-			commandTracker(c.CommandTracker))
+			commandTracker(c.CommandTracker),
+			tariffSelector)
 	}
 	if cfg.Ocpp.Ocpp201Enabled {
 		c.Ocpp201Handler = ocpp201.NewRouter(c.MsgEmitter,
@@ -484,7 +498,8 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 			c.ContractCertProviderService,
 			heartbeatInterval,
 			schemas.OcppSchemas,
-			commandObserver(c.CommandDispatcher))
+			commandObserver(c.CommandDispatcher),
+			tariffSelector)
 	}
 
 	if cfg.Ocpi != nil {

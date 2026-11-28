@@ -64,6 +64,7 @@ type AssetLocation struct {
 	Version            int64              `db:"version" json:"version"`
 	CreatedAt          pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	DefaultTariffRef   pgtype.UUID        `db:"default_tariff_ref" json:"default_tariff_ref"`
 }
 
 type Certificate struct {
@@ -550,6 +551,17 @@ type Token struct {
 	UpdatedAt    pgtype.Timestamp   `db:"updated_at" json:"updated_at"`
 	ExpiresAt    pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
 	OrgID        pgtype.UUID        `db:"org_id" json:"org_id"`
+	TokenGroupID pgtype.UUID        `db:"token_group_id" json:"token_group_id"`
+}
+
+type TokenGroup struct {
+	ID                pgtype.UUID        `db:"id" json:"id"`
+	OrgID             pgtype.UUID        `db:"org_id" json:"org_id"`
+	Name              string             `db:"name" json:"name"`
+	PrefixMatch       bool               `db:"prefix_match" json:"prefix_match"`
+	OverrideTariffRef pgtype.UUID        `db:"override_tariff_ref" json:"override_tariff_ref"`
+	CreatedAt         pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
 
 type Transaction struct {
@@ -573,6 +585,9 @@ type Transaction struct {
 	IDTokenGroup    pgtype.Text      `db:"id_token_group" json:"id_token_group"`
 	ReservationID   pgtype.Int4      `db:"reservation_id" json:"reservation_id"`
 	OrgID           pgtype.UUID      `db:"org_id" json:"org_id"`
+	TariffID        pgtype.UUID      `db:"tariff_id" json:"tariff_id"`
+	TariffVersion   pgtype.Int4      `db:"tariff_version" json:"tariff_version"`
+	TariffSource    pgtype.Text      `db:"tariff_source" json:"tariff_source"`
 }
 
 type TransactionMeterValue struct {

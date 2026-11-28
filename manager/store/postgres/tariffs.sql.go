@@ -34,17 +34,27 @@ func (q *Queries) BumpTariffCurrentVersion(ctx context.Context, arg BumpTariffCu
 }
 
 const CountTariffReferences = `-- name: CountTariffReferences :one
-SELECT count(*) FROM asset_connectors
-WHERE tariff_ref = $1::uuid OR adhoc_tariff_ref = $1::uuid
+SELECT
+    (SELECT count(*) FROM asset_connectors c
+     WHERE c.tariff_ref = $1::uuid OR c.adhoc_tariff_ref = $1::uuid)::bigint AS connectors,
+    (SELECT count(*) FROM asset_locations l WHERE l.default_tariff_ref = $1::uuid)::bigint AS locations,
+    (SELECT count(*) FROM token_groups g WHERE g.override_tariff_ref = $1::uuid)::bigint AS token_groups
 `
 
+type CountTariffReferencesRow struct {
+	Connectors  int64 `db:"connectors" json:"connectors"`
+	Locations   int64 `db:"locations" json:"locations"`
+	TokenGroups int64 `db:"token_groups" json:"token_groups"`
+}
+
 // The records that refer to a tariff: the connectors that use it as their tariff or as
-// their ad hoc tariff.
-func (q *Queries) CountTariffReferences(ctx context.Context, tariffID pgtype.UUID) (int64, error) {
+// their ad hoc tariff, the locations that have it as their default tariff and the token
+// groups that have it as their override tariff.
+func (q *Queries) CountTariffReferences(ctx context.Context, tariffID pgtype.UUID) (CountTariffReferencesRow, error) {
 	row := q.db.QueryRow(ctx, CountTariffReferences, tariffID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
+	var i CountTariffReferencesRow
+	err := row.Scan(&i.Connectors, &i.Locations, &i.TokenGroups)
+	return i, err
 }
 
 const CreateTariff = `-- name: CreateTariff :one

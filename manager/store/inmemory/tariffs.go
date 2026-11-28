@@ -16,8 +16,8 @@ import (
 
 // The tariff store keeps the rules of the PostgreSQL tables: the OCPI id of a tariff is
 // unique for its party, a version is stored once and never changed, a new version needs
-// the current version that the caller saw, and a tariff that a connector refers to
-// cannot be deleted.
+// the current version that the caller saw, and a tariff that a connector, a location or a
+// token group refers to cannot be deleted.
 
 // tariffTime returns the time as PostgreSQL reads it back: in UTC, to the microsecond.
 func tariffTime(t time.Time) time.Time {
@@ -293,6 +293,16 @@ func (s *Store) DeleteTariff(_ context.Context, tariffId string) error {
 			if ref != nil && *ref == id {
 				return fmt.Errorf("delete tariff %s: connector %s: %w", tariffId, c.Id, store.ErrInUse)
 			}
+		}
+	}
+	for _, loc := range s.assetLocations {
+		if loc.DefaultTariffRef != nil && *loc.DefaultTariffRef == id {
+			return fmt.Errorf("delete tariff %s: location %s: %w", tariffId, loc.Id, store.ErrInUse)
+		}
+	}
+	for _, g := range s.tokenGroups {
+		if g.OverrideTariffRef != nil && *g.OverrideTariffRef == id {
+			return fmt.Errorf("delete tariff %s: token group %s: %w", tariffId, g.Id, store.ErrInUse)
 		}
 	}
 	now := tariffTime(s.clock.Now())

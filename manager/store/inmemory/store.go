@@ -93,6 +93,9 @@ type Store struct {
 	// the versions of each tariff in the order of their numbers (version n at index n-1)
 	tariffs        map[string]*store.Tariff
 	tariffVersions map[string][]*store.TariffVersion
+	// the token groups by the canonical text of their id; the tokens of a group name it
+	// (Token.TokenGroupId)
+	tokenGroups map[string]*store.TokenGroup
 }
 
 func NewStore(clock clock.PassiveClock) *Store {
@@ -150,6 +153,7 @@ func NewStore(clock clock.PassiveClock) *Store {
 		chargeStations:                   make(map[string]*store.ChargeStation),
 		tariffs:                          make(map[string]*store.Tariff),
 		tariffVersions:                   make(map[string][]*store.TariffVersion),
+		tokenGroups:                      make(map[string]*store.TokenGroup),
 	}
 }
 
@@ -477,7 +481,8 @@ func tokenKey(orgId, countryCode, partyId, uid string) string {
 }
 
 // SetToken stores the token, or replaces the token with the same org, country code,
-// party id and UID (which keeps its place in the listings).
+// party id and UID (which keeps its place in the listings and its token group). A new
+// token is in no group.
 func (s *Store) SetToken(_ context.Context, token *store.Token) error {
 	if token.OrgId == "" {
 		return fmt.Errorf("token org id is required")
@@ -487,9 +492,11 @@ func (s *Store) SetToken(_ context.Context, token *store.Token) error {
 	token.LastUpdated = s.clock.Now().UTC().Format(time.RFC3339)
 	key := tokenKey(token.OrgId, token.CountryCode, token.PartyId, token.Uid)
 	if entry, ok := s.tokens[key]; ok {
+		token.TokenGroupId = copyOrNil(entry.token.TokenGroupId)
 		entry.token = token
 		return nil
 	}
+	token.TokenGroupId = nil
 	s.tokenSeq++
 	s.tokens[key] = &tokenEntry{token: token, seq: s.tokenSeq}
 	return nil
@@ -770,6 +777,33 @@ func (s *Store) UpdateTransactionDetails(_ context.Context, chargeStationId, tra
 	if details.ReservationId != nil {
 		transaction.ReservationId = copyOf(details.ReservationId)
 	}
+	return nil
+}
+
+// SetTransactionTariff stores the tariff version and the tariff source of a transaction
+// that has none yet.
+func (s *Store) SetTransactionTariff(_ context.Context, chargeStationId, transactionId string, tariffId *string, version *int, source string) error {
+	what := fmt.Sprintf("set the tariff of transaction %s/%s", chargeStationId, transactionId)
+	if err := store.CheckTransactionTariff(tariffId, version, source); err != nil {
+		return fmt.Errorf("%s: %w", what, err)
+	}
+	id, err := optionalAssetKey(tariffId)
+	if err != nil {
+		return fmt.Errorf("%s: invalid tariff id %q: %w", what, *tariffId, err)
+	}
+
+	s.Lock()
+	defer s.Unlock()
+	transaction := s.getTransaction(chargeStationId, transactionId)
+	if transaction == nil {
+		return fmt.Errorf("%s: %w", what, store.ErrNotFound)
+	}
+	if transaction.TariffSource != nil {
+		return fmt.Errorf("%s: the transaction has its tariff: %w", what, store.ErrAlreadyExists)
+	}
+	transaction.TariffId = id
+	transaction.TariffVersion = copyOrNil(version)
+	transaction.TariffSource = &source
 	return nil
 }
 

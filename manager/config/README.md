@@ -145,7 +145,8 @@ the platform called, within `[tenancy] cache_ttl` on any other instance, and for
 | `default_security_profile` | A charge station that is registered through the API without `securityProfile`: `SP1`, `SP2` or `SP3` (stored as `0`, `1`, `2`). A `securityProfile` in the request always wins | `SP2` (TLS with basic auth) |
 | `accepted_cert_org_names`  | The organisation names (`O`) that the gateway accepts in the client certificate of a charge station of the tenant (OCPP security profile 3, `securityProfile` `2`), instead of its `--org-name`. The first name is the organization of the client certificates that the admin pages issue | empty: the organisation is not checked |
 | `heartbeat_interval_s`     | The interval in the answer to a BootNotification of a charge station of the tenant, 60 to 86400 seconds | `[ocpp] heartbeat_interval` |
-| `default_tariff_ref`       | Stored for the tariffs; not applied yet | none |
+| `default_tariff_ref`       | The id of the tariff that a transaction of the tenant is charged with when no other tariff is found for it (see [the tariff of a transaction](#the-tariff-of-a-transaction)) | none |
+| `adhoc_emsp_parties`       | The parties that issue the tokens of ad hoc payment, each as country code, `*` and party id (`XX*PAY`), at most 50. A transaction with a token of one of these parties is an ad hoc session, like one with a token of the type `AD_HOC_USER` | empty |
 | `onboarding_mode`          | A charge station that connects to a host of the tenant without being registered: `pending_approval` admits it as a pending station that cannot charge until it is approved, `preregistered_only` refuses it (as before there was onboarding) | `pending_approval` |
 | `onboarding_open_sp1`      | With `pending_approval`: such a station may connect without TLS and without a password (OCPP security profile 1) | `true` |
 | `onboarding_password_sha256` | With `pending_approval`: the base64 encoded SHA-256 hash of the onboarding password, with which such a station may connect (any username, with or without TLS) | none |
@@ -501,6 +502,35 @@ There is a single tariff service implementation:
 #### kWh tariff service
 
 There is no additional configuration for the kWh tariff service.
+
+#### The tariff of a transaction
+
+When a transaction starts, the manager chooses the tariff that it is charged with and stores the version of
+that tariff with the transaction (`tariff_id`, `tariff_version` and `tariff_source`; the `session.started`
+event of an OCPP 1.6 transaction has them too). The tariff is the first of these that is a tariff of the org
+of the transaction, is not deleted and is valid at the start of the transaction (the `start_date_time` and
+`end_date_time` of its current version):
+
+| Order | Tariff | `tariff_source` |
+|-------|--------|-----------------|
+| 1 | The override tariff of the token group of the token. A token is in the group that it was put in; otherwise, in the group with prefix match that has the token with the longest UID that the UID of the token starts with (in any case) | `token_group` |
+| 2 | For an ad hoc session, the ad hoc tariff of the connector. A session is ad hoc when its token has the OCPI type `AD_HOC_USER`, or when the party of its token is one of the `adhoc_emsp_parties` of the [tenant config](#tenant-config) | `connector_adhoc` |
+| 3 | The tariff of the connector | `connector` |
+| 4 | The default tariff of the location of the EVSE, or of the location of the charge station when the EVSE is not in the asset model | `location` |
+| 5 | The `default_tariff_ref` of the [tenant config](#tenant-config) | `tenant_default` |
+
+A transaction for which none of them applies has no tariff: only its `tariff_source` is stored, `fallback`
+when the tariff service has a price for such a session and `none` otherwise.
+
+The tariff of a transaction is chosen once. A tariff that gets a new version, or a connector that gets another
+tariff, during the session does not change what the session is charged with. An OCPP 1.6 transaction gets its
+tariff when it is recorded (the time of the manager decides whether a tariff is valid); an OCPP 2.0.1
+transaction with the first event that names its EVSE (the time of that event decides). Charging never waits
+for a tariff and is never refused for want of one: when the tariff cannot be selected within 2 seconds, or
+cannot be stored, that is logged and the transaction starts without a tariff (no `tariff_source`).
+
+Tariffs, token groups and the asset model are only stored in PostgreSQL and in memory. With Firestore no
+transaction gets a tariff.
 
 ### Root certificate provider
 

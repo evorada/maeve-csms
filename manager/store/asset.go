@@ -62,6 +62,7 @@ type AssetLocation struct {
 	Facilities         []string
 	ChargingWhenClosed *bool
 	ExternalRefs       []string // at most 3 references in other systems
+	DefaultTariffRef   *string  // id of the tariff of the connectors at the location that have none of their own
 	Version            int64    // optimistic concurrency, starts at 1
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
@@ -182,8 +183,9 @@ type AssetStore interface {
 	// TransferChargeStation moves a charge station to another org, all together: the
 	// station, every EVSE of the station and their connectors (a new Version each), its
 	// charging profiles and, with MoveLocation, its location. The connectors lose their
-	// tariffs, which belong to the old org. Transactions, meter values and the other
-	// history of the station keep their org, and the station key does not change.
+	// tariffs, and a location that moves loses its default tariff: they belong to the old
+	// org. Transactions, meter values and the other history of the station keep their
+	// org, and the station key does not change.
 	//
 	// A station that does not exist is ErrNotFound; one that is decommissioned or whose
 	// org is not FromOrgId is ErrInvalidState. MoveLocation with a station without a
@@ -219,7 +221,7 @@ type TransferResult struct {
 	LocationMoved   bool
 	EvsesMoved      int
 	ConnectorsMoved int
-	// ClearedTariffRefs are the tariffs (of the old org) that the moved connectors
-	// referred to, each once, sorted.
+	// ClearedTariffRefs are the tariffs (of the old org) that the moved connectors, and
+	// the location when it moved, referred to, each once, sorted.
 	ClearedTariffRefs []string
 }

@@ -49,7 +49,7 @@ func (q *Queries) DeleteTokenForOrg(ctx context.Context, arg DeleteTokenForOrgPa
 }
 
 const GetTokenAnyOrg = `-- name: GetTokenAnyOrg :one
-SELECT id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at, org_id FROM tokens
+SELECT id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at, org_id, token_group_id FROM tokens
 WHERE uid = $1
 ORDER BY valid DESC, last_updated DESC, id DESC
 LIMIT 1
@@ -76,12 +76,13 @@ func (q *Queries) GetTokenAnyOrg(ctx context.Context, uid string) (Token, error)
 		&i.UpdatedAt,
 		&i.ExpiresAt,
 		&i.OrgID,
+		&i.TokenGroupID,
 	)
 	return i, err
 }
 
 const GetTokenForOrg = `-- name: GetTokenForOrg :one
-SELECT id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at, org_id FROM tokens
+SELECT id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at, org_id, token_group_id FROM tokens
 WHERE org_id = $1 AND uid = $2
 ORDER BY valid DESC, last_updated DESC, id DESC
 LIMIT 1
@@ -113,12 +114,13 @@ func (q *Queries) GetTokenForOrg(ctx context.Context, arg GetTokenForOrgParams) 
 		&i.UpdatedAt,
 		&i.ExpiresAt,
 		&i.OrgID,
+		&i.TokenGroupID,
 	)
 	return i, err
 }
 
 const ListTokens = `-- name: ListTokens :many
-SELECT id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at, org_id FROM tokens
+SELECT id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at, org_id, token_group_id FROM tokens
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -155,6 +157,7 @@ func (q *Queries) ListTokens(ctx context.Context, arg ListTokensParams) ([]Token
 			&i.UpdatedAt,
 			&i.ExpiresAt,
 			&i.OrgID,
+			&i.TokenGroupID,
 		); err != nil {
 			return nil, err
 		}
@@ -167,7 +170,7 @@ func (q *Queries) ListTokens(ctx context.Context, arg ListTokensParams) ([]Token
 }
 
 const ListTokensForOrgs = `-- name: ListTokensForOrgs :many
-SELECT id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at, org_id FROM tokens
+SELECT id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at, org_id, token_group_id FROM tokens
 WHERE org_id = ANY($1::uuid[])
 ORDER BY created_at DESC, id DESC
 LIMIT $3 OFFSET $2
@@ -206,6 +209,7 @@ func (q *Queries) ListTokensForOrgs(ctx context.Context, arg ListTokensForOrgsPa
 			&i.UpdatedAt,
 			&i.ExpiresAt,
 			&i.OrgID,
+			&i.TokenGroupID,
 		); err != nil {
 			return nil, err
 		}
@@ -237,7 +241,7 @@ ON CONFLICT ON CONSTRAINT tokens_org_party_uid_unique DO UPDATE SET
     last_updated = EXCLUDED.last_updated,
     expires_at = EXCLUDED.expires_at,
     updated_at = NOW()
-RETURNING id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at, org_id
+RETURNING id, country_code, party_id, type, uid, contract_id, visual_number, issuer, group_id, valid, language_code, cache_mode, last_updated, created_at, updated_at, expires_at, org_id, token_group_id
 `
 
 type UpsertTokenParams struct {
@@ -293,6 +297,7 @@ func (q *Queries) UpsertToken(ctx context.Context, arg UpsertTokenParams) (Token
 		&i.UpdatedAt,
 		&i.ExpiresAt,
 		&i.OrgID,
+		&i.TokenGroupID,
 	)
 	return i, err
 }

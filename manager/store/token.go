@@ -36,11 +36,17 @@ type Token struct {
 	// a token. Firestore does not store the org (it has one token for each UID): it
 	// always reads as "".
 	OrgId string
+	// TokenGroupId is the token group of the org (TokenGroup.Id) that the token is in; nil
+	// when it is in none. It is read-only: TokenGroupStore.SetTokenGroup changes it, and
+	// SetToken keeps the group of a token that it replaces. Firestore has no token
+	// groups: it always reads as nil.
+	TokenGroupId *string
 }
 
 type TokenStore interface {
 	// SetToken creates the token, or replaces the token with the same OrgId,
-	// CountryCode, PartyId and Uid.
+	// CountryCode, PartyId and Uid. It does not write TokenGroupId: a new token is in no
+	// group, and a token that is replaced stays in its group.
 	SetToken(ctx context.Context, token *Token) error
 	// LookupToken finds a token by UID across all orgs (a valid token first, then the
 	// most recently updated one). It returns nil when there is none.

@@ -2,9 +2,9 @@
 INSERT INTO asset_locations (
     id, org_id, party_ref, ocpi_id, name, address, city, postal_code, state, country,
     latitude, longitude, time_zone, parking_type, publish, opening_times, facilities,
-    charging_when_closed, external_refs
+    charging_when_closed, external_refs, default_tariff_ref
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
 )
 RETURNING *;
 
@@ -28,6 +28,7 @@ UPDATE asset_locations SET
     facilities = @facilities,
     charging_when_closed = @charging_when_closed,
     external_refs = @external_refs,
+    default_tariff_ref = @default_tariff_ref,
     version = version + 1,
     updated_at = NOW()
 WHERE id = @id AND version = @version
@@ -119,12 +120,18 @@ SELECT org_id, location_id, state FROM charge_stations
 WHERE charge_station_id = $1
 FOR UPDATE;
 
+-- The default tariff of a location, with the row locked until the transaction ends.
+-- name: LockAssetLocationDefaultTariff :one
+SELECT default_tariff_ref FROM asset_locations WHERE id = $1 FOR UPDATE;
+
 -- A location only moves to another org when no other station and no EVSE of another
--- station is at it: no row is changed otherwise.
+-- station is at it: no row is changed otherwise. It loses its default tariff, which
+-- belongs to the old org.
 -- name: TransferLocation :execrows
 UPDATE asset_locations l SET
     org_id = sqlc.arg('to_org_id')::uuid,
     party_ref = sqlc.arg('party_ref')::text,
+    default_tariff_ref = NULL,
     version = l.version + 1,
     updated_at = NOW()
 WHERE l.id = sqlc.arg('location_id')::uuid

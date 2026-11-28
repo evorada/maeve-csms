@@ -63,6 +63,16 @@ UPDATE transactions SET
     updated_at      = NOW()
 WHERE charge_station_id = sqlc.arg('charge_station_id') AND id = sqlc.arg('id');
 
+-- The tariff of a transaction is set once: no row is changed when the transaction has a
+-- tariff source already.
+-- name: SetTransactionTariff :execrows
+UPDATE transactions SET
+    tariff_id      = sqlc.narg('tariff_id')::uuid,
+    tariff_version = sqlc.narg('tariff_version')::int,
+    tariff_source  = sqlc.arg('tariff_source')::text,
+    updated_at     = NOW()
+WHERE charge_station_id = sqlc.arg('charge_station_id') AND id = sqlc.arg('id') AND tariff_source IS NULL;
+
 -- name: NextOcpp16TransactionId :one
 SELECT nextval('ocpp16_transaction_id_seq')::integer AS id;
 

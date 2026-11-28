@@ -386,6 +386,59 @@ func TestAssetStore(t *testing.T, newStore func(t *testing.T) store.Engine) {
 		assert.Equal(t, c, lookupAssetConnector(t, s, c.Id))
 	})
 
+	t.Run("the default tariff of a location", func(t *testing.T) {
+		s := newStore(t)
+		tariff := createTariffWithId(t, s, testAssetId(50), orgA)
+		other := createTariffWithId(t, s, testAssetId(51), orgA)
+
+		loc := testAssetLocation("Plaza")
+		loc.DefaultTariffRef = ptr(strings.ToUpper(tariff.Id))
+		createAssetLocation(t, s, loc)
+		assert.Equal(t, &tariff.Id, loc.DefaultTariffRef, "canonical form")
+		assert.Equal(t, loc, lookupAssetLocation(t, s, loc.Id))
+		byOcpiId, err := s.LookupAssetLocationByOcpiId(ctx, assetPartyA, loc.OcpiId)
+		require.NoError(t, err)
+		assert.Equal(t, loc, byOcpiId)
+		listed, _, err := s.ListAssetLocations(ctx, store.AssetLocationFilter{OrgIds: []string{orgA}})
+		require.NoError(t, err)
+		assert.Equal(t, []*store.AssetLocation{loc}, listed)
+
+		// the store keeps its own copy
+		got := lookupAssetLocation(t, s, loc.Id)
+		*got.DefaultTariffRef = other.Id
+		assert.Equal(t, &tariff.Id, lookupAssetLocation(t, s, loc.Id).DefaultTariffRef)
+
+		loc.DefaultTariffRef = &other.Id
+		require.NoError(t, s.UpdateAssetLocation(ctx, loc))
+		assert.Equal(t, &other.Id, lookupAssetLocation(t, s, loc.Id).DefaultTariffRef)
+		loc.DefaultTariffRef = nil
+		require.NoError(t, s.UpdateAssetLocation(ctx, loc))
+		assert.Nil(t, lookupAssetLocation(t, s, loc.Id).DefaultTariffRef)
+		assert.Equal(t, int64(3), loc.Version)
+
+		// a tariff that does not exist
+		unknown := testAssetLocation("Unknown tariff")
+		unknown.Id = testAssetId(60)
+		unknown.OcpiId = "UNKNOWN"
+		unknown.DefaultTariffRef = ptr(testAssetId(98))
+		assert.ErrorIs(t, s.CreateAssetLocation(ctx, unknown), store.ErrNotFound)
+		assert.Nil(t, lookupAssetLocation(t, s, testAssetId(60)), "a location that is refused is not stored")
+		changed := *loc
+		changed.DefaultTariffRef = ptr(testAssetId(98))
+		assert.ErrorIs(t, s.UpdateAssetLocation(ctx, &changed), store.ErrNotFound)
+		assert.Equal(t, loc, lookupAssetLocation(t, s, loc.Id), "a refused update changes nothing")
+		notAnId := testAssetLocation("Not an id")
+		notAnId.OcpiId = "NOT-AN-ID"
+		notAnId.DefaultTariffRef = ptr("not-a-uuid")
+		assert.Error(t, s.CreateAssetLocation(ctx, notAnId))
+
+		// a deleted tariff is still there
+		require.NoError(t, s.DeleteTariff(ctx, tariff.Id))
+		loc.DefaultTariffRef = &tariff.Id
+		require.NoError(t, s.UpdateAssetLocation(ctx, loc))
+		assert.Equal(t, loc, lookupAssetLocation(t, s, loc.Id))
+	})
+
 	t.Run("unique keys", func(t *testing.T) {
 		s := newStore(t)
 		registerAssetStations(t, s)

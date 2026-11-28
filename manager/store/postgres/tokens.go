@@ -14,7 +14,8 @@ import (
 )
 
 // SetToken creates the token, or updates the token with the same org, country code,
-// party id and UID.
+// party id and UID. The token group of the token is not written: a token that is updated
+// stays in its group.
 func (s *Store) SetToken(ctx context.Context, token *store.Token) error {
 	slog.Debug("setting token", "uid", token.Uid, "contract_id", token.ContractId)
 
@@ -193,5 +194,6 @@ func toStoreToken(t *Token) *store.Token {
 		LastUpdated:  timeFromTimestamp(t.LastUpdated).Format(time.RFC3339),
 		ExpiresAt:    fromNullTimestamptz(t.ExpiresAt),
 		OrgId:        uuidString(t.OrgID),
+		TokenGroupId: optionalUUIDString(t.TokenGroupID),
 	}
 }

@@ -18,7 +18,7 @@ import (
 // The asset store keeps the rules of the PostgreSQL tables: unique keys, optimistic
 // versions, the references between records (a location in use cannot be deleted, an
 // EVSE needs its location and charge station, a connector its EVSE and the tariffs that
-// it refers to) and the defaults.
+// it refers to, a location its default tariff) and the defaults.
 
 // assetKey returns the canonical form of an asset id, under which the asset is stored;
 // false when the id is not a UUID, which no stored asset has.
@@ -77,6 +77,9 @@ func (s *Store) CreateAssetLocation(_ context.Context, loc *store.AssetLocation)
 
 	s.Lock()
 	defer s.Unlock()
+	if stored.DefaultTariffRef, err = s.assetLocationTariff(loc.DefaultTariffRef); err != nil {
+		return fmt.Errorf("create asset location: %w", err)
+	}
 	if _, found := s.assetLocations[id]; found {
 		return fmt.Errorf("create asset location %s: %w", id, store.ErrAlreadyExists)
 	}
@@ -90,6 +93,20 @@ func (s *Store) CreateAssetLocation(_ context.Context, loc *store.AssetLocation)
 	s.assetLocations[id] = stored
 	*loc = *copyAssetLocation(stored)
 	return nil
+}
+
+// assetLocationTariff returns the canonical form of the default tariff of a location,
+// after checking that the tariff exists (a deleted tariff is still there). The caller
+// holds the lock.
+func (s *Store) assetLocationTariff(ref *string) (*string, error) {
+	tariffRef, err := optionalAssetKey(ref)
+	if err != nil {
+		return nil, fmt.Errorf("invalid default tariff ref %q: %w", *ref, err)
+	}
+	if tariffRef != nil && s.tariffs[*tariffRef] == nil {
+		return nil, fmt.Errorf("tariff %s: %w", *tariffRef, store.ErrNotFound)
+	}
+	return tariffRef, nil
 }
 
 // assetLocationOcpiIdTaken reports whether another location has the party and the OCPI
@@ -123,6 +140,10 @@ func (s *Store) UpdateAssetLocation(_ context.Context, loc *store.AssetLocation)
 	updated.OrgId = current.OrgId
 	if updated.OcpiId == "" {
 		updated.OcpiId = id
+	}
+	var err error
+	if updated.DefaultTariffRef, err = s.assetLocationTariff(loc.DefaultTariffRef); err != nil {
+		return fmt.Errorf("update asset location %s: %w", loc.Id, err)
 	}
 	if s.assetLocationOcpiIdTaken(updated) {
 		return fmt.Errorf("update asset location %s: OCPI id %s/%s: %w", loc.Id, updated.PartyRef, updated.OcpiId, store.ErrAlreadyExists)
@@ -664,6 +685,7 @@ func copyAssetLocation(loc *store.AssetLocation) *store.AssetLocation {
 	c.State = copyOrNil(loc.State)
 	c.ParkingType = copyOrNil(loc.ParkingType)
 	c.ChargingWhenClosed = copyOrNil(loc.ChargingWhenClosed)
+	c.DefaultTariffRef = copyOrNil(loc.DefaultTariffRef)
 	c.Facilities = append([]string{}, loc.Facilities...)
 	c.ExternalRefs = append([]string{}, loc.ExternalRefs...)
 	if loc.OpeningTimes != nil {
@@ -780,6 +802,7 @@ func (s *Store) TransferChargeStation(_ context.Context, p store.TransferParams)
 
 	var target *string
 	var moved *store.AssetLocation
+	var clearedDefaultTariff *string
 	switch {
 	case p.MoveLocation:
 		if registered.LocationId == nil {
@@ -792,6 +815,9 @@ func (s *Store) TransferChargeStation(_ context.Context, p store.TransferParams)
 		moved = copyAssetLocation(s.assetLocations[*target])
 		moved.OrgId = to.String()
 		moved.PartyRef = *p.TargetPartyRef
+		// its default tariff belongs to the old org
+		clearedDefaultTariff = moved.DefaultTariffRef
+		moved.DefaultTariffRef = nil
 		if s.assetLocationOcpiIdTaken(moved) {
 			return nil, fmt.Errorf("%s: move location %s: OCPI id %s/%s: %w", what, *target, moved.PartyRef, moved.OcpiId, store.ErrAlreadyExists)
 		}
@@ -824,6 +850,9 @@ func (s *Store) TransferChargeStation(_ context.Context, p store.TransferParams)
 		}
 	}
 	tariffs := map[string]bool{}
+	if clearedDefaultTariff != nil {
+		tariffs[*clearedDefaultTariff] = true
+	}
 	for _, evse := range evses {
 		stored := s.assetEvses[evse.Id]
 		stored.OrgId = to.String()

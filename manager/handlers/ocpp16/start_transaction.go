@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"math/rand"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/tariffs"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	"go.opentelemetry.io/otel/trace"
@@ -42,11 +44,20 @@ const refusedTransactionId = -1
 // The exception is a charge station that may not charge (pending or decommissioned):
 // nothing is recorded, and it gets Invalid with the transaction id -1.
 //
-// The transaction, its details, the reservation it uses and the session.started event
-// are stored in one transaction. The event belongs to the org of the stored transaction,
-// like the later events of the session. Once it is stored, a transaction whose idTag is
-// accepted is given to the CommandTracker (when there is one), which links it to the
-// remote start that asked for it; nothing the tracker does changes the answer.
+// The transaction, its details, the reservation it uses, its tariff and the
+// session.started event are stored in one transaction. The event belongs to the org of
+// the stored transaction, like the later events of the session. Once it is stored, a
+// transaction whose idTag is accepted is given to the CommandTracker (when there is one),
+// which links it to the remote start that asked for it; nothing the tracker does changes
+// the answer.
+//
+// The tariff of the transaction is chosen once, here, whatever the status of the idTag (a
+// station may charge on with an idTag that was refused): the version that the
+// TariffSelector selects is stored with the transaction and stays, also when the tariff
+// gets a new version during the session. It is selected for the org of the transaction.
+// Charging never waits for a tariff and is never refused for want of one: when the
+// selection fails or takes too long, that is logged and the transaction starts without a
+// tariff.
 type StartTransactionHandler struct {
 	Clock      clock.PassiveClock
 	TokenStore store.TokenStore
@@ -60,6 +71,8 @@ type StartTransactionHandler struct {
 	Tx               store.Transactor
 	Events           events.Emitter
 	CommandTracker   CommandTracker // nil: commands are not followed
+	// TariffSelector selects the tariff of the transaction. Nil: transactions get no tariff.
+	TariffSelector *tariffs.Selector
 }
 
 func (t StartTransactionHandler) HandleCall(ctx context.Context, chargeStationId string, request ocpp.Request) (ocpp.Response, error) {
@@ -91,6 +104,10 @@ func (t StartTransactionHandler) HandleCall(ctx context.Context, chargeStationId
 		slog.Warn("invalid start transaction timestamp, using the current time",
 			slog.String("chargeStationId", chargeStationId), slog.String("timestamp", req.Timestamp), "err", err)
 	}
+
+	// the tariff is selected before the transaction is stored: the selection reads from
+	// several stores, and none of that holds up or breaks the storing
+	selection := t.selectTariff(ctx, chargeStationId, req, auth.OrgId)
 
 	var transactionId int
 	var transactionUuid string
@@ -134,11 +151,14 @@ func (t StartTransactionHandler) HandleCall(ctx context.Context, chargeStationId
 			return err
 		}
 
-		return t.Events.Emit(ctx, sessionStartedEvent(chargeStationId, req, transactionId, transactionUuid, details, auth.Status, sessionOrgId(stored)))
+		tariff := t.pinTariff(ctx, selection, stored, chargeStationId, transactionUuid)
+
+		return t.Events.Emit(ctx, sessionStartedEvent(chargeStationId, req, transactionId, transactionUuid, details, auth.Status, sessionOrgId(stored), tariff))
 	})
 	if err != nil {
 		return nil, err
 	}
+	t.pinTariffOfOtherOrg(ctx, selection, chargeStationId, transactionUuid, req)
 
 	if auth.Status == string(types.StartTransactionResponseJsonIdTagInfoStatusAccepted) {
 		trackCommand(ctx, t.CommandTracker, chargeStationId, "StartTransaction", func(tracker CommandTracker) {
@@ -190,12 +210,115 @@ func (t StartTransactionHandler) createTransaction(ctx context.Context, chargeSt
 	return 0, "", fmt.Errorf("allocating a transaction id for %s: %w", chargeStationId, err)
 }
 
+// tariffSelection is the tariff that was selected for a transaction before the
+// transaction was stored.
+type tariffSelection struct {
+	// orgId is the org that the tariff was selected for: the org that owned the charge
+	// station when the idTag was authorised
+	orgId  string
+	choice tariffs.Choice
+	// err says why there is no choice
+	err error
+	// otherOrgId is set when the stored transaction turned out to belong to another org
+	// than orgId (the charge station moved in between): its tariff is selected again
+	otherOrgId string
+}
+
+// selectTariff selects the tariff of the transaction that the station has started, for
+// the org that owns the charge station. It returns nil when there is no selector.
+func (t StartTransactionHandler) selectTariff(ctx context.Context, chargeStationId string, req *types.StartTransactionJson, orgId string) *tariffSelection {
+	if t.TariffSelector == nil {
+		return nil
+	}
+	selection := &tariffSelection{orgId: orgId}
+	selection.choice, selection.err = t.TariffSelector.SelectForStart(ctx, t.tariffInput(chargeStationId, req, orgId))
+	return selection
+}
+
+func (t StartTransactionHandler) tariffInput(chargeStationId string, req *types.StartTransactionJson, orgId string) tariffs.SelectInput {
+	return tariffs.SelectInput{
+		OrgId:       orgId,
+		StationKey:  chargeStationId,
+		OcppVersion: string(transport.OcppVersion16),
+		// OCPP 1.6 has no EVSEs: the connector id is used for both
+		EvseId:      req.ConnectorId,
+		ConnectorId: req.ConnectorId,
+		TokenUid:    req.IdTag,
+		At:          t.Clock.Now(),
+	}
+}
+
+// pinTariff stores the selected tariff with the transaction that was just stored, in the
+// database transaction that stored it. It returns the tariff that the transaction has
+// now, nil when it has none. Nothing here fails the start of the transaction.
+//
+// The tariff was selected for the org that owned the charge station a moment ago. The
+// stored transaction has the org that owns it now: when the charge station moved to
+// another org in between, the selected tariff is not a tariff of the transaction, and
+// another one is selected after the transaction is stored (pinTariffOfOtherOrg).
+func (t StartTransactionHandler) pinTariff(ctx context.Context, selection *tariffSelection, stored *store.Transaction, chargeStationId, transactionUuid string) *tariffs.Choice {
+	if selection == nil {
+		return nil
+	}
+	logAttrs := []any{slog.String("chargeStationId", chargeStationId), slog.String("transactionId", transactionUuid)}
+	// a transaction of the legacy org, or without an org, belongs to the org of its
+	// charge station
+	if orgId := sessionOrgId(stored); orgId != "" && !strings.EqualFold(orgId, selection.orgId) {
+		selection.otherOrgId = orgId
+		return nil
+	}
+	if selection.err != nil {
+		slog.Error("failed to select the tariff of a transaction, it starts without one", append(logAttrs, "err", selection.err)...)
+		trace.SpanFromContext(ctx).RecordError(selection.err)
+		return nil
+	}
+	pinned, err := tariffs.Pin(ctx, t.TransactionStore, chargeStationId, transactionUuid, selection.choice)
+	if err != nil {
+		slog.Error("failed to store the tariff of a transaction, it starts without one", append(logAttrs, "err", err)...)
+		trace.SpanFromContext(ctx).RecordError(err)
+		return nil
+	}
+	if !pinned {
+		return nil
+	}
+	return &selection.choice
+}
+
+// pinTariffOfOtherOrg selects and stores the tariff of a transaction that belongs to
+// another org than the one that its tariff was selected for first, after the transaction
+// is stored. Nothing here fails the start of the transaction.
+func (t StartTransactionHandler) pinTariffOfOtherOrg(ctx context.Context, selection *tariffSelection, chargeStationId, transactionUuid string, req *types.StartTransactionJson) {
+	if selection == nil || selection.otherOrgId == "" {
+		return
+	}
+	choice, err := t.TariffSelector.SelectForStart(ctx, t.tariffInput(chargeStationId, req, selection.otherOrgId))
+	if err == nil {
+		_, err = tariffs.Pin(ctx, t.TransactionStore, chargeStationId, transactionUuid, choice)
+	}
+	if err != nil {
+		slog.Error("failed to select the tariff of a transaction, it starts without one",
+			slog.String("chargeStationId", chargeStationId), slog.String("transactionId", transactionUuid), "err", err)
+		trace.SpanFromContext(ctx).RecordError(err)
+	}
+}
+
 // sessionStartedEvent is the session.started event of a transaction with the details
 // that were stored for it, and the authorisation status that the station gets. orgId is
 // the org of the stored transaction (sessionOrgId): "" leaves it to the emitter, which
-// takes the org of the charge station.
+// takes the org of the charge station. tariff is the tariff that was stored with the
+// transaction, nil when it has none.
 func sessionStartedEvent(chargeStationId string, req *types.StartTransactionJson, transactionId int, transactionUuid string,
-	details *store.TransactionDetails, authStatus, orgId string) events.Event {
+	details *store.TransactionDetails, authStatus, orgId string, tariff *tariffs.Choice) events.Event {
+	var tariffId, tariffSource *string
+	var tariffVersion *int
+	if tariff != nil {
+		source := string(tariff.Source)
+		tariffSource = &source
+		if tariff.TariffId != "" {
+			id, version := tariff.TariffId, tariff.Version
+			tariffId, tariffVersion = &id, &version
+		}
+	}
 	return events.Event{
 		Type:         events.TypeSessionStarted,
 		OrgId:        orgId,
@@ -218,6 +341,9 @@ func sessionStartedEvent(chargeStationId string, req *types.StartTransactionJson
 			StartedAt:         details.StartedAt.UTC(),
 			MeterStartWh:      details.MeterStartWh,
 			ReservationId:     details.ReservationId,
+			TariffId:          tariffId,
+			TariffVersion:     tariffVersion,
+			TariffSource:      tariffSource,
 		},
 	}
 }

@@ -219,6 +219,11 @@ func (s *Store) NextOcpp16TransactionId(ctx context.Context) (int, error) {
 	return 0, fmt.Errorf("NextOcpp16TransactionId: %w", store.ErrNotImplemented)
 }
 
+// SetTransactionTariff is not implemented for Firestore, which has no tariffs.
+func (s *Store) SetTransactionTariff(context.Context, string, string, *string, *int, string) error {
+	return fmt.Errorf("SetTransactionTariff: %w", store.ErrNotImplemented)
+}
+
 func getPath(chargeStationId, transactionId string) string {
 	return fmt.Sprintf("Transaction/%s-%s", chargeStationId, transactionId)
 }

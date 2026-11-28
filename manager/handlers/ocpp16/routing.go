@@ -21,6 +21,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/services"
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/tariffs"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	"k8s.io/utils/clock"
@@ -31,7 +32,8 @@ import (
 // every CallResult and CallError first; when it also implements CommandKicker it is
 // asked to send the next queued command of a station after each BootNotification.
 // commandTracker (may be nil) learns about the transactions and connector statuses that
-// the stations report, to follow the commands to their effect.
+// the stations report, to follow the commands to their effect. tariffSelector (may be
+// nil) selects the tariff that a new transaction is charged with.
 func NewRouter(emitter transport.Emitter,
 	clk clock.PassiveClock,
 	engine store.Engine,
@@ -44,7 +46,8 @@ func NewRouter(emitter transport.Emitter,
 	heartbeatInterval time.Duration,
 	schemaFS fs.FS,
 	observer handlers.CallOutcomeObserver,
-	commandTracker CommandTracker) transport.MessageHandler {
+	commandTracker CommandTracker,
+	tariffSelector *tariffs.Selector) transport.MessageHandler {
 
 	standardCallMaker := NewCallMaker(emitter)
 	commandKicker, _ := observer.(CommandKicker)
@@ -127,6 +130,7 @@ func NewRouter(emitter transport.Emitter,
 					Tx:               engine,
 					Events:           domainEvents,
 					CommandTracker:   commandTracker,
+					TariffSelector:   tariffSelector,
 				},
 			},
 			"StopTransaction": {

@@ -19,6 +19,7 @@ const fullConfig = `{
 	"accepted_cert_org_names": ["Charge Co", "Charge Co Services"],
 	"heartbeat_interval_s": 120,
 	"default_tariff_ref": "tariff-standard",
+	"adhoc_emsp_parties": ["XX*PAY", "es*Ad1"],
 	"onboarding_mode": "preregistered_only",
 	"onboarding_open_sp1": false,
 	"onboarding_password_sha256": "XohImNooBHFR0OVvjcYpJ3NgPQ1qq73WKhHvch0VQtg=",
@@ -56,7 +57,7 @@ func TestConfigSchema(t *testing.T) {
 	}
 	assert.ElementsMatch(t, []string{
 		"version", "default_security_profile", "accepted_cert_org_names",
-		"heartbeat_interval_s", "default_tariff_ref", "onboarding_mode",
+		"heartbeat_interval_s", "default_tariff_ref", "adhoc_emsp_parties", "onboarding_mode",
 		"onboarding_open_sp1", "onboarding_password_sha256", "onboarding_max_pending", "onboarding_boot_interval_s",
 	}, names)
 
@@ -67,6 +68,10 @@ func TestConfigSchema(t *testing.T) {
 	assert.JSONEq(t, `"pending_approval"`, string(*schema.Properties["onboarding_mode"].Default))
 	assert.Equal(t, tenancy.OnboardingPendingApproval, defaults.Onboarding())
 	assert.JSONEq(t, `[]`, string(*schema.Properties["accepted_cert_org_names"].Default))
+	assert.JSONEq(t, `[]`, string(*schema.Properties["adhoc_emsp_parties"].Default))
+	assert.False(t, defaults.AdhocEmspParty("XX", "PAY"))
+	assert.Nil(t, schema.Properties["default_tariff_ref"].Default, "there is no default tariff unless the tenant sets one")
+	assert.Empty(t, defaults.DefaultTariff())
 	assert.JSONEq(t, `true`, string(*schema.Properties["onboarding_open_sp1"].Default))
 	assert.True(t, defaults.OnboardingWithoutPassword())
 	assert.JSONEq(t, `50`, string(*schema.Properties["onboarding_max_pending"].Default))
@@ -100,6 +105,8 @@ func TestValidateConfigAcceptsAValidConfig(t *testing.T) {
 		"the shortest boot interval":               `{"version":1,"onboarding_boot_interval_s":10}`,
 		"the longest boot interval":                `{"version":1,"onboarding_boot_interval_s":86400}`,
 		"an onboarding password with + and /":      `{"version":1,"onboarding_password_sha256":"+/+/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}`,
+		"no parties of ad hoc payment":             `{"version":1,"adhoc_emsp_parties":[]}`,
+		"parties of ad hoc payment in any case":    `{"version":1,"adhoc_emsp_parties":["XX*PAY","nl*a1b","De*0Z9"]}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			assert.NoError(t, tenancy.ValidateConfig(json.RawMessage(doc)))
@@ -141,6 +148,13 @@ func TestValidateConfigRefusesAnInvalidConfig(t *testing.T) {
 		{name: "an empty name", doc: `{"version":1,"accepted_cert_org_names":[""]}`, fields: []string{"accepted_cert_org_names[0]"}},
 		{name: "no names as null", doc: `{"version":1,"accepted_cert_org_names":null}`, fields: []string{"accepted_cert_org_names"}},
 		{name: "a tariff that is not a text", doc: `{"version":1,"default_tariff_ref":7}`, fields: []string{"default_tariff_ref"}},
+		{name: "parties that are not a list", doc: `{"version":1,"adhoc_emsp_parties":"XX*PAY"}`, fields: []string{"adhoc_emsp_parties"}},
+		{name: "a party without the asterisk", doc: `{"version":1,"adhoc_emsp_parties":["XX*PAY","XXPAY"]}`, fields: []string{"adhoc_emsp_parties[1]"}},
+		{name: "a party with a hyphen", doc: `{"version":1,"adhoc_emsp_parties":["XX-PAY"]}`, fields: []string{"adhoc_emsp_parties[0]"}},
+		{name: "a party id that is too long", doc: `{"version":1,"adhoc_emsp_parties":["XX*PAYS"]}`, fields: []string{"adhoc_emsp_parties[0]"}},
+		{name: "a country code that is too short", doc: `{"version":1,"adhoc_emsp_parties":["X*PAY"]}`, fields: []string{"adhoc_emsp_parties[0]"}},
+		{name: "a party with something after it", doc: `{"version":1,"adhoc_emsp_parties":["XX*PAY\n"]}`, fields: []string{"adhoc_emsp_parties[0]"}},
+		{name: "a party that is not a text", doc: `{"version":1,"adhoc_emsp_parties":[7]}`, fields: []string{"adhoc_emsp_parties[0]"}},
 		{name: "not an object", doc: `["version"]`, fields: []string{""}},
 		{name: "null", doc: `null`, fields: []string{""}},
 		{name: "not JSON", doc: `{"version":1`, fields: []string{""}},
@@ -193,6 +207,7 @@ func TestParseConfig(t *testing.T) {
 		AcceptedCertOrgNames:     []string{"Charge Co", "Charge Co Services"},
 		HeartbeatIntervalS:       &heartbeat,
 		DefaultTariffRef:         &tariff,
+		AdhocEmspParties:         []string{"XX*PAY", "es*Ad1"},
 		OnboardingMode:           tenancy.OnboardingPreregisteredOnly,
 		OnboardingOpenSP1:        &openSP1,
 		OnboardingPasswordSHA256: "XohImNooBHFR0OVvjcYpJ3NgPQ1qq73WKhHvch0VQtg=",
@@ -206,6 +221,16 @@ func TestParseConfig(t *testing.T) {
 	assert.Equal(t, store.TLSWithClientSideCertificates, cfg.SecurityProfile())
 	assert.Equal(t, tenancy.OnboardingPreregisteredOnly, cfg.Onboarding())
 	assert.Equal(t, 2*time.Minute, cfg.HeartbeatInterval(5*time.Minute))
+	assert.Equal(t, "tariff-standard", cfg.DefaultTariff())
+	assert.True(t, cfg.AdhocEmspParty("XX", "PAY"))
+	assert.True(t, cfg.AdhocEmspParty("xx", "pay"), "country codes and party ids have no case")
+	assert.True(t, cfg.AdhocEmspParty("ES", "AD1"))
+	assert.False(t, cfg.AdhocEmspParty("XX", "PAX"))
+	assert.False(t, cfg.AdhocEmspParty("X", "XPAY"), "the two parts are not run together")
+	assert.False(t, cfg.AdhocEmspParty("", ""))
+	var none *tenancy.TenantConfig
+	assert.False(t, none.AdhocEmspParty("XX", "PAY"))
+	assert.Empty(t, none.DefaultTariff())
 
 	t.Run("a tenant without a config has the zero config", func(t *testing.T) {
 		for _, doc := range []string{``, `null`, `{}`, ` { } `} {

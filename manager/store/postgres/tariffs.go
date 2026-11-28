@@ -280,9 +280,9 @@ func (s *Store) ListTariffVersions(ctx context.Context, tariffId string) ([]*sto
 	return versions, nil
 }
 
-// DeleteTariff counts the connectors that refer to the tariff and marks the tariff as
-// deleted, in a transaction of its own or in a savepoint inside the transaction of the
-// caller.
+// DeleteTariff counts the connectors, locations and token groups that refer to the tariff
+// and marks the tariff as deleted, in a transaction of its own or in a savepoint inside
+// the transaction of the caller.
 func (s *Store) DeleteTariff(ctx context.Context, tariffId string) error {
 	id, ok := assetId(tariffId)
 	if !ok {
@@ -309,8 +309,9 @@ func (s *Store) DeleteTariff(ctx context.Context, tariffId string) error {
 	if err != nil {
 		return fmt.Errorf("delete tariff %s: count references: %w", tariffId, err)
 	}
-	if references > 0 {
-		return fmt.Errorf("delete tariff %s: %d connectors: %w", tariffId, references, store.ErrInUse)
+	if references.Connectors+references.Locations+references.TokenGroups > 0 {
+		return fmt.Errorf("delete tariff %s: %d connectors, %d locations, %d token groups: %w", tariffId,
+			references.Connectors, references.Locations, references.TokenGroups, store.ErrInUse)
 	}
 	if err := q.SoftDeleteTariff(ctx, id); err != nil {
 		return fmt.Errorf("delete tariff %s: %w", tariffId, err)

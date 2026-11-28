@@ -143,11 +143,11 @@ const CreateAssetLocation = `-- name: CreateAssetLocation :one
 INSERT INTO asset_locations (
     id, org_id, party_ref, ocpi_id, name, address, city, postal_code, state, country,
     latitude, longitude, time_zone, parking_type, publish, opening_times, facilities,
-    charging_when_closed, external_refs
+    charging_when_closed, external_refs, default_tariff_ref
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
 )
-RETURNING id, org_id, party_ref, ocpi_id, name, address, city, postal_code, state, country, latitude, longitude, time_zone, parking_type, publish, opening_times, facilities, charging_when_closed, external_refs, version, created_at, updated_at
+RETURNING id, org_id, party_ref, ocpi_id, name, address, city, postal_code, state, country, latitude, longitude, time_zone, parking_type, publish, opening_times, facilities, charging_when_closed, external_refs, version, created_at, updated_at, default_tariff_ref
 `
 
 type CreateAssetLocationParams struct {
@@ -170,6 +170,7 @@ type CreateAssetLocationParams struct {
 	Facilities         []string    `db:"facilities" json:"facilities"`
 	ChargingWhenClosed pgtype.Bool `db:"charging_when_closed" json:"charging_when_closed"`
 	ExternalRefs       []string    `db:"external_refs" json:"external_refs"`
+	DefaultTariffRef   pgtype.UUID `db:"default_tariff_ref" json:"default_tariff_ref"`
 }
 
 func (q *Queries) CreateAssetLocation(ctx context.Context, arg CreateAssetLocationParams) (AssetLocation, error) {
@@ -193,6 +194,7 @@ func (q *Queries) CreateAssetLocation(ctx context.Context, arg CreateAssetLocati
 		arg.Facilities,
 		arg.ChargingWhenClosed,
 		arg.ExternalRefs,
+		arg.DefaultTariffRef,
 	)
 	var i AssetLocation
 	err := row.Scan(
@@ -218,6 +220,7 @@ func (q *Queries) CreateAssetLocation(ctx context.Context, arg CreateAssetLocati
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DefaultTariffRef,
 	)
 	return i, err
 }
@@ -365,7 +368,7 @@ func (q *Queries) GetAssetEvseByOcpp(ctx context.Context, arg GetAssetEvseByOcpp
 }
 
 const GetAssetLocation = `-- name: GetAssetLocation :one
-SELECT id, org_id, party_ref, ocpi_id, name, address, city, postal_code, state, country, latitude, longitude, time_zone, parking_type, publish, opening_times, facilities, charging_when_closed, external_refs, version, created_at, updated_at FROM asset_locations WHERE id = $1
+SELECT id, org_id, party_ref, ocpi_id, name, address, city, postal_code, state, country, latitude, longitude, time_zone, parking_type, publish, opening_times, facilities, charging_when_closed, external_refs, version, created_at, updated_at, default_tariff_ref FROM asset_locations WHERE id = $1
 `
 
 func (q *Queries) GetAssetLocation(ctx context.Context, id pgtype.UUID) (AssetLocation, error) {
@@ -394,12 +397,13 @@ func (q *Queries) GetAssetLocation(ctx context.Context, id pgtype.UUID) (AssetLo
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DefaultTariffRef,
 	)
 	return i, err
 }
 
 const GetAssetLocationByOcpiId = `-- name: GetAssetLocationByOcpiId :one
-SELECT id, org_id, party_ref, ocpi_id, name, address, city, postal_code, state, country, latitude, longitude, time_zone, parking_type, publish, opening_times, facilities, charging_when_closed, external_refs, version, created_at, updated_at FROM asset_locations WHERE party_ref = $1 AND ocpi_id = $2
+SELECT id, org_id, party_ref, ocpi_id, name, address, city, postal_code, state, country, latitude, longitude, time_zone, parking_type, publish, opening_times, facilities, charging_when_closed, external_refs, version, created_at, updated_at, default_tariff_ref FROM asset_locations WHERE party_ref = $1 AND ocpi_id = $2
 `
 
 type GetAssetLocationByOcpiIdParams struct {
@@ -433,6 +437,7 @@ func (q *Queries) GetAssetLocationByOcpiId(ctx context.Context, arg GetAssetLoca
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DefaultTariffRef,
 	)
 	return i, err
 }
@@ -553,7 +558,7 @@ func (q *Queries) ListAssetEvsesByStation(ctx context.Context, stationKey string
 }
 
 const ListAssetLocations = `-- name: ListAssetLocations :many
-SELECT id, org_id, party_ref, ocpi_id, name, address, city, postal_code, state, country, latitude, longitude, time_zone, parking_type, publish, opening_times, facilities, charging_when_closed, external_refs, version, created_at, updated_at FROM asset_locations
+SELECT id, org_id, party_ref, ocpi_id, name, address, city, postal_code, state, country, latitude, longitude, time_zone, parking_type, publish, opening_times, facilities, charging_when_closed, external_refs, version, created_at, updated_at, default_tariff_ref FROM asset_locations
 WHERE org_id = ANY($1::uuid[])
   AND ($2::text IS NULL OR party_ref = $2::text)
   AND ($3::boolean IS NULL OR publish = $3::boolean)
@@ -616,6 +621,7 @@ func (q *Queries) ListAssetLocations(ctx context.Context, arg ListAssetLocations
 			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DefaultTariffRef,
 		); err != nil {
 			return nil, err
 		}
@@ -625,6 +631,18 @@ func (q *Queries) ListAssetLocations(ctx context.Context, arg ListAssetLocations
 		return nil, err
 	}
 	return items, nil
+}
+
+const LockAssetLocationDefaultTariff = `-- name: LockAssetLocationDefaultTariff :one
+SELECT default_tariff_ref FROM asset_locations WHERE id = $1 FOR UPDATE
+`
+
+// The default tariff of a location, with the row locked until the transaction ends.
+func (q *Queries) LockAssetLocationDefaultTariff(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, LockAssetLocationDefaultTariff, id)
+	var default_tariff_ref pgtype.UUID
+	err := row.Scan(&default_tariff_ref)
+	return default_tariff_ref, err
 }
 
 const LockChargeStation = `-- name: LockChargeStation :one
@@ -734,6 +752,7 @@ const TransferLocation = `-- name: TransferLocation :execrows
 UPDATE asset_locations l SET
     org_id = $1::uuid,
     party_ref = $2::text,
+    default_tariff_ref = NULL,
     version = l.version + 1,
     updated_at = NOW()
 WHERE l.id = $3::uuid
@@ -753,7 +772,8 @@ type TransferLocationParams struct {
 }
 
 // A location only moves to another org when no other station and no EVSE of another
-// station is at it: no row is changed otherwise.
+// station is at it: no row is changed otherwise. It loses its default tariff, which
+// belongs to the old org.
 func (q *Queries) TransferLocation(ctx context.Context, arg TransferLocationParams) (int64, error) {
 	result, err := q.db.Exec(ctx, TransferLocation,
 		arg.ToOrgID,
@@ -978,10 +998,11 @@ UPDATE asset_locations SET
     facilities = $15,
     charging_when_closed = $16,
     external_refs = $17,
+    default_tariff_ref = $18,
     version = version + 1,
     updated_at = NOW()
-WHERE id = $18 AND version = $19
-RETURNING id, org_id, party_ref, ocpi_id, name, address, city, postal_code, state, country, latitude, longitude, time_zone, parking_type, publish, opening_times, facilities, charging_when_closed, external_refs, version, created_at, updated_at
+WHERE id = $19 AND version = $20
+RETURNING id, org_id, party_ref, ocpi_id, name, address, city, postal_code, state, country, latitude, longitude, time_zone, parking_type, publish, opening_times, facilities, charging_when_closed, external_refs, version, created_at, updated_at, default_tariff_ref
 `
 
 type UpdateAssetLocationParams struct {
@@ -1002,6 +1023,7 @@ type UpdateAssetLocationParams struct {
 	Facilities         []string    `db:"facilities" json:"facilities"`
 	ChargingWhenClosed pgtype.Bool `db:"charging_when_closed" json:"charging_when_closed"`
 	ExternalRefs       []string    `db:"external_refs" json:"external_refs"`
+	DefaultTariffRef   pgtype.UUID `db:"default_tariff_ref" json:"default_tariff_ref"`
 	ID                 pgtype.UUID `db:"id" json:"id"`
 	Version            int64       `db:"version" json:"version"`
 }
@@ -1026,6 +1048,7 @@ func (q *Queries) UpdateAssetLocation(ctx context.Context, arg UpdateAssetLocati
 		arg.Facilities,
 		arg.ChargingWhenClosed,
 		arg.ExternalRefs,
+		arg.DefaultTariffRef,
 		arg.ID,
 		arg.Version,
 	)
@@ -1053,6 +1076,7 @@ func (q *Queries) UpdateAssetLocation(ctx context.Context, arg UpdateAssetLocati
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DefaultTariffRef,
 	)
 	return i, err
 }

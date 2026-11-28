@@ -61,8 +61,13 @@ type TenantConfig struct {
 	// certificate of a charge station. Empty means that the organisation is not checked.
 	AcceptedCertOrgNames []string `json:"accepted_cert_org_names,omitempty"`
 	// HeartbeatIntervalS is 60 to 86400; see HeartbeatInterval.
-	HeartbeatIntervalS *int    `json:"heartbeat_interval_s,omitempty"`
-	DefaultTariffRef   *string `json:"default_tariff_ref,omitempty"`
+	HeartbeatIntervalS *int `json:"heartbeat_interval_s,omitempty"`
+	// DefaultTariffRef is the id of the tariff of a session for which no other tariff is
+	// found; see DefaultTariff.
+	DefaultTariffRef *string `json:"default_tariff_ref,omitempty"`
+	// AdhocEmspParties are the parties whose tokens make a session an ad hoc session,
+	// each as "CC*PID"; see AdhocEmspParty.
+	AdhocEmspParties []string `json:"adhoc_emsp_parties,omitempty"`
 	// OnboardingMode is pending_approval or preregistered_only; see Onboarding.
 	OnboardingMode string `json:"onboarding_mode,omitempty"`
 	// OnboardingOpenSP1 lets a station that is not registered connect for its onboarding
@@ -143,6 +148,30 @@ func (c *TenantConfig) OnboardingBootInterval() time.Duration {
 		return DefaultOnboardingBootInterval
 	}
 	return time.Duration(seconds) * time.Second
+}
+
+// DefaultTariff returns the id of the default tariff of the tenant, "" when it has none.
+func (c *TenantConfig) DefaultTariff() string {
+	if c == nil || c.DefaultTariffRef == nil {
+		return ""
+	}
+	return *c.DefaultTariffRef
+}
+
+// AdhocEmspParty reports whether the party with the country code and the party id is one
+// of the parties of the tenant that issue the tokens of ad hoc payment. Country codes and
+// party ids are compared without regard to case, as OCPI does.
+func (c *TenantConfig) AdhocEmspParty(countryCode, partyId string) bool {
+	if c == nil {
+		return false
+	}
+	party := countryCode + "*" + partyId
+	for _, adhoc := range c.AdhocEmspParties {
+		if strings.EqualFold(adhoc, party) {
+			return true
+		}
+	}
+	return false
 }
 
 // HeartbeatInterval returns the heartbeat interval of the charge stations of the

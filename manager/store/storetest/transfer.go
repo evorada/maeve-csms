@@ -11,15 +11,17 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
-// Two tariffs of orgA that the connectors of the transfer tests refer to.
+// Two tariffs of orgA that the connectors of the transfer tests refer to, and the default
+// tariff of the location of the station that is transferred.
 var (
-	transferTariff      = testAssetId(901)
-	transferAdhocTariff = testAssetId(902)
+	transferTariff        = testAssetId(901)
+	transferAdhocTariff   = testAssetId(902)
+	transferDefaultTariff = testAssetId(903)
 )
 
-// transferFixture is a charge station of orgA with two EVSEs at a location, one of its
-// connectors with tariffs, a charging profile and a transaction; and another charge
-// station of orgA at another location.
+// transferFixture is a charge station of orgA with two EVSEs at a location with a default
+// tariff, one of its connectors with tariffs, a charging profile and a transaction; and
+// another charge station of orgA at another location.
 type transferFixture struct {
 	plaza, garage *store.AssetLocation
 	first, second *store.AssetEvse
@@ -32,13 +34,17 @@ func newTransferFixture(t *testing.T, s store.Engine) *transferFixture {
 	f := &transferFixture{auth: &store.ChargeStationAuth{SecurityProfile: store.TLSWithBasicAuth, Base64SHA256Password: "c2VjcmV0", OrgId: orgA}} // #nosec G101 -- a test value, not a credential
 	require.NoError(t, s.SetChargeStationAuth(ctx, assetStationA, f.auth))
 	require.NoError(t, s.SetChargeStationAuth(ctx, assetStationB, &store.ChargeStationAuth{SecurityProfile: store.TLSWithBasicAuth, OrgId: orgA}))
-	f.plaza = createAssetLocation(t, s, testAssetLocation("Plaza"))
-	garage := testAssetLocation("Garage")
-	garage.OcpiId = "GARAGE"
-	f.garage = createAssetLocation(t, s, garage)
-
 	createTariffWithId(t, s, transferTariff, orgA)
 	createTariffWithId(t, s, transferAdhocTariff, orgA)
+	createTariffWithId(t, s, transferDefaultTariff, orgA)
+	plaza := testAssetLocation("Plaza")
+	plaza.DefaultTariffRef = ptr(transferDefaultTariff)
+	f.plaza = createAssetLocation(t, s, plaza)
+	garage := testAssetLocation("Garage")
+	garage.OcpiId = "GARAGE"
+	garage.DefaultTariffRef = ptr(transferDefaultTariff)
+	f.garage = createAssetLocation(t, s, garage)
+
 	first := testAssetEvse(f.plaza.Id, assetStationA, 1, 1)
 	first.Connectors[0].TariffRef = ptr(transferTariff)
 	first.Connectors[0].AdhocTariffRef = ptr(transferAdhocTariff)
@@ -93,7 +99,7 @@ func testStationTransfer(t *testing.T, newStore func(t *testing.T) store.Engine)
 			LocationMoved:     true,
 			EvsesMoved:        2,
 			ConnectorsMoved:   3,
-			ClearedTariffRefs: []string{transferTariff, transferAdhocTariff},
+			ClearedTariffRefs: []string{transferTariff, transferAdhocTariff, transferDefaultTariff},
 		}, result)
 
 		cs := lookupStation(t, s, assetStationA)
@@ -105,6 +111,7 @@ func testStationTransfer(t *testing.T, newStore func(t *testing.T) store.Engine)
 		assert.Equal(t, assetPartyB, plaza.PartyRef)
 		assert.Equal(t, f.plaza.OcpiId, plaza.OcpiId)
 		assert.Equal(t, int64(2), plaza.Version)
+		assert.Nil(t, plaza.DefaultTariffRef, "the default tariff of the old org is cleared")
 		for _, before := range []*store.AssetEvse{f.first, f.second} {
 			evse := lookupAssetEvse(t, s, before.Id)
 			assert.Equal(t, orgB, evse.OrgId)
@@ -136,7 +143,7 @@ func testStationTransfer(t *testing.T, newStore func(t *testing.T) store.Engine)
 		// the other station is as it was
 		other := lookupStation(t, s, assetStationB)
 		assert.Equal(t, orgA, other.OrgId)
-		assert.Equal(t, orgA, lookupAssetLocation(t, s, f.garage.Id).OrgId)
+		assert.Equal(t, f.garage, lookupAssetLocation(t, s, f.garage.Id))
 		listed := listStationKeys(t, s, store.ChargeStationFilter{OrgIds: []string{orgA}})
 		assert.Equal(t, []string{assetStationB}, listed)
 		listed = listStationKeys(t, s, store.ChargeStationFilter{OrgIds: []string{orgB}})
@@ -163,6 +170,8 @@ func testStationTransfer(t *testing.T, newStore func(t *testing.T) store.Engine)
 		assert.False(t, result.LocationMoved)
 		assert.Equal(t, 2, result.EvsesMoved)
 		assert.Equal(t, 3, result.ConnectorsMoved)
+		assert.Equal(t, []string{transferTariff, transferAdhocTariff}, result.ClearedTariffRefs,
+			"a location that stays keeps its default tariff")
 
 		cs := lookupStation(t, s, assetStationA)
 		assert.Equal(t, orgB, cs.OrgId)

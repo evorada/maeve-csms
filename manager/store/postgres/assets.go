@@ -145,6 +145,10 @@ func (s *Store) CreateAssetLocation(ctx context.Context, loc *store.AssetLocatio
 	if err != nil {
 		return fmt.Errorf("create asset location: opening times: %w", err)
 	}
+	defaultTariffRef, err := optionalUUID(loc.DefaultTariffRef)
+	if err != nil {
+		return fmt.Errorf("create asset location: invalid default tariff ref %q: %w", *loc.DefaultTariffRef, err)
+	}
 	ocpiId := loc.OcpiId
 	if ocpiId == "" {
 		ocpiId = uuidString(id)
@@ -170,6 +174,7 @@ func (s *Store) CreateAssetLocation(ctx context.Context, loc *store.AssetLocatio
 		Facilities:         textArray(loc.Facilities),
 		ChargingWhenClosed: pgBool(loc.ChargingWhenClosed),
 		ExternalRefs:       textArray(loc.ExternalRefs),
+		DefaultTariffRef:   defaultTariffRef,
 	})
 	if err != nil {
 		return assetWriteError("create asset location", err)
@@ -190,6 +195,10 @@ func (s *Store) UpdateAssetLocation(ctx context.Context, loc *store.AssetLocatio
 	openingTimes, err := openingTimesDocument(loc.OpeningTimes)
 	if err != nil {
 		return fmt.Errorf("update asset location %s: opening times: %w", loc.Id, err)
+	}
+	defaultTariffRef, err := optionalUUID(loc.DefaultTariffRef)
+	if err != nil {
+		return fmt.Errorf("update asset location %s: invalid default tariff ref %q: %w", loc.Id, *loc.DefaultTariffRef, err)
 	}
 	ocpiId := loc.OcpiId
 	if ocpiId == "" {
@@ -217,6 +226,7 @@ func (s *Store) UpdateAssetLocation(ctx context.Context, loc *store.AssetLocatio
 		Facilities:         textArray(loc.Facilities),
 		ChargingWhenClosed: pgBool(loc.ChargingWhenClosed),
 		ExternalRefs:       textArray(loc.ExternalRefs),
+		DefaultTariffRef:   defaultTariffRef,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		_, getErr := q.GetAssetLocation(ctx, id)
@@ -384,6 +394,7 @@ func assetLocationFromRow(row AssetLocation) (*store.AssetLocation, error) {
 		Facilities:         textArray(row.Facilities),
 		ChargingWhenClosed: boolFromPg(row.ChargingWhenClosed),
 		ExternalRefs:       textArray(row.ExternalRefs),
+		DefaultTariffRef:   optionalUUIDString(row.DefaultTariffRef),
 		Version:            row.Version,
 		CreatedAt:          fromPgTimestamptz(row.CreatedAt),
 		UpdatedAt:          fromPgTimestamptz(row.UpdatedAt),
@@ -937,11 +948,21 @@ func (s *Store) TransferChargeStation(ctx context.Context, p store.TransferParam
 	}
 
 	result := &store.TransferResult{StationKey: p.StationKey, ClearedTariffRefs: []string{}}
+	// the tariffs of the old org that the transfer takes away
+	tariffs := map[string]bool{}
 	if p.MoveLocation {
 		if !station.LocationID.Valid {
 			return nil, fmt.Errorf("%s: the station has no location to move: %w", what, store.ErrInvalidState)
 		}
 		target = station.LocationID
+		// the station refers to its location, so the location is there
+		defaultTariff, err := q.LockAssetLocationDefaultTariff(ctx, target)
+		if err != nil {
+			return nil, fmt.Errorf("%s: location %s: %w", what, uuidString(target), err)
+		}
+		if defaultTariff.Valid {
+			tariffs[uuidString(defaultTariff)] = true
+		}
 		rows, err := q.TransferLocation(ctx, TransferLocationParams{
 			ToOrgID:    to,
 			PartyRef:   *p.TargetPartyRef,
@@ -968,7 +989,6 @@ func (s *Store) TransferChargeStation(ctx context.Context, p store.TransferParam
 		return nil, fmt.Errorf("%s: connectors: %w", what, err)
 	}
 	ids := make([]pgtype.UUID, len(connectors))
-	tariffs := map[string]bool{}
 	for i, c := range connectors {
 		ids[i] = c.ID
 		for _, ref := range []pgtype.UUID{c.TariffRef, c.AdhocTariffRef} {

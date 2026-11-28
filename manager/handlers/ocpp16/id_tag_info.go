@@ -42,6 +42,9 @@ type idTagAuthorization struct {
 	ParentIdTag *string
 	// Token is the stored token, nil when the idTag is not known
 	Token *store.Token
+	// OrgId is the org that owns the charge station, in whose tokens the idTag was
+	// looked up
+	OrgId string
 }
 
 // authorizeIdTag looks the idTag up in the tokens of the org that owns the charge
@@ -84,7 +87,7 @@ func authorizeIdTag(ctx context.Context, tokens store.TokenStore, registry store
 			span.SetAttributes(attribute.Bool("authorize.allow_any_token", true))
 		}
 		span.SetAttributes(attribute.String("authorize.status", status))
-		return idTagAuthorization{Status: status}, nil
+		return idTagAuthorization{Status: status, OrgId: orgId}, nil
 	}
 
 	now := clk.Now()
@@ -92,6 +95,7 @@ func authorizeIdTag(ctx context.Context, tokens store.TokenStore, registry store
 		Status:      idTagStatusAccepted,
 		ParentIdTag: parentIdTag(tok),
 		Token:       tok,
+		OrgId:       orgId,
 	}
 	switch {
 	case !tok.Valid:

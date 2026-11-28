@@ -78,6 +78,13 @@ type SessionStartedData struct {
 	MeterStartWh *int64    `json:"meter_start_wh,omitempty"`
 	// ReservationId is the reservation that the station says the session terminates.
 	ReservationId *int `json:"reservation_id,omitempty"`
+	// TariffId and TariffVersion are the tariff version that the session is charged
+	// with, and TariffSource the rule that chose it (the sources of the package tariffs).
+	// A session without a tariff has only the source. All three are left out when the
+	// tariff of the session was not chosen at its start.
+	TariffId      *string `json:"tariff_id,omitempty"`
+	TariffVersion *int    `json:"tariff_version,omitempty"`
+	TariffSource  *string `json:"tariff_source,omitempty"`
 }
 
 // SessionUpdatedData is the payload of session.updated: the newest readings that a
@@ -252,8 +259,9 @@ type StationRejectedData struct {
 // when LocationMoved. It is emitted in both orgs. The station key does not change; the
 // history of the station (transactions, meter values) stays with the old org.
 // LocationId is where the station and its EVSEs are now (null without a location),
-// ClearedTariffRefs the tariffs of the old org that the connectors lost, Reason the
-// reason given (or null) and Actor who transferred the station.
+// ClearedTariffRefs the tariffs of the old org that the connectors, and the location
+// when it moved, lost, Reason the reason given (or null) and Actor who transferred the
+// station.
 type StationTransferredData struct {
 	StationKey        string   `json:"station_key"`
 	StationId         string   `json:"station_id"`

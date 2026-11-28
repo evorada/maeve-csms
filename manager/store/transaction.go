@@ -4,6 +4,9 @@ package store
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"math"
 	"time"
 )
 
@@ -38,6 +41,17 @@ type Transaction struct {
 	// when the charge station is not registered), and it stays the same when the charge
 	// station moves to another org. Firestore does not store it: it always reads as "".
 	OrgId string `firestore:"-"`
+
+	// The tariff that the transaction is charged with, chosen once, when the transaction
+	// starts, and written with TransactionStore.SetTransactionTariff. TariffId and
+	// TariffVersion name a version of a tariff (TariffVersion), which stays as it was
+	// when the tariff gets a new version later. TariffSource says where the tariff came
+	// from (the rule that chose it); a transaction for which no tariff was found has only
+	// the source. All three are nil for a transaction whose tariff was not chosen.
+	// Firestore does not store them.
+	TariffId      *string `firestore:"-"`
+	TariffVersion *int    `firestore:"-"`
+	TariffSource  *string `firestore:"-"`
 }
 
 // TransactionDetails is a partial update: only non-nil fields are written.
@@ -101,6 +115,27 @@ type TransactionStore interface {
 	// NextOcpp16TransactionId returns the next CSMS-assigned OCPP 1.6 transaction id
 	// (1..2147483647, wrapping). Firestore returns ErrNotImplemented.
 	NextOcpp16TransactionId(ctx context.Context) (int, error)
+	// SetTransactionTariff stores the tariff version that the transaction is charged with
+	// and its source. tariffId and version are both set, or both nil for a transaction
+	// without a tariff, which then has only the source; the source is never empty. The
+	// tariff of a transaction is set once: when the transaction has a source already,
+	// nothing is written and ErrAlreadyExists is returned. A transaction that does not
+	// exist is ErrNotFound. Firestore returns ErrNotImplemented.
+	SetTransactionTariff(ctx context.Context, chargeStationId, transactionId string, tariffId *string, version *int, source string) error
+}
+
+// CheckTransactionTariff checks what SetTransactionTariff is given: a source, and a
+// tariff id together with a version number (1 to 2147483647), or neither.
+func CheckTransactionTariff(tariffId *string, version *int, source string) error {
+	switch {
+	case source == "":
+		return errors.New("a tariff source is required")
+	case (tariffId == nil) != (version == nil):
+		return errors.New("a tariff id and a tariff version go together")
+	case version != nil && (*version < 1 || *version > math.MaxInt32):
+		return fmt.Errorf("tariff version %d is not a version number", *version)
+	}
+	return nil
 }
 
 type RemoteTransactionRequestStatus string

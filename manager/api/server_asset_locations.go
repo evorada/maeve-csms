@@ -448,6 +448,8 @@ func (s *Server) UpdateAssetLocation(w http.ResponseWriter, r *http.Request, loc
 		if in.Publish == nil {
 			loc.Publish = current.Publish
 		}
+		// the default tariff of a location is not a field of the API yet: it stays
+		loc.DefaultTariffRef = current.DefaultTariffRef
 		if err := s.checkLocation(ctx, loc, in.OrgId); err != nil {
 			return err
 		}

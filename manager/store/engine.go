@@ -43,4 +43,5 @@ type Engine interface {
 	ChargeStationRegistryStore
 	InventoryStore
 	TariffStore
+	TokenGroupStore
 }

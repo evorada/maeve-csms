@@ -262,6 +262,47 @@ func (s *Store) UpdateTransactionDetails(ctx context.Context, chargeStationId, t
 	return nil
 }
 
+// SetTransactionTariff stores the tariff version and the tariff source of a transaction
+// that has none yet. What it is given is checked before anything is sent, so that a call
+// that is refused leaves a transaction of the caller usable.
+func (s *Store) SetTransactionTariff(ctx context.Context, chargeStationId, transactionId string, tariffId *string, version *int, source string) error {
+	what := fmt.Sprintf("set the tariff of transaction %s/%s", chargeStationId, transactionId)
+	if err := store.CheckTransactionTariff(tariffId, version, source); err != nil {
+		return fmt.Errorf("%s: %w", what, err)
+	}
+	params := SetTransactionTariffParams{ChargeStationID: chargeStationId, ID: transactionId, TariffSource: source}
+	if tariffId != nil {
+		id, err := pgUUID(*tariffId)
+		if err != nil {
+			return fmt.Errorf("%s: invalid tariff id %q: %w", what, *tariffId, err)
+		}
+		number, err := safeIntToInt32(*version)
+		if err != nil {
+			return fmt.Errorf("%s: tariff version: %w", what, err)
+		}
+		params.TariffID = id
+		params.TariffVersion = pgtype.Int4{Int32: number, Valid: true}
+	}
+
+	q := s.writeQueries(ctx)
+	rows, err := q.SetTransactionTariff(ctx, params)
+	if err != nil {
+		return fmt.Errorf("%s: %w", what, err)
+	}
+	if rows == 0 {
+		_, err := q.GetTransaction(ctx, GetTransactionParams{ChargeStationID: chargeStationId, ID: transactionId})
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			return fmt.Errorf("%s: %w", what, store.ErrNotFound)
+		case err != nil:
+			return fmt.Errorf("%s: %w", what, err)
+		default:
+			return fmt.Errorf("%s: the transaction has its tariff: %w", what, store.ErrAlreadyExists)
+		}
+	}
+	return nil
+}
+
 // NextOcpp16TransactionId returns the next CSMS-assigned OCPP 1.6 transaction id
 // (1..2147483647, wrapping).
 func (s *Store) NextOcpp16TransactionId(ctx context.Context) (int, error) {
@@ -433,5 +474,8 @@ func (s *Store) toStoreTransaction(ctx context.Context, txn *Transaction) (*stor
 		IdTokenGroup:      stringFromText(txn.IDTokenGroup),
 		ReservationId:     fromNullInt32(txn.ReservationID),
 		OrgId:             uuidString(txn.OrgID),
+		TariffId:          optionalUUIDString(txn.TariffID),
+		TariffVersion:     fromNullInt32(txn.TariffVersion),
+		TariffSource:      stringFromText(txn.TariffSource),
 	}, nil
 }

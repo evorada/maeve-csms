@@ -35,8 +35,9 @@ type Querier interface {
 	CountInventoryTokens(ctx context.Context, arg CountInventoryTokensParams) (int64, error)
 	CountMeterValues(ctx context.Context, arg CountMeterValuesParams) (int64, error)
 	// The records that refer to a tariff: the connectors that use it as their tariff or as
-	// their ad hoc tariff.
-	CountTariffReferences(ctx context.Context, tariffID pgtype.UUID) (int64, error)
+	// their ad hoc tariff, the locations that have it as their default tariff and the token
+	// groups that have it as their override tariff.
+	CountTariffReferences(ctx context.Context, tariffID pgtype.UUID) (CountTariffReferencesRow, error)
 	CountTransactionsFiltered(ctx context.Context, arg CountTransactionsFilteredParams) (int64, error)
 	// A connector belongs to the org of its EVSE. Returns no row when there is no such EVSE.
 	CreateAssetConnector(ctx context.Context, arg CreateAssetConnectorParams) (AssetConnector, error)
@@ -50,6 +51,7 @@ type Querier interface {
 	CreateReservation(ctx context.Context, arg CreateReservationParams) error
 	CreateTariff(ctx context.Context, arg CreateTariffParams) (Tariff, error)
 	CreateTariffVersion(ctx context.Context, arg CreateTariffVersionParams) (TariffVersion, error)
+	CreateTokenGroup(ctx context.Context, arg CreateTokenGroupParams) (TokenGroup, error)
 	// CreateTransaction returns no row when the transaction already exists, instead of
 	// raising a unique violation that would abort an enclosing database transaction.
 	// The transaction belongs to the org of its charge station, or to the legacy org when
@@ -91,12 +93,21 @@ type Querier interface {
 	DeleteTenantHostnames(ctx context.Context, orgID pgtype.UUID) error
 	DeleteToken(ctx context.Context, arg DeleteTokenParams) error
 	DeleteTokenForOrg(ctx context.Context, arg DeleteTokenForOrgParams) error
+	// The tokens of the group leave it (ON DELETE SET NULL).
+	DeleteTokenGroup(ctx context.Context, id pgtype.UUID) error
 	DeleteUnlockConnectorRequest(ctx context.Context, chargeStationID string) error
 	DeleteVariableMonitoring(ctx context.Context, arg DeleteVariableMonitoringParams) error
 	// GREATEST ignores NULLs; a row where all three are NULL is not touched.
 	DisconnectStaleStations(ctx context.Context, arg DisconnectStaleStationsParams) ([]string, error)
 	ExpireReservations(ctx context.Context) (int64, error)
 	FindActiveTransaction(ctx context.Context, chargeStationID string) (Transaction, error)
+	// The group of the token of the org with exactly the UID.
+	FindExactTokenGroup(ctx context.Context, arg FindExactTokenGroupParams) (TokenGroup, error)
+	// The group with prefix_match that has the token with the longest UID that the presented
+	// UID starts with, ignoring case. The UID of the token is matched as plain text: %, _ and
+	// \ in it have no meaning. The C collation makes the order of two UIDs of the same length
+	// the order of their bytes on every server.
+	FindPrefixTokenGroup(ctx context.Context, arg FindPrefixTokenGroupParams) (TokenGroup, error)
 	GetActiveReservations(ctx context.Context, chargeStationID string) ([]Reservation, error)
 	GetAllMeterValuesByStation(ctx context.Context, arg GetAllMeterValuesByStationParams) ([]MeterValue, error)
 	GetAssetConnector(ctx context.Context, id pgtype.UUID) (AssetConnector, error)
@@ -167,6 +178,7 @@ type Querier interface {
 	GetTenantIdentityForUpdate(ctx context.Context, orgID pgtype.UUID) (GetTenantIdentityForUpdateRow, error)
 	GetTokenAnyOrg(ctx context.Context, uid string) (Token, error)
 	GetTokenForOrg(ctx context.Context, arg GetTokenForOrgParams) (Token, error)
+	GetTokenGroup(ctx context.Context, id pgtype.UUID) (TokenGroup, error)
 	// Transactions are identified by (charge_station_id, id): ids are only unique per station.
 	GetTransaction(ctx context.Context, arg GetTransactionParams) (Transaction, error)
 	GetUnlockConnectorRequest(ctx context.Context, chargeStationID string) (UnlockConnectorRequest, error)
@@ -235,12 +247,17 @@ type Querier interface {
 	// of the current version.
 	ListTariffs(ctx context.Context, arg ListTariffsParams) ([]ListTariffsRow, error)
 	ListTenants(ctx context.Context, arg ListTenantsParams) ([]ListTenantsRow, error)
+	// The tokens of a group in the order in which they were stored.
+	ListTokenGroupMembers(ctx context.Context, arg ListTokenGroupMembersParams) ([]Token, error)
+	ListTokenGroups(ctx context.Context, arg ListTokenGroupsParams) ([]TokenGroup, error)
 	ListTokens(ctx context.Context, arg ListTokensParams) ([]Token, error)
 	ListTokensForOrgs(ctx context.Context, arg ListTokensForOrgsParams) ([]Token, error)
 	ListTransactions(ctx context.Context) ([]Transaction, error)
 	// The transactions of a charge station, of the given orgs: no org is every org.
 	ListTransactionsFiltered(ctx context.Context, arg ListTransactionsFilteredParams) ([]Transaction, error)
 	ListVariableMonitoring(ctx context.Context, arg ListVariableMonitoringParams) ([]VariableMonitoring, error)
+	// The default tariff of a location, with the row locked until the transaction ends.
+	LockAssetLocationDefaultTariff(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error)
 	// A charge station that moves to another org, with its EVSEs, their connectors, its
 	// charging profiles and maybe its location. The station row is locked first, so that
 	// transfers of one station happen one after the other.
@@ -310,6 +327,12 @@ type Querier interface {
 	SetResetRequest(ctx context.Context, arg SetResetRequestParams) (ResetRequest, error)
 	SetStationLocation(ctx context.Context, arg SetStationLocationParams) (int64, error)
 	SetTenantStatus(ctx context.Context, arg SetTenantStatusParams) (int64, error)
+	// The tokens of the org with the UID, of every party, go into the group (NULL: into no
+	// group). No row is changed when the group is not a group of the org.
+	SetTokenGroup(ctx context.Context, arg SetTokenGroupParams) (int64, error)
+	// The tariff of a transaction is set once: no row is changed when the transaction has a
+	// tariff source already.
+	SetTransactionTariff(ctx context.Context, arg SetTransactionTariffParams) (int64, error)
 	// Unlock Connector Request
 	SetUnlockConnectorRequest(ctx context.Context, arg SetUnlockConnectorRequestParams) (UnlockConnectorRequest, error)
 	SoftDeleteTariff(ctx context.Context, id pgtype.UUID) error
@@ -320,7 +343,8 @@ type Querier interface {
 	TouchStationLastSeen(ctx context.Context, arg TouchStationLastSeenParams) error
 	TransferChargingProfiles(ctx context.Context, arg TransferChargingProfilesParams) error
 	// A location only moves to another org when no other station and no EVSE of another
-	// station is at it: no row is changed otherwise.
+	// station is at it: no row is changed otherwise. It loses its default tariff, which
+	// belongs to the old org.
 	TransferLocation(ctx context.Context, arg TransferLocationParams) (int64, error)
 	// Tariffs belong to an org: the connectors of a station that moves to another org lose
 	// theirs.
@@ -344,6 +368,8 @@ type Querier interface {
 	// The entitlement and config documents are only replaced by a document of the same or
 	// a newer version. The status, the slug and the org key are never changed here.
 	UpdateTenant(ctx context.Context, arg UpdateTenantParams) error
+	// An update of a group that does not exist returns no row.
+	UpdateTokenGroup(ctx context.Context, arg UpdateTokenGroupParams) (TokenGroup, error)
 	UpdateTransaction(ctx context.Context, arg UpdateTransactionParams) (Transaction, error)
 	UpdateTransactionDetails(ctx context.Context, arg UpdateTransactionDetailsParams) (int64, error)
 	UpsertChargeStationStatus(ctx context.Context, arg UpsertChargeStationStatusParams) error

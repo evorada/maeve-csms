@@ -60,10 +60,14 @@ LIMIT sqlc.arg('row_limit');
 SELECT * FROM tariff_versions WHERE tariff_id = $1 ORDER BY version DESC;
 
 -- The records that refer to a tariff: the connectors that use it as their tariff or as
--- their ad hoc tariff.
+-- their ad hoc tariff, the locations that have it as their default tariff and the token
+-- groups that have it as their override tariff.
 -- name: CountTariffReferences :one
-SELECT count(*) FROM asset_connectors
-WHERE tariff_ref = sqlc.arg('tariff_id')::uuid OR adhoc_tariff_ref = sqlc.arg('tariff_id')::uuid;
+SELECT
+    (SELECT count(*) FROM asset_connectors c
+     WHERE c.tariff_ref = sqlc.arg('tariff_id')::uuid OR c.adhoc_tariff_ref = sqlc.arg('tariff_id')::uuid)::bigint AS connectors,
+    (SELECT count(*) FROM asset_locations l WHERE l.default_tariff_ref = sqlc.arg('tariff_id')::uuid)::bigint AS locations,
+    (SELECT count(*) FROM token_groups g WHERE g.override_tariff_ref = sqlc.arg('tariff_id')::uuid)::bigint AS token_groups;
 
 -- name: SoftDeleteTariff :exec
 UPDATE tariffs SET deleted_at = NOW(), updated_at = NOW()

@@ -12,13 +12,15 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/services"
 	"github.com/thoughtworks/maeve-csms/manager/store"
+	"github.com/thoughtworks/maeve-csms/manager/tariffs"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/transport"
 	"k8s.io/utils/clock"
 )
 
 // NewRouter returns the handler of the OCPP 2.0.1 messages. observer (may be nil) sees
-// every CallResult and CallError first.
+// every CallResult and CallError first. tariffSelector (may be nil) selects the tariff
+// that a new transaction is charged with.
 func NewRouter(emitter transport.Emitter,
 	clk clock.PassiveClock,
 	engine store.Engine,
@@ -30,7 +32,8 @@ func NewRouter(emitter transport.Emitter,
 	contractCertProvider services.ContractCertificateProvider,
 	heartbeatInterval time.Duration,
 	schemaFS fs.FS,
-	observer handlers.CallOutcomeObserver) transport.MessageHandler {
+	observer handlers.CallOutcomeObserver,
+	tariffSelector *tariffs.Selector) transport.MessageHandler {
 
 	return &handlers.Router{
 		Emitter:     emitter,
@@ -225,7 +228,10 @@ func NewRouter(emitter transport.Emitter,
 						OrgResolver: orgResolver,
 						Registry:    engine,
 					},
-					TariffService: tariffService,
+					TariffService:  tariffService,
+					TariffSelector: tariffSelector,
+					OrgResolver:    orgResolver,
+					Clock:          clk,
 				},
 			},
 		},

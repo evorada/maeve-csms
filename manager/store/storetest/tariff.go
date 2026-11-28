@@ -456,6 +456,46 @@ func TestTariffStore(t *testing.T, newStore func(t *testing.T) store.Engine) {
 		assert.NotNil(t, lookupTariff(t, s, adhoc.Id).DeletedAt)
 	})
 
+	t.Run("a tariff that a location or a token group refers to is not deleted", func(t *testing.T) {
+		s := newStore(t)
+		byLocation := createTariff(t, s, testTariff("Default of a location"), testTariffVersion(3000))
+		byGroup := createTariff(t, s, testTariff("Override of a group"), testTariffVersion(2000))
+		loc := testAssetLocation("Plaza")
+		loc.DefaultTariffRef = &byLocation.Id
+		createAssetLocation(t, s, loc)
+		group := &store.TokenGroup{OrgId: orgA, Name: "Staff", OverrideTariffRef: &byGroup.Id}
+		require.NoError(t, s.CreateTokenGroup(ctx, group))
+
+		assert.ErrorIs(t, s.DeleteTariff(ctx, byLocation.Id), store.ErrInUse, "the default tariff of a location")
+		assert.ErrorIs(t, s.DeleteTariff(ctx, strings.ToUpper(byGroup.Id)), store.ErrInUse, "the override tariff of a token group")
+		assert.Nil(t, lookupTariff(t, s, byLocation.Id).DeletedAt)
+		assert.Nil(t, lookupTariff(t, s, byGroup.Id).DeletedAt)
+
+		// a location and a group that let go of the tariff free it
+		loc.DefaultTariffRef = nil
+		require.NoError(t, s.UpdateAssetLocation(ctx, loc))
+		require.NoError(t, s.DeleteTariff(ctx, byLocation.Id))
+		assert.NotNil(t, lookupTariff(t, s, byLocation.Id).DeletedAt)
+		group.OverrideTariffRef = nil
+		require.NoError(t, s.UpdateTokenGroup(ctx, group))
+		require.NoError(t, s.DeleteTariff(ctx, byGroup.Id))
+		assert.NotNil(t, lookupTariff(t, s, byGroup.Id).DeletedAt)
+
+		// so do a location and a group that are deleted
+		again := createTariff(t, s, testTariff("Used again"), testTariffVersion(2500))
+		second := testAssetLocation("Garage")
+		second.OcpiId = "GARAGE"
+		second.DefaultTariffRef = &again.Id
+		createAssetLocation(t, s, second)
+		require.NoError(t, s.CreateTokenGroup(ctx, &store.TokenGroup{Id: testAssetId(70), OrgId: orgA, Name: "Fleet", OverrideTariffRef: &again.Id}))
+		assert.ErrorIs(t, s.DeleteTariff(ctx, again.Id), store.ErrInUse)
+		require.NoError(t, s.DeleteAssetLocation(ctx, second.Id))
+		assert.ErrorIs(t, s.DeleteTariff(ctx, again.Id), store.ErrInUse, "the group still refers to it")
+		require.NoError(t, s.DeleteTokenGroup(ctx, testAssetId(70)))
+		require.NoError(t, s.DeleteTariff(ctx, again.Id))
+		assert.NotNil(t, lookupTariff(t, s, again.Id).DeletedAt)
+	})
+
 	t.Run("a deleted tariff stays readable and takes no changes", func(t *testing.T) {
 		s := newStore(t)
 		v := testTariffVersion(3000)

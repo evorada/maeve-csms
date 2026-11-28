@@ -331,6 +331,37 @@ func TestStubsReturnErrNotImplemented(t *testing.T) {
 		"DeleteTariff": func() error {
 			return s.DeleteTariff(ctx, "tariff001")
 		},
+		"CreateTokenGroup": func() error {
+			return s.CreateTokenGroup(ctx, &store.TokenGroup{})
+		},
+		"UpdateTokenGroup": func() error {
+			return s.UpdateTokenGroup(ctx, &store.TokenGroup{})
+		},
+		"LookupTokenGroup": func() error {
+			_, err := s.LookupTokenGroup(ctx, "group001")
+			return err
+		},
+		"ListTokenGroups": func() error {
+			_, _, err := s.ListTokenGroups(ctx, []string{"org001"}, store.PageRequest{})
+			return err
+		},
+		"DeleteTokenGroup": func() error {
+			return s.DeleteTokenGroup(ctx, "group001")
+		},
+		"SetTokenGroup": func() error {
+			return s.SetTokenGroup(ctx, "org001", "token001", nil)
+		},
+		"ListTokenGroupMembers": func() error {
+			_, _, err := s.ListTokenGroupMembers(ctx, "group001", store.PageRequest{})
+			return err
+		},
+		"FindTokenGroupForUid": func() error {
+			_, err := s.FindTokenGroupForUid(ctx, "org001", "token001")
+			return err
+		},
+		"SetTransactionTariff": func() error {
+			return s.SetTransactionTariff(ctx, "cs001", "tx001", nil, nil, "none")
+		},
 	}
 
 	for name, stub := range stubs {

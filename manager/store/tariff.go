@@ -206,7 +206,8 @@ type TariffStore interface {
 	// a tariff that does not exist.
 	ListTariffVersions(ctx context.Context, tariffId string) ([]*TariffVersion, error)
 	// DeleteTariff marks the tariff as deleted; the tariff and its versions stay stored.
-	// It returns ErrInUse while a connector refers to the tariff. Deleting a tariff that
-	// does not exist, or that is deleted already, does nothing.
+	// It returns ErrInUse while a connector, a location (its default tariff) or a token
+	// group (its override tariff) refers to the tariff. Deleting a tariff that does not
+	// exist, or that is deleted already, does nothing.
 	DeleteTariff(ctx context.Context, tariffId string) error
 }

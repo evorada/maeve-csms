@@ -299,6 +299,29 @@ func TestAssetLocationLifecycle(t *testing.T) {
 	})
 }
 
+// The default tariff of a location is not a field of the API yet. A change of the location
+// through the API, which replaces the fields of the location, leaves it as it is.
+func TestUpdateAssetLocationKeepsItsDefaultTariff(t *testing.T) {
+	ctx := context.Background()
+	m := newMultiTenant(t)
+	r := m.router(t)
+	callerOfA := callerOf(orgA, tenancy.OrgScopeSelf)
+	ofA := m.assetsOf(t, orgA, stationOfA)
+	tariff := m.createTariff(t, orgA, "")
+	ofA.location.DefaultTariffRef = &tariff
+	require.NoError(t, m.engine.UpdateAssetLocation(ctx, ofA.location))
+
+	changed := locationInput(partyOfA, "Renamed")
+	rr := serve(r, as(callerOfA, http.MethodPut, ofA.locationPath(), jsonBody(t, changed)))
+	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+
+	loc, err := m.engine.LookupAssetLocation(ctx, ofA.location.Id)
+	require.NoError(t, err)
+	assert.Equal(t, ptr("Renamed"), loc.Name)
+	assert.Equal(t, &tariff, loc.DefaultTariffRef)
+	assert.ErrorIs(t, m.engine.DeleteTariff(ctx, tariff), store.ErrInUse, "the location still refers to its tariff")
+}
+
 func TestCreateAssetLocationForAnotherOrg(t *testing.T) {
 	ctx := context.Background()
 	m := newMultiTenant(t)

@@ -65,11 +65,20 @@ func TestPayloadFieldNames(t *testing.T) {
 			payload: events.SessionStartedData{StationKey: "k7f2.CP001", StationId: "CP001", TransactionId: "tx",
 				OcppTransactionId: "17", OcppVersion: "ocpp1.6", EvseId: ptr(1), ConnectorId: ptr(1), IdToken: "TAG",
 				TokenType: "ISO14443", IdTokenGroup: ptr("G"), AuthStatus: "Accepted", StartedAt: payloadTime,
-				MeterStartWh: ptr(int64(100)), ReservationId: ptr(7)},
+				MeterStartWh: ptr(int64(100)), ReservationId: ptr(7),
+				TariffId: ptr("0193b2c5-0000-7000-8000-000000000021"), TariffVersion: ptr(3), TariffSource: ptr("connector")},
 			want: `{"station_key":"k7f2.CP001","station_id":"CP001","transaction_id":"tx","ocpp_transaction_id":"17",` +
 				`"ocpp_version":"ocpp1.6","evse_id":1,"connector_id":1,"id_token":"TAG","token_type":"ISO14443",` +
 				`"id_token_group":"G","auth_status":"Accepted","started_at":"2026-11-27T10:30:00Z","meter_start_wh":100,` +
-				`"reservation_id":7}`,
+				`"reservation_id":7,"tariff_id":"0193b2c5-0000-7000-8000-000000000021","tariff_version":3,"tariff_source":"connector"}`,
+		},
+		"session.started without a tariff": {
+			payload: events.SessionStartedData{StationKey: "CP001", StationId: "CP001", TransactionId: "tx",
+				OcppTransactionId: "17", OcppVersion: "ocpp1.6", IdToken: "TAG", TokenType: "ISO14443", AuthStatus: "Accepted",
+				StartedAt: payloadTime, TariffSource: ptr("none")},
+			want: `{"station_key":"CP001","station_id":"CP001","transaction_id":"tx","ocpp_transaction_id":"17",` +
+				`"ocpp_version":"ocpp1.6","id_token":"TAG","token_type":"ISO14443","auth_status":"Accepted",` +
+				`"started_at":"2026-11-27T10:30:00Z","tariff_source":"none"}`,
 		},
 		"session.started minimal": {
 			payload: events.SessionStartedData{StationKey: "CP001", StationId: "CP001", TransactionId: "tx",

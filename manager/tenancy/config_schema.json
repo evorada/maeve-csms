@@ -41,8 +41,19 @@
     },
     "default_tariff_ref": {
       "title": "Default tariff",
-      "description": "The tariff that applies where no other tariff is set.",
+      "description": "The id of the tariff that a session is charged with where no other tariff is set: its token is in no token group with a tariff, and its connector and location have no tariff.",
       "type": "string"
+    },
+    "adhoc_emsp_parties": {
+      "title": "Parties of ad hoc payment",
+      "description": "The parties that issue the tokens of ad hoc payment, each as country code, an asterisk and party id (XX*PAY). A session with a token of one of these parties is an ad hoc session, like a session with a token of the type AD_HOC_USER: it is charged with the ad hoc tariff of its connector, when the connector has one.",
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z]{2}\\*[A-Za-z0-9]{3}$"
+      },
+      "default": []
     },
     "onboarding_mode": {
       "title": "Onboarding of charge stations",
