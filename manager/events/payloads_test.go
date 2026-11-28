@@ -141,6 +141,20 @@ func TestPayloadFieldNames(t *testing.T) {
 				`"progress":{"state":"transaction_started","transactionId":"tx","ocppTransactionId":17,"connectorId":1},` +
 				`"progress_at":"2026-11-27T10:30:00Z"}`,
 		},
+		"location.updated of a connector": {
+			payload: events.LocationUpdatedData{LocationId: "0193b2c4-0000-7000-8000-000000000001", OcpiId: "LOC1",
+				PartyRef: "cpo-1", Change: events.LocationChangeCreated, EvseUid: "0193b2c4-0000-7000-8000-000000000002",
+				ConnectorUid: "0193b2c4-0000-7000-8000-000000000003", Publish: true},
+			want: `{"location_id":"0193b2c4-0000-7000-8000-000000000001","ocpi_id":"LOC1","party_ref":"cpo-1",` +
+				`"change":"created","evse_uid":"0193b2c4-0000-7000-8000-000000000002",` +
+				`"connector_uid":"0193b2c4-0000-7000-8000-000000000003","publish":true,"publish_changed":false}`,
+		},
+		"location.updated of a location": {
+			payload: events.LocationUpdatedData{LocationId: "0193b2c4-0000-7000-8000-000000000001", OcpiId: "LOC1",
+				PartyRef: "cpo-1", Change: events.LocationChangeUpdated, PublishChanged: true},
+			want: `{"location_id":"0193b2c4-0000-7000-8000-000000000001","ocpi_id":"LOC1","party_ref":"cpo-1",` +
+				`"change":"updated","publish":false,"publish_changed":true}`,
+		},
 	} {
 		got, err := json.Marshal(tc.payload)
 		require.NoError(t, err, name)
@@ -162,10 +176,11 @@ func TestStationActorAndConnectorResourceId(t *testing.T) {
 
 // Every type of the catalogue is one that the emitter accepts.
 func TestAllTypesCanBeEmitted(t *testing.T) {
-	assert.Len(t, events.AllTypes, 9)
+	assert.Len(t, events.AllTypes, 10)
 	assert.Equal(t, []string{
 		"station.registered", "station.connected", "station.disconnected", "connector.status_changed",
 		"session.started", "session.updated", "session.completed", "command.completed", "command.progress",
+		"location.updated",
 	}, events.AllTypes)
 
 	s := inmemory.NewStore(clocktest.NewFakePassiveClock(testNow))

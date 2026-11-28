@@ -233,6 +233,12 @@ func (s *Store) DeleteAssetLocation(_ context.Context, locationId string) error 
 		}
 	}
 	delete(s.assetLocations, id)
+	// the stations at the location have no location any more (ON DELETE SET NULL)
+	for _, cs := range s.chargeStations {
+		if cs.LocationId != nil && *cs.LocationId == id {
+			cs.LocationId = nil
+		}
+	}
 	return nil
 }
 

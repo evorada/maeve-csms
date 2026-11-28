@@ -2,10 +2,12 @@ paths:
   /location/{locationId}:
     post:
       summary: Registers a location with the CSMS
-      description: 'Registers a location with the CSMS.
+      description: 'Registers a location with the CSMS. Deprecated: locations, their EVSEs
+        and their connectors are managed with `/locations`.
 
         '
       operationId: registerLocation
+      deprecated: true
       x-permission: cpms.station.write
       parameters:
       - name: locationId

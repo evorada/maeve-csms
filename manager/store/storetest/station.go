@@ -188,6 +188,25 @@ func TestChargeStationRegistryStore(t *testing.T, newStore func(t *testing.T) st
 		assert.Nil(t, lookupStation(t, s, "k7f2.CP001").DisplayName, "nothing is written")
 	})
 
+	t.Run("a deleted location is taken from its stations", func(t *testing.T) {
+		s := newStore(t)
+		gone := createAssetLocation(t, s, testAssetLocation("Gone"))
+		kept := createAssetLocation(t, s, testAssetLocation("Kept"))
+		for key, loc := range map[string]*store.AssetLocation{"k7f2.CP001": gone, "k7f2.CP002": kept} {
+			cs := registerStation(t, s, key, orgA)
+			cs.LocationId = &loc.Id
+			cs.DisplayName = ptr("Station " + key)
+			require.NoError(t, s.UpdateChargeStation(ctx, cs))
+		}
+
+		require.NoError(t, s.DeleteAssetLocation(ctx, gone.Id))
+
+		cleared := lookupStation(t, s, "k7f2.CP001")
+		assert.Nil(t, cleared.LocationId)
+		assert.Equal(t, ptr("Station k7f2.CP001"), cleared.DisplayName, "the rest of the record stays")
+		assert.Equal(t, &kept.Id, lookupStation(t, s, "k7f2.CP002").LocationId)
+	})
+
 	t.Run("state change", func(t *testing.T) {
 		s := newStore(t)
 		cs := registerStation(t, s, "k7f2.CP001", orgA)

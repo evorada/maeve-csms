@@ -134,6 +134,21 @@ func RenderOcpiLocation(ctx context.Context, loc *store.AssetLocation, evses []*
 	return out, nil
 }
 
+// EvseStatuses returns the OCPI status of each EVSE, in the order of evses, as
+// RenderOcpiLocation renders it. The connector statuses of each station are read once.
+func EvseStatuses(ctx context.Context, statuses store.StatusStore, evses []*store.AssetEvse) ([]ocpi.EvseStatus, error) {
+	r := &locationRenderer{statuses: statuses, stationStatuses: map[string][]*store.ConnectorStatus{}}
+	out := make([]ocpi.EvseStatus, len(evses))
+	for i, evse := range evses {
+		status, _, err := r.status(ctx, evse)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = status
+	}
+	return out, nil
+}
+
 // locationRenderer renders the EVSEs of a location. It reads the connector statuses of
 // each station once.
 type locationRenderer struct {
@@ -155,22 +170,12 @@ func (r *locationRenderer) evse(ctx context.Context, evse *store.AssetEvse) (ocp
 		lastUpdated = latest(lastUpdated, c.UpdatedAt)
 	}
 
-	var status ocpi.EvseStatus
-	switch evse.Status {
-	case store.AssetEvseStatusRemoved:
-		status = ocpi.EvseStatusREMOVED
-	case store.AssetEvseStatusPlanned:
-		status = ocpi.EvseStatusPLANNED
-	default:
-		connectorStatus, err := r.connectorStatus(ctx, evse.StationKey, evse.OcppEvseId)
-		if err != nil {
-			return ocpi.Evse{}, time.Time{}, fmt.Errorf("EVSE %s: %w", evse.Id, err)
-		}
-		status = ocpi.EvseStatusUNKNOWN
-		if connectorStatus != nil {
-			status = evseStatus(connectorStatus.Status)
-			lastUpdated = latest(lastUpdated, connectorStatus.UpdatedAt)
-		}
+	status, connectorStatus, err := r.status(ctx, evse)
+	if err != nil {
+		return ocpi.Evse{}, time.Time{}, err
+	}
+	if connectorStatus != nil {
+		lastUpdated = latest(lastUpdated, connectorStatus.UpdatedAt)
 	}
 
 	return ocpi.Evse{
@@ -181,6 +186,26 @@ func (r *locationRenderer) evse(ctx context.Context, evse *store.AssetEvse) (ocp
 		Connectors:        connectors,
 		LastUpdated:       ocpiTime(lastUpdated),
 	}, lastUpdated, nil
+}
+
+// status returns the OCPI status of the EVSE and the status of its station's connector
+// that it comes from (nil for a REMOVED or PLANNED EVSE, or when the station reported
+// none).
+func (r *locationRenderer) status(ctx context.Context, evse *store.AssetEvse) (ocpi.EvseStatus, *store.ConnectorStatus, error) {
+	switch evse.Status {
+	case store.AssetEvseStatusRemoved:
+		return ocpi.EvseStatusREMOVED, nil, nil
+	case store.AssetEvseStatusPlanned:
+		return ocpi.EvseStatusPLANNED, nil, nil
+	}
+	connectorStatus, err := r.connectorStatus(ctx, evse.StationKey, evse.OcppEvseId)
+	if err != nil {
+		return "", nil, fmt.Errorf("EVSE %s: %w", evse.Id, err)
+	}
+	if connectorStatus == nil {
+		return ocpi.EvseStatusUNKNOWN, nil, nil
+	}
+	return evseStatus(connectorStatus.Status), connectorStatus, nil
 }
 
 func (r *locationRenderer) connector(ctx context.Context, c *store.AssetConnector) (ocpi.Connector, error) {

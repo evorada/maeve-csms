@@ -157,3 +157,21 @@ type CommandProgressData struct {
 	Progress   json.RawMessage `json:"progress"`
 	ProgressAt time.Time       `json:"progress_at"`
 }
+
+// LocationUpdatedData is the payload of location.updated: a location, an EVSE at it or a
+// connector of such an EVSE was created, changed or deleted. Change is what happened to
+// the connector when ConnectorUid is set, otherwise to the EVSE when EvseUid is set,
+// otherwise to the location. The location fields are those that the location has after
+// the change (before it, for a location that was deleted).
+type LocationUpdatedData struct {
+	LocationId   string `json:"location_id"`
+	OcpiId       string `json:"ocpi_id"`
+	PartyRef     string `json:"party_ref"`
+	Change       string `json:"change"` // LocationChange*
+	EvseUid      string `json:"evse_uid,omitempty"`
+	ConnectorUid string `json:"connector_uid,omitempty"`
+	// Publish is whether the location is published through OCPI, and PublishChanged
+	// whether the change turned it on or off.
+	Publish        bool `json:"publish"`
+	PublishChanged bool `json:"publish_changed"`
+}

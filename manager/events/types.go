@@ -20,6 +20,7 @@ const (
 	TypeSessionCompleted       = "session.completed"
 	TypeCommandCompleted       = "command.completed"
 	TypeCommandProgress        = "command.progress"
+	TypeLocationUpdated        = "location.updated"
 )
 
 // The types of the resources that the events are about, with the form of their ids.
@@ -28,6 +29,7 @@ const (
 	ResourceConnector = "connector" // id: "<station_key>#<connector_id>" (ConnectorResourceId)
 	ResourceSession   = "session"   // id: the id that the transaction is stored with
 	ResourceCommand   = "command"   // id: command id
+	ResourceLocation  = "location"  // id: asset location id
 )
 
 // AllTypes lists every type of the catalogue.
@@ -41,7 +43,15 @@ var AllTypes = []string{
 	TypeSessionCompleted,
 	TypeCommandCompleted,
 	TypeCommandProgress,
+	TypeLocationUpdated,
 }
+
+// The changes that a location.updated event reports.
+const (
+	LocationChangeCreated = "created"
+	LocationChangeUpdated = "updated"
+	LocationChangeDeleted = "deleted"
+)
 
 // DisconnectReasonStale is the reason of a station.disconnected event when the station
 // showed no sign of life for too long and the manager marked it disconnected. The other

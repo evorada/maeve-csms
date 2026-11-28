@@ -236,6 +236,39 @@ func TestRenderOcpiLocationEvseStatus(t *testing.T) {
 	})
 }
 
+// The statuses of EVSEs are those that the rendered location has.
+func TestEvseStatuses(t *testing.T) {
+	ctx := context.Background()
+	statuses := &statusStore{statuses: map[string][]*store.ConnectorStatus{station16: {
+		connectorStatus(1, store.ConnectorStatusCharging, renderAt(1)),
+		connectorStatus(3, store.ConnectorStatusAvailable, renderAt(1)),
+	}}}
+	evses := []*store.AssetEvse{
+		renderEvse(1, 1, store.AssetEvseStatusActive, renderAt(0)),
+		renderEvse(2, 2, store.AssetEvseStatusActive, renderAt(0)),
+		renderEvse(3, 3, store.AssetEvseStatusRemoved, renderAt(0)),
+		renderEvse(4, 4, store.AssetEvseStatusPlanned, renderAt(0)),
+	}
+
+	got, err := assets.EvseStatuses(ctx, statuses, evses)
+	require.NoError(t, err)
+	assert.Equal(t, []ocpi.EvseStatus{ocpi.EvseStatusCHARGING, ocpi.EvseStatusUNKNOWN, ocpi.EvseStatusREMOVED, ocpi.EvseStatusPLANNED}, got)
+	assert.Equal(t, map[string]int{station16: 1}, statuses.reads, "the statuses of a station are read once")
+
+	rendered := render(t, renderLocation(), evses, statuses, nil)
+	for i, evse := range *rendered.Evses {
+		assert.Equal(t, evse.Status, got[i])
+	}
+
+	none, err := assets.EvseStatuses(ctx, statuses, nil)
+	require.NoError(t, err)
+	assert.Empty(t, none)
+
+	errStatus := errors.New("status store down")
+	_, err = assets.EvseStatuses(ctx, &statusStore{err: errStatus}, evses)
+	assert.ErrorIs(t, err, errStatus)
+}
+
 func TestRenderOcpiLocationLastUpdated(t *testing.T) {
 	statuses := &statusStore{statuses: map[string][]*store.ConnectorStatus{station16: {
 		connectorStatus(1, store.ConnectorStatusAvailable, renderAt(5)),

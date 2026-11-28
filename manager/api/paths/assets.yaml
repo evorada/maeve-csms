@@ -1,0 +1,1065 @@
+paths:
+  /locations:
+    get:
+      summary: List locations
+      description: |
+        Lists the locations of the orgs that the caller may reach, ordered by id, one page at
+        a time. `next_cursor` is the `cursor` of the next page, and `null` after the last
+        page.
+      operationId: listAssetLocations
+      x-permission: cpms.station.read
+      parameters:
+      - name: limit
+        in: query
+        description: Maximum number of locations to return
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 50
+      - name: cursor
+        in: query
+        description: The `next_cursor` of the previous page; the first page without it
+        required: false
+        schema:
+          type: string
+      - name: q
+        in: query
+        description: Only locations whose name, address, city or `ocpi_id` contains this text, ignoring case
+        required: false
+        schema:
+          type: string
+      - name: party_ref
+        in: query
+        description: Only locations of this party
+        required: false
+        schema:
+          type: string
+      - name: publish
+        in: query
+        description: Only locations that are published (true) or not (false)
+        required: false
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: A page of locations
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/AssetLocationPage'
+        '400':
+          description: The limit is out of range or the cursor is not one of a previous page
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+    post:
+      summary: Create a location
+      description: |
+        Creates a location of the org in `org_id`, or of the org of the caller when there is
+        none. `ocpi_id` defaults to the id of the location and `publish` to true.
+      operationId: createAssetLocation
+      x-permission: cpms.station.write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/schemas.yaml#/components/schemas/AssetLocationInput'
+      responses:
+        '201':
+          description: The location
+          headers:
+            Location:
+              description: Where the location can be read
+              schema:
+                type: string
+            ETag:
+              description: The version of the location, as `"<version>"`
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/AssetLocation'
+        '400':
+          description: The body cannot be read, or `org_id` is missing for a caller whose own org is not a tenant here
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: The org is outside the scope of the caller
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: The party already has a location with the `ocpi_id` (error `already_exists`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '422':
+          description: Fields of the location break a rule
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/ValidationErrors'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+  /locations/{locationId}:
+    get:
+      summary: Read a location
+      operationId: getAssetLocation
+      x-permission: cpms.station.read
+      parameters:
+      - name: locationId
+        in: path
+        description: The location identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: expand
+        in: query
+        description: '`evses` adds the EVSEs of the location, with their connectors'
+        required: false
+        schema:
+          type: string
+          enum:
+          - evses
+      responses:
+        '200':
+          description: The location
+          headers:
+            ETag:
+              description: The version of the location, as `"<version>"`
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/AssetLocation'
+        '400':
+          description: The location id is not a UUID, or `expand` is not known
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown location
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+    put:
+      summary: Change a location
+      description: |
+        Replaces the fields of the location with the body. `ocpi_id` and `publish` keep
+        their value when the body leaves them out; `org_id`, when given, must be the org of
+        the location. With `If-Match` the location is only changed while it has that
+        version.
+      operationId: updateAssetLocation
+      x-permission: cpms.station.write
+      parameters:
+      - name: locationId
+        in: path
+        description: The location identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: If-Match
+        in: header
+        description: The version that the location must have, as `"<version>"` (the `ETag` of a read)
+        required: false
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/schemas.yaml#/components/schemas/AssetLocationInput'
+      responses:
+        '200':
+          description: The changed location
+          headers:
+            ETag:
+              description: The version of the location, as `"<version>"`
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/AssetLocation'
+        '400':
+          description: The body or `If-Match` cannot be read, or the location id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown location
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: The party already has another location with the `ocpi_id` (error `already_exists`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '412':
+          description: The location does not have the version in `If-Match` (error `version_conflict`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '422':
+          description: Fields of the location break a rule
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/ValidationErrors'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+    delete:
+      summary: Delete a location
+      description: A location with EVSEs cannot be deleted.
+      operationId: deleteAssetLocation
+      x-permission: cpms.station.write
+      parameters:
+      - name: locationId
+        in: path
+        description: The location identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          description: The location id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown location
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: EVSEs are at the location (error `in_use`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+  /locations/{locationId}/ocpi:
+    get:
+      summary: Render a location as OCPI
+      description: |
+        The OCPI 2.2.1 Location that the parties connected through OCPI receive for the
+        location: its EVSEs, with the live status of the active ones, and their connectors.
+      operationId: getAssetLocationOcpi
+      x-permission: cpms.station.read
+      parameters:
+      - name: locationId
+        in: path
+        description: The location identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The OCPI 2.2.1 Location
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          description: The location id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown location
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: The party of the location is not a party of its tenant (error `unknown_party`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+  /locations/{locationId}/evses:
+    get:
+      summary: List the EVSEs of a location
+      description: The EVSEs of the location with their connectors, ordered by OCPP EVSE id.
+      operationId: listAssetEvses
+      x-permission: cpms.station.read
+      parameters:
+      - name: locationId
+        in: path
+        description: The location identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The EVSEs of the location
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../schemas/schemas.yaml#/components/schemas/AssetEvse'
+        '400':
+          description: The location id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown location
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+    post:
+      summary: Create an EVSE at a location
+      description: |
+        Creates an EVSE of the charge station `cs_id` at the location, with its connectors
+        (at least one). The charge station must be an active charge station of the org of
+        the location. `evse_id` defaults to the eMI3 id made of the party of the location,
+        the station id and `ocpp_evse_id`; `status` defaults to `ACTIVE`. A charge station
+        without a location gets this one.
+      operationId: createAssetEvse
+      x-permission: cpms.station.write
+      parameters:
+      - name: locationId
+        in: path
+        description: The location identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/schemas.yaml#/components/schemas/AssetEvseInput'
+      responses:
+        '201':
+          description: The EVSE
+          headers:
+            Location:
+              description: Where the EVSE can be read
+              schema:
+                type: string
+            ETag:
+              description: The version of the EVSE, as `"<version>"`
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/AssetEvse'
+        '400':
+          description: The body cannot be read, or the location id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown location
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: |
+            The charge station waits for approval (error `station_pending`) or is
+            decommissioned (error `station_decommissioned`), or it already has an EVSE with
+            the `ocpp_evse_id`, or another EVSE has the `evse_id` (error `already_exists`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '422':
+          description: Fields of the EVSE or of its connectors break a rule
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/ValidationErrors'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+  /evses/{evseUid}:
+    get:
+      summary: Read an EVSE
+      operationId: getAssetEvse
+      x-permission: cpms.station.read
+      parameters:
+      - name: evseUid
+        in: path
+        description: The EVSE identifier (`uid`)
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The EVSE with its connectors
+          headers:
+            ETag:
+              description: The version of the EVSE, as `"<version>"`
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/AssetEvse'
+        '400':
+          description: The EVSE id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown EVSE
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+    put:
+      summary: Change an EVSE
+      description: |
+        Replaces the fields of the EVSE with the body. The connectors are not changed (they
+        have operations of their own): `connectors` in the body is ignored. `evse_id` and
+        `status` keep their value when the body leaves them out. A new `cs_id` must be an
+        active charge station of the org of the EVSE. With `If-Match` the EVSE is only
+        changed while it has that version.
+      operationId: updateAssetEvse
+      x-permission: cpms.station.write
+      parameters:
+      - name: evseUid
+        in: path
+        description: The EVSE identifier (`uid`)
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: If-Match
+        in: header
+        description: The version that the EVSE must have, as `"<version>"` (the `ETag` of a read)
+        required: false
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/schemas.yaml#/components/schemas/AssetEvseInput'
+      responses:
+        '200':
+          description: The changed EVSE
+          headers:
+            ETag:
+              description: The version of the EVSE, as `"<version>"`
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/AssetEvse'
+        '400':
+          description: The body or `If-Match` cannot be read, or the EVSE id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown EVSE
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: |
+            The new charge station waits for approval (error `station_pending`) or is
+            decommissioned (error `station_decommissioned`), or the OCPP EVSE id or the
+            `evse_id` is taken (error `already_exists`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '412':
+          description: The EVSE does not have the version in `If-Match` (error `version_conflict`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '422':
+          description: Fields of the EVSE break a rule
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/ValidationErrors'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+    delete:
+      summary: Delete an EVSE
+      description: Deletes the EVSE and its connectors, unless a transaction is running on it.
+      operationId: deleteAssetEvse
+      x-permission: cpms.station.write
+      parameters:
+      - name: evseUid
+        in: path
+        description: The EVSE identifier (`uid`)
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          description: The EVSE id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown EVSE
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: A transaction is running on the EVSE (error `active_transaction`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+  /evses/{evseUid}/connectors:
+    post:
+      summary: Create a connector of an EVSE
+      description: '`ocpi_id` defaults to `ocpp_connector_id`.'
+      operationId: createAssetConnector
+      x-permission: cpms.station.write
+      parameters:
+      - name: evseUid
+        in: path
+        description: The EVSE identifier (`uid`)
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/schemas.yaml#/components/schemas/AssetConnectorInput'
+      responses:
+        '201':
+          description: The connector
+          headers:
+            ETag:
+              description: The version of the connector, as `"<version>"`
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/AssetConnector'
+        '400':
+          description: The body cannot be read, or the EVSE id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown EVSE
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: The EVSE already has a connector with the `ocpp_connector_id` or the `ocpi_id` (error `already_exists`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '422':
+          description: Fields of the connector break a rule
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/ValidationErrors'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+  /evses/{evseUid}/connectors/{connectorUid}:
+    put:
+      summary: Change a connector
+      description: |
+        Replaces the fields of the connector with the body. `ocpi_id` keeps its value when
+        the body leaves it out. With `If-Match` the connector is only changed while it has
+        that version.
+      operationId: updateAssetConnector
+      x-permission: cpms.station.write
+      parameters:
+      - name: evseUid
+        in: path
+        description: The EVSE identifier (`uid`)
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: connectorUid
+        in: path
+        description: The connector identifier (`uid`)
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: If-Match
+        in: header
+        description: The version that the connector must have, as `"<version>"` (the `ETag` of a read)
+        required: false
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/schemas.yaml#/components/schemas/AssetConnectorInput'
+      responses:
+        '200':
+          description: The changed connector
+          headers:
+            ETag:
+              description: The version of the connector, as `"<version>"`
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/AssetConnector'
+        '400':
+          description: The body or `If-Match` cannot be read, or an id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown EVSE, or the EVSE has no such connector
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: Another connector of the EVSE has the `ocpp_connector_id` or the `ocpi_id` (error `already_exists`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '412':
+          description: The connector does not have the version in `If-Match` (error `version_conflict`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '422':
+          description: Fields of the connector break a rule
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/ValidationErrors'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+    delete:
+      summary: Delete a connector
+      description: |
+        Deletes the connector, unless a transaction is running on its EVSE or it is the last
+        connector of the EVSE (delete the EVSE instead).
+      operationId: deleteAssetConnector
+      x-permission: cpms.station.write
+      parameters:
+      - name: evseUid
+        in: path
+        description: The EVSE identifier (`uid`)
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: connectorUid
+        in: path
+        description: The connector identifier (`uid`)
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          description: An id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '403':
+          description: The caller does not have the permission of the operation, or the tenant is suspended (error `tenant_suspended`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '404':
+          description: Unknown EVSE, or the EVSE has no such connector
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '409':
+          description: |
+            A transaction is running on the EVSE (error `active_transaction`), or the
+            connector is the last one of the EVSE (error `last_connector`)
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        '501':
+          description: The storage engine of the manager does not keep assets
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/schemas.yaml#/components/schemas/Status'

@@ -121,6 +121,20 @@ paths:
     $ref: 'paths/commands.yaml#/paths/~1commands~1{commandId}'
   /commands/{commandId}:cancel:
     $ref: 'paths/commands.yaml#/paths/~1commands~1{commandId}:cancel'
+  /locations:
+    $ref: 'paths/assets.yaml#/paths/~1locations'
+  /locations/{locationId}:
+    $ref: 'paths/assets.yaml#/paths/~1locations~1{locationId}'
+  /locations/{locationId}/ocpi:
+    $ref: 'paths/assets.yaml#/paths/~1locations~1{locationId}~1ocpi'
+  /locations/{locationId}/evses:
+    $ref: 'paths/assets.yaml#/paths/~1locations~1{locationId}~1evses'
+  /evses/{evseUid}:
+    $ref: 'paths/assets.yaml#/paths/~1evses~1{evseUid}'
+  /evses/{evseUid}/connectors:
+    $ref: 'paths/assets.yaml#/paths/~1evses~1{evseUid}~1connectors'
+  /evses/{evseUid}/connectors/{connectorUid}:
+    $ref: 'paths/assets.yaml#/paths/~1evses~1{evseUid}~1connectors~1{connectorUid}'
 components:
   securitySchemes:
     bearerAuth:
@@ -288,3 +302,29 @@ components:
       $ref: 'schemas/schemas.yaml#/components/schemas/Command'
     CommandList:
       $ref: 'schemas/schemas.yaml#/components/schemas/CommandList'
+    OpeningTimes:
+      $ref: 'schemas/schemas.yaml#/components/schemas/OpeningTimes'
+    RegularHours:
+      $ref: 'schemas/schemas.yaml#/components/schemas/RegularHours'
+    ExceptionalPeriod:
+      $ref: 'schemas/schemas.yaml#/components/schemas/ExceptionalPeriod'
+    AssetLocationInput:
+      $ref: 'schemas/schemas.yaml#/components/schemas/AssetLocationInput'
+    AssetLocation:
+      $ref: 'schemas/schemas.yaml#/components/schemas/AssetLocation'
+    AssetLocationPage:
+      $ref: 'schemas/schemas.yaml#/components/schemas/AssetLocationPage'
+    AssetEvseStatus:
+      $ref: 'schemas/schemas.yaml#/components/schemas/AssetEvseStatus'
+    AssetEvseInput:
+      $ref: 'schemas/schemas.yaml#/components/schemas/AssetEvseInput'
+    AssetEvse:
+      $ref: 'schemas/schemas.yaml#/components/schemas/AssetEvse'
+    AssetConnectorInput:
+      $ref: 'schemas/schemas.yaml#/components/schemas/AssetConnectorInput'
+    AssetConnector:
+      $ref: 'schemas/schemas.yaml#/components/schemas/AssetConnector'
+    ValidationError:
+      $ref: 'schemas/schemas.yaml#/components/schemas/ValidationError'
+    ValidationErrors:
+      $ref: 'schemas/schemas.yaml#/components/schemas/ValidationErrors'

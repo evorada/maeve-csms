@@ -70,6 +70,15 @@ func ErrConflict(msg string) render.Renderer {
 	}
 }
 
+// ErrPreconditionFailed answers a change whose precondition (If-Match) does not hold.
+func ErrPreconditionFailed(msg string) render.Renderer {
+	return &ErrResponse{
+		HTTPStatusCode: http.StatusPreconditionFailed,
+		StatusText:     http.StatusText(http.StatusPreconditionFailed),
+		ErrorText:      msg,
+	}
+}
+
 // ErrUnauthorized answers a request without a verified caller.
 var ErrUnauthorized = &ErrResponse{
 	HTTPStatusCode: http.StatusUnauthorized,
