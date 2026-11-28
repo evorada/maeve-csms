@@ -17,7 +17,7 @@ at [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-
 Please take some time to familiarise yourself with the components in MaEVe. These are in
 the [README's documentation section](./README.md/#documentation).
 
-You will need to have Go 1.20 installed in your development machine. Instructions are available on
+You will need to have Go 1.26 installed in your development machine. Instructions are available on
 the [Go website](https://go.dev/doc/install)
 
 MaEVe components can be run through a [docker-compose file](./docker-compose.yml), hence you will require Docker on your

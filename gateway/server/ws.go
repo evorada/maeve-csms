@@ -20,6 +20,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -180,7 +181,7 @@ func ensureDefaults(handler *WebsocketHandler) {
 	}
 
 	if handler.tracer == nil {
-		handler.tracer = trace.NewNoopTracerProvider().Tracer("")
+		handler.tracer = noop.NewTracerProvider().Tracer("")
 	}
 
 	if handler.transport == nil {

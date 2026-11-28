@@ -530,8 +530,8 @@ func TestChangeConfigurationHandlerKeepsNoAuthorizationKey(t *testing.T) {
 			require.Len(t, spans, 1)
 			traced := map[string]string{}
 			for _, attribute := range spans[0].Attributes {
-				traced[string(attribute.Key)] = attribute.Value.Emit()
-				assert.NotContains(t, attribute.Value.Emit(), password, string(attribute.Key))
+				traced[string(attribute.Key)] = attribute.Value.String()
+				assert.NotContains(t, attribute.Value.String(), password, string(attribute.Key))
 			}
 			assert.Equal(t, "***", traced["setting.value"])
 		})

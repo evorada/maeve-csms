@@ -15,7 +15,7 @@
 
 ## Overview
 
-MaEVe is an EV Charge Station Management System (CSMS) written in Go 1.20. This document describes the code style and patterns used throughout the codebase to maintain consistency and quality.
+MaEVe is an EV Charge Station Management System (CSMS) written in Go 1.26. This document describes the code style and patterns used throughout the codebase to maintain consistency and quality.
 
 ## Project Structure
 
@@ -60,7 +60,7 @@ maeve-csms/
 ### General Rules
 
 1. **Follow Standard Go Formatting**: Use `gofmt` or `goimports` for automatic formatting
-2. **Go Version**: Target Go 1.20 or higher
+2. **Go Version**: Target Go 1.26 or higher
 3. **Effective Go**: Follow the guidelines in [Effective Go](https://go.dev/doc/effective_go)
 
 ### License Headers
