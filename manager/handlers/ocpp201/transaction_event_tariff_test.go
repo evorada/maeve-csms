@@ -111,7 +111,6 @@ func newTariffFixture(t *testing.T) *tariffFixture {
 	f.handler = handlers.TransactionEventHandler{
 		Store:            engine,
 		TokenAuthService: &services.OcppTokenAuthService{Clock: clk, TokenStore: engine, OrgResolver: orgs, Registry: engine},
-		TariffService:    services.BasicKwhTariffService{},
 		TariffSelector:   &tariffs.Selector{Assets: engine, Registry: engine, Tariffs: engine, Groups: engine, Tokens: engine},
 		OrgResolver:      orgs,
 		Clock:            clk,

@@ -5,6 +5,8 @@ package events
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/thoughtworks/maeve-csms/manager/money"
 )
 
 // The payloads (CloudEvents "data") of the event types. Field names are snake_case,
@@ -87,6 +89,25 @@ type SessionStartedData struct {
 	TariffSource  *string `json:"tariff_source,omitempty"`
 }
 
+// SessionCost is what a session costs with its tariff, in session.updated (the cost so
+// far, Final false) and session.completed (the cost of the session, Final true). The
+// amounts are the total of the price without and with VAT. TariffId and TariffVersion
+// are the tariff version that the session was rated with; they are left out for a session
+// without a tariff, which was rated with the price of the manager for such sessions.
+// EnergyWh, ChargingS and ParkingS are the energy and the charging and idle time, in
+// seconds, that the cost is for.
+type SessionCost struct {
+	Currency      string       `json:"currency"`
+	ExclVat       money.Amount `json:"excl_vat"`
+	InclVat       money.Amount `json:"incl_vat"`
+	Final         bool         `json:"final"`
+	TariffId      *string      `json:"tariff_id,omitempty"`
+	TariffVersion *int         `json:"tariff_version,omitempty"`
+	EnergyWh      int64        `json:"energy_wh"`
+	ChargingS     int64        `json:"charging_s"`
+	ParkingS      int64        `json:"parking_s"`
+}
+
 // SessionUpdatedData is the payload of session.updated: the newest readings that a
 // meter values message reported for a session.
 type SessionUpdatedData struct {
@@ -101,6 +122,9 @@ type SessionUpdatedData struct {
 	EnergyWh          *int64    `json:"energy_wh,omitempty"` // meter_wh − meter_start_wh
 	PowerW            *float64  `json:"power_w,omitempty"`   // latest Power.Active.Import (kW × 1000)
 	SocPercent        *float64  `json:"soc_percent,omitempty"`
+	// Cost is the cost so far, when it was worked out with this message: not with every
+	// message, and never for a session without a price.
+	Cost *SessionCost `json:"cost,omitempty"`
 }
 
 // SessionCompletedData is the payload of session.completed.
@@ -123,6 +147,9 @@ type SessionCompletedData struct {
 	MeterStopWh  *int64     `json:"meter_stop_wh,omitempty"`
 	EnergyWh     *int64     `json:"energy_wh,omitempty"`
 	StopReason   string     `json:"stop_reason"`
+	// Cost is the cost of the session; left out for a session without a price, and when
+	// the cost could not be worked out in time.
+	Cost *SessionCost `json:"cost,omitempty"`
 }
 
 // CommandCompletedData is the payload of command.completed, which the dispatcher of the

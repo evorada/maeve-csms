@@ -365,6 +365,9 @@ func TestStubsReturnErrNotImplemented(t *testing.T) {
 		"SetTransactionAnalysis": func() error {
 			return s.SetTransactionAnalysis(ctx, "cs001", "tx001", store.TransactionAnalysis{AnalysedAt: time.Now()})
 		},
+		"SetTransactionCost": func() error {
+			return s.SetTransactionCost(ctx, "cs001", "tx001", store.TransactionCost{Currency: "EUR", RatedAt: time.Now()})
+		},
 	}
 
 	for name, stub := range stubs {

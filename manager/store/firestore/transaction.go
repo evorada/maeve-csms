@@ -240,6 +240,12 @@ func (s *Store) SetTransactionAnalysis(context.Context, string, string, store.Tr
 	return fmt.Errorf("SetTransactionAnalysis: %w", store.ErrNotImplemented)
 }
 
+// SetTransactionCost is not implemented for Firestore, which keeps only the last cost of a
+// transaction (UpdateTransactionCost).
+func (s *Store) SetTransactionCost(context.Context, string, string, store.TransactionCost) error {
+	return fmt.Errorf("SetTransactionCost: %w", store.ErrNotImplemented)
+}
+
 func getPath(chargeStationId, transactionId string) string {
 	return fmt.Sprintf("Transaction/%s-%s", chargeStationId, transactionId)
 }

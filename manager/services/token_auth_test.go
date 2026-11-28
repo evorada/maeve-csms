@@ -19,6 +19,11 @@ import (
 	fakeclock "k8s.io/utils/clock/testing"
 )
 
+func makePtr[T any](t T) *T {
+	v := t
+	return &v
+}
+
 func TestOcppTokenAuthServiceAcceptsNoAuthorization(t *testing.T) {
 	now := time.Now()
 	clock := fakeclock.NewFakePassiveClock(now)

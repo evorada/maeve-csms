@@ -44,22 +44,41 @@ const meterValuesPageSize = 1000
 // it is not a reading, but the energy of the transaction, which the transactions of
 // OCPP 1.6 were once stored with.
 func LoadEnergyPoints(ctx context.Context, tx *store.Transaction, mv store.MeterValuesStore) ([]EnergyPoint, error) {
+	meterValues, err := LoadMeterValues(ctx, tx, mv)
+	if err != nil {
+		return nil, err
+	}
+	return EnergyPoints(tx, meterValues), nil
+}
+
+// LoadMeterValues returns every meter value of a transaction: those that are stored with
+// it (tx.MeterValues) and those that the charge station sent on their own with the id of
+// the transaction, read from mv. mv may be nil, and a store without such a query
+// (store.ErrNotImplemented) adds nothing.
+func LoadMeterValues(ctx context.Context, tx *store.Transaction, mv store.MeterValuesStore) ([]store.MeterValue, error) {
+	meterValues := make([]store.MeterValue, len(tx.MeterValues))
+	copy(meterValues, tx.MeterValues)
+	if mv == nil {
+		return meterValues, nil
+	}
+	sent, err := transactionMeterValues(ctx, mv, tx.ChargeStationId, tx.TransactionId)
+	if err != nil {
+		return nil, err
+	}
+	return append(meterValues, sent...), nil
+}
+
+// EnergyPoints returns the readings of the energy register of the connector that the
+// meter values of a transaction hold (see LoadEnergyPoints), in the order of their time,
+// after the meter start at the start of the transaction when both are known.
+func EnergyPoints(tx *store.Transaction, meterValues []store.MeterValue) []EnergyPoint {
 	var points []EnergyPoint
 	if tx.StartedAt != nil && tx.MeterStartWh != nil {
 		points = append(points, EnergyPoint{At: *tx.StartedAt, RegisterWh: float64(*tx.MeterStartWh)})
 	}
-	points = appendEnergyPoints(points, tx, tx.MeterValues)
-
-	if mv != nil {
-		sent, err := transactionMeterValues(ctx, mv, tx.ChargeStationId, tx.TransactionId)
-		if err != nil {
-			return nil, err
-		}
-		points = appendEnergyPoints(points, tx, sent)
-	}
-
+	points = appendEnergyPoints(points, tx, meterValues)
 	sortPoints(points)
-	return points, nil
+	return points
 }
 
 // transactionMeterValues returns every meter value that the charge station sent on its

@@ -21,6 +21,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/rating"
 	"github.com/thoughtworks/maeve-csms/manager/services"
+	"github.com/thoughtworks/maeve-csms/manager/sessions"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tariffs"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
@@ -35,7 +36,8 @@ import (
 // commandTracker (may be nil) learns about the transactions and connector statuses that
 // the stations report, to follow the commands to their effect. tariffSelector (may be
 // nil) selects the tariff that a new transaction is charged with. analyzer (may be nil)
-// works out the idle time of a transaction that ends.
+// works out the idle time of a transaction that ends. sessionService (may be nil) works
+// out what a transaction costs.
 func NewRouter(emitter transport.Emitter,
 	clk clock.PassiveClock,
 	engine store.Engine,
@@ -50,7 +52,8 @@ func NewRouter(emitter transport.Emitter,
 	observer handlers.CallOutcomeObserver,
 	commandTracker CommandTracker,
 	tariffSelector *tariffs.Selector,
-	analyzer *rating.Analyzer) transport.MessageHandler {
+	analyzer *rating.Analyzer,
+	sessionService *sessions.Service) transport.MessageHandler {
 
 	standardCallMaker := NewCallMaker(emitter)
 	commandKicker, _ := observer.(CommandKicker)
@@ -150,6 +153,7 @@ func NewRouter(emitter transport.Emitter,
 					Events:           domainEvents,
 					CommandTracker:   commandTracker,
 					Analyzer:         analyzer,
+					Sessions:         sessionService,
 				},
 			},
 			"MeterValues": {
@@ -161,6 +165,7 @@ func NewRouter(emitter transport.Emitter,
 					MeterValuesStore: engine,
 					Tx:               engine,
 					Events:           domainEvents,
+					Sessions:         sessionService,
 				},
 			},
 			"SecurityEventNotification": {

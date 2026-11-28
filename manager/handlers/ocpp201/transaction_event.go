@@ -10,6 +10,7 @@ import (
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/rating"
 	"github.com/thoughtworks/maeve-csms/manager/services"
+	"github.com/thoughtworks/maeve-csms/manager/sessions"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tariffs"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
@@ -31,10 +32,17 @@ import (
 // values how long it charged and how long it was idle, and stores that with the
 // transaction. The answer never depends on it: an analysis that fails or takes too long
 // is logged, and the transaction is left without one.
+//
+// Sessions (when there is one) works out what the transaction costs with its tariff: the
+// cost so far with an Updated event, not more often than its interval allows, and the
+// final cost with the Ended event, whose answer has it as the total cost, with VAT. The
+// cost is stored with the transaction. A rating that fails or takes too long is logged:
+// the event is answered as ever, an Ended event without a total cost.
 type TransactionEventHandler struct {
 	Store            store.Engine
 	TokenAuthService services.TokenAuthService
-	TariffService    services.TariffService
+	// Sessions works out what a transaction costs. Nil: transactions are not rated.
+	Sessions *sessions.Service
 	// TariffSelector selects the tariff of a transaction. Nil: transactions get no tariff.
 	TariffSelector *tariffs.Selector
 	// OrgResolver gives the org of a charge station, for a transaction that the store
@@ -101,23 +109,48 @@ func (t TransactionEventHandler) HandleCall(ctx context.Context, chargeStationId
 
 	t.pinTariff(ctx, chargeStationId, req, idToken)
 
-	if req.EventType == types.TransactionEventEnumTypeEnded {
+	switch req.EventType {
+	case types.TransactionEventEnumTypeUpdated:
+		t.updateRunningCost(ctx, chargeStationId, req.TransactionInfo.TransactionId)
+	case types.TransactionEventEnumTypeEnded:
 		t.analyse(ctx, chargeStationId, req.TransactionInfo.TransactionId)
-
-		transaction, err := t.Store.FindTransaction(ctx, chargeStationId, req.TransactionInfo.TransactionId)
-		if err != nil {
-			return nil, err
-		}
-		cost, err := t.TariffService.CalculateCost(transaction)
-		if err != nil {
-			slog.Error("error calculating tariff", "err", err)
-		} else {
-			slog.Info("total cost", slog.Float64("cost", cost))
-			response.TotalCost = &cost
-		}
+		response.TotalCost = t.finalCost(ctx, chargeStationId, req.TransactionInfo.TransactionId)
 	}
 
 	return response, nil
+}
+
+// updateRunningCost works out the cost so far of the transaction and stores it with the
+// transaction, when the last time was long enough ago. Nothing here fails the event.
+func (t TransactionEventHandler) updateRunningCost(ctx context.Context, chargeStationId, transactionId string) {
+	if t.Sessions == nil {
+		return
+	}
+	if _, err := t.Sessions.UpdateRunningCost(ctx, chargeStationId, transactionId); err != nil {
+		slog.Error("failed to rate a running transaction, its cost so far is not updated",
+			slog.String("chargeStationId", chargeStationId), slog.String("transactionId", transactionId), "err", err)
+	}
+}
+
+// finalCost works out the cost of the transaction that has just ended, stores it with the
+// transaction, and returns the total with VAT for the answer; nil for a transaction
+// without a price, and when the cost cannot be worked out in time. Nothing here fails the
+// event.
+func (t TransactionEventHandler) finalCost(ctx context.Context, chargeStationId, transactionId string) *float64 {
+	if t.Sessions == nil {
+		return nil
+	}
+	result, err := t.Sessions.End(ctx, chargeStationId, transactionId)
+	if err != nil {
+		slog.Error("failed to rate an ended transaction, it has no final cost",
+			slog.String("chargeStationId", chargeStationId), slog.String("transactionId", transactionId), "err", err)
+		return nil
+	}
+	if result == nil {
+		return nil
+	}
+	totalCost, _ := result.Breakdown.Total.InclVat.Rat().Float64()
+	return &totalCost
 }
 
 // pinTariff selects the tariff of the transaction of the event and stores it with the

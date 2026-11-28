@@ -200,11 +200,11 @@ func TestOnlyTheEndedEventAnalyses(t *testing.T) {
 func TestEndedEventIsAnsweredWhenTheAnalysisFails(t *testing.T) {
 	errDown := errors.New("the store is down")
 
-	// the answer of the handler without an Analyzer
-	plain := newTariffFixture(t)
+	// the answer of the handler without an Analyzer, with the total cost of the session
+	plain := rated(newTariffFixture(t))
 	want, err := plain.handler.HandleCall(context.Background(), tariffStation, chargeAndPark(t, plain, "tx-1"))
 	require.NoError(t, err)
-	require.NotNil(t, want.(*types.TransactionEventResponseJson).TotalCost)
+	require.Equal(t, makePtr(3.3), want.(*types.TransactionEventResponseJson).TotalCost)
 
 	for name, backend := range map[string]*analysisBackend{
 		"the transaction cannot be read": {findErr: errDown},
@@ -212,7 +212,7 @@ func TestEndedEventIsAnsweredWhenTheAnalysisFails(t *testing.T) {
 		"the backend keeps no analysis":  {setErr: fmt.Errorf("SetTransactionAnalysis: %w", store.ErrNotImplemented)},
 	} {
 		t.Run(name, func(t *testing.T) {
-			f := newAnalysisFixture(t)
+			f := newCostFixture(t)
 			backend.Engine = f.engine
 			f.handler.Analyzer.Transactions = backend
 			ended := chargeAndPark(t, f, "tx-1")
@@ -237,9 +237,9 @@ func TestNewRouterGivesTheAnalyzerToTheTransactionEventHandler(t *testing.T) {
 	engine := inmemory.NewStore(clk)
 	analyzer := &rating.Analyzer{Transactions: engine, Defaults: rating.DefaultIdleSettings()}
 
-	router, ok := handlers.NewRouter(&fakeEmitter{}, clk, engine, &tenancy.Resolver{Stations: engine}, nil, &fakeTariffService{},
+	router, ok := handlers.NewRouter(&fakeEmitter{}, clk, engine, &tenancy.Resolver{Stations: engine}, nil,
 		&fakeCertValidationService{}, &fakeChargeStationCertProvider{}, &fakeContractCertProvider{}, 5*time.Minute, schemas.OcppSchemas,
-		nil, nil, analyzer).(*msghandlers.Router)
+		nil, nil, analyzer, nil).(*msghandlers.Router)
 	require.True(t, ok)
 
 	handler, ok := router.CallRoutes["TransactionEvent"].Handler.(handlers.TransactionEventHandler)

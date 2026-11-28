@@ -96,6 +96,17 @@ func TestPayloadFieldNames(t *testing.T) {
 				`"evse_id":1,"connector_id":1,"sampled_at":"2026-11-27T10:30:00Z","meter_wh":1800,"energy_wh":800,` +
 				`"power_w":7400,"soc_percent":63.5}`,
 		},
+		"session.updated with the cost so far": {
+			payload: events.SessionUpdatedData{StationKey: "k7f2.CP001", StationId: "CP001", TransactionId: "tx",
+				OcppTransactionId: "17", SampledAt: payloadTime, MeterWh: ptr(int64(111000)),
+				Cost: &events.SessionCost{Currency: "EUR", ExclVat: 3_8000, InclVat: 4_6000,
+					TariffId: ptr("0193b2c5-0000-7000-8000-000000000021"), TariffVersion: ptr(3),
+					EnergyWh: 11000, ChargingS: 3600, ParkingS: 2700}},
+			want: `{"station_key":"k7f2.CP001","station_id":"CP001","transaction_id":"tx","ocpp_transaction_id":"17",` +
+				`"sampled_at":"2026-11-27T10:30:00Z","meter_wh":111000,"cost":{"currency":"EUR","excl_vat":3.8,"incl_vat":4.6,` +
+				`"final":false,"tariff_id":"0193b2c5-0000-7000-8000-000000000021","tariff_version":3,"energy_wh":11000,` +
+				`"charging_s":3600,"parking_s":2700}}`,
+		},
 		"session.updated without readings": {
 			payload: events.SessionUpdatedData{StationKey: "k7f2.CP001", StationId: "CP001", TransactionId: "tx",
 				OcppTransactionId: "17", SampledAt: payloadTime},
@@ -112,6 +123,14 @@ func TestPayloadFieldNames(t *testing.T) {
 				`"evse_id":1,"connector_id":1,"id_token":"TAG","token_type":"ISO14443","id_token_group":"G",` +
 				`"started_at":"2026-11-27T09:30:00Z","stopped_at":"2026-11-27T10:30:00Z","duration_s":3600,` +
 				`"meter_start_wh":100,"meter_stop_wh":2100,"energy_wh":2000,"stop_reason":"EVDisconnected"}`,
+		},
+		"session.completed with the cost of a session without a tariff": {
+			payload: events.SessionCompletedData{StationKey: "k7f2.CP001", StationId: "CP001", TransactionId: "tx",
+				OcppTransactionId: "17", StoppedAt: payloadTime, StopReason: "Local",
+				Cost: &events.SessionCost{Currency: "EUR", ExclVat: 6_0500, InclVat: 6_0500, Final: true, EnergyWh: 11000, ChargingS: 3600}},
+			want: `{"station_key":"k7f2.CP001","station_id":"CP001","transaction_id":"tx","ocpp_transaction_id":"17",` +
+				`"id_token":"","token_type":"","stopped_at":"2026-11-27T10:30:00Z","stop_reason":"Local",` +
+				`"cost":{"currency":"EUR","excl_vat":6.05,"incl_vat":6.05,"final":true,"energy_wh":11000,"charging_s":3600,"parking_s":0}}`,
 		},
 		"session.completed minimal": {
 			payload: events.SessionCompletedData{StationKey: "k7f2.CP001", StationId: "CP001", TransactionId: "tx",

@@ -19,7 +19,6 @@ import (
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp201"
 	"github.com/thoughtworks/maeve-csms/manager/schemas"
 	"github.com/thoughtworks/maeve-csms/manager/services"
-	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"github.com/thoughtworks/maeve-csms/manager/testutil"
@@ -41,12 +40,6 @@ func (f *fakeEmitter) Emit(ctx context.Context, ocppVersion transport.OcppVersio
 	f.ChargeStationId = chargeStationId
 	f.Message = message
 	return nil
-}
-
-type fakeTariffService struct{}
-
-func (f fakeTariffService) CalculateCost(transaction *store.Transaction) (float64, error) {
-	return 42.0, nil
 }
 
 type fakeCertValidationService struct{}
@@ -86,12 +79,12 @@ func TestRoutingCalls(t *testing.T) {
 		engine,
 		&tenancy.Resolver{Stations: engine},
 		nil,
-		&fakeTariffService{},
 		&fakeCertValidationService{},
 		&fakeChargeStationCertProvider{},
 		&fakeContractCertProvider{},
 		5*time.Minute,
 		schemas.OcppSchemas,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -283,12 +276,12 @@ func TestRoutingCallResults(t *testing.T) {
 		engine,
 		&tenancy.Resolver{Stations: engine},
 		nil,
-		&fakeTariffService{},
 		&fakeCertValidationService{},
 		&fakeChargeStationCertProvider{},
 		&fakeContractCertProvider{},
 		5*time.Minute,
 		schemas.OcppSchemas,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -812,12 +805,12 @@ func TestAllRouteSchemasExist(t *testing.T) {
 		engine,
 		&tenancy.Resolver{Stations: engine},
 		nil,
-		&fakeTariffService{},
 		&fakeCertValidationService{},
 		&fakeChargeStationCertProvider{},
 		&fakeContractCertProvider{},
 		5*time.Minute,
 		schemas.OcppSchemas,
+		nil,
 		nil,
 		nil,
 		nil,

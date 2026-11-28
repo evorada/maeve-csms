@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/thoughtworks/maeve-csms/manager/money"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 )
 
@@ -349,6 +350,41 @@ func (s *Store) SetTransactionAnalysis(ctx context.Context, chargeStationId, tra
 	return nil
 }
 
+// SetTransactionCost stores what a transaction costs. What it is given is checked before
+// anything is sent, so that a call that is refused leaves a transaction of the caller
+// usable.
+func (s *Store) SetTransactionCost(ctx context.Context, chargeStationId, transactionId string, cost store.TransactionCost) error {
+	what := fmt.Sprintf("set the cost of transaction %s/%s", chargeStationId, transactionId)
+	if err := store.CheckTransactionCost(cost); err != nil {
+		return fmt.Errorf("%s: %w", what, err)
+	}
+
+	q := s.writeQueries(ctx)
+	rows, err := q.SetTransactionCost(ctx, SetTransactionCostParams{
+		ChargeStationID: chargeStationId,
+		ID:              transactionId,
+		Currency:        cost.Currency,
+		ExclVat:         numericFromAmount(cost.Total.ExclVat),
+		InclVat:         numericFromAmount(cost.Total.InclVat),
+		Final:           cost.Final,
+		RatedAt:         pgtype.Timestamptz{Time: cost.RatedAt, Valid: true},
+	})
+	if err != nil {
+		return fmt.Errorf("%s: %w", what, err)
+	}
+	if rows == 0 {
+		// no such transaction, or one that keeps its final cost
+		_, err := q.GetTransaction(ctx, GetTransactionParams{ChargeStationID: chargeStationId, ID: transactionId})
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			return fmt.Errorf("%s: %w", what, store.ErrNotFound)
+		case err != nil:
+			return fmt.Errorf("%s: %w", what, err)
+		}
+	}
+	return nil
+}
+
 // NextOcpp16TransactionId returns the next CSMS-assigned OCPP 1.6 transaction id
 // (1..2147483647, wrapping).
 func (s *Store) NextOcpp16TransactionId(ctx context.Context) (int, error) {
@@ -531,6 +567,27 @@ func transactionSummary(txn *Transaction) *store.Transaction {
 		TariffVersion:     fromNullInt32(txn.TariffVersion),
 		TariffSource:      stringFromText(txn.TariffSource),
 		Analysis:          transactionAnalysis(txn),
+		Cost:              transactionCost(txn),
+	}
+}
+
+// transactionCost returns the cost of the row of a transaction; nil for a transaction
+// that was not rated.
+func transactionCost(txn *Transaction) *store.TransactionCost {
+	if !txn.CostRatedAt.Valid {
+		return nil
+	}
+	exclVat, _, exclErr := amountFromNumeric(txn.CostExclVat)
+	inclVat, _, inclErr := amountFromNumeric(txn.CostInclVat)
+	if exclErr != nil || inclErr != nil {
+		// not what SetTransactionCost writes
+		return nil
+	}
+	return &store.TransactionCost{
+		Currency: txn.CostCurrency.String,
+		Total:    money.Price{ExclVat: exclVat, InclVat: inclVat},
+		Final:    txn.CostFinal.Bool,
+		RatedAt:  txn.CostRatedAt.Time.UTC(),
 	}
 }
 

@@ -774,6 +774,37 @@ components:
           type: number
           format: double
           description: Average power in W over the intervals between two meter readings in which the transaction charged, 0 when there was none. Null while active, if not analysed, or without two meter readings
+        tariffId:
+          type: string
+          description: The tariff that the transaction is charged with, chosen when it started. Null for a transaction without a tariff
+        tariffVersion:
+          type: integer
+          description: The version of that tariff that the transaction is charged with. It stays the same when the tariff gets a new version
+        cost:
+          $ref: '#/components/schemas/TransactionCost'
+    TransactionCost:
+      type: object
+      description: What a transaction costs with its tariff, as the rating engine worked it out. The total of the price, of which every part (start fee, energy, charging time, parking time) was rounded on its own. Null for a transaction that was not rated, among them the transactions without a tariff when the manager has no price for them
+      required:
+      - currency
+      - exclVat
+      - inclVat
+      - final
+      properties:
+        currency:
+          type: string
+          description: The currency of the tariff (ISO 4217)
+        exclVat:
+          type: number
+          format: double
+          description: The total without VAT
+        inclVat:
+          type: number
+          format: double
+          description: The total with VAT
+        final:
+          type: boolean
+          description: False for the cost so far of a transaction that runs (it is worked out again with its meter values, at most once in the running cost interval), true for the cost of a transaction that has ended
     TransactionDetail:
       type: object
       description: Detailed transaction information including meter values
@@ -843,6 +874,14 @@ components:
           type: number
           format: double
           description: Average power in W over the intervals between two meter readings in which the transaction charged, 0 when there was none. Null while active, if not analysed, or without two meter readings
+        tariffId:
+          type: string
+          description: The tariff that the transaction is charged with, chosen when it started. Null for a transaction without a tariff
+        tariffVersion:
+          type: integer
+          description: The version of that tariff that the transaction is charged with. It stays the same when the tariff gets a new version
+        cost:
+          $ref: '#/components/schemas/TransactionCost'
         meterValues:
           type: array
           items:

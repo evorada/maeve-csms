@@ -138,7 +138,7 @@ func TestAChangeOfAvailabilityIsFollowedThroughTheRouter(t *testing.T) {
 // routerWithTracker is the OCPP 1.6 router of f with another command tracker.
 func (f *fixture) routerWithTracker(tracker handlers16.CommandTracker) transport.MessageHandler {
 	return handlers16.NewRouter(f.emitter, f.clock, f.store, events.NopEmitter{}, &tenancy.Resolver{Stations: f.store},
-		nil, nil, nil, nil, time.Minute, schemas.OcppSchemas, f.dispatcher, tracker, nil, nil)
+		nil, nil, nil, nil, time.Minute, schemas.OcppSchemas, f.dispatcher, tracker, nil, nil, nil)
 }
 
 // stationAnswers sends a StartTransaction, a StatusNotification and a StopTransaction

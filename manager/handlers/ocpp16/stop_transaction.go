@@ -12,6 +12,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/ocpp"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/rating"
+	"github.com/thoughtworks/maeve-csms/manager/sessions"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/tenancy"
 	"go.opentelemetry.io/otel/trace"
@@ -32,6 +33,13 @@ import (
 // the transaction charged and how long it was idle, and stores that with the
 // transaction. The answer never depends on it: an analysis that fails or takes too long
 // is logged, and the transaction is left without one.
+//
+// Sessions (when there is one) works out what the transaction costs with its tariff,
+// twice: before the end is stored, from the stored transaction and the end that the
+// request gives, for the session.completed event, which is emitted with the end; and
+// after the analysis, from what is stored then, which is the final cost that is stored
+// with the transaction. The answer never depends on it either: a rating that fails or
+// takes too long is logged, and the event or the transaction is left without a cost.
 type StopTransactionHandler struct {
 	Clock      clock.PassiveClock
 	TokenStore store.TokenStore
@@ -48,6 +56,8 @@ type StopTransactionHandler struct {
 	// Analyzer works out the idle time of the transaction. Nil: transactions are not
 	// analysed.
 	Analyzer *rating.Analyzer
+	// Sessions works out what the transaction costs. Nil: transactions are not rated.
+	Sessions *sessions.Service
 }
 
 func (s StopTransactionHandler) HandleCall(ctx context.Context, chargeStationId string, request ocpp.Request) (response ocpp.Response, err error) {
@@ -87,8 +97,18 @@ func (s StopTransactionHandler) HandleCall(ctx context.Context, chargeStationId 
 		tokenType = idTagTokenType
 	}
 
+	meterValues := convertTransactionData(req.TransactionData)
+	if !hasTransactionEndEnergyRegister(meterValues) {
+		// meterStop is the reading of the register, not the energy of the transaction
+		meterValues = append(meterValues, energyRegisterMeterValue(stoppedAt, sampledValueContextTransactionEnd, req.MeterStop))
+	}
+
+	// the cost for the event is worked out before the database transaction that stores the
+	// end, and outside of it: a read that fails there would fail the transaction
+	cost := s.previewCost(ctx, chargeStationId, transactionId, stoppedAt, int64(req.MeterStop), meterValues)
+
 	err = s.Tx.RunInTx(ctx, func(ctx context.Context) error {
-		return s.endTransaction(ctx, chargeStationId, req, transactionId, idToken, tokenType, stoppedAt, reason)
+		return s.endTransaction(ctx, chargeStationId, req, transactionId, idToken, tokenType, stoppedAt, reason, meterValues, cost)
 	})
 	if err != nil {
 		return nil, err
@@ -99,10 +119,46 @@ func (s StopTransactionHandler) HandleCall(ctx context.Context, chargeStationId 
 	})
 
 	s.analyse(ctx, chargeStationId, transactionId)
+	s.rate(ctx, chargeStationId, transactionId)
 
 	return &types.StopTransactionResponseJson{
 		IdTagInfo: idTagInfo,
 	}, nil
+}
+
+// previewCost works out what the transaction costs with the end that the request gives,
+// before that end is stored, for the session.completed event; nil for a transaction that
+// is not known or has no price, and when the rating fails. Nothing here fails the stop.
+func (s StopTransactionHandler) previewCost(ctx context.Context, chargeStationId, transactionId string,
+	stoppedAt time.Time, meterStop int64, meterValues []store.MeterValue) *rating.Result {
+	if s.Sessions == nil {
+		return nil
+	}
+	cost, err := s.Sessions.PreviewEnd(ctx, chargeStationId, transactionId, sessions.Pending{
+		MeterValues: meterValues,
+		StoppedAt:   &stoppedAt,
+		MeterStopWh: &meterStop,
+	})
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		slog.Error("failed to rate a transaction that ends, its session.completed event has no cost",
+			slog.String("chargeStationId", chargeStationId), slog.String("transactionId", transactionId), "err", err)
+		trace.SpanFromContext(ctx).RecordError(err)
+	}
+	return cost
+}
+
+// rate works out the final cost of the transaction that has just ended and stores it with
+// the transaction, in a database transaction of its own, after the one that stored the
+// end and after the analysis. Nothing here fails the stop.
+func (s StopTransactionHandler) rate(ctx context.Context, chargeStationId, transactionId string) {
+	if s.Sessions == nil {
+		return
+	}
+	if _, err := s.Sessions.End(ctx, chargeStationId, transactionId); err != nil {
+		slog.Error("failed to rate an ended transaction, it has no final cost",
+			slog.String("chargeStationId", chargeStationId), slog.String("transactionId", transactionId), "err", err)
+		trace.SpanFromContext(ctx).RecordError(err)
+	}
 }
 
 // analyse works out the idle time of the transaction that has just ended and stores it
@@ -120,9 +176,11 @@ func (s StopTransactionHandler) analyse(ctx context.Context, chargeStationId, tr
 }
 
 // endTransaction records the end of a transaction (creating the transaction when it is
-// not known) and emits session.completed.
+// not known) and emits session.completed. meterValues are the transaction data of the
+// request with the reading of the register at the end; cost is what the transaction
+// costs, nil when that is not known.
 func (s StopTransactionHandler) endTransaction(ctx context.Context, chargeStationId string, req *types.StopTransactionJson,
-	transactionId, idToken, tokenType string, stoppedAt time.Time, reason string) error {
+	transactionId, idToken, tokenType string, stoppedAt time.Time, reason string, meterValues []store.MeterValue, cost *rating.Result) error {
 	transaction, err := s.TransactionStore.FindTransaction(ctx, chargeStationId, transactionId)
 	if err != nil {
 		return err
@@ -144,12 +202,6 @@ func (s StopTransactionHandler) endTransaction(ctx context.Context, chargeStatio
 		}
 	}
 	seqNo := transaction.StartSeqNo + transaction.UpdatedSeqNoCount + 1
-
-	meterValues := convertTransactionData(req.TransactionData)
-	if !hasTransactionEndEnergyRegister(meterValues) {
-		// meterStop is the reading of the register, not the energy of the transaction
-		meterValues = append(meterValues, energyRegisterMeterValue(stoppedAt, sampledValueContextTransactionEnd, req.MeterStop))
-	}
 
 	err = s.TransactionStore.EndTransaction(ctx, chargeStationId, transactionId, idToken, tokenType, meterValues, seqNo)
 	if err != nil {
@@ -186,14 +238,16 @@ func (s StopTransactionHandler) endTransaction(ctx context.Context, chargeStatio
 	if ended == nil {
 		ended = transaction
 	}
-	return s.Events.Emit(ctx, sessionCompletedEvent(chargeStationId, req.TransactionId, ended, details))
+	return s.Events.Emit(ctx, sessionCompletedEvent(chargeStationId, req.TransactionId, ended, details, cost))
 }
 
 // sessionCompletedEvent is the session.completed event of an ended transaction, in the
 // org of the transaction (sessionOrgId). The stop (time, meter, energy, reason) is what
 // the handler wrote, details; the rest comes from the stored transaction. So a store
-// that does not keep the details (Firestore) still gives the event its stop.
-func sessionCompletedEvent(chargeStationId string, ocppTransactionId int, transaction *store.Transaction, details *store.TransactionDetails) events.Event {
+// that does not keep the details (Firestore) still gives the event its stop. cost is what
+// the transaction costs; nil when that is not known.
+func sessionCompletedEvent(chargeStationId string, ocppTransactionId int, transaction *store.Transaction,
+	details *store.TransactionDetails, cost *rating.Result) events.Event {
 	stoppedAt := details.StoppedAt.UTC()
 	data := events.SessionCompletedData{
 		StationKey:        chargeStationId,
@@ -209,6 +263,7 @@ func sessionCompletedEvent(chargeStationId string, ocppTransactionId int, transa
 		MeterStopWh:       details.MeterStopWh,
 		EnergyWh:          details.EnergyWh,
 		StopReason:        *details.StopReason,
+		Cost:              sessions.EventCost(cost),
 	}
 	if meterStart, ok := transactionMeterStartWh(transaction); ok {
 		data.MeterStartWh = &meterStart

@@ -35,6 +35,13 @@ party_id = "TWK"
 [storage]
 type = "in_memory"
 
+# A session is rated with the tariff that was chosen for it when it started. A session
+# without a tariff costs this price per kWh (without VAT); without the two lines such a
+# session has no price.
+[tariff_service]
+fallback_energy_price_per_kwh = "0.55"
+fallback_currency = "EUR"
+
 [contract_cert_validator]
 type = "ocsp"
 

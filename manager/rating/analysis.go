@@ -105,11 +105,21 @@ func (a *Analyzer) AnalyseAndStore(ctx context.Context, chargeStationId, transac
 // Analyse works out the analysis of an ended transaction that was read with its meter
 // values (store.TransactionStore.FindTransaction), without storing it.
 func (a *Analyzer) Analyse(ctx context.Context, tx *store.Transaction) (*store.TransactionAnalysis, error) {
-	start, stop, err := sessionTimes(tx)
-	if err != nil {
+	if _, _, err := sessionTimes(tx); err != nil {
 		return nil, err
 	}
 	points, err := LoadEnergyPoints(ctx, tx, a.MeterValues)
+	if err != nil {
+		return nil, err
+	}
+	return a.AnalyseReadings(ctx, tx, points)
+}
+
+// AnalyseReadings is Analyse for a caller that has read the readings of the energy
+// register of the transaction already (LoadEnergyPoints, EnergyPoints): nothing is read
+// from the meter values.
+func (a *Analyzer) AnalyseReadings(ctx context.Context, tx *store.Transaction, points []EnergyPoint) (*store.TransactionAnalysis, error) {
+	start, stop, err := sessionTimes(tx)
 	if err != nil {
 		return nil, err
 	}
@@ -153,6 +163,27 @@ func (a *Analyzer) Analyse(ctx context.Context, tx *store.Transaction) (*store.T
 	return analysis, nil
 }
 
+// IdleNow tells since when a transaction that runs is idle at the moment now, from the
+// readings of its energy register (LoadEnergyPoints, EnergyPoints), with the thresholds
+// that its analysis will have when it ends. The result has no idle start for a
+// transaction that charged when it was last heard of. A transaction whose start is not
+// known is store.ErrInvalidState.
+func (a *Analyzer) IdleNow(ctx context.Context, tx *store.Transaction, points []EnergyPoint, now time.Time) (IdleResult, error) {
+	start, _, known := TransactionTimes(tx)
+	if !known {
+		return IdleResult{}, fmt.Errorf("the start of the transaction is not known: %w", store.ErrInvalidState)
+	}
+	settings, err := a.settings(ctx, tx)
+	if err != nil {
+		return IdleResult{}, err
+	}
+	maxPowerW, err := a.maxPowerW(ctx, tx)
+	if err != nil {
+		return IdleResult{}, err
+	}
+	return DetectIdle(points, start, nil, now, nil, maxPowerW, settings), nil
+}
+
 func (a *Analyzer) now() time.Time {
 	if a.Clock != nil {
 		return a.Clock.Now()
@@ -164,26 +195,38 @@ func (a *Analyzer) now() time.Time {
 // stored with it or, for a store that does not keep them, the times of its first and its
 // last meter value.
 func sessionTimes(tx *store.Transaction) (start, stop time.Time, err error) {
+	begin, end, known := TransactionTimes(tx)
+	switch {
+	case end == nil:
+		return start, stop, fmt.Errorf("the transaction has not ended: %w", store.ErrInvalidState)
+	case !known:
+		return start, stop, fmt.Errorf("the start of the transaction is not known: %w", store.ErrInvalidState)
+	}
+	return begin, *end, nil
+}
+
+// TransactionTimes returns the start and the end of a transaction that was read with its
+// meter values: the times that are stored with it or, for a store that does not keep
+// them, the times of its first and, when it has ended, of its last meter value. stop is
+// nil for a transaction that runs; startKnown is false when the transaction has neither a
+// stored start nor a meter value to tell it from.
+func TransactionTimes(tx *store.Transaction) (start time.Time, stop *time.Time, startKnown bool) {
 	first, last, sampled := meterValueTimes(tx.MeterValues)
 
 	switch {
 	case tx.StoppedAt != nil:
-		stop = *tx.StoppedAt
+		stop = tx.StoppedAt
 	case tx.EndedSeqNo > 0 && sampled:
-		stop = last
-	default:
-		return start, stop, fmt.Errorf("the transaction has not ended: %w", store.ErrInvalidState)
+		stop = &last
 	}
 
 	switch {
 	case tx.StartedAt != nil:
-		start = *tx.StartedAt
+		return *tx.StartedAt, stop, true
 	case sampled:
-		start = first
-	default:
-		return start, stop, fmt.Errorf("the start of the transaction is not known: %w", store.ErrInvalidState)
+		return first, stop, true
 	}
-	return start, stop, nil
+	return start, stop, false
 }
 
 // meterValueTimes returns the earliest and the latest time of the meter values; ok is

@@ -846,6 +846,31 @@ func (s *Store) SetTransactionAnalysis(_ context.Context, chargeStationId, trans
 	return nil
 }
 
+// SetTransactionCost stores what a transaction costs, in place of an earlier cost, and
+// its amount with VAT as the last cost. A transaction that has its final cost keeps it
+// when the new cost is not final.
+func (s *Store) SetTransactionCost(_ context.Context, chargeStationId, transactionId string, cost store.TransactionCost) error {
+	what := fmt.Sprintf("set the cost of transaction %s/%s", chargeStationId, transactionId)
+	if err := store.CheckTransactionCost(cost); err != nil {
+		return fmt.Errorf("%s: %w", what, err)
+	}
+
+	s.Lock()
+	defer s.Unlock()
+	transaction := s.getTransaction(chargeStationId, transactionId)
+	if transaction == nil {
+		return fmt.Errorf("%s: %w", what, store.ErrNotFound)
+	}
+	if transaction.Cost != nil && transaction.Cost.Final && !cost.Final {
+		return nil
+	}
+	cost.RatedAt = cost.RatedAt.UTC()
+	transaction.Cost = &cost
+	inclVat, _ := cost.Total.InclVat.Rat().Float64()
+	transaction.LastCost = &inclVat
+	return nil
+}
+
 // copyOf returns a pointer to a copy of the value that p points to.
 func copyOf[T any](p *T) *T {
 	v := *p

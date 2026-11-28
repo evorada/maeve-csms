@@ -26,6 +26,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/rating"
 	"github.com/thoughtworks/maeve-csms/manager/schemas"
 	"github.com/thoughtworks/maeve-csms/manager/services"
+	"github.com/thoughtworks/maeve-csms/manager/sessions"
 	"github.com/thoughtworks/maeve-csms/manager/store"
 	"github.com/thoughtworks/maeve-csms/manager/store/firestore"
 	"github.com/thoughtworks/maeve-csms/manager/store/inmemory"
@@ -74,8 +75,9 @@ type Config struct {
 	ContractCertValidationService    services.CertificateValidationService
 	ContractCertProviderService      services.ContractCertificateProvider
 	ChargeStationCertProviderService services.ChargeStationCertificateProvider
-	TariffService                    services.TariffService
-	OcpiApi                          ocpi.Api
+	// Sessions works out what the transactions cost and stores it with them.
+	Sessions *sessions.Service
+	OcpiApi  ocpi.Api
 	// JobRunner runs the background jobs: on one replica at a time with leases in NATS KV
 	// (jobs runner "nats_kv"), or all of them in this process ("local").
 	JobRunner                 jobs.Runner
@@ -350,6 +352,11 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		return nil, err
 	}
 
+	tariffSettings, err := parseTariffServiceConfig(&cfg.TariffService)
+	if err != nil {
+		return nil, err
+	}
+
 	c.AuthVerifier, err = getAuthVerifier(ctx, &cfg.Api.Auth, c.DefaultOrgId)
 	if err != nil {
 		return nil, err
@@ -421,11 +428,6 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		return nil, err
 	}
 
-	c.TariffService, err = getTariffService(&cfg.TariffService)
-	if err != nil {
-		return nil, err
-	}
-
 	if cfg.usesNats() {
 		natsConn, err = getNatsConn(cfg.Nats)
 		if err != nil {
@@ -465,7 +467,8 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 	}
 
 	// a new transaction is charged with the tariff that applies where and for whom it
-	// starts. The price of the tariff service is what a session without a tariff costs.
+	// starts. The fallback price of the tariff service, when there is one, is what a
+	// session without a tariff costs.
 	tariffSelector := &tariffs.Selector{
 		Assets:   c.Storage,
 		Registry: c.Storage,
@@ -473,7 +476,7 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		Groups:   c.Storage,
 		Tokens:   c.Storage,
 		Tenants:  c.TenantConfig,
-		Fallback: c.TariffService != nil,
+		Fallback: tariffSettings.fallback != nil,
 	}
 	// a transaction that ends is analysed: how long it charged and how long it was idle
 	analyzer := &rating.Analyzer{
@@ -485,6 +488,9 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		Defaults:     idleSettings,
 		Clock:        clock.RealClock{},
 	}
+	// a transaction is rated with its tariff: its cost so far while it runs, its final
+	// cost when it ends
+	c.Sessions = getSessionService(tariffSettings, c.Storage, analyzer)
 
 	if cfg.Ocpp.Ocpp16Enabled {
 		c.Ocpp16Handler = ocpp16.NewRouter(c.MsgEmitter,
@@ -501,7 +507,8 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 			commandObserver(c.CommandDispatcher),
 			commandTracker(c.CommandTracker),
 			tariffSelector,
-			analyzer)
+			analyzer,
+			c.Sessions)
 	}
 	if cfg.Ocpp.Ocpp201Enabled {
 		c.Ocpp201Handler = ocpp201.NewRouter(c.MsgEmitter,
@@ -509,7 +516,6 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 			c.Storage,
 			c.TenantResolver,
 			c.TenantConfig,
-			c.TariffService,
 			c.ContractCertValidationService,
 			c.ChargeStationCertProviderService,
 			c.ContractCertProviderService,
@@ -517,7 +523,8 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 			schemas.OcppSchemas,
 			commandObserver(c.CommandDispatcher),
 			tariffSelector,
-			analyzer)
+			analyzer,
+			c.Sessions)
 	}
 
 	if cfg.Ocpi != nil {
@@ -854,15 +861,23 @@ func getLocalSource(cfg *LocalSourceConfig) (source services.LocalSource, err er
 	return
 }
 
-func getTariffService(cfg *TariffServiceConfig) (tariffService services.TariffService, err error) {
-	switch cfg.Type {
-	case "kwh":
-		tariffService = services.BasicKwhTariffService{}
-	default:
-		return nil, fmt.Errorf("unknown tariff service type: %s", cfg.Type)
+// getSessionService creates what rates the transactions of the storage: with the tariff
+// version that a transaction was given when it started or, for a transaction without a
+// tariff, with the fallback price of [tariff_service] when there is one.
+func getSessionService(settings tariffServiceSettings, engine store.Engine, analyzer *rating.Analyzer) *sessions.Service {
+	return &sessions.Service{
+		Rater:        rating.Rater{Rounding: settings.rounding},
+		Analyzer:     analyzer,
+		Transactions: engine,
+		MeterValues:  engine,
+		Tariffs:      engine,
+		Assets:       engine,
+		Registry:     engine,
+		Tx:           engine,
+		Clock:        clock.RealClock{},
+		Fallback:     settings.fallback,
+		RunningEvery: settings.runningCostInterval,
 	}
-
-	return
 }
 
 // getNatsConn opens the connection to NATS that [nats] describes.

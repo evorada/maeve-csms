@@ -496,13 +496,36 @@ There is no additional configuration for the default charge station certificate 
 
 ### Tariff service
 
-There is a single tariff service implementation:
-* [`kwh`](#kwh-tariff-service) - calculates the tariff based on the energy consumed
+The tariff service works out what a transaction costs. There is a single implementation:
+* [`ocpi`](#ocpi-tariff-service) - rates a transaction with the OCPI tariff that was chosen for it when it started
 
-#### kWh tariff service
+The type `kwh`, which charged every transaction 0.55 per kWh, is gone: a configuration that names it is refused
+when the manager starts. Set `fallback_energy_price_per_kwh = "0.55"` to go on charging the transactions without
+a tariff that price.
 
-There is no additional configuration for the kWh tariff service. The settings of
-[the idle time of a transaction](#the-idle-time-of-a-transaction) are in `[tariff_service.idle_detection]`.
+#### OCPI tariff service
+
+| Key                             | Description | Default |
+|---------------------------------|-------------|---------|
+| `fallback_energy_price_per_kwh` | The price per kWh, without VAT, of a transaction that has no tariff, as a decimal number in a string with at most 4 decimals. Empty: such a transaction has no price | `""` |
+| `fallback_currency`             | The currency of that price (ISO 4217, three capital letters) | `"EUR"` |
+| `rounding_scale`                | The number of decimals of the amounts of a price, 0 to 4 | `2` |
+| `rounding_mode`                 | What happens to a half: `"half_up"` (away from zero) or `"half_even"` (to the even neighbour) | `"half_up"` |
+| `running_cost_interval`         | The least time between two ratings of a transaction that runs. `"0s"` rates with every meter values message | `"60s"` |
+
+```toml
+[tariff_service]
+type = "ocpi"
+fallback_energy_price_per_kwh = "0.55"
+fallback_currency = "EUR"
+rounding_scale = 2
+rounding_mode = "half_up"
+running_cost_interval = "60s"
+```
+
+How a transaction gets its tariff, how it is rated and how its idle time is told are described below; the
+settings of [the idle time of a transaction](#the-idle-time-of-a-transaction) are in
+`[tariff_service.idle_detection]`.
 
 #### The tariff of a transaction
 
@@ -533,6 +556,52 @@ cannot be stored, that is logged and the transaction starts without a tariff (no
 Tariffs, token groups and the asset model are only stored in PostgreSQL and in memory. With Firestore no
 transaction gets a tariff.
 
+#### The cost of a transaction
+
+A transaction is rated with the tariff version that was stored with it when it started, by the rules of OCPI
+2.2.1; a transaction without a tariff with `fallback_energy_price_per_kwh`, and not at all when that is not set.
+
+* The session is cut wherever a price can change: at every meter reading, where the idle time starts, where a
+  grace period ends, and where a restriction of a tariff element starts or stops to hold (time of day, weekday,
+  date, duration, energy; power and current are those of the readings). The energy between two readings is
+  spread evenly over the time between them. Times of day, weekdays and dates are read on the clock of the
+  location of the EVSE (its `time_zone`), else of the location of the charge station, else in UTC.
+* For each of energy, charging time and parking time the price is that of the first tariff element whose
+  restrictions hold and which has a price component for it; without one it is free. Elements for reservations
+  are passed over.
+* Charging time (`TIME`) is charged while the transaction charges, parking time (`PARKING_TIME`) while it is idle
+  (see [the idle time of a transaction](#the-idle-time-of-a-transaction)). A grace period (`grace_period_s`) runs
+  on the clock from the start of the transaction, or of the idle time, whether or not a price applies then, and
+  only the time after it is charged. A `FLAT` component is charged once.
+* What was charged of a dimension is rounded up to whole steps (`step_size`) of the price component that applied
+  last. A time component with a `price_per_step` is charged by that price.
+* Every part (start fee, energy, charging time, parking time) is rounded on its own, without and with VAT, to
+  `rounding_scale` decimals. The VAT is that of each price component; a component without `vat` has the same
+  amount with and without. The total is the sum of the rounded parts, raised to the `min_price` or held to the
+  `max_price` of the tariff.
+
+While a transaction runs, its cost so far is worked out with its meter values (OCPP 1.6 `MeterValues`, OCPP
+2.0.1 `TransactionEvent` Updated), at most once in `running_cost_interval`. When it ends, its final cost is
+worked out, and the answer to an OCPP 2.0.1 Ended event has it as `totalCost`, with VAT. The cost is stored with
+the transaction (`cost_currency`, `cost_excl_vat`, `cost_incl_vat`, `cost_final`, `cost_rated_at`; `last_cost`
+has the amount with VAT), and the transaction API shows it as `cost` (`currency`, `exclVat`, `inclVat`, `final`)
+beside `tariffId` and `tariffVersion`. The `session.updated` and `session.completed` events of an OCPP 1.6
+transaction carry it as `cost`, when it was worked out for them:
+
+| Field            | Description |
+|------------------|-------------|
+| `currency`       | The currency of the tariff |
+| `excl_vat`, `incl_vat` | The total without and with VAT |
+| `final`          | `false` in `session.updated` (the cost so far), `true` in `session.completed` |
+| `tariff_id`, `tariff_version` | The tariff version that the session was rated with; left out for a session without a tariff |
+| `energy_wh`      | The energy that the cost is for |
+| `charging_s`, `parking_s` | The charging and the idle time in seconds that the cost is for |
+
+The rating never holds up or fails the answer to the charge station, and never stops a transaction: each rating
+has at most 2 seconds, and when it fails that is logged and the event, the answer or the transaction is left
+without a cost. With Firestore only the transactions without a tariff can be rated (there are no tariffs), in
+UTC, and only the amount with VAT is kept.
+
 #### The idle time of a transaction
 
 When a transaction ends, the manager works out from the readings of its energy register (the meter start, the
@@ -558,7 +627,7 @@ power was above `min_charging_power_w`.
 
 ```toml
 [tariff_service]
-type = "kwh"
+type = "ocpi"
 
 [tariff_service.idle_detection]
 charging_power_share = 0.01

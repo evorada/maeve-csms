@@ -115,7 +115,12 @@ func TestParseConfig(t *testing.T) {
 			},
 		},
 		TariffService: config.TariffServiceConfig{
-			Type: "kwh",
+			Type:                      "ocpi",
+			FallbackEnergyPricePerKwh: "0.55",
+			FallbackCurrency:          "GBP",
+			RoundingScale:             3,
+			RoundingMode:              "half_even",
+			RunningCostInterval:       "30s",
 			IdleDetection: config.IdleDetectionConfig{
 				ChargingPowerShare: 0.02,
 				MinChargingPowerW:  150,
@@ -209,6 +214,9 @@ func TestExampleConfigsAreValid(t *testing.T) {
 			assert.True(t, cfg.Events.EnsureStream, "the manager creates the event stream in development")
 			assert.Equal(t, "nats_kv", cfg.Jobs.Runner)
 			assert.True(t, cfg.Jobs.EnsureBucket, "the manager creates the job lease bucket in development")
+			assert.Equal(t, "ocpi", cfg.TariffService.Type)
+			assert.Equal(t, "0.55", cfg.TariffService.FallbackEnergyPricePerKwh, "a session without a tariff has a price in development")
+			assert.Equal(t, "EUR", cfg.TariffService.FallbackCurrency)
 		})
 	}
 }

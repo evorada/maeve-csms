@@ -101,7 +101,12 @@ opcp.auth.hubject_test_token.cache.file = "/tmp/hubject_token.txt"
 opcp.auth.hubject_test_token.cache.ttl = "1h"
 
 [tariff_service]
-type = "kwh"
+type = "ocpi"
+fallback_energy_price_per_kwh = "0.55"
+fallback_currency = "GBP"
+rounding_scale = 3
+rounding_mode = "half_even"
+running_cost_interval = "30s"
 
 [tariff_service.idle_detection]
 charging_power_share = 0.02

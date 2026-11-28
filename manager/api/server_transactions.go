@@ -124,6 +124,7 @@ func (s *Server) ListTransactions(w http.ResponseWriter, r *http.Request, csId s
 			EnergyWh:      txn.EnergyWh,
 		}
 		summary.IdleStartedAt, summary.IdleS, summary.ChargingS, summary.AveragePowerW = analysisView(txn)
+		summary.TariffId, summary.TariffVersion, summary.Cost = txn.TariffId, txn.TariffVersion, costView(txn)
 		response.Transactions = append(response.Transactions, summary)
 	}
 
@@ -205,8 +206,21 @@ func (s *Server) GetTransactionDetails(w http.ResponseWriter, r *http.Request, c
 		EnergyWh:      txn.EnergyWh,
 	}
 	response.IdleStartedAt, response.IdleS, response.ChargingS, response.AveragePowerW = analysisView(txn)
+	response.TariffId, response.TariffVersion, response.Cost = txn.TariffId, txn.TariffVersion, costView(txn)
 
 	_ = render.Render(w, r, response)
+}
+
+// costView returns the API form of the cost of a transaction: nil for a transaction that
+// was not rated (one without a price, or of a store that keeps no cost).
+func costView(txn *store.Transaction) *TransactionCost {
+	cost := txn.Cost
+	if cost == nil {
+		return nil
+	}
+	exclVat, _ := cost.Total.ExclVat.Rat().Float64()
+	inclVat, _ := cost.Total.InclVat.Rat().Float64()
+	return &TransactionCost{Currency: cost.Currency, ExclVat: exclVat, InclVat: inclVat, Final: cost.Final}
 }
 
 // analysisView returns the API fields of the analysis of a transaction: all nil for a

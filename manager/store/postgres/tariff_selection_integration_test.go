@@ -230,7 +230,6 @@ func TestTariffSelection_TransactionEvent(t *testing.T) {
 	handler := ocpp201.TransactionEventHandler{
 		Store:            testStore,
 		TokenAuthService: &services.OcppTokenAuthService{Clock: clk, TokenStore: testStore, OrgResolver: f.orgs, Registry: testStore},
-		TariffService:    services.BasicKwhTariffService{},
 		TariffSelector:   f.selector,
 		OrgResolver:      f.orgs,
 		Clock:            clk,

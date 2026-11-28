@@ -593,6 +593,11 @@ type Transaction struct {
 	ChargingS       pgtype.Int8        `db:"charging_s" json:"charging_s"`
 	AveragePowerW   pgtype.Numeric     `db:"average_power_w" json:"average_power_w"`
 	AnalysedAt      pgtype.Timestamptz `db:"analysed_at" json:"analysed_at"`
+	CostCurrency    pgtype.Text        `db:"cost_currency" json:"cost_currency"`
+	CostExclVat     pgtype.Numeric     `db:"cost_excl_vat" json:"cost_excl_vat"`
+	CostInclVat     pgtype.Numeric     `db:"cost_incl_vat" json:"cost_incl_vat"`
+	CostFinal       pgtype.Bool        `db:"cost_final" json:"cost_final"`
+	CostRatedAt     pgtype.Timestamptz `db:"cost_rated_at" json:"cost_rated_at"`
 }
 
 type TransactionMeterValue struct {

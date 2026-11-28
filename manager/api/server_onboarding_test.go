@@ -268,7 +268,7 @@ func TestApproveSendsANewPasswordToTheStation(t *testing.T) {
 
 	// the station takes it (through the OCPP 1.6 router, as the gateway hands it on)
 	router := ocpp16.NewRouter(f.calls, f.clock, f.engine, events.NopEmitter{}, f.scoper.Resolver,
-		nil, nil, nil, nil, time.Minute, schemas.OcppSchemas, f.dispatcher, nil, nil, nil)
+		nil, nil, nil, nil, time.Minute, schemas.OcppSchemas, f.dispatcher, nil, nil, nil, nil)
 	router.Handle(ctx, pendingStationOfA, &transport.Message{MessageType: transport.MessageTypeCallResult, Action: sent[0].Action,
 		MessageId: sent[0].MessageId, RequestPayload: sent[0].RequestPayload, ResponsePayload: json.RawMessage(`{"status":"Accepted"}`)})
 

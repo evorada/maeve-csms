@@ -374,7 +374,7 @@ func TestNewRouterGivesTheAnalyzerToTheStopHandler(t *testing.T) {
 	analyzer := &rating.Analyzer{Transactions: engine, Defaults: rating.DefaultIdleSettings()}
 
 	router, ok := handlers.NewRouter(&FakeEmitter{}, clockAt(t, "2026-11-28T10:00:00Z"), engine, events.NopEmitter{},
-		&tenancy.Resolver{Stations: engine}, nil, nil, nil, nil, time.Minute, schemas.OcppSchemas, nil, nil, nil, analyzer).(*msghandlers.Router)
+		&tenancy.Resolver{Stations: engine}, nil, nil, nil, nil, time.Minute, schemas.OcppSchemas, nil, nil, nil, analyzer, nil).(*msghandlers.Router)
 	require.True(t, ok)
 
 	stop, ok := router.CallRoutes["StopTransaction"].Handler.(handlers.StopTransactionHandler)

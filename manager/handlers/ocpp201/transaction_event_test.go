@@ -21,7 +21,6 @@ import (
 func TestTransactionEventHandlerWithStartedEvent(t *testing.T) {
 	ctx := context.Background()
 	engine := inmemory.NewStore(clock.RealClock{})
-	tariffService := services.BasicKwhTariffService{}
 
 	err := engine.SetToken(ctx, &store.Token{
 		OrgId: store.LegacyOrgId,
@@ -39,7 +38,7 @@ func TestTransactionEventHandlerWithStartedEvent(t *testing.T) {
 	handler := handlers.TransactionEventHandler{
 		Store:            engine,
 		TokenAuthService: tokenAuthService,
-		TariffService:    tariffService,
+		Sessions:         fallbackSessions(engine),
 	}
 
 	req := &types.TransactionEventRequestJson{
@@ -87,7 +86,6 @@ func TestTransactionEventHandlerWithStartedEvent(t *testing.T) {
 func TestTransactionEventHandlerWithStartedEventWithInvalidToken(t *testing.T) {
 	ctx := context.Background()
 	engine := inmemory.NewStore(clock.RealClock{})
-	tariffService := services.BasicKwhTariffService{}
 
 	tokenAuthService := &services.OcppTokenAuthService{
 		Clock:       clock.RealClock{},
@@ -98,7 +96,7 @@ func TestTransactionEventHandlerWithStartedEventWithInvalidToken(t *testing.T) {
 	handler := handlers.TransactionEventHandler{
 		Store:            engine,
 		TokenAuthService: tokenAuthService,
-		TariffService:    tariffService,
+		Sessions:         fallbackSessions(engine),
 	}
 
 	req := &types.TransactionEventRequestJson{
@@ -146,7 +144,6 @@ func TestTransactionEventHandlerWithStartedEventWithInvalidToken(t *testing.T) {
 func TestTransactionEventHandlerWithUpdatedEvent(t *testing.T) {
 	ctx := context.Background()
 	engine := inmemory.NewStore(clock.RealClock{})
-	tariffService := services.BasicKwhTariffService{}
 
 	tokenAuthService := &services.OcppTokenAuthService{
 		Clock:       clock.RealClock{},
@@ -157,7 +154,7 @@ func TestTransactionEventHandlerWithUpdatedEvent(t *testing.T) {
 	handler := handlers.TransactionEventHandler{
 		Store:            engine,
 		TokenAuthService: tokenAuthService,
-		TariffService:    tariffService,
+		Sessions:         fallbackSessions(engine),
 	}
 
 	req := &types.TransactionEventRequestJson{
@@ -197,7 +194,6 @@ func TestTransactionEventHandlerWithUpdatedEvent(t *testing.T) {
 func TestTransactionEventHandlerWithEndedEvent(t *testing.T) {
 	ctx := context.Background()
 	engine := inmemory.NewStore(clock.RealClock{})
-	tariffService := services.BasicKwhTariffService{}
 
 	tokenAuthService := &services.OcppTokenAuthService{
 		Clock:       clock.RealClock{},
@@ -208,8 +204,34 @@ func TestTransactionEventHandlerWithEndedEvent(t *testing.T) {
 	handler := handlers.TransactionEventHandler{
 		Store:            engine,
 		TokenAuthService: tokenAuthService,
-		TariffService:    tariffService,
+		Sessions:         fallbackSessions(engine),
 	}
+
+	// the transaction started an hour before, with the register at 100 Wh
+	_, err := handler.HandleCall(ctx, "cs001", &types.TransactionEventRequestJson{
+		EventType:     types.TransactionEventEnumTypeStarted,
+		TriggerReason: types.TriggerReasonEnumTypeCablePluggedIn,
+		Timestamp:     "2023-05-05T11:00:00+01:00",
+		MeterValue: []types.MeterValueType{
+			{
+				Timestamp: "2023-05-05T11:00:00+01:00",
+				SampledValue: []types.SampledValueType{
+					{
+						Context:   makePtr(types.ReadingContextEnumTypeTransactionBegin),
+						Measurand: makePtr(types.MeasurandEnumTypeEnergyActiveImportRegister),
+						Location:  makePtr(types.LocationEnumTypeOutlet),
+						Value:     100,
+					},
+				},
+			},
+		},
+		SeqNo: 0,
+		TransactionInfo: types.TransactionType{
+			TransactionId: "5555",
+			ChargingState: makePtr(types.ChargingStateEnumTypeCharging),
+		},
+	})
+	require.NoError(t, err)
 
 	req := &types.TransactionEventRequestJson{
 		EventType:     types.TransactionEventEnumTypeEnded,
@@ -223,12 +245,12 @@ func TestTransactionEventHandlerWithEndedEvent(t *testing.T) {
 						Context:   makePtr(types.ReadingContextEnumTypeTransactionEnd),
 						Measurand: makePtr(types.MeasurandEnumTypeEnergyActiveImportRegister),
 						Location:  makePtr(types.LocationEnumTypeOutlet),
-						Value:     100,
+						Value:     1100,
 					},
 				},
 			},
 		},
-		SeqNo: 0,
+		SeqNo: 1,
 		TransactionInfo: types.TransactionType{
 			TransactionId: "5555",
 			ChargingState: makePtr(types.ChargingStateEnumTypeCharging),
@@ -238,8 +260,9 @@ func TestTransactionEventHandlerWithEndedEvent(t *testing.T) {
 	got, err := handler.HandleCall(ctx, "cs001", req)
 	assert.NoError(t, err)
 
+	// 1 kWh at the price of the sessions without a tariff, 0.55 per kWh
 	want := &types.TransactionEventResponseJson{
-		TotalCost: makePtr(0.055),
+		TotalCost: makePtr(0.55),
 	}
 	assert.Equal(t, want, got)
 

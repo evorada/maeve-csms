@@ -86,7 +86,7 @@ func TestConfigure(t *testing.T) {
 	assert.NotNil(t, settings.ContractCertValidationService)
 	assert.NotNil(t, settings.ContractCertProviderService)
 	assert.NotNil(t, settings.ChargeStationCertProviderService)
-	assert.NotNil(t, settings.TariffService)
+	assert.NotNil(t, settings.Sessions)
 	assert.NotNil(t, settings.AuthVerifier)
 	assert.NotNil(t, settings.Events)
 	assert.Nil(t, settings.EventRelay)
@@ -336,16 +336,6 @@ func TestConfigureDefaultChargeStationCertProvider(t *testing.T) {
 	settings, err := config.Configure(context.TODO(), cfg)
 	require.NoError(t, err)
 	require.NotNil(t, settings.ChargeStationCertProviderService)
-}
-
-func TestConfigureKwHTariffService(t *testing.T) {
-	cfg := newTestConfig(t)
-	cfg.ContractCertValidator.Ocsp.RootCertProvider.File.FileNames = []string{"testdata/root_ca.pem"}
-	cfg.TariffService.Type = "kwh"
-
-	settings, err := config.Configure(context.TODO(), cfg)
-	require.NoError(t, err)
-	require.NotNil(t, settings.ContractCertProviderService)
 }
 
 func TestConfigureReservationExpiryInterval(t *testing.T) {

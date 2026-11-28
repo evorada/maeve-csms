@@ -106,7 +106,11 @@ var DefaultConfig = BaseConfig{
 		Type: "default",
 	},
 	TariffService: TariffServiceConfig{
-		Type: "kwh",
+		Type:                "ocpi",
+		FallbackCurrency:    "EUR",
+		RoundingScale:       rating.DefaultRounding().Scale,
+		RoundingMode:        string(rating.DefaultRounding().Mode),
+		RunningCostInterval: DefaultRunningCostInterval.String(),
 		IdleDetection: IdleDetectionConfig{
 			ChargingPowerShare: rating.DefaultChargingPowerShare,
 			MinChargingPowerW:  rating.DefaultMinChargingPowerW,
@@ -201,6 +205,10 @@ func (c *BaseConfig) replaceDefaults() {
 
 // Validate ensures that the configuration is structurally valid.
 func (c *BaseConfig) Validate() error {
+	if c.TariffService.Type == legacyTariffServiceType {
+		return errLegacyTariffService
+	}
+
 	validate := validator.New()
 
 	err := validate.Struct(c)

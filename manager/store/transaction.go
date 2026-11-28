@@ -7,7 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"regexp"
 	"time"
+
+	"github.com/thoughtworks/maeve-csms/manager/money"
 )
 
 type Transaction struct {
@@ -20,7 +23,10 @@ type Transaction struct {
 	EndedSeqNo        int          `firestore:"endedSeqNo"`
 	UpdatedSeqNoCount int          `firestore:"updatedSeqNoCount"`
 	Offline           bool         `firestore:"offline"`
-	// LastCost is the most recently communicated running cost for this transaction (from CostUpdated).
+	// LastCost is the newest total cost of the transaction with VAT: the amount of Cost
+	// (written with TransactionStore.SetTransactionCost), or the running cost that was
+	// communicated to the charge station (CostUpdated, written with
+	// TransactionStore.UpdateTransactionCost), whichever was written last.
 	LastCost *float64 `firestore:"lastCost,omitempty"`
 
 	// The fields below are written with TransactionStore.UpdateTransactionDetails.
@@ -57,6 +63,28 @@ type Transaction struct {
 	// before that. It is written with TransactionStore.SetTransactionAnalysis. Firestore
 	// does not store it.
 	Analysis *TransactionAnalysis `firestore:"-"`
+
+	// Cost is what the transaction costs with its tariff, as the manager worked it out:
+	// the cost so far while the transaction runs, the final cost after it ended. It is nil
+	// for a transaction that was not rated, and written with
+	// TransactionStore.SetTransactionCost. Firestore does not store it.
+	Cost *TransactionCost `firestore:"-"`
+}
+
+// MaxTransactionCost is the limit of the amounts of a TransactionCost, which must stay
+// below it: PostgreSQL keeps them with eight digits before the decimal point.
+const MaxTransactionCost = money.Amount(100_000_000 * 10_000)
+
+// TransactionCost is what a transaction costs: the total of its price without and with
+// VAT, in the currency of its tariff.
+type TransactionCost struct {
+	Currency string // ISO 4217
+	Total    money.Price
+	// Final is false for the cost so far of a transaction that runs, and true for the
+	// cost of a transaction that has ended.
+	Final bool
+	// RatedAt is when the cost was worked out. It is read back in UTC.
+	RatedAt time.Time
 }
 
 // MaxAveragePowerW is the limit of TransactionAnalysis.AveragePowerW, which must stay
@@ -163,6 +191,14 @@ type TransactionStore interface {
 	// A transaction that does not exist is ErrNotFound; an analysis that
 	// CheckTransactionAnalysis refuses is not stored. Firestore returns ErrNotImplemented.
 	SetTransactionAnalysis(ctx context.Context, chargeStationId, transactionId string, analysis TransactionAnalysis) error
+	// SetTransactionCost stores what the transaction costs (Transaction.Cost), and its
+	// amount with VAT as Transaction.LastCost. A cost that the transaction has already is
+	// replaced, with one exception: a transaction that has its final cost keeps it when
+	// the new cost is not final. Nothing is written then, and no error is returned: a
+	// running cost that was worked out while the transaction ended comes too late. A
+	// transaction that does not exist is ErrNotFound; a cost that CheckTransactionCost
+	// refuses is not stored. Firestore returns ErrNotImplemented.
+	SetTransactionCost(ctx context.Context, chargeStationId, transactionId string, cost TransactionCost) error
 }
 
 // CheckTransactionTariff checks what SetTransactionTariff is given: a source, and a
@@ -193,6 +229,24 @@ func CheckTransactionAnalysis(analysis TransactionAnalysis) error {
 	}
 	if power := analysis.AveragePowerW; power != nil && (math.IsNaN(*power) || *power < 0 || math.Round(*power*10)/10 >= MaxAveragePowerW) {
 		return fmt.Errorf("average power %v W is not a power from 0 to below %v W", *power, float64(MaxAveragePowerW))
+	}
+	return nil
+}
+
+var costCurrencyPattern = regexp.MustCompile(`^[A-Z]{3}$`)
+
+// CheckTransactionCost checks what SetTransactionCost is given: a currency code of three
+// capital letters, amounts from 0 to below MaxTransactionCost, and the time of the rating.
+func CheckTransactionCost(cost TransactionCost) error {
+	switch {
+	case !costCurrencyPattern.MatchString(cost.Currency):
+		return fmt.Errorf("%q is not a currency code", cost.Currency)
+	case cost.Total.ExclVat < 0 || cost.Total.ExclVat >= MaxTransactionCost:
+		return fmt.Errorf("cost without VAT %s is not an amount from 0 to below %s", cost.Total.ExclVat, MaxTransactionCost)
+	case cost.Total.InclVat < 0 || cost.Total.InclVat >= MaxTransactionCost:
+		return fmt.Errorf("cost with VAT %s is not an amount from 0 to below %s", cost.Total.InclVat, MaxTransactionCost)
+	case cost.RatedAt.IsZero():
+		return errors.New("the time of the rating is required")
 	}
 	return nil
 }

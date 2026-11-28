@@ -31,6 +31,7 @@ import (
 	"github.com/thoughtworks/maeve-csms/manager/entitlements"
 	"github.com/thoughtworks/maeve-csms/manager/events"
 	"github.com/thoughtworks/maeve-csms/manager/handlers/ocpp16"
+	"github.com/thoughtworks/maeve-csms/manager/money"
 	"github.com/thoughtworks/maeve-csms/manager/ocpi"
 	types "github.com/thoughtworks/maeve-csms/manager/ocpp/ocpp16"
 	"github.com/thoughtworks/maeve-csms/manager/store"
@@ -1513,6 +1514,90 @@ func TestTransactionsReturnTheAnalysis(t *testing.T) {
 		assert.Nil(t, summary.IdleS, transactionId)
 		assert.Nil(t, summary.ChargingS, transactionId)
 		assert.Nil(t, summary.AveragePowerW, transactionId)
+	}
+}
+
+// TestTransactionsReturnTheCost checks that the list and the detail of the transactions
+// carry the tariff version and the cost of a transaction, and nothing of them for a
+// transaction that has none.
+func TestTransactionsReturnTheCost(t *testing.T) {
+	server, r, engine, _ := setupServer(t)
+	defer server.Close()
+	registerStation(t, engine, "cs001")
+	ctx := context.Background()
+
+	const tariffId = "0193b2c5-0000-7000-8000-000000000021"
+	ratedAt := time.Date(2026, 11, 26, 12, 30, 0, 0, time.UTC)
+	for _, transactionId := range []string{"tx-ended", "tx-running", "tx-fallback", "tx-unpriced", "tx-not-rated"} {
+		require.NoError(t, engine.CreateTransaction(ctx, "cs001", transactionId, "MYRFIDTAG", "ISO14443", nil, 0, false))
+	}
+	require.NoError(t, engine.EndTransaction(ctx, "cs001", "tx-ended", "MYRFIDTAG", "ISO14443", nil, 1))
+	// the final cost of an ended transaction and the cost so far of a running one, with
+	// version 3 of a tariff
+	require.NoError(t, engine.SetTransactionTariff(ctx, "cs001", "tx-ended", ptr(tariffId), ptr(3), "connector"))
+	require.NoError(t, engine.SetTransactionCost(ctx, "cs001", "tx-ended", store.TransactionCost{
+		Currency: "EUR", Total: money.Price{ExclVat: 5_8000, InclVat: 7_0200}, Final: true, RatedAt: ratedAt,
+	}))
+	require.NoError(t, engine.SetTransactionTariff(ctx, "cs001", "tx-running", ptr(tariffId), ptr(3), "connector"))
+	require.NoError(t, engine.SetTransactionCost(ctx, "cs001", "tx-running", store.TransactionCost{
+		Currency: "EUR", Total: money.Price{ExclVat: 3_8000, InclVat: 4_6050}, RatedAt: ratedAt,
+	}))
+	// a transaction without a tariff, with the price of the manager for such transactions
+	require.NoError(t, engine.SetTransactionTariff(ctx, "cs001", "tx-fallback", nil, nil, "fallback"))
+	require.NoError(t, engine.SetTransactionCost(ctx, "cs001", "tx-fallback", store.TransactionCost{Currency: "PLN", RatedAt: ratedAt}))
+	// a transaction without a tariff and without a price, and one whose tariff was never
+	// chosen
+	require.NoError(t, engine.SetTransactionTariff(ctx, "cs001", "tx-unpriced", nil, nil, "none"))
+
+	want := map[string]struct {
+		tariffId *string
+		version  *int
+		cost     *api.TransactionCost
+	}{
+		"tx-ended":     {ptr(tariffId), ptr(3), &api.TransactionCost{Currency: "EUR", ExclVat: 5.8, InclVat: 7.02, Final: true}},
+		"tx-running":   {ptr(tariffId), ptr(3), &api.TransactionCost{Currency: "EUR", ExclVat: 3.8, InclVat: 4.605}},
+		"tx-fallback":  {nil, nil, &api.TransactionCost{Currency: "PLN"}},
+		"tx-unpriced":  {},
+		"tx-not-rated": {},
+	}
+
+	for transactionId, tc := range want {
+		gotDetail := new(api.TransactionDetail)
+		getJson(t, r, "/cs/cs001/transaction/"+transactionId, gotDetail)
+		assert.Equal(t, tc.tariffId, gotDetail.TariffId, transactionId)
+		assert.Equal(t, tc.version, gotDetail.TariffVersion, transactionId)
+		assert.Equal(t, tc.cost, gotDetail.Cost, transactionId)
+	}
+
+	gotList := new(api.TransactionList)
+	getJson(t, r, "/cs/cs001/transactions", gotList)
+	require.Len(t, gotList.Transactions, len(want))
+	for _, summary := range gotList.Transactions {
+		tc := want[summary.TransactionId]
+		assert.Equal(t, tc.tariffId, summary.TariffId, summary.TransactionId)
+		assert.Equal(t, tc.version, summary.TariffVersion, summary.TransactionId)
+		assert.Equal(t, tc.cost, summary.Cost, summary.TransactionId)
+	}
+
+	// the fields as they are sent: amounts as numbers, a cost of nothing in full, and no
+	// field for what a transaction does not have
+	fields := map[string]any{}
+	getJson(t, r, "/cs/cs001/transaction/tx-ended", &fields)
+	assert.Equal(t, map[string]any{"currency": "EUR", "exclVat": 5.8, "inclVat": 7.02, "final": true}, fields["cost"])
+	assert.Equal(t, tariffId, fields["tariffId"])
+	assert.Equal(t, float64(3), fields["tariffVersion"])
+	fields = map[string]any{}
+	getJson(t, r, "/cs/cs001/transaction/tx-fallback", &fields)
+	assert.Equal(t, map[string]any{"currency": "PLN", "exclVat": 0.0, "inclVat": 0.0, "final": false}, fields["cost"])
+	assert.NotContains(t, fields, "tariffId")
+	assert.NotContains(t, fields, "tariffVersion")
+	for _, transactionId := range []string{"tx-unpriced", "tx-not-rated"} {
+		fields := map[string]any{}
+		getJson(t, r, "/cs/cs001/transaction/"+transactionId, &fields)
+		require.Equal(t, transactionId, fields["transactionId"])
+		for _, field := range []string{"cost", "tariffId", "tariffVersion"} {
+			assert.NotContains(t, fields, field, transactionId)
+		}
 	}
 }
 

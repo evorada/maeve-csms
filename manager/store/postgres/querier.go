@@ -333,6 +333,10 @@ type Querier interface {
 	// The analysis of an ended transaction. An earlier analysis is replaced. The average
 	// power is rounded to the one decimal that the column keeps.
 	SetTransactionAnalysis(ctx context.Context, arg SetTransactionAnalysisParams) (int64, error)
+	// The cost of a transaction, with its amount with VAT in last_cost as well. An earlier
+	// cost is replaced, but a final cost only by another final cost: no row is changed when
+	// the transaction has its final cost and the new cost is not final.
+	SetTransactionCost(ctx context.Context, arg SetTransactionCostParams) (int64, error)
 	// The tariff of a transaction is set once: no row is changed when the transaction has a
 	// tariff source already.
 	SetTransactionTariff(ctx context.Context, arg SetTransactionTariffParams) (int64, error)

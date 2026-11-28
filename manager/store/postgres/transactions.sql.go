@@ -76,7 +76,7 @@ INSERT INTO transactions (
     COALESCE((SELECT cs.org_id FROM charge_stations cs WHERE cs.charge_station_id = $2::varchar), '00000000-0000-0000-0000-000000000000'::uuid)
 )
 ON CONFLICT (charge_station_id, id) DO NOTHING
-RETURNING id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source, idle_started_at, idle_s, charging_s, average_power_w, analysed_at
+RETURNING id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source, idle_started_at, idle_s, charging_s, average_power_w, analysed_at, cost_currency, cost_excl_vat, cost_incl_vat, cost_final, cost_rated_at
 `
 
 type CreateTransactionParams struct {
@@ -133,12 +133,17 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 		&i.ChargingS,
 		&i.AveragePowerW,
 		&i.AnalysedAt,
+		&i.CostCurrency,
+		&i.CostExclVat,
+		&i.CostInclVat,
+		&i.CostFinal,
+		&i.CostRatedAt,
 	)
 	return i, err
 }
 
 const FindActiveTransaction = `-- name: FindActiveTransaction :one
-SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source, idle_started_at, idle_s, charging_s, average_power_w, analysed_at FROM transactions 
+SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source, idle_started_at, idle_s, charging_s, average_power_w, analysed_at, cost_currency, cost_excl_vat, cost_incl_vat, cost_final, cost_rated_at FROM transactions 
 WHERE charge_station_id = $1 AND stop_timestamp IS NULL
 ORDER BY start_timestamp DESC
 LIMIT 1
@@ -176,6 +181,11 @@ func (q *Queries) FindActiveTransaction(ctx context.Context, chargeStationID str
 		&i.ChargingS,
 		&i.AveragePowerW,
 		&i.AnalysedAt,
+		&i.CostCurrency,
+		&i.CostExclVat,
+		&i.CostInclVat,
+		&i.CostFinal,
+		&i.CostRatedAt,
 	)
 	return i, err
 }
@@ -220,7 +230,7 @@ func (q *Queries) GetMeterValues(ctx context.Context, arg GetMeterValuesParams) 
 
 const GetTransaction = `-- name: GetTransaction :one
 
-SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source, idle_started_at, idle_s, charging_s, average_power_w, analysed_at FROM transactions WHERE charge_station_id = $1 AND id = $2
+SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source, idle_started_at, idle_s, charging_s, average_power_w, analysed_at, cost_currency, cost_excl_vat, cost_incl_vat, cost_final, cost_rated_at FROM transactions WHERE charge_station_id = $1 AND id = $2
 `
 
 type GetTransactionParams struct {
@@ -261,12 +271,17 @@ func (q *Queries) GetTransaction(ctx context.Context, arg GetTransactionParams) 
 		&i.ChargingS,
 		&i.AveragePowerW,
 		&i.AnalysedAt,
+		&i.CostCurrency,
+		&i.CostExclVat,
+		&i.CostInclVat,
+		&i.CostFinal,
+		&i.CostRatedAt,
 	)
 	return i, err
 }
 
 const ListTransactions = `-- name: ListTransactions :many
-SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source, idle_started_at, idle_s, charging_s, average_power_w, analysed_at FROM transactions
+SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source, idle_started_at, idle_s, charging_s, average_power_w, analysed_at, cost_currency, cost_excl_vat, cost_incl_vat, cost_final, cost_rated_at FROM transactions
 ORDER BY start_timestamp DESC
 `
 
@@ -308,6 +323,11 @@ func (q *Queries) ListTransactions(ctx context.Context) ([]Transaction, error) {
 			&i.ChargingS,
 			&i.AveragePowerW,
 			&i.AnalysedAt,
+			&i.CostCurrency,
+			&i.CostExclVat,
+			&i.CostInclVat,
+			&i.CostFinal,
+			&i.CostRatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -321,7 +341,7 @@ func (q *Queries) ListTransactions(ctx context.Context) ([]Transaction, error) {
 
 const ListTransactionsFiltered = `-- name: ListTransactionsFiltered :many
 
-SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source, idle_started_at, idle_s, charging_s, average_power_w, analysed_at FROM transactions
+SELECT id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source, idle_started_at, idle_s, charging_s, average_power_w, analysed_at, cost_currency, cost_excl_vat, cost_incl_vat, cost_final, cost_rated_at FROM transactions
 WHERE charge_station_id = $1
     AND (cardinality($4::uuid[]) = 0 OR org_id = ANY($4::uuid[]))
     AND ($5::text IS NULL 
@@ -391,6 +411,11 @@ func (q *Queries) ListTransactionsFiltered(ctx context.Context, arg ListTransact
 			&i.ChargingS,
 			&i.AveragePowerW,
 			&i.AnalysedAt,
+			&i.CostCurrency,
+			&i.CostExclVat,
+			&i.CostInclVat,
+			&i.CostFinal,
+			&i.CostRatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -452,6 +477,48 @@ func (q *Queries) SetTransactionAnalysis(ctx context.Context, arg SetTransaction
 	return result.RowsAffected(), nil
 }
 
+const SetTransactionCost = `-- name: SetTransactionCost :execrows
+UPDATE transactions SET
+    cost_currency = $1::text,
+    cost_excl_vat = $2::numeric,
+    cost_incl_vat = $3::numeric,
+    cost_final    = $4::boolean,
+    cost_rated_at = $5::timestamptz,
+    last_cost     = $3::numeric,
+    updated_at    = NOW()
+WHERE charge_station_id = $6 AND id = $7
+    AND ($4::boolean OR cost_final IS NOT TRUE)
+`
+
+type SetTransactionCostParams struct {
+	Currency        string             `db:"currency" json:"currency"`
+	ExclVat         pgtype.Numeric     `db:"excl_vat" json:"excl_vat"`
+	InclVat         pgtype.Numeric     `db:"incl_vat" json:"incl_vat"`
+	Final           bool               `db:"final" json:"final"`
+	RatedAt         pgtype.Timestamptz `db:"rated_at" json:"rated_at"`
+	ChargeStationID string             `db:"charge_station_id" json:"charge_station_id"`
+	ID              string             `db:"id" json:"id"`
+}
+
+// The cost of a transaction, with its amount with VAT in last_cost as well. An earlier
+// cost is replaced, but a final cost only by another final cost: no row is changed when
+// the transaction has its final cost and the new cost is not final.
+func (q *Queries) SetTransactionCost(ctx context.Context, arg SetTransactionCostParams) (int64, error) {
+	result, err := q.db.Exec(ctx, SetTransactionCost,
+		arg.Currency,
+		arg.ExclVat,
+		arg.InclVat,
+		arg.Final,
+		arg.RatedAt,
+		arg.ChargeStationID,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const SetTransactionTariff = `-- name: SetTransactionTariff :execrows
 UPDATE transactions SET
     tariff_id      = $1::uuid,
@@ -493,7 +560,7 @@ SET meter_stop = $3,
     updated_seq_no = $6,
     updated_at = NOW()
 WHERE charge_station_id = $1 AND id = $2
-RETURNING id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source, idle_started_at, idle_s, charging_s, average_power_w, analysed_at
+RETURNING id, charge_station_id, token_uid, token_type, meter_start, meter_stop, start_timestamp, stop_timestamp, stopped_reason, updated_seq_no, offline, created_at, updated_at, last_cost, evse_id, connector_id, energy_wh, id_token_group, reservation_id, org_id, tariff_id, tariff_version, tariff_source, idle_started_at, idle_s, charging_s, average_power_w, analysed_at, cost_currency, cost_excl_vat, cost_incl_vat, cost_final, cost_rated_at
 `
 
 type UpdateTransactionParams struct {
@@ -544,6 +611,11 @@ func (q *Queries) UpdateTransaction(ctx context.Context, arg UpdateTransactionPa
 		&i.ChargingS,
 		&i.AveragePowerW,
 		&i.AnalysedAt,
+		&i.CostCurrency,
+		&i.CostExclVat,
+		&i.CostInclVat,
+		&i.CostFinal,
+		&i.CostRatedAt,
 	)
 	return i, err
 }

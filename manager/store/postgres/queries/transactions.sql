@@ -85,6 +85,21 @@ UPDATE transactions SET
     updated_at      = NOW()
 WHERE charge_station_id = sqlc.arg('charge_station_id') AND id = sqlc.arg('id');
 
+-- The cost of a transaction, with its amount with VAT in last_cost as well. An earlier
+-- cost is replaced, but a final cost only by another final cost: no row is changed when
+-- the transaction has its final cost and the new cost is not final.
+-- name: SetTransactionCost :execrows
+UPDATE transactions SET
+    cost_currency = sqlc.arg('currency')::text,
+    cost_excl_vat = sqlc.arg('excl_vat')::numeric,
+    cost_incl_vat = sqlc.arg('incl_vat')::numeric,
+    cost_final    = sqlc.arg('final')::boolean,
+    cost_rated_at = sqlc.arg('rated_at')::timestamptz,
+    last_cost     = sqlc.arg('incl_vat')::numeric,
+    updated_at    = NOW()
+WHERE charge_station_id = sqlc.arg('charge_station_id') AND id = sqlc.arg('id')
+    AND (sqlc.arg('final')::boolean OR cost_final IS NOT TRUE);
+
 -- name: NextOcpp16TransactionId :one
 SELECT nextval('ocpp16_transaction_id_seq')::integer AS id;
 

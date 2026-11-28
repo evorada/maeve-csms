@@ -204,6 +204,8 @@ components:
       $ref: 'schemas/schemas.yaml#/components/schemas/TransactionSummary'
     TransactionDetail:
       $ref: 'schemas/schemas.yaml#/components/schemas/TransactionDetail'
+    TransactionCost:
+      $ref: 'schemas/schemas.yaml#/components/schemas/TransactionCost'
     ReservationResponse:
       $ref: 'schemas/schemas.yaml#/components/schemas/ReservationResponse'
     DataTransferRequest:
